@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.0.0
+# Steam Deck 工具箱 v1.0.1
 # 制作人：薯条
 
 # 颜色定义
@@ -25,7 +25,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
 # 版本信息
-VERSION="1.0.0"
+VERSION="1.0.1"
 GITHUB_REPO="https://github.com/Zhucy123/steamdeck_toolbox.git"
 
 # 初始化目录
@@ -40,55 +40,6 @@ init_dirs() {
 log() {
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo "[$timestamp] $1" >> "$LOG_FILE"
-}
-
-# 静默检查并创建桌面快捷方式
-create_desktop_shortcuts() {
-    # 检查主程序快捷方式是否存在
-    if [ ! -f "$MAIN_LAUNCHER" ]; then
-        # 获取当前脚本的绝对路径
-        local current_script_path="$(realpath "$0")"
-        local current_script_dir="$(dirname "$current_script_path")"
-        local current_script_name="$(basename "$current_script_path")"
-        
-        # 创建主程序快捷方式
-        cat > "$MAIN_LAUNCHER" << EOF
-[Desktop Entry]
-Type=Application
-Name=SteamDeck 工具箱
-Comment=Steam Deck 系统优化与软件管理工具 v$VERSION
-Exec=konsole -e /bin/bash -c 'cd "$current_script_dir" && ./"$current_script_name" && echo "" && echo "程序执行完毕，按回车键关闭窗口..." && read'
-Icon=utilities-terminal
-Terminal=false
-StartupNotify=true
-Categories=Utility;
-EOF
-        chmod +x "$MAIN_LAUNCHER"
-        log "创建了主程序桌面快捷方式: $MAIN_LAUNCHER"
-    fi
-
-    # 检查更新程序快捷方式是否存在
-    if [ ! -f "$UPDATE_LAUNCHER" ]; then
-        # 获取当前脚本的绝对路径
-        local current_script_path="$(realpath "$0")"
-        local current_script_dir="$(dirname "$current_script_path")"
-        local current_script_name="$(basename "$current_script_path")"
-        
-        # 创建更新程序快捷方式
-        cat > "$UPDATE_LAUNCHER" << EOF
-[Desktop Entry]
-Type=Application
-Name=更新SteamDeck工具箱
-Comment=更新 Steam Deck 工具箱到最新版本
-Exec=konsole -e /bin/bash -c 'cd "$current_script_dir" && ./"$current_script_name" --update && echo "" && echo "按回车键关闭窗口..." && read'
-Icon=system-software-update
-Terminal=false
-StartupNotify=true
-Categories=Utility;
-EOF
-        chmod +x "$UPDATE_LAUNCHER"
-        log "创建了更新程序桌面快捷方式: $UPDATE_LAUNCHER"
-    fi
 }
 
 # 显示标题
@@ -122,7 +73,7 @@ show_main_menu() {
         echo -e "${GREEN}  9.  安装ToMoon${NC}"
         echo -e "${GREEN} 10.  安装＆卸载插件商店${NC}"
         echo -e "${GREEN} 11.  安装＆卸载宝葫芦${NC}"
-        echo -e "${GREEN}  12.  校准摇杆${NC}"
+        echo -e "${GREEN} 12.  校准摇杆${NC}"
         echo -e "${GREEN} 13.  安装AnyDesk${NC}"
         echo -e "${GREEN} 14.  安装ToDesk${NC}"
         echo -e "${GREEN} 15.  安装WPS Office${NC}"
@@ -133,6 +84,8 @@ show_main_menu() {
         echo -e "${GREEN} 20.  安装Edge浏览器${NC}"
         echo -e "${GREEN} 21.  安装Google浏览器${NC}"
         echo -e "${GREEN} 22.  更新已安装应用${NC}"
+        echo -e "${GREEN} 23.  创建桌面快捷方式${NC}"
+        echo -e "${GREEN} 24.  更新工具箱${NC}"
         echo ""
 
         echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
@@ -163,6 +116,8 @@ show_main_menu() {
             20) install_edge ;;
             21) install_chrome ;;
             22) update_installed_apps ;;
+            23) create_desktop_shortcuts_menu ;;
+            24) update_toolbox_menu ;;
             *)
                 echo -e "${RED}无效选择，请重新输入！${NC}"
                 sleep 1
@@ -171,8 +126,124 @@ show_main_menu() {
     done
 }
 
+# 23. 创建桌面快捷方式（菜单选项）
+create_desktop_shortcuts_menu() {
+    show_header
+    echo -e "${YELLOW}════════════════ 创建桌面快捷方式 ════════════════${NC}"
+    echo ""
+    
+    echo -e "${CYAN}正在创建桌面快捷方式...${NC}"
+    echo ""
+    
+    # 获取当前脚本的绝对路径
+    local current_script_path="$(realpath "$0")"
+    local current_script_dir="$(dirname "$current_script_path")"
+    local current_script_name="$(basename "$current_script_path")"
+    
+    echo -e "${CYAN}脚本路径: $current_script_path${NC}"
+    echo -e "${CYAN}脚本目录: $current_script_dir${NC}"
+    echo -e "${CYAN}脚本名称: $current_script_name${NC}"
+    echo ""
+    
+    # 检查主程序快捷方式是否存在
+    if [ -f "$MAIN_LAUNCHER" ]; then
+        echo -e "${YELLOW}主程序快捷方式已存在${NC}"
+        read -p "是否覆盖？(y/N): " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}已取消创建${NC}"
+            log "取消创建主程序桌面快捷方式"
+            read -p "按回车键返回主菜单..."
+            return
+        fi
+    fi
+    
+    # 创建主程序快捷方式
+    cat > "$MAIN_LAUNCHER" << EOF
+[Desktop Entry]
+Type=Application
+Name=SteamDeck 工具箱
+Comment=Steam Deck 系统优化与软件管理工具 v$VERSION
+Exec=konsole --workdir "$current_script_dir" -e bash -c "'$current_script_path'; echo ''; echo '程序执行完毕，按回车键关闭窗口...'; read"
+Icon=utilities-terminal
+Terminal=false
+StartupNotify=true
+Categories=Utility;
+EOF
+    
+    chmod +x "$MAIN_LAUNCHER"
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ 主程序快捷方式创建成功${NC}"
+        echo "位置: $MAIN_LAUNCHER"
+        log "手动创建主程序桌面快捷方式: $MAIN_LAUNCHER"
+    else
+        echo -e "${RED}✗ 主程序快捷方式创建失败${NC}"
+        log "创建主程序桌面快捷方式失败"
+    fi
+    
+    echo ""
+    
+    # 检查更新程序快捷方式是否存在
+    if [ -f "$UPDATE_LAUNCHER" ]; then
+        echo -e "${YELLOW}更新程序快捷方式已存在${NC}"
+        read -p "是否覆盖？(y/N): " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}已取消创建${NC}"
+            read -p "按回车键返回主菜单..."
+            return
+        fi
+    fi
+    
+    # 创建更新程序快捷方式
+    cat > "$UPDATE_LAUNCHER" << EOF
+[Desktop Entry]
+Type=Application
+Name=更新SteamDeck工具箱
+Comment=更新 Steam Deck 工具箱到最新版本
+Exec=konsole --workdir "$current_script_dir" -e bash -c "'$current_script_path' --update; echo ''; echo '按回车键关闭窗口...'; read"
+Icon=system-software-update
+Terminal=false
+StartupNotify=true
+Categories=Utility;
+EOF
+    
+    chmod +x "$UPDATE_LAUNCHER"
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ 更新程序快捷方式创建成功${NC}"
+        echo "位置: $UPDATE_LAUNCHER"
+        log "手动创建更新程序桌面快捷方式: $UPDATE_LAUNCHER"
+    else
+        echo -e "${RED}✗ 更新程序快捷方式创建失败${NC}"
+        log "创建更新程序桌面快捷方式失败"
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}提示：${NC}"
+    echo "1. 桌面快捷方式已创建完成"
+    echo "2. 如果无法启动，请检查脚本路径是否正确"
+    echo "3. 可以尝试重新运行此功能修复快捷方式"
+    
+    read -p "按回车键返回主菜单..."
+}
+
+# 24. 更新工具箱（菜单选项）
+update_toolbox_menu() {
+    show_header
+    echo -e "${YELLOW}════════════════ 更新工具箱 ════════════════${NC}"
+    echo ""
+    
+    echo -e "${CYAN}正在检查更新...${NC}"
+    echo ""
+    
+    # 调用更新功能
+    update_toolbox
+}
+
 # ============================================
-# 修改后的更新工具箱功能
+# 更新工具箱功能
 # ============================================
 
 # 检查工具箱是否正在运行
@@ -208,13 +279,6 @@ close_toolbox_processes() {
 
 # 更新工具箱（通过参数调用）
 update_toolbox() {
-    # 显示更新界面
-    clear
-    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}              Steam Deck 工具箱更新程序               ${NC}"
-    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
-    echo ""
-    
     # 步骤1: 检查工具箱是否正在运行
     echo -e "${CYAN}步骤1: 检查工具箱运行状态...${NC}"
     
@@ -237,8 +301,8 @@ update_toolbox() {
         else
             echo -e "${RED}更新已取消。请先手动关闭工具箱，然后重新运行更新程序。${NC}"
             echo ""
-            read -p "按回车键退出..."
-            exit 0
+            read -p "按回车键返回主菜单..."
+            return
         fi
     else
         echo -e "${GREEN}✓ 工具箱未运行，可以继续更新${NC}"
@@ -251,8 +315,8 @@ update_toolbox() {
     if ! check_network_connection; then
         echo -e "${RED}✗ 网络连接失败！${NC}"
         echo "请检查网络连接后重试。"
-        read -p "按回车键退出..."
-        exit 1
+        read -p "按回车键返回主菜单..."
+        return
     fi
     
     echo -e "${GREEN}✓ 网络连接正常${NC}"
@@ -283,8 +347,8 @@ update_toolbox() {
         echo -e "${YELLOW}未找到git，正在尝试安装...${NC}"
         sudo pacman -Sy git --noconfirm 2>/dev/null || {
             echo -e "${RED}✗ 安装git失败！请手动安装git后重试。${NC}"
-            read -p "按回车键退出..."
-            exit 1
+            read -p "按回车键返回主菜单..."
+            return
         }
         echo -e "${GREEN}✓ git安装完成${NC}"
     fi
@@ -292,8 +356,8 @@ update_toolbox() {
     # 切换到用户目录
     cd ~/ || {
         echo -e "${RED}✗ 无法切换到用户目录${NC}"
-        read -p "按回车键退出..."
-        exit 1
+        read -p "按回车键返回主菜单..."
+        return
     }
     
     # 检查是否已经存在仓库目录
@@ -310,8 +374,8 @@ update_toolbox() {
     else
         echo -e "${RED}✗ 克隆仓库失败！${NC}"
         echo "请检查网络连接和仓库地址。"
-        read -p "按回车键退出..."
-        exit 1
+        read -p "按回车键返回主菜单..."
+        return
     fi
     
     # 步骤5: 检查仓库中的脚本文件
@@ -331,8 +395,8 @@ update_toolbox() {
         else
             echo -e "${RED}✗ 在仓库中未找到脚本文件！${NC}"
             rm -rf "$temp_repo_dir"
-            read -p "按回车键退出..."
-            exit 1
+            read -p "按回车键返回主菜单..."
+            return
         fi
     fi
     
@@ -388,8 +452,8 @@ update_toolbox() {
         # 清理临时文件
         rm -rf "$temp_repo_dir"
         
-        read -p "按回车键退出..."
-        exit 1
+        read -p "按回车键返回主菜单..."
+        return
     fi
     
     # 清理备份文件
@@ -1130,9 +1194,6 @@ main() {
         update_toolbox
         exit 0
     fi
-
-    # 静默检查并创建桌面快捷方式（仅首次运行）
-    create_desktop_shortcuts
 
     # 显示主菜单
     show_main_menu
