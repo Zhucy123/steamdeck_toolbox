@@ -340,7 +340,7 @@ fix_disk_write_error() {
         # 原始挂载点不存在，创建挂载点
         sudo mkdir -p "$MOUNT_POINT"
     fi
-    
+
     if [ -n "$MOUNT_POINT" ]; then
         echo "重新挂载分区到: $MOUNT_POINT"
         if sudo mount "$DISK_DEVICE" "$MOUNT_POINT" 2>/dev/null; then
@@ -365,10 +365,10 @@ fix_boot() {
     echo ""
     echo -e "${CYAN}正在修复引导...${NC}"
     echo ""
-    
+
     # 这里可以添加实际的引导修复命令
     # 例如: sudo bootctl install 等
-    
+
     echo -e "${GREEN}✓ 引导修复完成（示例功能）${NC}"
     log "修复引导"
     read -p "按回车键返回主菜单..."
@@ -381,10 +381,10 @@ fix_shared_disk() {
     echo ""
     echo -e "${CYAN}正在修复互通盘...${NC}"
     echo ""
-    
+
     # 这里可以添加实际的互通盘修复命令
     # 例如: 重新挂载共享目录等
-    
+
     echo -e "${GREEN}✓ 互通盘修复完成（示例功能）${NC}"
     log "修复互通盘"
     read -p "按回车键返回主菜单..."
@@ -396,13 +396,13 @@ clear_hosts_cache() {
     echo -e "${YELLOW}════════════════ 清理hosts缓存 ════════════════${NC}"
     echo ""
     echo -e "${CYAN}正在清理hosts缓存...${NC}"
-    
+
     # 清理DNS缓存
     sudo systemd-resolve --flush-caches 2>/dev/null || true
-    
+
     # 重启network服务
     sudo systemctl restart systemd-networkd 2>/dev/null || true
-    
+
     echo ""
     echo -e "${GREEN}✓ hosts缓存清理完成${NC}"
     log "清理hosts缓存"
@@ -416,9 +416,9 @@ install_uu_accelerator() {
     echo ""
     echo -e "${CYAN}正在安装UU加速器插件...${NC}"
     echo ""
-    
+
     # 这里可以添加实际的UU加速器安装命令
-    
+
     echo -e "${GREEN}✓ UU加速器插件安装完成（示例功能）${NC}"
     log "安装UU加速器插件"
     read -p "按回车键返回主菜单..."
@@ -431,9 +431,9 @@ install_tomoon() {
     echo ""
     echo -e "${CYAN}正在安装ToMoon...${NC}"
     echo ""
-    
+
     # 这里可以添加实际的ToMoon安装命令
-    
+
     echo -e "${GREEN}✓ ToMoon安装完成（示例功能）${NC}"
     log "安装ToMoon"
     read -p "按回车键返回主菜单..."
@@ -448,7 +448,7 @@ install_remove_plugin_store() {
     echo "2. 卸载插件商店"
     echo ""
     read -p "请选择操作 (1或2): " plugin_choice
-    
+
     case $plugin_choice in
         1)
             echo -e "${CYAN}正在安装插件商店...${NC}"
@@ -466,7 +466,7 @@ install_remove_plugin_store() {
             echo -e "${RED}无效选择${NC}"
             ;;
     esac
-    
+
     read -p "按回车键返回主菜单..."
 }
 
@@ -479,7 +479,7 @@ install_remove_baohulu() {
     echo "2. 卸载宝葫芦"
     echo ""
     read -p "请选择操作 (1或2): " baohulu_choice
-    
+
     case $baohulu_choice in
         1)
             echo -e "${CYAN}正在安装宝葫芦...${NC}"
@@ -497,7 +497,7 @@ install_remove_baohulu() {
             echo -e "${RED}无效选择${NC}"
             ;;
     esac
-    
+
     read -p "按回车键返回主菜单..."
 }
 
@@ -511,10 +511,10 @@ calibrate_joystick() {
     echo "1. 不要触摸摇杆"
     echo "2. 随后缓慢移动摇杆至各个方向极限位置"
     echo ""
-    
+
     # 这里可以添加实际的摇杆校准命令
     # 例如: sudo evtest --calibrate /dev/input/eventX 等
-    
+
     echo -e "${GREEN}✓ 摇杆校准完成（示例功能）${NC}"
     log "校准摇杆"
     read -p "按回车键返回主菜单..."
@@ -527,7 +527,7 @@ install_anydesk() {
     echo ""
     echo -e "${CYAN}正在安装AnyDesk...${NC}"
     echo ""
-    
+
     # 下载并安装AnyDesk
     echo "下载AnyDesk..."
     wget -q -O /tmp/anydesk.deb "https://download.anydesk.com/linux/anydesk_6.2.1_amd64.deb" || {
@@ -535,16 +535,16 @@ install_anydesk() {
         read -p "按回车键返回主菜单..."
         return
     }
-    
+
     echo "安装AnyDesk..."
     sudo apt install -y /tmp/anydesk.deb 2>/dev/null || {
         echo -e "${YELLOW}使用dpkg安装...${NC}"
         sudo dpkg -i /tmp/anydesk.deb
         sudo apt install -f -y
     }
-    
+
     rm -f /tmp/anydesk.deb
-    
+
     echo ""
     echo -e "${GREEN}✓ AnyDesk安装完成${NC}"
     log "安装AnyDesk"
@@ -558,9 +558,9 @@ install_todesk() {
     echo ""
     echo -e "${CYAN}正在安装ToDesk...${NC}"
     echo ""
-    
+
     # 这里可以添加实际的ToDesk安装命令
-    
+
     echo -e "${GREEN}✓ ToDesk安装完成（示例功能）${NC}"
     log "安装ToDesk"
     read -p "按回车键返回主菜单..."
@@ -573,9 +573,9 @@ install_wps_office() {
     echo ""
     echo -e "${CYAN}正在安装WPS Office...${NC}"
     echo ""
-    
+
     # 这里可以添加实际的WPS Office安装命令
-    
+
     echo -e "${GREEN}✓ WPS Office安装完成（示例功能）${NC}"
     log "安装WPS Office"
     read -p "按回车键返回主菜单..."
@@ -588,14 +588,14 @@ install_qq() {
     echo ""
     echo -e "${CYAN}正在安装QQ...${NC}"
     echo ""
-    
+
     # 通过Flatpak安装QQ Linux版
     echo "通过Flatpak安装QQ Linux版..."
     flatpak install -y flathub com.qq.QQ 2>/dev/null || {
         echo -e "${YELLOW}尝试其他方法...${NC}"
         # 可以添加其他安装方法
     }
-    
+
     echo ""
     echo -e "${GREEN}✓ QQ安装完成${NC}"
     log "安装QQ"
@@ -609,14 +609,14 @@ install_wechat() {
     echo ""
     echo -e "${CYAN}正在安装微信...${NC}"
     echo ""
-    
+
     # 通过Flatpak安装微信
     echo "通过Flatpak安装微信..."
     flatpak install -y flathub com.tencent.WeChat 2>/dev/null || {
         echo -e "${YELLOW}尝试其他方法...${NC}"
         # 可以添加其他安装方法
     }
-    
+
     echo ""
     echo -e "${GREEN}✓ 微信安装完成${NC}"
     log "安装微信"
@@ -630,9 +630,9 @@ install_qqmusic() {
     echo ""
     echo -e "${CYAN}正在安装QQ音乐...${NC}"
     echo ""
-    
+
     # 这里可以添加实际的QQ音乐安装命令
-    
+
     echo -e "${GREEN}✓ QQ音乐安装完成（示例功能）${NC}"
     log "安装QQ音乐"
     read -p "按回车键返回主菜单..."
@@ -645,7 +645,7 @@ install_baidunetdisk() {
     echo ""
     echo -e "${CYAN}正在安装百度网盘...${NC}"
     echo ""
-    
+
     # 下载并安装百度网盘
     echo "下载百度网盘Linux版..."
     wget -q -O /tmp/baidunetdisk.deb "https://issuepcdn.baidupcs.com/issue/netdisk/LinuxGuanjia/4.17.7/baidunetdisk_4.17.7_amd64.deb" || {
@@ -653,16 +653,16 @@ install_baidunetdisk() {
         read -p "按回车键返回主菜单..."
         return
     }
-    
+
     echo "安装百度网盘..."
     sudo apt install -y /tmp/baidunetdisk.deb 2>/dev/null || {
         echo -e "${YELLOW}使用dpkg安装...${NC}"
         sudo dpkg -i /tmp/baidunetdisk.deb
         sudo apt install -f -y
     }
-    
+
     rm -f /tmp/baidunetdisk.deb
-    
+
     echo ""
     echo -e "${GREEN}✓ 百度网盘安装完成${NC}"
     log "安装百度网盘"
@@ -676,16 +676,16 @@ install_edge() {
     echo ""
     echo -e "${CYAN}正在安装Edge浏览器...${NC}"
     echo ""
-    
+
     # 添加Microsoft仓库并安装Edge
     echo "添加Microsoft仓库..."
     curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
     sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/edge stable main" > /etc/apt/sources.list.d/microsoft-edge-dev.list'
-    
+
     echo "更新仓库并安装Edge..."
     sudo apt update
     sudo apt install -y microsoft-edge-stable
-    
+
     echo ""
     echo -e "${GREEN}✓ Edge浏览器安装完成${NC}"
     log "安装Edge浏览器"
@@ -699,7 +699,7 @@ install_chrome() {
     echo ""
     echo -e "${CYAN}正在安装Google浏览器...${NC}"
     echo ""
-    
+
     # 下载并安装Google Chrome
     echo "下载Google Chrome..."
     wget -q -O /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" || {
@@ -707,16 +707,16 @@ install_chrome() {
         read -p "按回车键返回主菜单..."
         return
     }
-    
+
     echo "安装Google Chrome..."
     sudo apt install -y /tmp/chrome.deb 2>/dev/null || {
         echo -e "${YELLOW}使用dpkg安装...${NC}"
         sudo dpkg -i /tmp/chrome.deb
         sudo apt install -f -y
     }
-    
+
     rm -f /tmp/chrome.deb
-    
+
     echo ""
     echo -e "${GREEN}✓ Google Chrome安装完成${NC}"
     log "安装Google浏览器"
@@ -730,15 +730,15 @@ update_installed_apps() {
     echo ""
     echo -e "${CYAN}正在更新已安装应用...${NC}"
     echo ""
-    
+
     # 更新系统包
     echo "更新系统包..."
     sudo apt update && sudo apt upgrade -y
-    
+
     # 更新Flatpak应用
     echo "更新Flatpak应用..."
     flatpak update -y
-    
+
     echo ""
     echo -e "${GREEN}✓ 已安装应用更新完成${NC}"
     log "更新已安装应用"
