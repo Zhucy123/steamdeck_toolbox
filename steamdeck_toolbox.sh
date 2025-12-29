@@ -42,40 +42,52 @@ log() {
     echo "[$timestamp] $1" >> "$LOG_FILE"
 }
 
-# 创建桌面快捷方式
+# 静默检查并创建桌面快捷方式
 create_desktop_shortcuts() {
-    # 静默创建主程序快捷方式
+    # 检查主程序快捷方式是否存在
     if [ ! -f "$MAIN_LAUNCHER" ]; then
+        # 获取当前脚本的绝对路径
+        local current_script_path="$(realpath "$0")"
+        local current_script_dir="$(dirname "$current_script_path")"
+        local current_script_name="$(basename "$current_script_path")"
+        
+        # 创建主程序快捷方式
         cat > "$MAIN_LAUNCHER" << EOF
 [Desktop Entry]
 Type=Application
 Name=SteamDeck 工具箱
 Comment=Steam Deck 系统优化与软件管理工具 v$VERSION
-Exec=konsole -e /bin/bash -c 'cd "$SCRIPT_DIR" && ./"$SCRIPT_NAME" && echo "" && echo "程序执行完毕，按回车键关闭窗口..." && read'
+Exec=konsole -e /bin/bash -c 'cd "$current_script_dir" && ./"$current_script_name" && echo "" && echo "程序执行完毕，按回车键关闭窗口..." && read'
 Icon=utilities-terminal
 Terminal=false
 StartupNotify=true
 Categories=Utility;
 EOF
         chmod +x "$MAIN_LAUNCHER"
-        log "创建了主程序桌面快捷方式"
+        log "创建了主程序桌面快捷方式: $MAIN_LAUNCHER"
     fi
 
-    # 静默创建更新程序快捷方式
+    # 检查更新程序快捷方式是否存在
     if [ ! -f "$UPDATE_LAUNCHER" ]; then
+        # 获取当前脚本的绝对路径
+        local current_script_path="$(realpath "$0")"
+        local current_script_dir="$(dirname "$current_script_path")"
+        local current_script_name="$(basename "$current_script_path")"
+        
+        # 创建更新程序快捷方式
         cat > "$UPDATE_LAUNCHER" << EOF
 [Desktop Entry]
 Type=Application
 Name=更新SteamDeck工具箱
 Comment=更新 Steam Deck 工具箱到最新版本
-Exec=konsole -e /bin/bash -c 'cd "$SCRIPT_DIR" && ./"$SCRIPT_NAME" --update && echo "" && echo "按回车键关闭窗口..." && read'
+Exec=konsole -e /bin/bash -c 'cd "$current_script_dir" && ./"$current_script_name" --update && echo "" && echo "按回车键关闭窗口..." && read'
 Icon=system-software-update
 Terminal=false
 StartupNotify=true
 Categories=Utility;
 EOF
         chmod +x "$UPDATE_LAUNCHER"
-        log "创建了更新程序桌面快捷方式"
+        log "创建了更新程序桌面快捷方式: $UPDATE_LAUNCHER"
     fi
 }
 
@@ -942,7 +954,7 @@ install_qq() {
     echo -e "${CYAN}正在安装QQ...${NC}"
     echo ""
     
-    # 通过Flatpak安装QQ
+    # 通过Flatpak安装QQ Linux版
     echo "通过Flatpak安装QQ Linux版..."
     flatpak install -y flathub com.qq.QQ 2>/dev/null || {
         echo -e "${YELLOW}尝试其他方法...${NC}"
