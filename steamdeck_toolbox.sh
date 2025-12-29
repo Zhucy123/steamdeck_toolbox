@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.0.0
+# Steam Deck 工具箱 v1.0.1
 # 制作人：薯条
 
 # 颜色定义
@@ -1128,3 +1128,4 @@ main() {
 
 # 运行主程序
 main "$@"
+
