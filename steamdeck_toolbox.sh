@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.0.1
+# Steam Deck 工具箱 v1.0.0
 # 制作人：薯条
 
 # 颜色定义
@@ -25,7 +25,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.0.0"
+VERSION="1.0.1"
 UPDATE_URL="https://raw.githubusercontent.com/Zhucy123/-steamdeck-/refs/heads/main/steamdeck_toolbox.sh"
 
 # 初始化目录
@@ -209,7 +209,8 @@ update_toolbox() {
     local parent_pid=$PPID
     
     # 查找除了当前进程和父进程之外的其他工具箱进程
-    local other_toolbox_pids=$(pgrep -f "steamdeck_toolbox" | grep -v "^$current_pid$" | grep -v "^$parent_pid$")
+    # 使用更精确的匹配方式
+    local other_toolbox_pids=$(ps aux | grep -E "[s]teamdeck_toolbox\.sh|[s]teamdeck.*toolbox" | grep -v "grep" | awk '{print $2}' | grep -v "^$current_pid$" | grep -v "^$parent_pid$")
     
     if [ -n "$other_toolbox_pids" ]; then
         echo -e "${YELLOW}检测到工具箱正在运行！${NC}"
