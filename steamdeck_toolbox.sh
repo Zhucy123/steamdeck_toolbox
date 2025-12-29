@@ -18,15 +18,15 @@ INSTALL_DIR="$HOME/Applications"
 DESKTOP_DIR="$HOME/Desktop"
 BACKUP_DIR="$HOME/backups"
 TEMP_DIR="/tmp/steamdeck_toolbox"
-MAIN_LAUNCHER="$DESKTOP_DIR/SteamDeck工具箱.desktop" # 主程序快捷方式路径
-UPDATE_LAUNCHER="$DESKTOP_DIR/更新SteamDeck工具箱.desktop" # 更新程序快捷方式路径
-SCRIPT_PATH="$(realpath "$0")" # 当前脚本的绝对路径
-SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
-SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
+MAIN_LAUNCHER="$DESKTOP_DIR/SteamDeck工具箱.desktop"
+UPDATE_LAUNCHER="$DESKTOP_DIR/更新SteamDeck工具箱.desktop"
+SCRIPT_PATH="$(realpath "$0")"
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
 # 版本信息
 VERSION="1.0.0"
-UPDATE_URL="https://raw.githubusercontent.com/Zhucy123/-steamdeck-/refs/heads/main/steamdeck_toolbox.sh"
+GITHUB_REPO="https://github.com/Zhucy123/steamdeck_toolbox.git"
 
 # 初始化目录
 init_dirs() {
@@ -110,7 +110,7 @@ show_main_menu() {
         echo -e "${GREEN}  9.  安装ToMoon${NC}"
         echo -e "${GREEN} 10.  安装＆卸载插件商店${NC}"
         echo -e "${GREEN} 11.  安装＆卸载宝葫芦${NC}"
-        echo -e "${GREEN} 12.  校准摇杆${NC}"
+        echo -e "${GREEN}  12.  校准摇杆${NC}"
         echo -e "${GREEN} 13.  安装AnyDesk${NC}"
         echo -e "${GREEN} 14.  安装ToDesk${NC}"
         echo -e "${GREEN} 15.  安装WPS Office${NC}"
@@ -160,40 +160,42 @@ show_main_menu() {
 }
 
 # ============================================
-# 优化后的更新工具箱功能
+# 修改后的更新工具箱功能
 # ============================================
+
+# 检查工具箱是否正在运行
+check_toolbox_running() {
+    local current_pid=$$
+    
+    # 查找所有包含steamdeck_toolbox的进程，排除当前进程
+    local running_pids=$(ps aux | grep -v "grep" | grep -v "$$" | grep -v "$PPID" | grep -E "(steamdeck_toolbox|konsole.*toolbox)" | awk '{print $2}')
+    
+    if [ -n "$running_pids" ]; then
+        echo "$running_pids"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# 关闭工具箱进程
+close_toolbox_processes() {
+    local pids="$1"
+    
+    echo "正在关闭工具箱进程..."
+    for pid in $pids; do
+        if [ -n "$pid" ] && [ "$pid" -ne "$$" ]; then
+            echo "关闭进程 $pid"
+            kill -9 "$pid" 2>/dev/null
+        fi
+    done
+    
+    # 等待进程关闭
+    sleep 2
+}
 
 # 更新工具箱（通过参数调用）
 update_toolbox() {
-    # 检查是否已经有更新进程在运行
-    if [ -f "$TEMP_DIR/updating.lock" ]; then
-        local lock_pid=$(cat "$TEMP_DIR/updating.lock" 2>/dev/null)
-        
-        # 检查锁文件中的进程是否还在运行
-        if ps -p "$lock_pid" > /dev/null 2>&1; then
-            echo -e "${YELLOW}更新程序已在运行中(PID: $lock_pid)，请稍候...${NC}"
-            echo "如果确定没有更新程序在运行，请删除锁文件: $TEMP_DIR/updating.lock"
-            sleep 5
-            exit 0
-        else
-            # 进程不存在，清理锁文件
-            rm -f "$TEMP_DIR/updating.lock"
-        fi
-    fi
-    
-    # 创建更新锁文件
-    mkdir -p "$TEMP_DIR"
-    echo "$$" > "$TEMP_DIR/updating.lock"
-    
-    # 清理函数，用于退出时清理锁文件
-    cleanup_on_exit() {
-        rm -f "$TEMP_DIR/updating.lock"
-        log "更新程序退出，清理锁文件"
-    }
-    
-    # 设置陷阱，在脚本退出时清理锁文件
-    trap cleanup_on_exit EXIT
-    
     # 显示更新界面
     clear
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
@@ -201,40 +203,51 @@ update_toolbox() {
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
     echo ""
     
-    # 检查当前是否有工具箱主程序在运行（更新程序自身除外）
-    echo -e "${CYAN}步骤1: 检查运行状态...${NC}"
+    # 步骤1: 检查工具箱是否正在运行
+    echo -e "${CYAN}步骤1: 检查工具箱运行状态...${NC}"
     
-    # 获取当前进程ID和父进程ID
-    local current_pid=$$
-    local parent_pid=$PPID
+    local running_pids=$(check_toolbox_running)
     
-    # 查找除了当前进程和父进程之外的其他工具箱进程
-    # 使用更精确的匹配方式
-    local other_toolbox_pids=$(ps aux | grep -E "[s]teamdeck_toolbox\.sh|[s]teamdeck.*toolbox" | grep -v "grep" | awk '{print $2}' | grep -v "^$current_pid$" | grep -v "^$parent_pid$")
-    
-    if [ -n "$other_toolbox_pids" ]; then
+    if [ -n "$running_pids" ]; then
         echo -e "${YELLOW}检测到工具箱正在运行！${NC}"
-        echo "请先关闭所有Steam Deck工具箱主程序窗口，然后再运行更新程序。"
-        echo ""
-        echo "检测到的进程ID: $other_toolbox_pids"
+        echo "检测到的进程ID: $running_pids"
         echo ""
         
-        # 询问用户是否要强制继续
-        read -p "是否强制继续更新？(y/N): " -n 1 -r
+        # 询问用户是否关闭工具箱
+        echo -e "${YELLOW}需要先关闭正在运行的工具箱才能进行更新。${NC}"
+        read -p "是否关闭工具箱并继续更新？(y/N): " -n 1 -r
         echo ""
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo "更新已取消。"
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "正在关闭工具箱..."
+            close_toolbox_processes "$running_pids"
+            echo -e "${GREEN}✓ 工具箱已关闭${NC}"
+        else
+            echo -e "${RED}更新已取消。请先手动关闭工具箱，然后重新运行更新程序。${NC}"
+            echo ""
+            read -p "按回车键退出..."
             exit 0
         fi
-        echo -e "${YELLOW}警告：强制继续更新，可能造成数据不一致！${NC}"
     else
-        echo -e "${GREEN}✓ 工具箱主程序未运行，可以继续更新${NC}"
+        echo -e "${GREEN}✓ 工具箱未运行，可以继续更新${NC}"
     fi
     
     echo ""
     
-    # 备份当前版本
-    echo -e "${CYAN}步骤2: 备份当前版本...${NC}"
+    # 步骤2: 检查网络连接
+    echo -e "${CYAN}步骤2: 检查网络连接...${NC}"
+    if ! check_network_connection; then
+        echo -e "${RED}✗ 网络连接失败！${NC}"
+        echo "请检查网络连接后重试。"
+        read -p "按回车键退出..."
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✓ 网络连接正常${NC}"
+    echo ""
+    
+    # 步骤3: 备份当前版本
+    echo -e "${CYAN}步骤3: 备份当前版本...${NC}"
     local backup_file="$BACKUP_DIR/steamdeck_toolbox_backup_v${VERSION}_$(date +%Y%m%d_%H%M%S).sh"
     
     if cp "$SCRIPT_PATH" "$backup_file"; then
@@ -247,89 +260,81 @@ update_toolbox() {
     
     echo ""
     
-    # 检查网络连接
-    echo -e "${CYAN}步骤3: 检查网络连接...${NC}"
-    if ! check_network_connection; then
-        echo -e "${RED}✗ 网络连接失败！${NC}"
-        echo "请检查网络连接后重试。"
-        read -p "按回车键退出..."
-        exit 1
-    fi
-    
-    echo -e "${GREEN}✓ 网络连接正常${NC}"
-    echo ""
-    
-    # 下载最新版本
+    # 步骤4: 下载最新版本
     echo -e "${CYAN}步骤4: 下载最新版本...${NC}"
-    local temp_script="$TEMP_DIR/steamdeck_toolbox_new.sh"
-    
-    echo "正在从服务器下载更新..."
-    echo "更新URL: $UPDATE_URL"
-    
-    # 使用curl下载（优先）
-    if command -v curl &> /dev/null; then
-        if curl -L -s -o "$temp_script" "$UPDATE_URL"; then
-            echo -e "${GREEN}✓ 下载完成${NC}"
-        else
-            echo -e "${RED}✗ 下载失败！${NC}"
-            echo "请检查网络连接或更新URL。"
-            read -p "按回车键退出..."
-            exit 1
-        fi
-    # 使用wget下载（备用）
-    elif command -v wget &> /dev/null; then
-        if wget -q -O "$temp_script" "$UPDATE_URL"; then
-            echo -e "${GREEN}✓ 下载完成${NC}"
-        else
-            echo -e "${RED}✗ 下载失败！${NC}"
-            echo "请检查网络连接或更新URL。"
-            read -p "按回车键退出..."
-            exit 1
-        fi
-    else
-        echo -e "${RED}✗ 未找到curl或wget，无法下载更新！${NC}"
-        echo "请先安装curl或wget工具。"
-        read -p "按回车键退出..."
-        exit 1
-    fi
-    
-    # 检查下载的文件是否有效
-    if [ ! -s "$temp_script" ]; then
-        echo -e "${RED}✗ 下载的文件为空或无效！${NC}"
-        read -p "按回车键退出..."
-        exit 1
-    fi
-    
-    # 检查文件是否为有效的bash脚本
-    if ! head -n 5 "$temp_script" | grep -q "bash"; then
-        echo -e "${YELLOW}⚠️  下载的文件可能不是有效的bash脚本${NC}"
-        echo "是否继续？(y/N)"
-        read -p "选择: " -n 1 -r
-        echo ""
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo "更新已取消。"
-            exit 0
-        fi
-    fi
-    
+    echo "正在从GitHub下载最新版本..."
+    echo "仓库地址: $GITHUB_REPO"
     echo ""
+    
+    # 检查是否已安装git
+    if ! command -v git &> /dev/null; then
+        echo -e "${YELLOW}未找到git，正在尝试安装...${NC}"
+        sudo pacman -Sy git --noconfirm 2>/dev/null || {
+            echo -e "${RED}✗ 安装git失败！请手动安装git后重试。${NC}"
+            read -p "按回车键退出..."
+            exit 1
+        }
+        echo -e "${GREEN}✓ git安装完成${NC}"
+    fi
+    
+    # 切换到用户目录
+    cd ~/ || {
+        echo -e "${RED}✗ 无法切换到用户目录${NC}"
+        read -p "按回车键退出..."
+        exit 1
+    }
+    
+    # 检查是否已经存在仓库目录
+    local temp_repo_dir="$HOME/steamdeck_toolbox_temp"
+    if [ -d "$temp_repo_dir" ]; then
+        echo "删除旧的临时仓库目录..."
+        rm -rf "$temp_repo_dir"
+    fi
+    
+    # 克隆仓库
+    echo "正在克隆仓库..."
+    if git clone "$GITHUB_REPO" "$temp_repo_dir" 2>/dev/null; then
+        echo -e "${GREEN}✓ 仓库克隆完成${NC}"
+    else
+        echo -e "${RED}✗ 克隆仓库失败！${NC}"
+        echo "请检查网络连接和仓库地址。"
+        read -p "按回车键退出..."
+        exit 1
+    fi
+    
+    # 步骤5: 检查仓库中的脚本文件
+    echo -e "${CYAN}步骤5: 检查更新文件...${NC}"
+    
+    local new_script_path="$temp_repo_dir/steamdeck_toolbox.sh"
+    
+    if [ ! -f "$new_script_path" ]; then
+        echo -e "${YELLOW}在仓库中未找到steamdeck_toolbox.sh，尝试查找其他文件...${NC}"
+        
+        # 尝试查找其他可能的脚本文件
+        local found_script=$(find "$temp_repo_dir" -name "*.sh" -type f | head -1)
+        
+        if [ -f "$found_script" ]; then
+            new_script_path="$found_script"
+            echo "找到脚本文件: $(basename "$new_script_path")"
+        else
+            echo -e "${RED}✗ 在仓库中未找到脚本文件！${NC}"
+            rm -rf "$temp_repo_dir"
+            read -p "按回车键退出..."
+            exit 1
+        fi
+    fi
     
     # 提取新版本号
-    echo -e "${CYAN}步骤5: 检查版本信息...${NC}"
-    local new_version=$(extract_version "$temp_script")
+    local new_version=$(extract_version "$new_script_path")
     
     if [ -n "$new_version" ]; then
         echo "当前版本: $VERSION"
         echo "最新版本: $new_version"
         
         if [ "$VERSION" == "$new_version" ]; then
-            echo -e "${GREEN}✓ 已经是最新版本${NC}"
-            echo ""
-            echo "无需更新。"
-            read -p "按回车键退出..."
-            exit 0
+            echo -e "${YELLOW}版本相同，但文件可能已更新，继续更新...${NC}"
         else
-            echo -e "${YELLOW}发现新版本: $new_version${NC}"
+            echo -e "${GREEN}发现新版本: $new_version${NC}"
         fi
     else
         echo -e "${YELLOW}⚠️  无法获取新版本号，继续更新...${NC}"
@@ -337,49 +342,39 @@ update_toolbox() {
     
     echo ""
     
-    # 确认更新
-    echo -e "${CYAN}步骤6: 确认更新${NC}"
-    echo "即将更新 Steam Deck 工具箱"
-    echo "当前版本: $VERSION"
-    if [ -n "$new_version" ]; then
-        echo "更新版本: $new_version"
-    fi
-    echo ""
-    
-    read -p "是否继续更新？(y/N): " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "更新已取消。"
-        exit 0
-    fi
-    
-    echo ""
-    
-    # 替换脚本文件
-    echo -e "${CYAN}步骤7: 替换脚本文件...${NC}"
-    
-    # 先设置权限
-    chmod +x "$temp_script"
+    # 步骤6: 替换脚本文件
+    echo -e "${CYAN}步骤6: 替换脚本文件...${NC}"
     
     # 备份当前脚本
     local current_backup="$SCRIPT_PATH.backup"
     cp "$SCRIPT_PATH" "$current_backup"
     
-    # 替换脚本
-    if mv "$temp_script" "$SCRIPT_PATH"; then
+    echo "正在替换脚本文件..."
+    
+    # 复制新脚本到原位置（强制覆盖）
+    if cp -f "$new_script_path" "$SCRIPT_PATH"; then
         chmod +x "$SCRIPT_PATH"
         echo -e "${GREEN}✓ 脚本文件替换成功${NC}"
-        log "更新脚本成功: $VERSION -> $new_version"
+        
+        # 记录更新日志
+        if [ -n "$new_version" ]; then
+            log "更新脚本成功: $VERSION -> $new_version"
+        else
+            log "更新脚本成功"
+        fi
     else
         echo -e "${RED}✗ 脚本文件替换失败！${NC}"
         echo "正在恢复备份..."
         
         # 尝试恢复备份
         if [ -f "$current_backup" ]; then
-            mv "$current_backup" "$SCRIPT_PATH"
+            cp -f "$current_backup" "$SCRIPT_PATH"
             chmod +x "$SCRIPT_PATH"
             echo -e "${YELLOW}✓ 已恢复备份${NC}"
         fi
+        
+        # 清理临时文件
+        rm -rf "$temp_repo_dir"
         
         read -p "按回车键退出..."
         exit 1
@@ -388,10 +383,14 @@ update_toolbox() {
     # 清理备份文件
     rm -f "$current_backup"
     
+    # 清理临时仓库
+    echo "清理临时文件..."
+    rm -rf "$temp_repo_dir"
+    
     echo ""
     
-    # 更新桌面快捷方式
-    echo -e "${CYAN}步骤8: 更新桌面快捷方式...${NC}"
+    # 步骤7: 更新桌面快捷方式
+    echo -e "${CYAN}步骤7: 更新桌面快捷方式...${NC}"
     
     # 删除旧的快捷方式，新的脚本会在下次运行时创建
     rm -f "$MAIN_LAUNCHER"
@@ -408,7 +407,7 @@ update_toolbox() {
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
     echo ""
     
-    if [ -n "$new_version" ]; then
+    if [ -n "$new_version" ] && [ "$VERSION" != "$new_version" ]; then
         echo -e "${GREEN}工具箱已从 v$VERSION 更新到 v$new_version${NC}"
     else
         echo -e "${GREEN}工具箱更新完成${NC}"
@@ -418,7 +417,8 @@ update_toolbox() {
     echo -e "${YELLOW}提示：${NC}"
     echo "1. 下次运行工具箱时会自动创建新的桌面快捷方式"
     echo "2. 旧版本备份保存在: $BACKUP_DIR/"
-    echo "3. 如有问题，可以手动恢复备份"
+    echo "3. 更新日志保存在: $LOG_FILE"
+    echo "4. 如有问题，可以手动恢复备份"
     echo ""
     
     log "工具箱更新完成"
@@ -1128,5 +1128,3 @@ main() {
 
 # 运行主程序
 main "$@"
-
-
