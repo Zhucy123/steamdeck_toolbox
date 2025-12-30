@@ -133,7 +133,8 @@ show_main_menu() {
         echo -e "${GREEN} 20.  安装Edge浏览器${NC}"
         echo -e "${GREEN} 21.  安装Google浏览器${NC}"
         echo -e "${GREEN} 22.  更新已安装应用${NC}"
-        echo -e "${GREEN} 23.  检查工具箱更新${NC}"
+        echo -e "${GREEN} 23.  卸载已安装应用${NC}"
+        echo -e "${GREEN} 24.  检查工具箱更新${NC}"
         echo ""
 
         echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
@@ -164,7 +165,8 @@ show_main_menu() {
             20) install_edge ;;
             21) install_chrome ;;
             22) update_installed_apps ;;
-            23) check_for_updates ;;
+            23) uninstall_apps ;;
+            24) check_for_updates ;;
             *)
                 echo -e "${RED}无效选择，请重新输入！${NC}"
                 sleep 1
@@ -174,7 +176,7 @@ show_main_menu() {
 }
 
 # ============================================
-# 优化的更新功能（无运行状态检测）
+# 优化的更新功能（无运行状态检测，无备份）
 # ============================================
 
 # 检查更新（通过菜单调用）
@@ -187,18 +189,8 @@ check_for_updates() {
     update_toolbox
 }
 
-# 更新工具箱（优化的GitHub仓库方式，无运行状态检测）
+# 更新工具箱（优化的GitHub仓库方式，无运行状态检测，无备份）
 update_toolbox() {
-    # 检查是否已经有更新进程在运行
-    if [ -f "$TEMP_DIR/updating.lock" ]; then
-        echo -e "${YELLOW}更新程序已在运行中，请稍候...${NC}"
-        sleep 3
-        exit 0
-    fi
-    
-    # 创建更新锁文件
-    echo "$$" > "$TEMP_DIR/updating.lock"
-    
     # 显示更新界面
     clear
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
@@ -206,28 +198,11 @@ update_toolbox() {
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
     echo ""
     
-    # 备份当前版本
-    echo -e "${CYAN}步骤1: 备份当前版本...${NC}"
-    local backup_file="$BACKUP_DIR/steamdeck_toolbox_backup_v${VERSION}_$(date +%Y%m%d_%H%M%S).sh"
-    
-    if cp "$SCRIPT_PATH" "$backup_file"; then
-        echo -e "${GREEN}✓ 当前版本已备份到: $(basename "$backup_file")${NC}"
-        log "备份当前版本到: $backup_file"
-    else
-        echo -e "${YELLOW}⚠️  备份失败，继续更新...${NC}"
-        log "备份当前版本失败"
-    fi
-    
-    echo ""
-    
     # 检查网络连接
-    echo -e "${CYAN}步骤2: 检查网络连接...${NC}"
+    echo -e "${CYAN}步骤1: 检查网络连接...${NC}"
     if ! check_network_connection; then
         echo -e "${RED}✗ 网络连接失败！${NC}"
         echo "请检查网络连接后重试。"
-        
-        # 移除锁文件
-        rm -f "$TEMP_DIR/updating.lock"
         
         read -p "按回车键退出..."
         exit 1
@@ -237,7 +212,7 @@ update_toolbox() {
     echo ""
     
     # 检查git是否安装
-    echo -e "${CYAN}步骤3: 检查Git工具...${NC}"
+    echo -e "${CYAN}步骤2: 检查Git工具...${NC}"
     if ! command -v git &> /dev/null; then
         echo -e "${YELLOW}未找到git工具，正在尝试安装...${NC}"
         
@@ -252,9 +227,6 @@ update_toolbox() {
             echo -e "${RED}无法自动安装git，请手动安装git后再试。${NC}"
             echo "安装命令: sudo pacman -S git 或 sudo apt install git"
             
-            # 移除锁文件
-            rm -f "$TEMP_DIR/updating.lock"
-            
             read -p "按回车键退出..."
             exit 1
         fi
@@ -262,9 +234,6 @@ update_toolbox() {
         # 再次检查git是否安装成功
         if ! command -v git &> /dev/null; then
             echo -e "${RED}✗ Git安装失败！${NC}"
-            
-            # 移除锁文件
-            rm -f "$TEMP_DIR/updating.lock"
             
             read -p "按回车键退出..."
             exit 1
@@ -275,8 +244,8 @@ update_toolbox() {
     echo ""
     
     # 克隆GitHub仓库
-    echo -e "${CYAN}步骤4: 下载最新版本...${NC}"
-    local clone_dir="$HOME/steamdeck_toolbox_update"
+    echo -e "${CYAN}步骤3: 下载最新版本...${NC}"
+    local clone_dir="$HOME/steamdeck_toolbox"
     
     # 清理旧的下载目录
     if [ -d "$clone_dir" ]; then
@@ -297,9 +266,6 @@ update_toolbox() {
         # 清理下载目录
         rm -rf "$clone_dir" 2>/dev/null
         
-        # 移除锁文件
-        rm -f "$TEMP_DIR/updating.lock"
-        
         read -p "按回车键退出..."
         exit 1
     fi
@@ -312,9 +278,6 @@ update_toolbox() {
         
         # 清理下载目录
         rm -rf "$clone_dir"
-        
-        # 移除锁文件
-        rm -f "$TEMP_DIR/updating.lock"
         
         read -p "按回车键退出..."
         exit 1
@@ -332,16 +295,13 @@ update_toolbox() {
             # 清理下载目录
             rm -rf "$clone_dir"
             
-            # 移除锁文件
-            rm -f "$TEMP_DIR/updating.lock"
-            
             read -p "按回车键退出..."
             exit 0
         fi
     fi
     
     # 提取新版本号
-    echo -e "${CYAN}步骤5: 检查版本信息...${NC}"
+    echo -e "${CYAN}步骤4: 检查版本信息...${NC}"
     local new_version=$(extract_version "$new_script_path")
     
     if [ -n "$new_version" ]; then
@@ -355,9 +315,6 @@ update_toolbox() {
             
             # 清理下载目录
             rm -rf "$clone_dir"
-            
-            # 移除锁文件
-            rm -f "$TEMP_DIR/updating.lock"
             
             echo "将在3秒后自动关闭..."
             sleep 3
@@ -373,7 +330,7 @@ update_toolbox() {
     echo ""
     
     # 确认更新
-    echo -e "${CYAN}步骤6: 确认更新${NC}"
+    echo -e "${CYAN}步骤5: 确认更新${NC}"
     echo "即将更新 Steam Deck 工具箱"
     echo "当前版本: $VERSION"
     if [ -n "$new_version" ]; then
@@ -389,9 +346,6 @@ update_toolbox() {
         # 清理下载目录
         rm -rf "$clone_dir"
         
-        # 移除锁文件
-        rm -f "$TEMP_DIR/updating.lock"
-        
         read -p "按回车键退出..."
         exit 0
     fi
@@ -399,16 +353,12 @@ update_toolbox() {
     echo ""
     
     # 替换脚本文件
-    echo -e "${CYAN}步骤7: 替换脚本文件...${NC}"
+    echo -e "${CYAN}步骤6: 替换脚本文件...${NC}"
     
     # 先设置权限
     chmod +x "$new_script_path"
     
-    # 备份当前脚本
-    local current_backup="$SCRIPT_PATH.backup"
-    cp "$SCRIPT_PATH" "$current_backup"
-    
-    # 替换脚本
+    # 直接替换脚本，不创建备份
     if cp "$new_script_path" "$SCRIPT_PATH"; then
         chmod +x "$SCRIPT_PATH"
         echo -e "${GREEN}✓ 脚本文件替换成功${NC}"
@@ -420,32 +370,19 @@ update_toolbox() {
         fi
     else
         echo -e "${RED}✗ 脚本文件替换失败！${NC}"
-        echo "正在恢复备份..."
-        
-        # 尝试恢复备份
-        if [ -f "$current_backup" ]; then
-            cp "$current_backup" "$SCRIPT_PATH"
-            chmod +x "$SCRIPT_PATH"
-            echo -e "${YELLOW}✓ 已恢复备份${NC}"
-        fi
+        echo "请检查文件权限。"
         
         # 清理下载目录
         rm -rf "$clone_dir"
-        
-        # 移除锁文件
-        rm -f "$TEMP_DIR/updating.lock"
         
         read -p "按回车键退出..."
         exit 1
     fi
     
     # 清理下载目录
-    echo -e "${CYAN}步骤8: 清理临时文件...${NC}"
+    echo -e "${CYAN}步骤7: 清理临时文件...${NC}"
     rm -rf "$clone_dir"
     echo -e "${GREEN}✓ 临时文件已清理${NC}"
-    
-    # 清理备份文件（可选，保留最近几个备份）
-    echo "保留备份文件: $(basename "$current_backup")"
     
     echo ""
     
@@ -463,13 +400,8 @@ update_toolbox() {
     
     echo ""
     echo -e "${YELLOW}提示：${NC}"
-    echo "1. 旧版本备份保存在: $BACKUP_DIR/"
-    echo "2. 如有问题，可以手动恢复备份"
-    echo "3. 请重新启动工具箱以应用更新"
+    echo "1. 请重新启动工具箱以应用更新"
     echo ""
-    
-    # 移除锁文件
-    rm -f "$TEMP_DIR/updating.lock"
     
     log "工具箱更新完成"
     
@@ -2674,6 +2606,136 @@ update_all_apps() {
         echo -e "${YELLOW}⚠️  应用更新过程中出现错误${NC}"
         log "更新所有应用失败"
     fi
+}
+
+# 23. 卸载已安装应用
+uninstall_apps() {
+    show_header
+    echo -e "${YELLOW}════════════════ 卸载已安装应用 ════════════════${NC}"
+    echo ""
+
+    echo "请选择要卸载的应用："
+    echo "1. AnyDesk"
+    echo "2. WPS Office"
+    echo "3. QQ"
+    echo "4. 微信"
+    echo "5. QQ音乐"
+    echo "6. 百度网盘"
+    echo "7. Edge浏览器"
+    echo "8. Google浏览器"
+    echo ""
+
+    read -p "请输入选择 [1-8] (输入其他键返回主菜单): " app_choice
+
+    case $app_choice in
+        1)
+            # 卸载AnyDesk
+            uninstall_app_by_name "AnyDesk" "com.anydesk.Anydesk" "$DESKTOP_DIR/AnyDesk.desktop"
+            ;;
+        2)
+            # 卸载WPS Office
+            uninstall_app_by_name "WPS Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps" "org.wps.Office" "$DESKTOP_DIR/WPS_Office.desktop"
+            ;;
+        3)
+            # 卸载QQ
+            uninstall_app_by_name "QQ" "com.qq.QQ" "com.tencent.qq" "io.github.msojocs.qq" "$DESKTOP_DIR/QQ.desktop"
+            ;;
+        4)
+            # 卸载微信
+            uninstall_app_by_name "微信" "com.tencent.WeChat" "com.qq.weixin" "com.tencent.wechat" "io.github.msojocs.wechat" "$DESKTOP_DIR/WeChat.desktop"
+            ;;
+        5)
+            # 卸载QQ音乐
+            uninstall_app_by_name "QQ音乐" "com.qq.QQmusic" "com.tencent.QQmusic" "$DESKTOP_DIR/com.qq.QQmusic.desktop"
+            ;;
+        6)
+            # 卸载百度网盘
+            uninstall_app_by_name "百度网盘" "com.baidu.NetDisk" "com.baidu.pan" "$DESKTOP_DIR/com.baidu.NetDisk.desktop"
+            ;;
+        7)
+            # 卸载Edge浏览器
+            uninstall_app_by_name "Edge浏览器" "com.microsoft.Edge" "org.mozilla.firefox" "com.google.Chrome" "$DESKTOP_DIR/Microsoft_Edge.desktop"
+            ;;
+        8)
+            # 卸载Google浏览器
+            uninstall_app_by_name "Google浏览器" "com.google.Chrome" "org.chromium.Chromium" "$DESKTOP_DIR/Google_Chrome.desktop"
+            ;;
+        *)
+            echo "返回主菜单..."
+            return
+            ;;
+    esac
+}
+
+# 通用应用卸载函数
+uninstall_app_by_name() {
+    local app_name="$1"
+    shift
+    local packages=("$@")
+    
+    # 最后一个参数是桌面快捷方式路径
+    local desktop_file="${!#}"
+    # 移除最后一个参数（桌面快捷方式路径）
+    set -- "${@:1:$(($#-1))}"
+    
+    echo ""
+    echo -e "${CYAN}正在检查是否已安装$app_name...${NC}"
+    
+    # 查找已安装的包
+    local installed_package=""
+    for package in "${packages[@]}"; do
+        if flatpak list | grep -q "$package"; then
+            installed_package="$package"
+            break
+        fi
+    done
+    
+    if [ -n "$installed_package" ]; then
+        echo "找到已安装的包: $installed_package"
+        echo ""
+        echo -e "${YELLOW}警告：您即将卸载 $app_name${NC}"
+        read -p "是否继续？(输入 y 确认，其他键取消): " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "操作已取消。"
+            return
+        fi
+        
+        echo "正在卸载$app_name..."
+        
+        if flatpak uninstall "$installed_package" -y 2>/dev/null; then
+            echo -e "${GREEN}✓ $app_name 卸载完成${NC}"
+            
+            # 删除桌面快捷方式
+            if [ -f "$desktop_file" ]; then
+                rm -f "$desktop_file"
+                echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+            fi
+            
+            log "卸载$app_name成功，包名: $installed_package"
+        else
+            echo -e "${RED}✗ $app_name 卸载失败${NC}"
+            log "卸载$app_name失败，包名: $installed_package"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  未检测到已安装的$app_name${NC}"
+        echo "无需卸载。"
+        
+        # 如果桌面快捷方式存在但应用未安装，询问是否删除快捷方式
+        if [ -f "$desktop_file" ]; then
+            echo "检测到残留的桌面快捷方式。"
+            read -p "是否删除桌面快捷方式？(输入 y 确认，其他键取消): " -n 1 -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                rm -f "$desktop_file"
+                echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+            fi
+        fi
+        
+        log "尝试卸载$appname但未找到已安装的包"
+    fi
+    
+    read -p "按回车键返回..."
 }
 
 # ============================================
