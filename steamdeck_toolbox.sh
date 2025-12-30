@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.0.0
+# Steam Deck 工具箱 v1.0.1
 # 制作人：薯条
 
 # 颜色定义
@@ -25,7 +25,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.0.0"
+VERSION="1.0.1"
 REPO_URL="https://github.com/Zhucy123/steamdeck_toolbox" # GitHub仓库地址
 
 # 初始化目录
@@ -174,7 +174,7 @@ show_main_menu() {
 }
 
 # ============================================
-# 优化的更新功能（无运行状态检测）
+# 优化的更新功能（无运行状态检测，无备份）
 # ============================================
 
 # 检查更新（通过菜单调用）
@@ -187,7 +187,7 @@ check_for_updates() {
     update_toolbox
 }
 
-# 更新工具箱（优化的GitHub仓库方式，无运行状态检测）
+# 更新工具箱（优化的GitHub仓库方式，无运行状态检测，无备份）
 update_toolbox() {
     # 检查是否已经有更新进程在运行
     if [ -f "$TEMP_DIR/updating.lock" ]; then
@@ -206,22 +206,8 @@ update_toolbox() {
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
     echo ""
     
-    # 备份当前版本
-    echo -e "${CYAN}步骤1: 备份当前版本...${NC}"
-    local backup_file="$BACKUP_DIR/steamdeck_toolbox_backup_v${VERSION}_$(date +%Y%m%d_%H%M%S).sh"
-    
-    if cp "$SCRIPT_PATH" "$backup_file"; then
-        echo -e "${GREEN}✓ 当前版本已备份到: $(basename "$backup_file")${NC}"
-        log "备份当前版本到: $backup_file"
-    else
-        echo -e "${YELLOW}⚠️  备份失败，继续更新...${NC}"
-        log "备份当前版本失败"
-    fi
-    
-    echo ""
-    
     # 检查网络连接
-    echo -e "${CYAN}步骤2: 检查网络连接...${NC}"
+    echo -e "${CYAN}步骤1: 检查网络连接...${NC}"
     if ! check_network_connection; then
         echo -e "${RED}✗ 网络连接失败！${NC}"
         echo "请检查网络连接后重试。"
@@ -237,7 +223,7 @@ update_toolbox() {
     echo ""
     
     # 检查git是否安装
-    echo -e "${CYAN}步骤3: 检查Git工具...${NC}"
+    echo -e "${CYAN}步骤2: 检查Git工具...${NC}"
     if ! command -v git &> /dev/null; then
         echo -e "${YELLOW}未找到git工具，正在尝试安装...${NC}"
         
@@ -275,7 +261,7 @@ update_toolbox() {
     echo ""
     
     # 克隆GitHub仓库
-    echo -e "${CYAN}步骤4: 下载最新版本...${NC}"
+    echo -e "${CYAN}步骤3: 下载最新版本...${NC}"
     local clone_dir="$HOME/steamdeck_toolbox_update"
     
     # 清理旧的下载目录
@@ -341,7 +327,7 @@ update_toolbox() {
     fi
     
     # 提取新版本号
-    echo -e "${CYAN}步骤5: 检查版本信息...${NC}"
+    echo -e "${CYAN}步骤4: 检查版本信息...${NC}"
     local new_version=$(extract_version "$new_script_path")
     
     if [ -n "$new_version" ]; then
@@ -373,7 +359,7 @@ update_toolbox() {
     echo ""
     
     # 确认更新
-    echo -e "${CYAN}步骤6: 确认更新${NC}"
+    echo -e "${CYAN}步骤5: 确认更新${NC}"
     echo "即将更新 Steam Deck 工具箱"
     echo "当前版本: $VERSION"
     if [ -n "$new_version" ]; then
@@ -399,16 +385,12 @@ update_toolbox() {
     echo ""
     
     # 替换脚本文件
-    echo -e "${CYAN}步骤7: 替换脚本文件...${NC}"
+    echo -e "${CYAN}步骤6: 替换脚本文件...${NC}"
     
     # 先设置权限
     chmod +x "$new_script_path"
     
-    # 备份当前脚本
-    local current_backup="$SCRIPT_PATH.backup"
-    cp "$SCRIPT_PATH" "$current_backup"
-    
-    # 替换脚本
+    # 直接替换脚本，不创建备份
     if cp "$new_script_path" "$SCRIPT_PATH"; then
         chmod +x "$SCRIPT_PATH"
         echo -e "${GREEN}✓ 脚本文件替换成功${NC}"
@@ -420,14 +402,7 @@ update_toolbox() {
         fi
     else
         echo -e "${RED}✗ 脚本文件替换失败！${NC}"
-        echo "正在恢复备份..."
-        
-        # 尝试恢复备份
-        if [ -f "$current_backup" ]; then
-            cp "$current_backup" "$SCRIPT_PATH"
-            chmod +x "$SCRIPT_PATH"
-            echo -e "${YELLOW}✓ 已恢复备份${NC}"
-        fi
+        echo "请检查文件权限。"
         
         # 清理下载目录
         rm -rf "$clone_dir"
@@ -440,12 +415,9 @@ update_toolbox() {
     fi
     
     # 清理下载目录
-    echo -e "${CYAN}步骤8: 清理临时文件...${NC}"
+    echo -e "${CYAN}步骤7: 清理临时文件...${NC}"
     rm -rf "$clone_dir"
     echo -e "${GREEN}✓ 临时文件已清理${NC}"
-    
-    # 清理备份文件（可选，保留最近几个备份）
-    echo "保留备份文件: $(basename "$current_backup")"
     
     echo ""
     
@@ -463,9 +435,7 @@ update_toolbox() {
     
     echo ""
     echo -e "${YELLOW}提示：${NC}"
-    echo "1. 旧版本备份保存在: $BACKUP_DIR/"
-    echo "2. 如有问题，可以手动恢复备份"
-    echo "3. 请重新启动工具箱以应用更新"
+    echo "1. 请重新启动工具箱以应用更新"
     echo ""
     
     # 移除锁文件
