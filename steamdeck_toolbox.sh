@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Steam Deck 工具箱 v0.0.1内测版
-# 制作人：薯条
+# 制作人：薯条＆DeepSeek
 
 # 颜色定义
 RED='\033[0;31m'
@@ -133,7 +133,7 @@ show_header() {
     clear
     echo -e "${CYAN} ${NC}"
     echo -e "${CYAN}                     steamdeck工具箱 - 版本: 内测版$VERSION                             ${NC}"
-    echo -e "${CYAN}                              制作人：薯条                                             ${NC}"
+    echo -e "${CYAN}                              制作人：薯条＆DeepSeek                                    ${NC}"
     echo -e "${CYAN}          按STEAM按键+X按键呼出键盘，如果呼不出来，请查看是否打开并登陆了steam             ${NC}"
     echo -e "${CYAN}                        意见建议请联系店铺售后客服反馈                                   ${NC}"
     echo ""
@@ -636,13 +636,13 @@ show_about() {
     echo -e "${YELLOW}════════════════ 关于 steamdeck工具箱 ════════════════${NC}"
     echo ""
     echo -e "${GREEN}steamdeck工具箱 v$VERSION${NC}"
-    echo "制作人：薯条"
+    echo "制作人：薯条＆DeepSeek"
     echo "发布日期：2026年1月1日"
     echo ""
     echo -e "${CYAN}工具箱介绍：${NC}"
     echo "这是一个专为 Steam Deck 设计的工具箱，集成了系统优化、软件安装、"
     echo "网络工具等多种功能，方便用户快速配置和优化设备。"
-    echo ""
+    echo "感谢DeepSeek提供的大量技术支持"
     echo -e "${YELLOW}使用说明：${NC}"
     echo "1. 使用数字或字母选择功能"
     echo "2. 部分功能需要管理员权限"
