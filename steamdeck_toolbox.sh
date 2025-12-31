@@ -27,11 +27,58 @@ SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 VERSION="0.0.1"
 REPO_URL="https://github.com/Zhucy123/steamdeck_toolbox" # GitHub仓库地址
 
+# 系统类型检测变量
+SYSTEM_TYPE="" # 存储检测结果：single 或 dual
+
 # 初始化目录
 init_dirs() {
     mkdir -p "$INSTALL_DIR"
     mkdir -p "$BACKUP_DIR"
     mkdir -p "$TEMP_DIR"
+}
+
+# 静默检测系统类型（单系统或双系统）
+detect_system_type() {
+    echo "正在检测系统类型..."
+
+    # 方法1: 检查引导相关文件
+    local boot_entries=0
+
+    # 检查efibootmgr输出中的引导项数量
+    if command -v efibootmgr &> /dev/null; then
+        boot_entries=$(efibootmgr 2>/dev/null | grep -c "Boot[0-9A-F][0-9A-F][0-9A-F][0-9A-F]")
+    fi
+
+    # 方法2: 检查引导分区内容
+    local efi_dirs=0
+    if [ -d "/boot/efi/EFI" ]; then
+        efi_dirs=$(find /boot/efi/EFI -maxdepth 1 -type d 2>/dev/null | wc -l)
+        efi_dirs=$((efi_dirs - 1)) # 减去目录本身
+    fi
+
+    # 方法3: 检查是否有Windows相关文件
+    local has_windows=0
+    if [ -d "/boot/efi/EFI/Microsoft" ] || [ -d "/boot/efi/EFI/Boot" ] || \
+       [ -f "/boot/efi/EFI/Microsoft/Boot/bootmgfw.efi" ] || \
+       [ -d "/mnt/windows" ] || [ -d "/run/media/deck/Windows" ]; then
+        has_windows=1
+    fi
+
+    # 方法4: 检查是否有Clover引导
+    local has_clover=0
+    if [ -d "/boot/efi/EFI/CLOVER" ] || [ -d "/boot/efi/EFI/Clover" ] || \
+       command -v efibootmgr &> /dev/null && efibootmgr 2>/dev/null | grep -i "CLOVER" &> /dev/null; then
+        has_clover=1
+    fi
+
+    # 判断逻辑
+    if [ $has_windows -eq 1 ] || [ $has_clover -eq 1 ] || [ $boot_entries -gt 2 ] || [ $efi_dirs -gt 2 ]; then
+        SYSTEM_TYPE="dual"
+        echo "检测到双系统配置"
+    else
+        SYSTEM_TYPE="single"
+        echo "检测到单系统配置"
+    fi
 }
 
 # 创建桌面快捷方式（优化版）
@@ -42,7 +89,7 @@ create_desktop_shortcuts() {
         # 获取脚本的实际位置
         local script_dir=$(dirname "$(realpath "$0")")
         local script_name=$(basename "$0")
-        
+
         cat > "$MAIN_LAUNCHER" << EOF
 [Desktop Entry]
 Type=Application
@@ -63,7 +110,7 @@ EOF
     if [ ! -f "$UPDATE_LAUNCHER" ]; then
         local script_dir=$(dirname "$(realpath "$0")")
         local script_name=$(basename "$0")
-        
+
         cat > "$UPDATE_LAUNCHER" << EOF
 [Desktop Entry]
 Type=Application
@@ -89,51 +136,192 @@ show_header() {
     echo -e "${CYAN}                              制作人：薯条                                             ${NC}"
     echo -e "${CYAN}          按STEAM按键+X按键呼出键盘，如果呼不出来，请查看是否打开并登陆了steam             ${NC}"
     echo -e "${CYAN}                        意见建议请联系店铺售后客服反馈                                   ${NC}"
-    echo -e "${CYAN} ${NC}"
     echo ""
 }
 
-# 显示主菜单
+# 显示主菜单（根据系统类型动态调整）
 show_main_menu() {
     while true; do
         show_header
 
+        # 显示系统类型信息
+        if [ "$SYSTEM_TYPE" == "dual" ]; then
+            echo -e "${GREEN}当前系统: 双系统 (检测到Windows/Clover引导)${NC}"
+        else
+            echo -e "${YELLOW}当前系统: 单系统 (仅SteamOS)${NC}"
+        fi
+        echo ""
+
         echo -e "${CYAN}请选择要执行的功能：${NC}"
         echo ""
 
-        echo -e "${GREEN}  1.  关于支持与维护的说明${NC}"
-        echo -e "${GREEN}  2.  安装国内源${NC}"
-        echo -e "${GREEN}  3.  调整虚拟内存大小${NC}"
-        echo -e "${GREEN}  4.  修复磁盘写入错误${NC}"
-        echo -e "${GREEN}  5.  修复引导${NC}"
-        echo -e "${GREEN}  6.  修复互通盘${NC}"
-        echo -e "${GREEN}  7.  清理hosts缓存${NC}"
-        echo -e "${GREEN}  8.  安装UU加速器插件${NC}"
-        echo -e "${GREEN}  9.  安装迅游加速器插件${NC}"
-        echo -e "${GREEN} 10.  安装ToMoon${NC}"
-        echo -e "${GREEN} 11.  安装＆卸载插件商店${NC}"
-        echo -e "${GREEN} 12.  安装＆卸载宝葫芦${NC}"
-        echo -e "${GREEN} 13.  校准摇杆${NC}"
-        echo -e "${GREEN} 14.  设置管理员密码${NC}"
-        echo -e "${GREEN} 15.  安装AnyDesk${NC}"
-        echo -e "${GREEN} 16.  安装ToDesk${NC}"
-        echo -e "${GREEN} 17.  安装WPS Office${NC}"
-        echo -e "${GREEN} 18.  安装QQ${NC}"
-        echo -e "${GREEN} 19.  安装微信${NC}"
-        echo -e "${GREEN} 20.  安装QQ音乐${NC}"
-        echo -e "${GREEN} 21.  安装百度网盘${NC}"
-        echo -e "${GREEN} 22.  安装Edge浏览器${NC}"
-        echo -e "${GREEN} 23.  安装Google浏览器${NC}"
-        echo -e "${GREEN} 24.  更新已安装应用${NC}"
-        echo -e "${GREEN} 25.  卸载已安装应用${NC}"
-        echo -e "${GREEN} 26.  检查工具箱更新${NC}"
-        echo ""
+        # 菜单项计数器
+        local menu_counter=1
 
+        # 1. 关于支持与维护的说明（始终显示）
+        echo -e "${GREEN}  $menu_counter.  关于支持与维护的说明${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 2. 安装国内源（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装国内源${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 3. 调整虚拟内存大小（始终显示）
+        echo -e "${GREEN}  $menu_counter.  调整虚拟内存大小${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 4. 修复磁盘写入错误（始终显示）
+        echo -e "${GREEN}  $menu_counter.  修复磁盘写入错误${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 5. 修复引导（仅双系统显示）
+        if [ "$SYSTEM_TYPE" == "dual" ]; then
+            echo -e "${GREEN}  $menu_counter.  修复引导${NC}"
+            menu_counter=$((menu_counter + 1))
+        fi
+
+        # 6. 修复互通盘（仅双系统显示）
+        if [ "$SYSTEM_TYPE" == "dual" ]; then
+            echo -e "${GREEN}  $menu_counter.  修复互通盘${NC}"
+            menu_counter=$((menu_counter + 1))
+        fi
+
+        # 7. 清理hosts缓存（始终显示）
+        echo -e "${GREEN}  $menu_counter.  清理hosts缓存${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 8. 安装UU加速器插件（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装UU加速器插件${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 9. 安装迅游加速器插件（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装迅游加速器插件${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 10. 安装ToMoon（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装ToMoon${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 11. 安装＆卸载插件商店（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装＆卸载插件商店${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 12. 安装＆卸载宝葫芦（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装＆卸载宝葫芦${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 13. 校准摇杆（始终显示）
+        echo -e "${GREEN}  $menu_counter.  校准摇杆${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 14. 设置管理员密码（始终显示）
+        echo -e "${GREEN}  $menu_counter.  设置管理员密码${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 15. 安装AnyDesk（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装AnyDesk${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 16. 安装ToDesk（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装ToDesk${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 17. 安装WPS Office（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装WPS Office${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 18. 安装QQ（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装QQ${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 19. 安装微信（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装微信${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 20. 安装QQ音乐（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装QQ音乐${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 21. 安装百度网盘（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装百度网盘${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 22. 安装Edge浏览器（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装Edge浏览器${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 23. 安装Google浏览器（始终显示）
+        echo -e "${GREEN}  $menu_counter.  安装Google浏览器${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 24. 更新已安装应用（始终显示）
+        echo -e "${GREEN}  $menu_counter.  更新已安装应用${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 25. 卸载已安装应用（始终显示）
+        echo -e "${GREEN}  $menu_counter.  卸载已安装应用${NC}"
+        menu_counter=$((menu_counter + 1))
+
+        # 26. 检查工具箱更新（始终显示）
+        echo -e "${GREEN}  $menu_counter.  检查工具箱更新${NC}"
+
+        echo ""
         echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
         echo ""
 
         read -p "请输入选项 (输入数字或字母): " choice
 
+        # 根据系统类型映射选择到实际功能
+        map_choice_to_function "$choice"
+    done
+}
+
+# 映射用户选择到实际功能（根据系统类型调整）
+map_choice_to_function() {
+    local choice="$1"
+
+    # 如果系统类型未检测，重新检测
+    if [ -z "$SYSTEM_TYPE" ]; then
+        detect_system_type
+    fi
+
+    # 单系统情况下的菜单映射
+    if [ "$SYSTEM_TYPE" == "single" ]; then
+        case $choice in
+            # 1-4项直接对应
+            1) show_about ;;
+            2) install_chinese_source ;;
+            3) adjust_swap ;;
+            4) fix_disk_write_error ;;
+
+            # 5-24项需要向后偏移2位（因为跳过了5、6两项）
+            5) clear_hosts_cache ;;
+            6) install_uu_accelerator ;;
+            7) install_xunyou_accelerator ;;
+            8) install_tomoon ;;
+            9) install_remove_plugin_store ;;
+            10) install_remove_baohulu ;;
+            11) calibrate_joystick ;;
+            12) set_admin_password ;;
+            13) install_anydesk ;;
+            14) install_todesk ;;
+            15) install_wps_office ;;
+            16) install_qq ;;
+            17) install_wechat ;;
+            18) install_qqmusic ;;
+            19) install_baidunetdisk ;;
+            20) install_edge ;;
+            21) install_chrome ;;
+            22) update_installed_apps ;;
+            23) uninstall_apps ;;
+            24) check_for_updates ;;
+            *)
+                echo -e "${RED}无效选择，请重新输入！${NC}"
+                sleep 1
+                ;;
+        esac
+    else
+        # 双系统情况下的菜单映射（原样）
         case $choice in
             1) show_about ;;
             2) install_chinese_source ;;
@@ -166,7 +354,7 @@ show_main_menu() {
                 sleep 1
                 ;;
         esac
-    done
+    fi
 }
 
 # ============================================
@@ -178,7 +366,7 @@ check_for_updates() {
     show_header
     echo -e "${YELLOW}════════════════ 检查工具箱更新 ════════════════${NC}"
     echo ""
-    
+
     # 直接执行更新流程，不检查运行状态
     update_toolbox
 }
@@ -191,25 +379,25 @@ update_toolbox() {
     echo -e "${CYAN}              Steam Deck 工具箱更新程序               ${NC}"
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
     echo ""
-    
+
     # 检查网络连接
     echo -e "${CYAN}步骤1: 检查网络连接...${NC}"
     if ! check_network_connection; then
         echo -e "${RED}✗ 网络连接失败！${NC}"
         echo "请检查网络连接后重试。"
-        
+
         read -p "按回车键退出..."
         exit 1
     fi
-    
+
     echo -e "${GREEN}✓ 网络连接正常${NC}"
     echo ""
-    
+
     # 检查git是否安装
     echo -e "${CYAN}步骤2: 检查Git工具...${NC}"
     if ! command -v git &> /dev/null; then
         echo -e "${YELLOW}未找到git工具，正在尝试安装...${NC}"
-        
+
         # 尝试安装git
         if command -v pacman &> /dev/null; then
             echo "正在安装git..."
@@ -220,63 +408,63 @@ update_toolbox() {
         else
             echo -e "${RED}无法自动安装git，请手动安装git后再试。${NC}"
             echo "安装命令: sudo pacman -S git 或 sudo apt install git"
-            
+
             read -p "按回车键退出..."
             exit 1
         fi
-        
+
         # 再次检查git是否安装成功
         if ! command -v git &> /dev/null; then
             echo -e "${RED}✗ Git安装失败！${NC}"
-            
+
             read -p "按回车键退出..."
             exit 1
         fi
     fi
-    
+
     echo -e "${GREEN}✓ Git工具可用${NC}"
     echo ""
-    
+
     # 克隆GitHub仓库
     echo -e "${CYAN}步骤3: 下载最新版本...${NC}"
     local clone_dir="$HOME/steamdeck_toolbox"
-    
+
     # 清理旧的下载目录
     if [ -d "$clone_dir" ]; then
         echo "清理旧的下载目录..."
         rm -rf "$clone_dir"
     fi
-    
+
     echo "正在从GitHub仓库下载最新版本..."
     echo "仓库地址: $REPO_URL"
-    
+
     # 克隆仓库
     if git clone --depth=1 "$REPO_URL" "$clone_dir"; then
         echo -e "${GREEN}✓ 下载完成${NC}"
     else
         echo -e "${RED}✗ 下载失败！${NC}"
         echo "请检查网络连接或仓库地址。"
-        
+
         # 清理下载目录
         rm -rf "$clone_dir" 2>/dev/null
-        
+
         read -p "按回车键退出..."
         exit 1
     fi
-    
+
     # 检查下载的文件是否有效
     local new_script_path="$clone_dir/steamdeck_toolbox.sh"
     if [ ! -f "$new_script_path" ]; then
         echo -e "${RED}✗ 在仓库中未找到脚本文件！${NC}"
         echo "请确认仓库中是否有 steamdeck_toolbox.sh 文件。"
-        
+
         # 清理下载目录
         rm -rf "$clone_dir"
-        
+
         read -p "按回车键退出..."
         exit 1
     fi
-    
+
     # 检查文件是否为有效的bash脚本
     if ! head -n 5 "$new_script_path" | grep -q "bash"; then
         echo -e "${YELLOW}⚠️  下载的文件可能不是有效的bash脚本${NC}"
@@ -285,31 +473,31 @@ update_toolbox() {
         echo ""
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             echo "更新已取消。"
-            
+
             # 清理下载目录
             rm -rf "$clone_dir"
-            
+
             read -p "按回车键退出..."
             exit 0
         fi
     fi
-    
+
     # 提取新版本号
     echo -e "${CYAN}步骤4: 检查版本信息...${NC}"
     local new_version=$(extract_version "$new_script_path")
-    
+
     if [ -n "$new_version" ]; then
         echo "当前版本: $VERSION"
         echo "最新版本: $new_version"
-        
+
         if [ "$VERSION" == "$new_version" ]; then
             echo -e "${GREEN}✓ 已经是最新版本${NC}"
             echo ""
             echo "无可用更新。"
-            
+
             # 清理下载目录
             rm -rf "$clone_dir"
-            
+
             echo "将在3秒后自动关闭..."
             sleep 3
             exit 0
@@ -319,9 +507,9 @@ update_toolbox() {
     else
         echo -e "${YELLOW}⚠️  无法获取新版本号，继续更新...${NC}"
     fi
-    
+
     echo ""
-    
+
     # 确认更新
     echo -e "${CYAN}步骤5: 确认更新${NC}"
     echo "即将更新 Steam Deck 工具箱"
@@ -330,27 +518,27 @@ update_toolbox() {
         echo "更新版本: $new_version"
     fi
     echo ""
-    
+
     read -p "是否继续更新？(y/n): " -n 1 -r
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         echo "更新已取消。"
-        
+
         # 清理下载目录
         rm -rf "$clone_dir"
-        
+
         read -p "按回车键退出..."
         exit 0
     fi
-    
+
     echo ""
-    
+
     # 替换脚本文件
     echo -e "${CYAN}步骤6: 替换脚本文件...${NC}"
-    
+
     # 先设置权限
     chmod +x "$new_script_path"
-    
+
     # 直接替换脚本，不创建备份
     if cp "$new_script_path" "$SCRIPT_PATH"; then
         chmod +x "$SCRIPT_PATH"
@@ -358,38 +546,38 @@ update_toolbox() {
     else
         echo -e "${RED}✗ 脚本文件替换失败！${NC}"
         echo "请检查文件权限。"
-        
+
         # 清理下载目录
         rm -rf "$clone_dir"
-        
+
         read -p "按回车键退出..."
         exit 1
     fi
-    
+
     # 清理下载目录
     echo -e "${CYAN}步骤7: 清理临时文件...${NC}"
     rm -rf "$clone_dir"
     echo -e "${GREEN}✓ 临时文件已清理${NC}"
-    
+
     echo ""
-    
+
     # 更新完成
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
     echo -e "${GREEN}              ✓ 更新完成！                          ${NC}"
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
     echo ""
-    
+
     if [ -n "$new_version" ]; then
         echo -e "${GREEN}工具箱已从 v$VERSION 成功更新到 v$new_version${NC}"
     else
         echo -e "${GREEN}工具箱更新完成${NC}"
     fi
-    
+
     echo ""
     echo -e "${YELLOW}提示：${NC}"
     echo "1. 请重新启动工具箱以应用更新"
     echo ""
-    
+
     # 提示用户重新启动
     echo "更新已完成！请重新启动工具箱以使用新版本。"
     read -p "按回车键退出..."
@@ -414,27 +602,27 @@ check_network_connection() {
             fi
         fi
     fi
-    
+
     return 1
 }
 
 # 从脚本文件中提取版本号
 extract_version() {
     local script_file="$1"
-    
+
     # 尝试从脚本开头提取版本号
     local version=$(grep -E "^#.*[Vv]ersion[[:space:]]*:" "$script_file" | head -1 | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+")
-    
+
     if [ -z "$version" ]; then
         # 尝试从注释中提取
         version=$(grep -E "VERSION[[:space:]]*=" "$script_file" | head -1 | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+")
     fi
-    
+
     if [ -z "$version" ]; then
         # 尝试从其他格式提取
         version=$(grep -E "v[0-9]\+\.[0-9]\+\.[0-9]\+" "$script_file" | head -1 | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+")
     fi
-    
+
     echo "$version"
 }
 
@@ -1135,7 +1323,7 @@ set_admin_password() {
     echo -e "${YELLOW}════════════════ 设置管理员密码 ════════════════${NC}"
 
     echo -e "${CYAN}正在检查是否已设置管理员密码...${NC}"
-    
+
     # 检查是否已经设置密码
     if sudo -n true 2>/dev/null; then
         echo -e "${GREEN}✓ 管理员密码已经设置${NC}"
@@ -1146,10 +1334,10 @@ set_admin_password() {
         echo "现在开始设置管理员密码..."
         echo "请按照提示输入您要设置的密码"
         echo ""
-        
+
         # 执行设置密码
         sudo passwd
-        
+
         if [ $? -eq 0 ]; then
             echo ""
             echo -e "${GREEN}✓ 管理员密码设置完成${NC}"
@@ -1267,7 +1455,7 @@ EOF
 
     INSTALL_SUCCESS=false
     PACKAGE="com.anydesk.Anydesk"
-    
+
     echo "尝试安装包: $PACKAGE"
     if flatpak install flathub "$PACKAGE" -y 2>/dev/null; then
         echo -e "${GREEN}✓ 使用包名 '$PACKAGE' 安装成功${NC}"
@@ -1281,7 +1469,7 @@ EOF
         echo ""
         echo -e "${YELLOW}无法通过Flatpak安装AnyDesk。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
-        
+
         read -p "按回车键返回主菜单..."
         return
     fi
@@ -1469,7 +1657,7 @@ EOF
         echo ""
         echo -e "${YELLOW}无法通过Flatpak安装WPS Office。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
-        
+
         read -p "按回车键返回主菜单..."
         return
     fi
@@ -1623,7 +1811,7 @@ EOF
         echo ""
         echo -e "${YELLOW}无法通过Flatpak安装QQ。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
-        
+
         read -p "按回车键返回主菜单..."
         return
     fi
@@ -1777,7 +1965,7 @@ EOF
         echo ""
         echo -e "${YELLOW}无法通过Flatpak安装微信。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
-        
+
         read -p "按回车键返回主菜单..."
         return
     fi
@@ -1931,7 +2119,7 @@ EOF
         echo ""
         echo -e "${YELLOW}无法通过Flatpak安装QQ音乐。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
-        
+
         read -p "按回车键返回主菜单..."
         return
     fi
@@ -2085,7 +2273,7 @@ EOF
         echo ""
         echo -e "${YELLOW}无法通过Flatpak安装百度网盘。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
-        
+
         read -p "按回车键返回主菜单..."
         return
     fi
@@ -2239,7 +2427,7 @@ EOF
         echo ""
         echo -e "${YELLOW}无法通过Flatpak安装Edge浏览器。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
-        
+
         read -p "按回车键返回主菜单..."
         return
     fi
@@ -2393,7 +2581,7 @@ EOF
         echo ""
         echo -e "${YELLOW}无法通过Flatpak安装Google浏览器。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
-        
+
         read -p "按回车键返回主菜单..."
         return
     fi
@@ -2521,10 +2709,10 @@ update_app_by_name() {
     local app_name="$1"
     shift
     local packages=("$@")
-    
+
     echo ""
     echo -e "${CYAN}正在检查$app_name的更新...${NC}"
-    
+
     # 查找已安装的包
     local installed_package=""
     for package in "${packages[@]}"; do
@@ -2533,11 +2721,11 @@ update_app_by_name() {
             break
         fi
     done
-    
+
     if [ -n "$installed_package" ]; then
         echo "找到已安装的包: $installed_package"
         echo "正在更新$app_name..."
-        
+
         if flatpak update "$installed_package" -y 2>/dev/null; then
             echo -e "${GREEN}✓ $app_name 更新完成${NC}"
         else
@@ -2554,12 +2742,12 @@ update_all_apps() {
     show_header
     echo -e "${YELLOW}════════════════ 更新全部应用 ════════════════${NC}"
     echo ""
-    
+
     echo -e "${CYAN}正在更新所有已安装的应用...${NC}"
-    
+
     # 更新所有应用
     flatpak update -y 2>/dev/null
-    
+
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ 所有应用更新完成${NC}"
     else
@@ -2631,15 +2819,15 @@ uninstall_app_by_name() {
     local app_name="$1"
     shift
     local packages=("$@")
-    
+
     # 最后一个参数是桌面快捷方式路径
     local desktop_file="${!#}"
     # 移除最后一个参数（桌面快捷方式路径）
     set -- "${@:1:$(($#-1))}"
-    
+
     echo ""
     echo -e "${CYAN}正在检查是否已安装$app_name...${NC}"
-    
+
     # 查找已安装的包
     local installed_package=""
     for package in "${packages[@]}"; do
@@ -2648,7 +2836,7 @@ uninstall_app_by_name() {
             break
         fi
     done
-    
+
     if [ -n "$installed_package" ]; then
         echo "找到已安装的包: $installed_package"
         echo ""
@@ -2659,12 +2847,12 @@ uninstall_app_by_name() {
             echo "操作已取消。"
             return
         fi
-        
+
         echo "正在卸载$app_name..."
-        
+
         if flatpak uninstall "$installed_package" -y 2>/dev/null; then
             echo -e "${GREEN}✓ $app_name 卸载完成${NC}"
-            
+
             # 删除桌面快捷方式
             if [ -f "$desktop_file" ]; then
                 rm -f "$desktop_file"
@@ -2676,7 +2864,7 @@ uninstall_app_by_name() {
     else
         echo -e "${YELLOW}⚠️  未检测到已安装的$app_name${NC}"
         echo "无需卸载。"
-        
+
         # 如果桌面快捷方式存在但应用未安装，询问是否删除快捷方式
         if [ -f "$desktop_file" ]; then
             echo "检测到残留的桌面快捷方式。"
@@ -2688,7 +2876,7 @@ uninstall_app_by_name() {
             fi
         fi
     fi
-    
+
     read -p "按回车键返回..."
 }
 
@@ -2699,6 +2887,9 @@ uninstall_app_by_name() {
 main() {
     # 初始化目录
     init_dirs
+
+    # 静默检测系统类型
+    detect_system_type
 
     # 检查是否是通过更新参数调用
     if [ "$1" == "--update" ]; then
