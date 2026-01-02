@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v0.0.2内测版
+# Steam Deck 工具箱 v1.0.0
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -24,8 +24,14 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="0.0.2"
+VERSION="1.0.0"
 REPO_URL="https://github.com/Zhucy123/steamdeck_toolbox" # GitHub仓库地址
+REPO_CDN_URLS=(
+    "https://githubfast.com/Zhucy123/steamdeck_toolbox"
+    "https://gitclone.com/github.com/Zhucy123/steamdeck_toolbox"
+    "https://github.com.cnpmjs.org/Zhucy123/steamdeck_toolbox"
+    "https://github.com/Zhucy123/steamdeck_toolbox" # 原始地址放在最后
+)
 
 # 系统类型检测变量
 SYSTEM_TYPE="" # 存储检测结果：single 或 dual
@@ -132,7 +138,7 @@ EOF
 show_header() {
     clear
     echo -e "${CYAN} ${NC}"
-    echo -e "${CYAN}                     steamdeck工具箱 - 版本: 内测版$VERSION                             ${NC}"
+    echo -e "${CYAN}                     steamdeck工具箱 - 版本: $VERSION                             ${NC}"
     echo -e "${CYAN}                              制作人：薯条＆DeepSeek                                    ${NC}"
     echo -e "${CYAN}          按STEAM按键+X按键呼出键盘，如果呼不出来，请查看是否打开并登陆了steam             ${NC}"
     echo -e "${CYAN}                        意见建议请联系店铺售后客服反馈                                   ${NC}"
@@ -358,7 +364,7 @@ map_choice_to_function() {
 }
 
 # ============================================
-# 优化的更新功能（无运行状态检测，无备份）
+# 优化的更新功能（使用CDN镜像加速下载）
 # ============================================
 
 # 检查更新（通过菜单调用）
@@ -371,7 +377,7 @@ check_for_updates() {
     update_toolbox
 }
 
-# 更新工具箱（优化的GitHub仓库方式，无运行状态检测，无备份）
+# 更新工具箱（使用CDN镜像加速下载）
 update_toolbox() {
     # 显示更新界面
     clear
@@ -425,7 +431,7 @@ update_toolbox() {
     echo -e "${GREEN}✓ Git工具可用${NC}"
     echo ""
 
-    # 克隆GitHub仓库
+    # 克隆GitHub仓库（使用CDN镜像）
     echo -e "${CYAN}步骤3: 下载最新版本...${NC}"
     local clone_dir="$HOME/steamdeck_toolbox"
 
@@ -435,18 +441,54 @@ update_toolbox() {
         rm -rf "$clone_dir"
     fi
 
-    echo "正在从GitHub仓库下载最新版本..."
-    echo "仓库地址: $REPO_URL"
+    echo "正在尝试使用CDN镜像加速下载..."
+    echo ""
 
-    # 克隆仓库
-    if git clone --depth=1 "$REPO_URL" "$clone_dir"; then
-        echo -e "${GREEN}✓ 下载完成${NC}"
+    # 尝试使用CDN镜像下载
+    local download_success=false
+
+    for url in "${REPO_CDN_URLS[@]}"; do
+    # 提取URL名称用于显示
+    local url_name
+    if [[ "$url" == *"githubfast.com"* ]]; then
+        url_name="GitHubFast镜像"
+    elif [[ "$url" == *"gitclone.com"* ]]; then
+        url_name="GitClone镜像"
+    elif [[ "$url" == *"github.com.cnpmjs.org"* ]]; then
+        url_name="CNPM镜像"
+    elif [[ "$url" == *"github.com"* ]]; then
+        url_name="GitHub原始地址"
     else
-        echo -e "${RED}✗ 下载失败！${NC}"
-        echo "请检查网络连接或仓库地址。"
+        url_name="未知镜像"
+    fi
 
-        # 清理下载目录
+    echo "尝试从 $url_name 下载..."
+    echo "下载地址: $url"
+
+    # 清理旧的下载目录
+    rm -rf "$clone_dir" 2>/dev/null
+
+    # 设置超时为30秒
+    if timeout 30 git clone --depth=1 "$url" "$clone_dir" 2>&1; then
+        echo -e "${GREEN}✓ $url_name 下载成功${NC}"
+        download_success=true
+        break
+    else
+        echo -e "${YELLOW}⚠️  $url_name 下载失败，尝试下一个镜像...${NC}"
+        echo ""
+        # 清理失败的下载
         rm -rf "$clone_dir" 2>/dev/null
+        sleep 1
+    fi
+done
+
+    if [ "$download_success" = false ]; then
+        echo -e "${RED}✗ 所有镜像下载失败！${NC}"
+        echo "请检查网络连接或稍后重试。"
+        echo "您也可以手动从以下地址下载："
+        echo "1. GitHub原始地址: $REPO_URL"
+        echo "2. CDN镜像地址: ${REPO_CDN_URLS[0]}"
+        echo ""
 
         read -p "按回车键退出..."
         exit 1
