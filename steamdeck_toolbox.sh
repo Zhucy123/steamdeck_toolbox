@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.0.1
+# Steam Deck 工具箱 v1.0.2
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -24,7 +24,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.0.1"
+VERSION="1.0.2"
 REPO_URL="https://github.com/Zhucy123/steamdeck_toolbox" # GitHub仓库地址
 REPO_CDN_URLS=(
     "https://githubfast.com/Zhucy123/steamdeck_toolbox"
@@ -43,21 +43,73 @@ init_dirs() {
     mkdir -p "$TEMP_DIR"
 }
 
-# 静默检测系统类型（单系统或双系统）- 修改为检查Game目录
+# 静默检测系统类型（单系统或双系统）- 修改为检查Clover引导
 detect_system_type() {
-    echo "正在检测系统类型..."
+    # 静默检测，不输出检测过程
+    local has_clover=0
 
-    # 检查是否存在 /run/media/deck/Game/ 目录
-    if [ -d "/run/media/deck/Game" ]; then
+    # 方法1: 检查Clover引导目录（大小写敏感）
+    if [ -d "/boot/efi/EFI/CLOVER" ] || [ -d "/boot/efi/EFI/Clover" ]; then
+        has_clover=1
+    fi
+
+    # 方法2: 检查efibootmgr输出中是否有Clover引导项
+    if command -v efibootmgr &> /dev/null; then
+        if efibootmgr 2>/dev/null | grep -i "CLOVER" &> /dev/null; then
+            has_clover=1
+        fi
+    fi
+
+    # 方法3: 检查引导分区中的Clover文件
+    if [ -f "/boot/efi/EFI/CLOVER/CLOVERX64.efi" ] || \
+       [ -f "/boot/efi/EFI/CLOVER/config.plist" ] || \
+       [ -f "/boot/efi/EFI/Clover/CLOVERX64.efi" ] || \
+       [ -f "/boot/efi/EFI/Clover/config.plist" ]; then
+        has_clover=1
+    fi
+
+    # 方法4: 检查是否有Windows引导（作为辅助判断）
+    local has_windows=0
+    if [ -d "/boot/efi/EFI/Microsoft" ] || \
+       [ -f "/boot/efi/EFI/Microsoft/Boot/bootmgfw.efi" ] || \
+       [ -d "/boot/efi/EFI/Boot" ] && [ -f "/boot/efi/EFI/Boot/bootx64.efi" ]; then
+        has_windows=1
+    fi
+
+    # 判断逻辑：如果检测到Clover或Windows引导，则认为是双系统
+    if [ $has_clover -eq 1 ] || [ $has_windows -eq 1 ]; then
         SYSTEM_TYPE="dual"
-        echo "检测到双系统配置（存在Game目录）"
     else
         SYSTEM_TYPE="single"
-        echo "检测到单系统配置（不存在Game目录）"
+    fi
+
+    # 如果没有检测到任何引导，尝试其他方法确认
+    if [ -z "$SYSTEM_TYPE" ]; then
+        # 备用检测方法：检查引导分区中的引导项数量
+        local boot_entries=0
+        if command -v efibootmgr &> /dev/null; then
+            boot_entries=$(efibootmgr 2>/dev/null | grep -c "Boot[0-9A-F][0-9A-F][0-9A-F][0-9A-F]")
+            if [ $boot_entries -gt 2 ]; then
+                SYSTEM_TYPE="dual"
+            else
+                SYSTEM_TYPE="single"
+            fi
+        else
+            SYSTEM_TYPE="single"
+        fi
     fi
 }
 
-# 创建桌面快捷方式（优化版）
+# 显示标题
+show_header() {
+    clear
+    echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                     Steam Deck 工具箱 - 版本: $VERSION                               ${NC}"
+    echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+}
+
+# 创建桌面快捷方式（静默版）
 create_desktop_shortcuts() {
     # 仅当快捷方式不存在时才创建
     # 1. 创建主程序快捷方式
@@ -78,8 +130,6 @@ StartupNotify=true
 Categories=Utility;
 EOF
         chmod +x "$MAIN_LAUNCHER"
-    else
-        echo "主程序桌面快捷方式已存在，跳过创建"
     fi
 
     # 2. 创建更新程序快捷方式（在主程序快捷方式之后创建）
@@ -99,160 +149,157 @@ StartupNotify=true
 Categories=Utility;
 EOF
         chmod +x "$UPDATE_LAUNCHER"
-    else
-        echo "更新程序桌面快捷方式已存在，跳过创建"
     fi
-}
-
-# 显示标题
-show_header() {
-    clear
-    echo -e "${CYAN} ${NC}"
-    echo -e "${CYAN}                     steamdeck工具箱 - 版本: $VERSION                             ${NC}"
-    echo -e "${CYAN}                              制作人：薯条＆DeepSeek                                    ${NC}"
-    echo -e "${CYAN}          按STEAM按键+X按键呼出键盘，如果呼不出来，请查看是否打开并登陆了steam             ${NC}"
-    echo -e "${CYAN}                        意见建议请联系店铺售后客服反馈                                   ${NC}"
-    echo ""
 }
 
 # 显示主菜单（根据系统类型动态调整）
 show_main_menu() {
     while true; do
-        show_header
+        clear
 
-        # 显示系统类型信息
+        # 显示简洁的标题
+        echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
+        echo -e "${CYAN}                     Steam Deck 工具箱 - 版本: $VERSION                               ${NC}"
+        echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
+        echo ""
+
+        # 显示系统类型信息（简洁版）
         if [ "$SYSTEM_TYPE" == "dual" ]; then
-            echo -e "${GREEN}当前系统: 双系统 (检测到Game目录)${NC}"
+            echo -e "${GREEN}当前系统: 双系统${NC}"
         else
-            echo -e "${YELLOW}当前系统: 单系统 (仅SteamOS)${NC}"
+            echo -e "${YELLOW}当前系统: 单系统${NC}"
         fi
         echo ""
 
         echo -e "${CYAN}请选择要执行的功能：${NC}"
         echo ""
 
-        # 菜单项计数器
-        local menu_counter=1
-
-        # 1. 关于支持与维护的说明（始终显示）
-        echo -e "${GREEN}  $menu_counter.  关于支持与维护的说明${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 2. 安装国内源（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装国内源${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 3. 调整虚拟内存大小（始终显示）
-        echo -e "${GREEN}  $menu_counter.  调整虚拟内存大小${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 4. 修复磁盘写入错误（始终显示）
-        echo -e "${GREEN}  $menu_counter.  修复磁盘写入错误${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 5. 修复引导（仅双系统显示）
-        if [ "$SYSTEM_TYPE" == "dual" ]; then
-            echo -e "${GREEN}  $menu_counter.  修复引导${NC}"
-            menu_counter=$((menu_counter + 1))
-        fi
-
-        # 6. 修复互通盘（仅双系统显示）
-        if [ "$SYSTEM_TYPE" == "dual" ]; then
-            echo -e "${GREEN}  $menu_counter.  修复互通盘${NC}"
-            menu_counter=$((menu_counter + 1))
-        fi
-
-        # 7. 清理hosts缓存（始终显示）
-        echo -e "${GREEN}  $menu_counter.  清理hosts缓存${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 8. 安装UU加速器插件（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装UU加速器插件${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 9. 安装迅游加速器插件（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装迅游加速器插件${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 10. 安装ToMoon（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装ToMoon${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 11. 安装＆卸载插件商店（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装＆卸载插件商店${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 12. 安装＆卸载宝葫芦（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装＆卸载宝葫芦${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 13. 校准摇杆（始终显示）
-        echo -e "${GREEN}  $menu_counter.  校准摇杆${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 14. 设置管理员密码（始终显示）
-        echo -e "${GREEN}  $menu_counter.  设置管理员密码${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 15. 安装AnyDesk（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装AnyDesk${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 16. 安装ToDesk（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装ToDesk${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 17. 安装WPS Office（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装WPS Office${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 18. 安装QQ（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装QQ${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 19. 安装微信（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装微信${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 20. 安装QQ音乐（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装QQ音乐${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 21. 安装百度网盘（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装百度网盘${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 22. 安装Edge浏览器（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装Edge浏览器${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 23. 安装Google浏览器（始终显示）
-        echo -e "${GREEN}  $menu_counter.  安装Google浏览器${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 24. 清理Steam缓存（着色器/兼容数据）（始终显示）- 新增功能
-        echo -e "${GREEN}  $menu_counter.  清理Steam缓存（着色器/兼容数据）${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 25. 更新已安装应用（始终显示）
-        echo -e "${GREEN}  $menu_counter.  更新已安装应用${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 26. 卸载已安装应用（始终显示）
-        echo -e "${GREEN}  $menu_counter.  卸载已安装应用${NC}"
-        menu_counter=$((menu_counter + 1))
-
-        # 27. 检查工具箱更新（始终显示）
-        echo -e "${GREEN}  $menu_counter.  检查工具箱更新${NC}"
+        # 预设的三列菜单布局
+        echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装百度网盘${NC}"
+        echo -e "${GREEN} 2. 安装国内源            12. 安装＆卸载宝葫芦    22. 安装Edge浏览器${NC}"
+        echo -e "${GREEN} 3. 调整虚拟内存大小      13. 校准摇杆            23. 安装Google浏览器${NC}"
+        echo -e "${GREEN} 4. 修复磁盘写入错误      14. 设置管理员密码      24. 清理Steam缓存${NC}"
+        echo -e "${GREEN} 5. 修复引导              15. 安装AnyDesk         25. 更新已安装应用${NC}"
+        echo -e "${GREEN} 6. 修复互通盘            16. 安装ToDesk          26. 卸载已安装应用${NC}"
+        echo -e "${GREEN} 7. 清理hosts缓存         17. 安装WPS Office      27. 检查工具箱更新${NC}"
+        echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装QQ${NC}"
+        echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装微信${NC}"
+        echo -e "${GREEN}10. 安装ToMoon            20. 安装QQ音乐${NC}"
 
         echo ""
         echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
         echo ""
 
-        read -p "请输入选项 (输入数字或字母): " choice
+        read -p "请输入选项 (输入数字): " choice
 
-        # 根据系统类型映射选择到实际功能
-        map_choice_to_function "$choice"
+        # 验证输入
+        if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}无效选择，请输入数字！${NC}"
+            sleep 1
+            continue
+        fi
+
+        # 检查选择是否在有效范围内
+        if [ $choice -lt 1 ] || [ $choice -gt 27 ]; then
+            echo -e "${RED}无效选择，请选择1到27之间的数字！${NC}"
+            sleep 1
+            continue
+        fi
+
+        # 创建菜单项数组
+        local menu_items=()
+        local menu_functions=()
+
+        # 添加菜单项（根据系统类型调整）
+        menu_items+=("关于支持与维护的说明")
+        menu_functions+=("show_about")
+
+        menu_items+=("安装国内源")
+        menu_functions+=("install_chinese_source")
+
+        menu_items+=("调整虚拟内存大小")
+        menu_functions+=("adjust_swap")
+
+        menu_items+=("修复磁盘写入错误")
+        menu_functions+=("fix_disk_write_error")
+
+        if [ "$SYSTEM_TYPE" == "dual" ]; then
+            menu_items+=("修复引导")
+            menu_functions+=("fix_boot")
+
+            menu_items+=("修复互通盘")
+            menu_functions+=("fix_shared_disk")
+        fi
+
+        menu_items+=("清理hosts缓存")
+        menu_functions+=("clear_hosts_cache")
+
+        menu_items+=("安装UU加速器插件")
+        menu_functions+=("install_uu_accelerator")
+
+        menu_items+=("安装迅游加速器插件")
+        menu_functions+=("install_xunyou_accelerator")
+
+        menu_items+=("安装ToMoon")
+        menu_functions+=("install_tomoon")
+
+        menu_items+=("安装＆卸载插件商店")
+        menu_functions+=("install_remove_plugin_store")
+
+        menu_items+=("安装＆卸载宝葫芦")
+        menu_functions+=("install_remove_baohulu")
+
+        menu_items+=("校准摇杆")
+        menu_functions+=("calibrate_joystick")
+
+        menu_items+=("设置管理员密码")
+        menu_functions+=("set_admin_password")
+
+        menu_items+=("安装AnyDesk")
+        menu_functions+=("install_anydesk")
+
+        menu_items+=("安装ToDesk")
+        menu_functions+=("install_todesk")
+
+        menu_items+=("安装WPS Office")
+        menu_functions+=("install_wps_office")
+
+        menu_items+=("安装QQ")
+        menu_functions+=("install_qq")
+
+        menu_items+=("安装微信")
+        menu_functions+=("install_wechat")
+
+        menu_items+=("安装QQ音乐")
+        menu_functions+=("install_qqmusic")
+
+        menu_items+=("安装百度网盘")
+        menu_functions+=("install_baidunetdisk")
+
+        menu_items+=("安装Edge浏览器")
+        menu_functions+=("install_edge")
+
+        menu_items+=("安装Google浏览器")
+        menu_functions+=("install_chrome")
+
+        menu_items+=("清理Steam缓存")
+        menu_functions+=("steamdeck_cache_manager")
+
+        menu_items+=("更新已安装应用")
+        menu_functions+=("update_installed_apps")
+
+        menu_items+=("卸载已安装应用")
+        menu_functions+=("uninstall_apps")
+
+        menu_items+=("检查工具箱更新")
+        menu_functions+=("check_for_updates")
+
+        # 执行对应的功能
+        local idx=$((choice - 1))
+        local func="${menu_functions[$idx]}"
+
+        # 调用函数
+        $func
     done
 }
 
@@ -1117,21 +1164,24 @@ fix_shared_disk() {
         echo -e "${RED}✗ 未找到fstab文件: $FSTAB_FILE${NC}"
     fi
 
-    # 步骤4: 创建目录并尝试打开
-    echo "步骤4: 创建Game目录并尝试打开"
+    # 步骤4: 创建目录（不再自动打开）
+    echo "步骤4: 创建Game目录"
     GAME_DIR="/run/media/deck/Game"
 
     # 创建目录
     sudo mkdir -p "$GAME_DIR"
     sudo chown deck:deck "$GAME_DIR"
 
-    # 尝试打开目录
-    echo "尝试打开Game目录..."
     if [ -d "$GAME_DIR" ]; then
-        # 使用xdg-open尝试打开目录
-        xdg-open "$GAME_DIR" 2>/dev/null || echo "无法自动打开目录，请手动查看"
-        sleep 1
-        echo -e "${GREEN}✓ 已打开Game目录${NC}"
+        echo -e "${GREEN}✓ 已创建Game目录: $GAME_DIR${NC}"
+        echo ""
+        echo -e "${YELLOW}提示：请手动打开Game目录查看${NC}"
+        echo "    路径: /run/media/deck/Game"
+        echo ""
+        echo -e "${CYAN}如何打开目录：${NC}"
+        echo "1. 在桌面模式打开文件管理器"
+        echo "2. 在地址栏输入或导航到: /run/media/deck/Game"
+        echo "3. 或者使用终端命令: xdg-open /run/media/deck/Game"
     else
         echo -e "${YELLOW}⚠️  无法创建或访问Game目录${NC}"
     fi
