@@ -1,37 +1,13 @@
-# steamdeck_toolbox
+# SteamDeck 工具箱
 
-#### 介绍
-steamdeck_toolbox工具箱
+一个专为 SteamDeck 设计的全方位系统管理工具，集成了系统优化、软件安装、网络工具等26项实用功能。无论您是新手还是高级用户，都能从中找到需要的工具。
 
-#### 软件架构
-软件架构说明
+## 主要功能
+- 🛠️ **系统优化**：国内源配置、虚拟内存调整、磁盘修复
+- 📦 **软件管理**：一键安装QQ、微信、WPS、浏览器等常用应用
+- 🌐 **网络工具**：UU/迅游加速器、ToMoon网络优化
+- 🔄 **双系统支持**：引导修复、Windows-SteamOS互通盘配置
+- 🎮 **游戏增强**：摇杆校准、插件商店管理
+- 📁 **便捷工具**：应用更新卸载、hosts缓存清理
 
-
-#### 安装教程
-
-1.  xxxx
-2.  xxxx
-3.  xxxx
-
-#### 使用说明
-
-1.  xxxx
-2.  xxxx
-3.  xxxx
-
-#### 参与贡献
-
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
-
-
-#### 特技
-
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+## 一键安装
