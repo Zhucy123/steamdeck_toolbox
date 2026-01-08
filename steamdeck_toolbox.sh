@@ -1226,8 +1226,19 @@ install_remove_plugin_store() {
             ;;
         2)
             echo -e "${CYAN}正在卸载插件商店...${NC}"
-            echo "卸载命令: sudo rm -rf /home/deck/homebrew
+            echo "卸载命令: sudo rm -rf /home/deck/homebrew"
+            echo "警告：这将删除整个/home/deck/homebrew目录，包括所有插件和插件商店。"
+            echo ""
 
+            read -p "确定要卸载插件商店吗？(y/N): " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "卸载已取消。"
+                read -p "按回车键返回主菜单..."
+                return
+            fi
+
+            echo "正在执行卸载..."
             if sudo rm -rf /home/deck/homebrew; then
                 echo ""
                 echo -e "${GREEN}✓ 插件商店卸载完成${NC}"
@@ -1376,7 +1387,7 @@ install_anydesk() {
         echo "2. 卸载AnyDesk"
         echo ""
 
-        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice
+        read -p "请输入选择 [1-2] 输入其他键返回主菜单: " app_choice
 
         case $app_choice in
             1)
@@ -1551,7 +1562,7 @@ install_wps_office() {
             1)
                 # 创建桌面快捷方式
                 echo "正在创建桌面快捷方式..."
-                cat > "$DESKTOP_DIR/WPS_Office.desktop" << EOF
+                cat > "$DESKTOP_DIR/WPS_Office.desktop" << 'EOF'
 [Desktop Entry]
 Name=WPS Office
 Exec=flatpak run $INSTALLED_WPS
@@ -1657,7 +1668,7 @@ EOF
     # 创建桌面快捷方式
     echo ""
     echo "步骤5: 创建桌面快捷方式"
-    cat > "$DESKTOP_DIR/WPS_Office.desktop" << EOF
+    cat > "$DESKTOP_DIR/WPS_Office.desktop" << 'EOF'
 [Desktop Entry]
 Name=WPS Office
 Exec=flatpak run $FINAL_PACKAGE
