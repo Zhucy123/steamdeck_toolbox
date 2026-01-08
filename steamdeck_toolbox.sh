@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.0.3
+# Steam Deck 工具箱 v1.0.4
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -24,13 +24,10 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.0.3"
-REPO_URL="https://github.com/Zhucy123/steamdeck_toolbox" # GitHub仓库地址
+VERSION="1.0.4"  # 更新版本号
+REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox" # Gitee仓库地址
 REPO_CDN_URLS=(
-    "https://githubfast.com/Zhucy123/steamdeck_toolbox"
-    "https://gitclone.com/github.com/Zhucy123/steamdeck_toolbox"
-    "https://github.com.cnpmjs.org/Zhucy123/steamdeck_toolbox"
-    "https://github.com/Zhucy123/steamdeck_toolbox" # 原始地址放在最后
+    "https://gitee.com/Zhucy2100/steamdeck_toolbox" # 只有Gitee地址，不使用镜像
 )
 
 # 系统类型检测变量
@@ -169,22 +166,22 @@ show_main_menu() {
             echo ""
             echo -e "${CYAN}请选择要执行的功能：${NC}"
             echo ""
-            # 双系统菜单（27项）
-            echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装百度网盘${NC}"
-            echo -e "${GREEN} 2. 安装国内源            12. 安装＆卸载宝葫芦    22. 安装Edge浏览器${NC}"
-            echo -e "${GREEN} 3. 调整虚拟内存大小      13. 校准摇杆            23. 安装Google浏览器${NC}"
-            echo -e "${GREEN} 4. 修复磁盘写入错误      14. 设置管理员密码      24. 清理Steam缓存${NC}"
-            echo -e "${GREEN} 5. 修复引导              15. 安装AnyDesk         25. 更新已安装应用${NC}"
-            echo -e "${GREEN} 6. 修复互通盘            16. 安装ToDesk          26. 卸载已安装应用${NC}"
-            echo -e "${GREEN} 7. 清理hosts缓存         17. 安装WPS Office      27. 检查工具箱更新${NC}"
-            echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装QQ              28. 安装小黄鸭插件${NC}"
-            echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装微信${NC}"
-            echo -e "${GREEN}10. 安装ToMoon            20. 安装QQ音乐${NC}"
+        # 双系统菜单（29项）
+        echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装百度网盘${NC}"
+        echo -e "${GREEN} 2. 安装国内源            12. 安装＆卸载宝葫芦    22. 安装Edge浏览器${NC}"
+        echo -e "${GREEN} 3. 调整虚拟内存大小      13. 校准摇杆            23. 安装Google浏览器${NC}"
+        echo -e "${GREEN} 4. 修复磁盘写入错误      14. 设置管理员密码      24. 清理Steam缓存${NC}"
+        echo -e "${GREEN} 5. 修复引导              15. 安装AnyDesk         25. 更新已安装应用${NC}"
+        echo -e "${GREEN} 6. 修复互通盘            16. 安装ToDesk          26. 卸载已安装应用${NC}"
+        echo -e "${GREEN} 7. 清理hosts缓存         17. 安装WPS Office      27. 检查工具箱更新${NC}"
+        echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装QQ              28. 安装小黄鸭插件${NC}"
+        echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装微信            29. 安装小黄鸭软件${NC}"
+        echo -e "${GREEN}10. 安装ToMoon            20. 安装QQ音乐${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
 
-            read -p "请输入选项 (输入1-28的数字): " choice
+            read -p "请输入选项 (输入1-29的数字): " choice
 
             # 验证输入
             if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
@@ -194,8 +191,8 @@ show_main_menu() {
             fi
 
             # 检查选择是否在有效范围内
-            if [ $choice -lt 1 ] || [ $choice -gt 28 ]; then
-                echo -e "${RED}无效选择，请选择1到28之间的数字！${NC}"
+            if [ $choice -lt 1 ] || [ $choice -gt 29 ]; then
+                echo -e "${RED}无效选择，请选择1到29之间的数字！${NC}"
                 sleep 1
                 continue
             fi
@@ -230,6 +227,7 @@ show_main_menu() {
                 26) uninstall_apps ;;
                 27) check_for_updates ;;
                 28) install_yellow_duck ;;
+                29) install_yellow_duck_software ;;
                 *)
                     echo -e "${RED}无效选择，请重新输入！${NC}"
                     sleep 1
@@ -242,21 +240,21 @@ show_main_menu() {
             echo ""
             echo -e "${CYAN}请选择要执行的功能：${NC}"
             echo ""
-            # 单系统菜单（26项，跳过5、6项）
-            echo -e "${GREEN} 1. 关于支持与维护的说明  10. 安装＆卸载插件商店  19. 安装百度网盘${NC}"
-            echo -e "${GREEN} 2. 安装国内源            11. 安装＆卸载宝葫芦    20. 安装Edge浏览器${NC}"
-            echo -e "${GREEN} 3. 调整虚拟内存大小      12. 校准摇杆            21. 安装Google浏览器${NC}"
-            echo -e "${GREEN} 4. 修复磁盘写入错误      13. 设置管理员密码      22. 清理Steam缓存${NC}"
-            echo -e "${GREEN} 5. 清理hosts缓存         14. 安装AnyDesk         23. 更新已安装应用${NC}"
-            echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装ToDesk          24. 卸载已安装应用${NC}"
-            echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装WPS Office      25. 检查工具箱更新${NC}"
-            echo -e "${GREEN} 8. 安装ToMoon            17. 安装QQ              26. 安装小黄鸭插件${NC}"
-            echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装微信${NC}"
+        # 单系统菜单（27项，跳过5、6两项）
+        echo -e "${GREEN} 1. 关于支持与维护的说明  10. 安装＆卸载插件商店  19. 安装百度网盘${NC}"
+        echo -e "${GREEN} 2. 安装国内源            11. 安装＆卸载宝葫芦    20. 安装Edge浏览器${NC}"
+        echo -e "${GREEN} 3. 调整虚拟内存大小      12. 校准摇杆            21. 安装Google浏览器${NC}"
+        echo -e "${GREEN} 4. 修复磁盘写入错误      13. 设置管理员密码      22. 清理Steam缓存${NC}"
+        echo -e "${GREEN} 5. 清理hosts缓存         14. 安装AnyDesk         23. 更新已安装应用${NC}"
+        echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装ToDesk          24. 卸载已安装应用${NC}"
+        echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装WPS Office      25. 检查工具箱更新${NC}"
+        echo -e "${GREEN} 8. 安装ToMoon            17. 安装QQ              26. 安装小黄鸭插件${NC}"
+        echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装微信            27. 安装小黄鸭软件${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
 
-            read -p "请输入选项 (输入1-26的数字): " choice
+            read -p "请输入选项 (输入1-27的数字): " choice
 
             # 验证输入
             if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
@@ -266,8 +264,8 @@ show_main_menu() {
             fi
 
             # 检查选择是否在有效范围内
-            if [ $choice -lt 1 ] || [ $choice -gt 26 ]; then
-                echo -e "${RED}无效选择，请选择1到26之间的数字！${NC}"
+            if [ $choice -lt 1 ] || [ $choice -gt 27 ]; then
+                echo -e "${RED}无效选择，请选择1到27之间的数字！${NC}"
                 sleep 1
                 continue
             fi
@@ -300,6 +298,7 @@ show_main_menu() {
                 24) uninstall_apps ;;
                 25) check_for_updates ;;
                 26) install_yellow_duck ;;
+                27) install_yellow_duck_software ;;
                 *)
                     echo -e "${RED}无效选择，请重新输入！${NC}"
                     sleep 1
@@ -378,56 +377,36 @@ update_toolbox() {
     echo -e "${GREEN}✓ Git工具可用${NC}"
     echo ""
 
-    # 克隆GitHub仓库（使用CDN镜像）
-    echo -e "${CYAN}步骤3: 下载最新版本...${NC}"
-    local clone_dir="$HOME/steamdeck_toolbox"
+    # 克隆Gitee仓库
+echo -e "${CYAN}步骤3: 下载最新版本...${NC}"
+local clone_dir="$HOME/steamdeck_toolbox"
 
-    # 清理旧的下载目录
-    if [ -d "$clone_dir" ]; then
-        echo "清理旧的下载目录..."
-        rm -rf "$clone_dir"
-    fi
+# 清理旧的下载目录
+if [ -d "$clone_dir" ]; then
+    echo "清理旧的下载目录..."
+    rm -rf "$clone_dir"
+fi
 
-    echo "正在尝试使用CDN镜像加速下载..."
+echo "正在从Gitee仓库下载..."
+echo ""
+
+# 直接从Gitee下载，不使用镜像
+echo "从Gitee仓库下载: $REPO_URL"
+echo "下载地址: $REPO_URL"
+
+# 清理旧的下载目录
+rm -rf "$clone_dir" 2>/dev/null
+
+# 设置超时为30秒
+if timeout 30 git clone --depth=1 "$REPO_URL" "$clone_dir" 2>&1; then
+    echo -e "${GREEN}✓ 下载成功${NC}"
+else
+    echo -e "${RED}✗ 下载失败！${NC}"
+    echo "请检查网络连接或稍后重试。"
     echo ""
-
-    # 尝试使用CDN镜像下载
-    local download_success=false
-
-    for url in "${REPO_CDN_URLS[@]}"; do
-    # 提取URL名称用于显示
-    local url_name
-    if [[ "$url" == *"githubfast.com"* ]]; then
-        url_name="GitHubFast镜像"
-    elif [[ "$url" == *"gitclone.com"* ]]; then
-        url_name="GitClone镜像"
-    elif [[ "$url" == *"github.com.cnpmjs.org"* ]]; then
-        url_name="CNPM镜像"
-    elif [[ "$url" == *"github.com"* ]]; then
-        url_name="GitHub原始地址"
-    else
-        url_name="未知镜像"
-    fi
-
-    echo "尝试从 $url_name 下载..."
-    echo "下载地址: $url"
-
-    # 清理旧的下载目录
-    rm -rf "$clone_dir" 2>/dev/null
-
-    # 设置超时为30秒
-    if timeout 30 git clone --depth=1 "$url" "$clone_dir" 2>&1; then
-        echo -e "${GREEN}✓ $url_name 下载成功${NC}"
-        download_success=true
-        break
-    else
-        echo -e "${YELLOW}⚠️  $url_name 下载失败，尝试下一个镜像...${NC}"
-        echo ""
-        # 清理失败的下载
-        rm -rf "$clone_dir" 2>/dev/null
-        sleep 1
-    fi
-done
+    read -p "按回车键退出..."
+    exit 1
+fi
 
     if [ "$download_success" = false ]; then
         echo -e "${RED}✗ 所有镜像下载失败！${NC}"
@@ -4019,6 +3998,427 @@ EOF
 
     # 执行安装脚本
     "$temp_dir/yellow_duck_installer.sh"
+
+    # 清理临时文件
+    rm -rf "$temp_dir"
+
+    echo ""
+    read -p "按回车键返回主菜单..."
+}
+
+# 29. 安装小黄鸭软件（双系统）/27. 安装小黄鸭软件（单系统）
+install_yellow_duck_software() {
+    show_header
+    echo -e "${YELLOW}════════════════ 安装小黄鸭软件 ════════════════${NC}"
+
+    # 保存到临时文件并执行
+    local temp_dir="$TEMP_DIR/yellow_duck_software"
+    mkdir -p "$temp_dir"
+
+    cat > "$temp_dir/install_lossless_scaling.sh" << 'EOF'
+#!/bin/bash
+
+# ==========================================
+# 函数：检测是否已安装小黄鸭软件
+# ==========================================
+check_lossless_scaling() {
+    echo "检测小黄鸭软件安装状态..."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    local LOSS_DIR="/home/deck/.local/share/Steam/steamapps/common/Lossless Scaling"
+
+    if [[ -d "$LOSS_DIR" ]]; then
+        echo "✅ 检测到已安装小黄鸭软件。"
+        echo "   安装目录: $LOSS_DIR"
+        echo ""
+
+        read -p "是否要卸载小黄鸭软件？(y/N): " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "开始卸载小黄鸭软件..."
+            if sudo rm -rf "$LOSS_DIR"; then
+                echo "✅ 小黄鸭软件已成功卸载。"
+                echo ""
+                echo "卸载完成，脚本退出。"
+            else
+                echo "❌ 卸载失败，请检查权限。"
+            fi
+            exit 0
+        else
+            echo "脚本退出。"
+            exit 0
+        fi
+    else
+        echo "未检测到小黄鸭软件，准备从Gitee仓库安装..."
+        return 1
+    fi
+}
+
+# ==========================================
+# 函数：检查并安装解压工具
+# ==========================================
+check_zip_tools() {
+    echo "检查必要的解压工具..."
+
+    local missing_tools=()
+
+    # 检查 zip 工具（用于分卷解压）
+    if ! command -v zip &> /dev/null; then
+        missing_tools+=("zip")
+    fi
+
+    # 检查 unzip 工具
+    if ! command -v unzip &> /dev/null; then
+        missing_tools+=("unzip")
+    fi
+
+    if [[ ${#missing_tools[@]} -gt 0 ]]; then
+        echo "需要安装以下工具: ${missing_tools[*]}"
+        read -p "是否现在安装？(y/N): " -n 1 -r
+        echo ""
+
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "正在安装必要的工具..."
+            sudo pacman -S --needed --noconfirm "${missing_tools[@]}"
+
+            # 再次检查是否安装成功
+            for tool in "${missing_tools[@]}"; do
+                if ! command -v "$tool" &> /dev/null; then
+                    echo "❌ 安装 $tool 失败，请手动安装后再运行脚本。"
+                    exit 1
+                fi
+            done
+            echo "✅ 工具安装完成。"
+        else
+            echo "❌ 需要解压工具才能继续，请手动安装后重试。"
+            exit 1
+        fi
+    else
+        echo "✅ 解压工具已就绪。"
+    fi
+    echo ""
+}
+
+# ==========================================
+# 函数：从Gitee克隆仓库
+# ==========================================
+clone_from_gitee() {
+    local CLONE_DIR="$HOME/lossless-scaling-repo"
+    local GITEE_REPO="https://gitee.com/Zhucy2100/lossless-scaling.git"
+
+    # 清理旧目录
+    if [[ -d "$CLONE_DIR" ]]; then
+        echo "清理旧仓库目录..."
+        rm -rf "$CLONE_DIR"
+    fi
+
+    echo "开始从Gitee克隆仓库..."
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "仓库地址: $GITEE_REPO"
+    echo ""
+
+    if git clone --depth=1 --progress "$GITEE_REPO" "$CLONE_DIR" 2>&1; then
+        echo ""
+        echo "✅ 从Gitee克隆成功！"
+        echo "仓库位置: $CLONE_DIR"
+        return 0
+    else
+        echo ""
+        echo "❌ 从Gitee克隆失败！"
+        echo "可能的原因:"
+        echo "1. 网络连接问题"
+        echo "2. 仓库地址不存在或已更改"
+        echo "3. Gitee服务器暂时不可用"
+        echo ""
+        echo "请检查网络连接后重试。"
+        exit 1
+    fi
+}
+
+# ==========================================
+# 函数：验证分卷文件（7个分卷）
+# ==========================================
+validate_split_files() {
+    local CLONE_DIR="$1"
+    # 定义7个分卷文件
+    local split_files=(
+        "Lossless Scaling.zip.001"
+        "Lossless Scaling.zip.002"
+        "Lossless Scaling.zip.003"
+        "Lossless Scaling.zip.004"
+        "Lossless Scaling.zip.005"
+        "Lossless Scaling.zip.006"
+        "Lossless Scaling.zip.007"
+    )
+
+    echo "验证分卷压缩文件（共7个分卷）..."
+
+    local missing_files=()
+    for file in "${split_files[@]}"; do
+        if [[ ! -f "$CLONE_DIR/$file" ]]; then
+            missing_files+=("$file")
+        fi
+    done
+
+    if [[ ${#missing_files[@]} -gt 0 ]]; then
+        echo "❌ 缺少必要的分卷文件:"
+        for file in "${missing_files[@]}"; do
+            echo "   - $file"
+        done
+        echo ""
+        echo "当前目录内容:"
+        ls -la "$CLONE_DIR"
+        return 1
+    fi
+
+    # 显示找到的文件
+    echo "✅ 找到所有7个分卷文件:"
+    for file in "${split_files[@]}"; do
+        local file_size=$(stat -c%s "$CLONE_DIR/$file" 2>/dev/null || stat -f%z "$CLONE_DIR/$file" 2>/dev/null)
+        if [[ $file_size -gt 0 ]]; then
+            # 将字节转换为MB
+            local size_mb=$(echo "scale=2; $file_size / 1024 / 1024" | bc)
+            echo "   - $file (${size_mb} MB)"
+        else
+            echo "   - $file (大小未知)"
+        fi
+    done
+
+    echo "✅ 所有分卷文件验证通过。"
+    echo ""
+    return 0
+}
+
+# ==========================================
+# 函数：合并并解压7个分卷文件
+# ==========================================
+extract_split_files() {
+    local CLONE_DIR="$1"
+    local TARGET_DIR="/home/deck/.local/share/Steam/steamapps/common"
+
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "步骤: 合并并解压7个分卷文件"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # 1. 确保目标目录存在
+    echo "检查目标目录: $TARGET_DIR"
+    if [[ ! -d "$TARGET_DIR" ]]; then
+        echo "创建目标目录..."
+        mkdir -p "$TARGET_DIR"
+        sudo chown deck:deck "$TARGET_DIR"
+    fi
+
+    # 2. 切换到克隆目录
+    cd "$CLONE_DIR" || {
+        echo "❌ 无法进入目录: $CLONE_DIR"
+        return 1
+    }
+
+    # 3. 合并7个分卷文件
+    echo "正在合并7个分卷文件..."
+    echo "注意：合并过程可能需要一些时间，请耐心等待..."
+
+    # 检查是否有合并所需的文件
+    if ls "Lossless Scaling.zip."* > /dev/null 2>&1; then
+        echo "找到分卷文件，开始合并..."
+        if cat "Lossless Scaling.zip."* > "Lossless-Scaling-Combined.zip"; then
+            echo "✅ 7个分卷文件合并完成。"
+
+            # 4. 验证合并后的zip文件
+            echo "验证合并后的文件..."
+            if unzip -tq "Lossless-Scaling-Combined.zip" > /dev/null 2>&1; then
+                echo "✅ ZIP文件完整性验证通过。"
+            else
+                echo "⚠️  ZIP文件完整性验证失败，但继续解压..."
+            fi
+
+            # 5. 解压文件
+            echo ""
+            echo "正在解压到目标目录: $TARGET_DIR"
+
+            # 使用unzip解压，保持原始权限
+            if unzip -o "Lossless-Scaling-Combined.zip" -d "$TARGET_DIR" 2>&1 | tail -20; then
+                echo ""
+                echo "✅ 解压完成！"
+
+                # 6. 清理合并的临时文件
+                echo "清理临时文件..."
+                rm -f "Lossless-Scaling-Combined.zip"
+
+                # 7. 检查解压结果
+                local EXTRACTED_DIR="$TARGET_DIR/Lossless Scaling"
+                if [[ -d "$EXTRACTED_DIR" ]]; then
+                    echo "解压目录: $EXTRACTED_DIR"
+
+                    # 确保文件权限正确
+                    sudo chown -R deck:deck "$EXTRACTED_DIR"
+                    sudo chmod -R 755 "$EXTRACTED_DIR"
+
+                    # 检查是否有可执行文件
+                    local exe_files=$(find "$EXTRACTED_DIR" -name "*.exe" -o -name "*.EXE" | head -5)
+                    if [[ -n "$exe_files" ]]; then
+                        echo "找到的可执行文件:"
+                        echo "$exe_files" | while read -r file; do
+                            echo "  - $(basename "$file")"
+                        done
+                    fi
+
+                    # 计算并显示总大小
+                    local total_size=$(du -sh "$EXTRACTED_DIR" 2>/dev/null | cut -f1)
+                    echo "安装总大小: $total_size"
+
+                    return 0
+                else
+                    echo "❌ 解压后未找到 'Lossless Scaling' 目录"
+                    echo "当前目录内容:"
+                    ls -la "$TARGET_DIR"
+                    return 1
+                fi
+            else
+                echo ""
+                echo "❌ 解压失败！"
+                echo "可能的原因:"
+                echo "1. ZIP文件损坏"
+                echo "2. 磁盘空间不足"
+                echo "3. 文件权限问题"
+                return 1
+            fi
+        else
+            echo "❌ 分卷文件合并失败！"
+            echo "请检查分卷文件是否完整。"
+            return 1
+        fi
+    else
+        echo "❌ 未找到分卷文件！"
+        echo "当前目录内容:"
+        ls -la
+        return 1
+    fi
+}
+
+# ==========================================
+# 函数：清理仓库
+# ==========================================
+cleanup_repository() {
+    local CLONE_DIR="$1"
+
+    echo ""
+    echo "清理克隆的仓库..."
+    if [[ -d "$CLONE_DIR" ]]; then
+        if rm -rf "$CLONE_DIR"; then
+            echo "✅ 仓库目录已清理。"
+        else
+            echo "⚠️  警告: 仓库目录清理失败，可手动删除: $CLONE_DIR"
+        fi
+    fi
+}
+
+# ==========================================
+# 函数：显示安装完成信息
+# ==========================================
+show_installation_complete() {
+    local INSTALL_DIR="/home/deck/.local/share/Steam/steamapps/common/Lossless Scaling"
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo " 小黄鸭软件安装完成！"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "安装目录: $INSTALL_DIR"
+    echo ""
+    echo "使用说明:"
+    echo "1. 打开 Steam，进入库页面"
+    echo "2. 点击左下角 '添加游戏' → '添加非Steam游戏'"
+    echo "3. 浏览到安装目录，选择 Lossless Scaling 可执行文件"
+    echo "4. 在游戏模式中，可以通过 Steam 库启动小黄鸭软件"
+    echo ""
+    echo "注意:"
+    echo "• 首次运行可能需要配置 Proton 兼容层"
+    echo "• 建议使用 Proton GE 或 Proton Experimental"
+    echo "• 在 Steam Deck 性能设置中，可以为该程序分配更多显存"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# ==========================================
+# 主函数
+# ==========================================
+main() {
+    clear
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Steam Deck 小黄鸭软件安装助手 (Gitee版)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "使用国内Gitee仓库，下载速度更快"
+    echo ""
+
+    # 步骤1: 检查是否已安装
+    if check_lossless_scaling; then
+        # 如果已安装且用户选择不卸载，脚本会退出
+        # 如果用户选择卸载，卸载后也会退出
+        return
+    fi
+
+    # 步骤2: 检查解压工具
+    check_zip_tools
+
+    # 步骤3: 确认安装
+    echo ""
+    echo "即将安装小黄鸭软件 (Lossless Scaling)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "安装说明:"
+    echo "• 使用国内Gitee仓库，下载速度快"
+    echo "• 需要约 175 MB 磁盘空间"
+    echo "• 需要合并7个分卷文件，请耐心等待"
+    echo "• 仓库地址: https://gitee.com/Zhucy2100/lossless-scaling"
+    echo ""
+
+    read -p "是否继续安装？(y/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "安装已取消。"
+        exit 0
+    fi
+
+    # 步骤4: 从Gitee克隆仓库
+    clone_from_gitee
+    local CLONE_DIR="$HOME/lossless-scaling-repo"
+
+    # 步骤5: 验证7个分卷文件
+    if ! validate_split_files "$CLONE_DIR"; then
+        cleanup_repository "$CLONE_DIR"
+        exit 1
+    fi
+
+    # 步骤6: 合并并解压7个分卷文件
+    if ! extract_split_files "$CLONE_DIR"; then
+        cleanup_repository "$CLONE_DIR"
+        exit 1
+    fi
+
+    # 步骤7: 清理仓库
+    cleanup_repository "$CLONE_DIR"
+
+    # 步骤8: 显示完成信息
+    show_installation_complete
+
+    # 步骤9: 等待用户确认
+    echo ""
+    read -p "按回车键退出..."
+}
+
+# ==========================================
+# 脚本入口
+# ==========================================
+main
+EOF
+
+    # 设置执行权限并运行安装脚本
+    chmod +x "$temp_dir/install_lossless_scaling.sh"
+    echo "正在启动小黄鸭软件安装助手..."
+    echo ""
+    "$temp_dir/install_lossless_scaling.sh"
 
     # 清理临时文件
     rm -rf "$temp_dir"
