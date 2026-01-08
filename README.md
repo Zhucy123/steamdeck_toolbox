@@ -11,3 +11,5 @@
 - 📁 **便捷工具**：应用更新卸载、hosts缓存清理
 
 ## 一键安装
+konsole中输入下方脚本一键安装
+curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_toolbox.sh -o steamdeck_toolbox.sh && chmod +x steamdeck_toolbox.sh && konsole --hold -e ./steamdeck_toolbox.sh
