@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.0.6
+# Steam Deck 工具箱 v1.0.7
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -24,7 +24,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.0.6"  # 更新版本号
+VERSION="1.0.7"  # 更新版本号
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox" # Gitee仓库地址
 REPO_CDN_URLS=(
     "https://gitee.com/Zhucy2100/steamdeck_toolbox" # 只有Gitee地址，不使用镜像
@@ -240,15 +240,15 @@ echo -e "${GREEN}10. 安装ToMoon            20. 安装QQ音乐${NC}"
             echo -e "${CYAN}请选择要执行的功能：${NC}"
             echo ""
 # 单系统菜单（26项，跳过5、6两项）
-echo -e "${GREEN} 1. 关于支持与维护的说明  10. 安装＆卸载插件商店  19. 安装百度网盘${NC}"
-echo -e "${GREEN} 2. 安装国内源            11. 安装＆卸载宝葫芦    20. 安装Edge浏览器${NC}"
-echo -e "${GREEN} 3. 调整虚拟内存大小      12. 校准摇杆            21. 安装Google浏览器${NC}"
-echo -e "${GREEN} 4. 修复磁盘写入错误      13. 设置管理员密码      22. 清理Steam缓存${NC}"
-echo -e "${GREEN} 5. 清理hosts缓存         14. 安装AnyDesk         23. 更新已安装应用${NC}"
-echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装ToDesk          24. 卸载已安装应用${NC}"
-echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装WPS Office      25. 检查工具箱更新${NC}"
-echo -e "${GREEN} 8. 安装ToMoon            17. 安装QQ              26. 安装小黄鸭软件${NC}"
-echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装微信${NC}"
+echo -e "${GREEN} 1. 关于支持与维护的说明  10. 安装＆卸载宝葫芦    19. 安装QQ音乐${NC}"
+echo -e "${GREEN} 2. 安装国内源            11. 校准摇杆            20. 安装百度网盘${NC}"
+echo -e "${GREEN} 3. 调整虚拟内存大小      12. 设置管理员密码      21. 安装Edge浏览器${NC}"
+echo -e "${GREEN} 4. 修复磁盘写入错误      13. 安装AnyDesk         22. 安装Google浏览器${NC}"
+echo -e "${GREEN} 5. 清理hosts缓存         14. 安装ToDesk          23. 清理Steam缓存${NC}"
+echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装WPS Office      24. 更新已安装应用${NC}"
+echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装QQ              25. 卸载已安装应用${NC}"
+echo -e "${GREEN} 8. 安装ToMoon            17. 安装微信            26. 安装小黄鸭软件${NC}"
+echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装QQ音乐${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
@@ -698,62 +698,470 @@ install_chinese_source() {
     read -p "按回车键返回主菜单..."
 }
 
-# 3. 调整虚拟内存大小
+# 3. 调整虚拟内存大小 (集成CryoByte33思路与btrfs修复)
 adjust_swap() {
     show_header
     echo -e "${YELLOW}════════════════ 调整虚拟内存大小 ════════════════${NC}"
-
-    echo "当前虚拟内存信息："
-    free -h | grep -i swap
     echo ""
 
-    read -p "请输入虚拟内存大小(GB，输入0禁用swap): " swap_size
+    # --- 1. 显示当前系统状态 ---
+    echo -e "${CYAN}📊 当前系统状态${NC}"
+    echo "--------------------------------------------"
 
-    if ! [[ "$swap_size" =~ ^[0-9]+$ ]]; then
-        echo -e "${RED}输入无效，请输入数字${NC}"
-        read -p "按回车键返回..."
+    # 物理内存状态 (使用更稳定的提取方法)
+    if command -v free &> /dev/null; then
+        # 获取内存信息，确保使用英文输出
+        LANG=C free -h | while read line; do
+            if [[ $line =~ ^Mem: ]]; then
+                read -ra mem <<< "$line"
+                echo -e "物理内存: ${GREEN}${mem[1]}${NC} | 已用: ${YELLOW}${mem[2]}${NC}"
+            elif [[ $line =~ ^Swap: ]]; then
+                read -ra sw <<< "$line"
+                echo -e "交换空间: ${GREEN}${sw[1]}${NC} | 已用: ${YELLOW}${sw[2]}${NC}"
+            fi
+        done
+    else
+        echo -e "${YELLOW}无法获取内存信息${NC}"
+    fi
+
+    echo ""
+
+    # 活动交换设备详情 (简洁显示)
+    echo -e "${CYAN}🔄 活动交换设备${NC}"
+    echo "--------------------------------------------"
+    if command -v swapon &> /dev/null && swapon_output=$(swapon --show 2>/dev/null); then
+        # 只显示一行关键信息
+        echo "$swapon_output" | while read line; do
+            if [[ ! $line == NAME* ]]; then
+                # 提取并格式化显示
+                read -ra parts <<< "$line"
+                if [ "${#parts[@]}" -ge 4 ]; then
+                    echo -e "${GREEN}${parts[0]}${NC} (${CYAN}${parts[1]}${NC}): ${parts[2]} | 已用: ${YELLOW}${parts[3]}${NC}"
+                fi
+            fi
+        done
+    else
+        echo "未找到活动交换空间"
+    fi
+    echo ""
+
+    # --- 2. 紧凑型功能菜单 ---
+    echo -e "${CYAN}🎯 请选择要执行的操作${NC}"
+    echo "============================================"
+
+    # 选项1：CryoByte33推荐方案
+    echo -e "${GREEN}[1] 一键应用CryoByte33推荐方案${NC}"
+    echo -e "    ${YELLOW}★ 推荐选项${NC} - 16GB Swap + 游戏专用优化参数    为现代大型游戏提供最佳兼容性与性能"
+    echo ""
+
+    # 选项2：调整传统Swap文件
+    echo -e "${GREEN}[2] 调整传统Swap文件大小${NC}"
+    echo -e "    手动设置位于 /home/swapfile 的交换文件，适用于需要精确控制或大容量后备的情况"
+    echo ""
+
+    # 选项3：配置ZRAM
+    echo -e "${GREEN}[3] 配置ZRAM (内存压缩交换)${NC}"
+    echo -e "    配置不依赖存储的快速内存交换，响应快、不损耗存储，适合日常使用"
+    echo ""
+
+    # 选项4：清理重置
+    echo -e "${GREEN}[4] 清理所有Swap配置并重新开始${NC}"
+    echo -e "    ${RED}重置选项${NC} - 停用并删除现有配置，切换方案或排除故障时使用"
+    echo "============================================"
+    echo ""
+
+    read -p "请输入选项 [1-4]: " main_choice
+
+    case $main_choice in
+        1)
+            apply_cryo_recommendation
+            ;;
+        2)
+            adjust_swapfile
+            ;;
+        3)
+            configure_zram
+            ;;
+        4)
+            cleanup_swap
+            ;;
+        *)
+            echo -e "${RED}无效选择，请重新输入${NC}"
+            echo ""
+            read -p "按回车键返回主菜单..."
+            return
+            ;;
+    esac
+}
+
+# === 子函数：一键应用CryoByte33推荐 (现在第一个选项) ===
+apply_cryo_recommendation() {
+    echo ""
+    echo -e "${YELLOW}═══════════════ 应用CryoByte33推荐方案 ═══════════════${NC}"
+    echo ""
+    echo -e "${CYAN}方案概述${NC}"
+    echo "----------------------------------------"
+    echo "此方案专为Steam Deck游戏优化，包含："
+    echo "• 16GB交换文件 (确保大型游戏兼容性)"
+    echo "• 优化的内核参数 (减少不必要的交换)"
+    echo "• 针对btrfs文件系统的正确配置"
+    echo ""
+    echo -e "${YELLOW}注意：${NC}这将需要约16GB的可用磁盘空间"
+    echo "现有交换配置将被替换"
+    echo ""
+
+    read -p "是否继续？(输入 y 确认，其他键取消): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}操作已取消${NC}"
+        read -p "按回车键返回主菜单..."
         return
     fi
 
-    if [ "$swap_size" -eq 0 ]; then
-        echo -e "${CYAN}正在禁用虚拟内存...${NC}"
-        sudo swapoff /swapfile 2>/dev/null
-        sudo rm -f /swapfile
-        sudo sed -i '/swapfile/d' /etc/fstab 2>/dev/null
-        echo -e "${GREEN}✓ 已禁用虚拟内存${NC}"
-    else
-        echo -e "${CYAN}正在调整虚拟内存为 ${swap_size}GB...${NC}"
+    echo -e "${CYAN}🚀 开始应用优化配置...${NC}"
+    echo "════════════════════════════════════════════"
 
-        # 检查当前swap使用情况
-        if swapon --show | grep -q "/swapfile"; then
-            echo "关闭当前swap..."
-            sudo swapoff /swapfile
-        fi
+    # 步骤1: 创建16GB Swap文件
+    echo -e "\n${CYAN}步骤1/3: 创建16GB交换文件${NC}"
+    echo "----------------------------------------"
 
-        # 删除旧swap文件
-        sudo rm -f /swapfile
+    local swap_size_gb=16
+    local block_count=$((swap_size_gb * 1024))
 
-        # 创建新的swap文件
-        echo "创建新的swap文件..."
-        sudo dd if=/dev/zero of=/swapfile bs=1G count=$swap_size status=progress
+    # 1.1 停用现有Swap
+    echo "• 停用现有交换文件..."
+    sudo swapoff /home/swapfile 2>/dev/null
+    sudo swapoff -a 2>/dev/null
 
-        # 设置权限
-        sudo chmod 600 /swapfile
+    # 1.2 删除旧文件
+    echo "• 删除旧文件..."
+    sudo rm -f /home/swapfile
 
-        # 格式化swap
-        sudo mkswap /swapfile
+    # 1.3 针对btrfs创建文件 (关键步骤)
+    echo "• 创建新文件 (针对btrfs文件系统)..."
+    sudo touch /home/swapfile
+    sudo chattr +C /home/swapfile 2>/dev/null || echo -e "${YELLOW}  提示: chattr +C 可能失败，继续执行...${NC}"
 
-        # 启用swap
-        sudo swapon /swapfile
+    # 1.4 填充文件
+    echo "• 填充16GB数据 (这需要几分钟)..."
+    sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$block_count conv=fsync status=progress 2>/dev/null
 
-        # 添加到fstab
-        if ! grep -q "swapfile" /etc/fstab; then
-            echo "/swapfile none swap defaults 0 0" | sudo tee -a /etc/fstab
-        fi
-
-        echo ""
-        echo -e "${GREEN}✓ 虚拟内存已调整为 ${swap_size}GB${NC}"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}✗ 创建文件失败，请检查磁盘空间${NC}"
+        return
     fi
+
+    # 1.5 设置权限并格式化
+    echo "• 设置权限并格式化..."
+    sudo chmod 600 /home/swapfile
+    sudo mkswap /home/swapfile
+
+    # 1.6 启用并配置自动加载
+    echo "• 启用交换文件..."
+    sudo swapon /home/swapfile
+
+    # 更新fstab配置
+    sudo sed -i '\|/home/swapfile|d' /etc/fstab 2>/dev/null
+    echo "/home/swapfile none swap defaults 0 0" | sudo tee -a /etc/fstab > /dev/null
+
+    echo -e "${GREEN}✓ 16GB交换文件创建完成${NC}"
+
+    # 步骤2: 优化内核参数
+    echo -e "\n${CYAN}步骤2/3: 优化内核参数${NC}"
+    echo "----------------------------------------"
+
+    # 创建优化配置文件
+    sudo tee /etc/sysctl.d/99-cryo-optimizations.conf > /dev/null <<'EOF'
+# CryoByte33 Steam Deck 优化参数
+# 减少交换倾向，优先使用物理内存
+vm.swappiness=1
+# 优化文件系统缓存压力
+vm.vfs_cache_pressure=50
+# 禁用页面集群，提高响应速度
+vm.page-cluster=0
+# 优化脏页回写策略
+vm.dirty_background_ratio=3
+vm.dirty_ratio=50
+EOF
+
+    # 立即应用参数
+    sudo sysctl --system --load=/etc/sysctl.d/99-cryo-optimizations.conf
+
+    echo -e "${GREEN}✓ 内核参数优化完成${NC}"
+
+    # 步骤3: 停用ZRAM避免冲突
+    echo -e "\n${CYAN}步骤3/3: 配置ZRAM${NC}"
+    echo "----------------------------------------"
+
+    echo "• 停用ZRAM (避免与交换文件冲突)..."
+    sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
+    sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null
+
+    echo -e "${GREEN}✓ ZRAM已停用${NC}"
+
+    # 完成总结
+    echo -e "\n${CYAN}════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}✅ CryoByte33推荐方案已成功应用！${NC}"
+    echo -e "${CYAN}════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${YELLOW}📋 应用的项目：${NC}"
+    echo "• 16GB交换文件 (位于 /home/swapfile)"
+    echo "• 优化的内核参数 (swappiness=1, vfs_cache_pressure=50等)"
+    echo "• ZRAM已停用，避免双重交换"
+    echo ""
+    echo -e "${YELLOW}💡 建议操作：${NC}"
+    echo "1. 重启系统使所有设置完全生效"
+    echo "2. 游戏时可在性能设置中调整交换文件使用策略"
+    echo "3. 如需恢复原状，可使用本工具的[清理所有Swap配置]选项"
+    echo ""
+
+    # 验证显示
+    echo -e "${CYAN}📊 验证当前状态：${NC}"
+    echo "----------------------------------------"
+    if command -v swapon &> /dev/null; then
+        swapon --show | grep -E "(NAME|/home/swapfile)"
+    fi
+    echo -e "交换倾向性 (swappiness): ${GREEN}$(cat /proc/sys/vm/swappiness 2>/dev/null || echo 'N/A')${NC}"
+    echo ""
+
+    read -p "按回车键返回主菜单..."
+}
+
+# === 子函数：调整传统Swap文件 (现选项2) ===
+adjust_swapfile() {
+    echo ""
+    echo -e "${YELLOW}🛠️  调整传统Swap文件大小${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # 检查当前文件大小
+    if [ -f "/home/swapfile" ]; then
+        current_size=$(sudo du -h /home/swapfile 2>/dev/null | cut -f1)
+        echo -e "现有文件大小: ${GREEN}$current_size${NC}"
+    else
+        echo -e "现有文件: ${YELLOW}未找到${NC}"
+    fi
+
+    # 显示磁盘空间
+    echo ""
+    echo -e "${CYAN}磁盘空间信息 (/) ${NC}"
+    df -h / | tail -1
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # 选择大小
+    echo "选择新的大小:"
+    echo " 1.  1GB (轻度使用)"
+    echo " 2.  4GB (基础游戏)"
+    echo " 3.  8GB (推荐，平衡型)"
+    echo " 4. 16GB (大型游戏/多任务)"
+    echo " 5. 32GB (虚拟机/专业用途)"
+    echo " 6. 自定义大小"
+    echo ""
+
+    read -p "请选择 [1-6]: " size_choice
+
+    case $size_choice in
+        1) swap_size_gb=1;;
+        2) swap_size_gb=4;;
+        3) swap_size_gb=8;;
+        4) swap_size_gb=16;;
+        5) swap_size_gb=32;;
+        6)
+            read -p "请输入大小 (单位GB，数字): " custom_size
+            if [[ "$custom_size" =~ ^[0-9]+$ ]]; then
+                swap_size_gb=$custom_size
+            else
+                echo -e "${RED}输入无效。${NC}"
+                return
+            fi
+            ;;
+        *) echo -e "${RED}无效选择。${NC}"; return;;
+    esac
+
+    # 确认
+    echo ""
+    echo -e "${YELLOW}即将创建 ${swap_size_gb}GB 的Swap文件。${NC}"
+    echo "这会花费几分钟，并且需要临时磁盘空间。"
+    read -p "是否继续? (y/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        return
+    fi
+
+    echo -e "${CYAN}开始创建Swap文件...${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # 关键步骤：针对btrfs的正确顺序
+    # 1. 停用现有
+    echo "1. 停用现有的Swap文件..."
+    sudo swapoff /home/swapfile 2>/dev/null
+
+    # 2. 删除旧文件
+    echo "2. 删除旧文件..."
+    sudo rm -f /home/swapfile
+
+    # 3. 创建空文件并立即禁用COW（针对btrfs的关键步骤！）
+    echo "3. 创建空文件并禁用Copy-on-Write (针对btrfs)..."
+    sudo touch /home/swapfile
+    sudo chattr +C /home/swapfile 2>/dev/null || echo -e "${YELLOW}⚠  警告: chattr +C 失败，但继续执行。${NC}"
+
+    # 4. 用dd填充文件（避免稀疏文件）
+    echo "4. 填充文件 (${swap_size_gb}GB)..."
+    block_count=$((swap_size_gb * 1024))
+    sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$block_count status=progress conv=fsync 2>/dev/null
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}✗ 创建文件失败，可能磁盘空间不足。${NC}"
+        sudo rm -f /home/swapfile
+        return
+    fi
+
+    # 5. 设置权限
+    echo "5. 设置文件权限..."
+    sudo chmod 600 /home/swapfile
+
+    # 6. 格式化为Swap
+    echo "6. 格式化..."
+    sudo mkswap /home/swapfile
+
+    # 7. 启用
+    echo "7. 启用Swap文件..."
+    sudo swapon /home/swapfile
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Swap文件已创建并启用。${NC}"
+
+        # 8. 添加到fstab (如果不存在)
+        if ! grep -q "/home/swapfile" /etc/fstab 2>/dev/null; then
+            echo "8. 添加到 /etc/fstab (永久生效)..."
+            echo "/home/swapfile none swap defaults 0 0" | sudo tee -a /etc/fstab > /dev/null
+        else
+            echo "8. /etc/fstab 中已存在配置。"
+        fi
+
+        # 验证
+        echo ""
+        echo -e "${CYAN}✅ 创建成功！验证:${NC}"
+        ls -lh /home/swapfile
+        swapon --show | grep /home/swapfile
+    else
+        echo -e "${RED}✗ 启用失败。文件可能包含空洞或不兼容。${NC}"
+        echo "建议: 使用本工具的选项4清理后，再尝试选项1（CryoByte33推荐）。"
+    fi
+
+    echo ""
+    read -p "按回车键返回主菜单..."
+}
+
+# === 子函数：配置ZRAM (现选项3) ===
+configure_zram() {
+    echo ""
+    echo -e "${YELLOW}🤏 配置ZRAM (内存压缩交换)${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    echo "ZRAM将部分内存作为压缩的交换空间，速度快且不磨损存储。"
+    echo ""
+    echo "选择ZRAM大小 (基于你的16GB物理内存):"
+    echo " 1. 2GB (保守，节省内存)"
+    echo " 2. 4GB (平衡推荐)"
+    echo " 3. 8GB (积极，提升大型游戏体验)"
+    echo ""
+
+    read -p "请选择 [1-3]: " zram_choice
+
+    case $zram_choice in
+        1) zram_size_gb=2;;
+        2) zram_size_gb=4;;
+        3) zram_size_gb=8;;
+        *) echo -e "${RED}无效选择。${NC}"; return;;
+    esac
+
+    echo ""
+    echo -e "${CYAN}安装并配置ZRAM...${NC}"
+
+    # 安装
+    if ! command -v systemctl &> /dev/null; then
+        echo -e "${RED}系统不支持systemd。${NC}"
+        return
+    fi
+
+    echo "1. 安装 systemd-zram-generator..."
+    sudo pacman -S --noconfirm systemd-zram-generator 2>/dev/null || {
+        echo -e "${YELLOW}无法通过pacman安装，尝试其他方法...${NC}"
+        # 可以添加备用安装方法
+    }
+
+    # 创建配置
+    echo "2. 创建配置文件..."
+    sudo tee /etc/systemd/zram-generator.conf > /dev/null <<EOF
+[zram0]
+zram-size = min(ram, ${zram_size_gb}G)
+compression-algorithm = lz4
+swap-priority = 100
+EOF
+
+    # 启用服务
+    echo "3. 启用服务..."
+    sudo systemctl daemon-reload
+    sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
+    sudo systemctl start systemd-zram-setup@zram0
+    sudo systemctl enable systemd-zram-setup@zram0
+
+    echo "4. 等待ZRAM初始化..."
+    sleep 2
+
+    # 验证
+    if swapon --show | grep -q zram; then
+        echo -e "${GREEN}✓ ZRAM 已启用。${NC}"
+        swapon --show | grep zram
+    else
+        echo -e "${YELLOW}⚠  ZRAM可能未启动，尝试重启后生效。${NC}"
+    fi
+
+    # 提示关闭传统Swap以避免冲突（可选）
+    echo ""
+    echo -e "${YELLOW}提示：${NC}你现在同时启用了ZRAM和传统Swap。"
+    echo "如需仅使用ZRAM，可在主菜单使用选项4清理传统Swap。"
+
+    read -p "按回车键返回主菜单..."
+}
+
+# === 子函数：清理Swap配置 (现选项4) ===
+cleanup_swap() {
+    echo ""
+    echo -e "${YELLOW}🧹 清理所有Swap配置${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "这将："
+    echo " • 停用并删除 /home/swapfile"
+    echo " • 从 /etc/fstab 移除Swap条目"
+    echo " • 停用并禁用ZRAM服务"
+    echo ""
+
+    read -p "确定要清理吗？此操作不可逆。(y/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        return
+    fi
+
+    echo -e "${CYAN}正在清理...${NC}"
+
+    # 停用所有Swap
+    sudo swapoff -a
+
+    # 删除文件
+    sudo rm -f /home/swapfile
+
+    # 清理fstab
+    sudo sed -i '\|/home/swapfile|d' /etc/fstab
+
+    # 停用ZRAM
+    sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
+    sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null
+    sudo rm -f /etc/systemd/zram-generator.conf 2>/dev/null
+    sudo systemctl daemon-reload
+
+    echo -e "${GREEN}✅ 已清理所有Swap配置。${NC}"
+    echo "你可以重新启动本功能来配置新的Swap方案。"
 
     read -p "按回车键返回主菜单..."
 }
@@ -1098,7 +1506,7 @@ fix_shared_disk() {
     # 步骤3: 检查并添加fstab配置
     echo "步骤3: 检查并添加fstab配置"
     FSTAB_FILE="/etc/fstab"
-    FSTAB_ENTRY="LABEL=Game  /run/media/deck/Game  ntfs   defaults,nofail   0 0"
+    FSTAB_ENTRY="LABEL=Game  /run/media/deck/Game  ntfs   defaults,nofail,uid=1000,gid=1000,umask=022   0 0"
 
     if [ -f "$FSTAB_FILE" ]; then
         # 检查是否已存在该配置
@@ -1116,24 +1524,45 @@ fix_shared_disk() {
         echo -e "${RED}✗ 未找到fstab文件: $FSTAB_FILE${NC}"
     fi
 
-    # 步骤4: 创建目录（不再自动打开）
-    echo "步骤4: 创建Game目录"
+    # 步骤4: 创建目录并尝试挂载
+    echo "步骤4: 创建目录并尝试挂载"
     GAME_DIR="/run/media/deck/Game"
 
-    # 创建目录
+    # 创建目录并设置权限
     sudo mkdir -p "$GAME_DIR"
     sudo chown deck:deck "$GAME_DIR"
 
     if [ -d "$GAME_DIR" ]; then
         echo -e "${GREEN}✓ 已创建Game目录: $GAME_DIR${NC}"
-        echo ""
-        echo -e "${YELLOW}提示：请手动打开Game目录查看${NC}"
-        echo "    路径: /run/media/deck/Game"
-        echo ""
-        echo -e "${CYAN}如何打开目录：${NC}"
-        echo "1. 在桌面模式打开文件管理器"
-        echo "2. 在地址栏输入或导航到: /run/media/deck/Game"
-        echo "3. 或者使用终端命令: xdg-open /run/media/deck/Game"
+
+        # 尝试卸载已挂载的Game盘（如果存在）
+        if mountpoint -q "$GAME_DIR"; then
+            echo "卸载已挂载的Game盘..."
+            sudo umount "$GAME_DIR"
+        fi
+
+        # 尝试挂载
+        echo "尝试挂载Game盘..."
+        if sudo mount -L "Game" "$GAME_DIR" 2>/dev/null; then
+            echo -e "${GREEN}✓ Game盘已成功挂载${NC}"
+            echo ""
+            echo -e "${CYAN}Game盘信息：${NC}"
+            echo "挂载点: $GAME_DIR"
+            echo "文件系统类型: $(lsblk -o NAME,FSTYPE,LABEL | grep -i game || echo '未知')"
+            echo ""
+            echo -e "${YELLOW}提示：${NC}"
+            echo "1. Game盘现在可以在文件管理器中访问"
+            echo "2. 路径: /run/media/deck/Game"
+            echo "3. 重启后会自动挂载"
+        else
+            echo -e "${YELLOW}⚠️  Game盘挂载失败${NC}"
+            echo "可能的原因："
+            echo "1. Game盘不存在或标签不正确"
+            echo "2. 分区未格式化"
+            echo "3. 需要重启后生效"
+            echo ""
+            echo "您可以尝试重启后再次检查"
+        fi
     else
         echo -e "${YELLOW}⚠️  无法创建或访问Game目录${NC}"
     fi
