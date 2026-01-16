@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.0.7
+# Steam Deck 工具箱 v1.0.8
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -24,7 +24,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.0.7"  # 更新版本号
+VERSION="1.0.8"  # 更新版本号
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox" # Gitee仓库地址
 REPO_CDN_URLS=(
     "https://gitee.com/Zhucy2100/steamdeck_toolbox" # 只有Gitee地址，不使用镜像
@@ -166,17 +166,17 @@ show_main_menu() {
             echo ""
             echo -e "${CYAN}请选择要执行的功能：${NC}"
             echo ""
-# 双系统菜单（28项）
-echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装百度网盘${NC}"
-echo -e "${GREEN} 2. 安装国内源            12. 安装＆卸载宝葫芦    22. 安装Edge浏览器${NC}"
-echo -e "${GREEN} 3. 调整虚拟内存大小      13. 校准摇杆            23. 安装Google浏览器${NC}"
-echo -e "${GREEN} 4. 修复磁盘写入错误      14. 设置管理员密码      24. 清理Steam缓存${NC}"
-echo -e "${GREEN} 5. 修复引导              15. 安装AnyDesk         25. 更新已安装应用${NC}"
-echo -e "${GREEN} 6. 修复互通盘            16. 安装ToDesk          26. 卸载已安装应用${NC}"
-echo -e "${GREEN} 7. 清理hosts缓存         17. 安装WPS Office      27. 检查工具箱更新${NC}"
-echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装QQ              28. 安装小黄鸭软件${NC}"
-echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装微信${NC}"
-echo -e "${GREEN}10. 安装ToMoon            20. 安装QQ音乐${NC}"
+            # 双系统菜单（28项）
+            echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装百度网盘${NC}"
+            echo -e "${GREEN} 2. 安装国内源            12. 安装＆卸载宝葫芦    22. 安装Edge浏览器${NC}"
+            echo -e "${GREEN} 3. 调整虚拟内存大小      13. 校准摇杆            23. 安装Google浏览器${NC}"
+            echo -e "${GREEN} 4. 修复磁盘写入错误      14. 设置管理员密码      24. 清理Steam缓存${NC}"
+            echo -e "${GREEN} 5. 修复引导              15. 安装AnyDesk         25. 更新已安装应用${NC}"
+            echo -e "${GREEN} 6. 修复互通盘            16. 安装ToDesk          26. 卸载已安装应用${NC}"
+            echo -e "${GREEN} 7. 清理hosts缓存         17. 安装WPS Office      27. 检查工具箱更新${NC}"
+            echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装QQ              28. 安装小黄鸭软件${NC}"
+            echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装微信${NC}"
+            echo -e "${GREEN}10. 安装ToMoon            20. 安装QQ音乐${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
@@ -239,16 +239,16 @@ echo -e "${GREEN}10. 安装ToMoon            20. 安装QQ音乐${NC}"
             echo ""
             echo -e "${CYAN}请选择要执行的功能：${NC}"
             echo ""
-# 单系统菜单（26项，跳过5、6两项）
-echo -e "${GREEN} 1. 关于支持与维护的说明  10. 安装＆卸载宝葫芦    19. 安装QQ音乐${NC}"
-echo -e "${GREEN} 2. 安装国内源            11. 校准摇杆            20. 安装百度网盘${NC}"
-echo -e "${GREEN} 3. 调整虚拟内存大小      12. 设置管理员密码      21. 安装Edge浏览器${NC}"
-echo -e "${GREEN} 4. 修复磁盘写入错误      13. 安装AnyDesk         22. 安装Google浏览器${NC}"
-echo -e "${GREEN} 5. 清理hosts缓存         14. 安装ToDesk          23. 清理Steam缓存${NC}"
-echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装WPS Office      24. 更新已安装应用${NC}"
-echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装QQ              25. 卸载已安装应用${NC}"
-echo -e "${GREEN} 8. 安装ToMoon            17. 安装微信            26. 安装小黄鸭软件${NC}"
-echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装QQ音乐${NC}"
+            # 单系统菜单（26项，跳过5、6两项）
+            echo -e "${GREEN} 1. 关于支持与维护的说明  10. 安装＆卸载宝葫芦    19. 安装百度网盘${NC}"
+            echo -e "${GREEN} 2. 安装国内源            11. 校准摇杆            20. 安装Edge浏览器${NC}"
+            echo -e "${GREEN} 3. 调整虚拟内存大小      12. 设置管理员密码      21. 安装Google浏览器${NC}"
+            echo -e "${GREEN} 4. 修复磁盘写入错误      13. 安装AnyDesk         22. 清理Steam缓存${NC}"
+            echo -e "${GREEN} 5. 清理hosts缓存         14. 安装ToDesk          23. 更新已安装应用${NC}"
+            echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装WPS Office      24. 卸载已安装应用${NC}"
+            echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装QQ              25. 检查工具箱更新${NC}"
+            echo -e "${GREEN} 8. 安装ToMoon            17. 安装微信            26. 安装小黄鸭软件${NC}"
+            echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装QQ音乐${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
@@ -269,34 +269,34 @@ echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装QQ音乐${NC}"
                 continue
             fi
 
-            # 单系统菜单映射（跳过5、6两项，后面的项对应向前移动2位）
+            # 单系统菜单映射（根据您提供的编号对应）
             case $choice in
-                1) show_about ;;
-                2) install_chinese_source ;;
-                3) adjust_swap ;;
-                4) fix_disk_write_error ;;
-                5) clear_hosts_cache ;;
-                6) install_uu_accelerator ;;
-                7) install_xunyou_accelerator ;;
-                8) install_tomoon ;;
-                9) install_remove_plugin_store ;;
-                10) install_remove_baohulu ;;
-                11) calibrate_joystick ;;
-                12) set_admin_password ;;
-                13) install_anydesk ;;
-                14) install_todesk ;;
-                15) install_wps_office ;;
-                16) install_qq ;;
-                17) install_wechat ;;
-                18) install_qqmusic ;;
-                19) install_baidunetdisk ;;
-                20) install_edge ;;
-                21) install_chrome ;;
-                22) steamdeck_cache_manager ;;
-                23) update_installed_apps ;;
-                24) uninstall_apps ;;
-                25) check_for_updates ;;
-                26) install_yellow_duck_software ;;
+                1) show_about ;;                     # 1. 关于支持与维护的说明
+                2) install_chinese_source ;;         # 2. 安装国内源
+                3) adjust_swap ;;                    # 3. 调整虚拟内存大小
+                4) fix_disk_write_error ;;           # 4. 修复磁盘写入错误
+                5) clear_hosts_cache ;;              # 5. 清理hosts缓存
+                6) install_uu_accelerator ;;         # 6. 安装UU加速器插件
+                7) install_xunyou_accelerator ;;     # 7. 安装迅游加速器插件
+                8) install_tomoon ;;                 # 8. 安装ToMoon
+                9) install_remove_plugin_store ;;    # 9. 安装＆卸载插件商店
+                10) install_remove_baohulu ;;        # 10. 安装＆卸载宝葫芦
+                11) calibrate_joystick ;;            # 11. 校准摇杆
+                12) set_admin_password ;;            # 12. 设置管理员密码
+                13) install_anydesk ;;               # 13. 安装AnyDesk
+                14) install_todesk ;;                # 14. 安装ToDesk
+                15) install_wps_office ;;            # 15. 安装WPS Office
+                16) install_qq ;;                    # 16. 安装QQ
+                17) install_wechat ;;                # 17. 安装微信
+                18) install_qqmusic ;;               # 18. 安装QQ音乐
+                19) install_baidunetdisk ;;          # 19. 安装百度网盘
+                20) install_edge ;;                  # 20. 安装Edge浏览器
+                21) install_chrome ;;                # 21. 安装Google浏览器
+                22) steamdeck_cache_manager ;;       # 22. 清理Steam缓存
+                23) update_installed_apps ;;         # 23. 更新已安装应用
+                24) uninstall_apps ;;                # 24. 卸载已安装应用
+                25) check_for_updates ;;             # 25. 检查工具箱更新
+                26) install_yellow_duck_software ;;  # 26. 安装小黄鸭软件
                 *)
                     echo -e "${RED}无效选择，请重新输入！${NC}"
                     sleep 1
@@ -705,7 +705,7 @@ adjust_swap() {
     echo ""
 
     # --- 1. 显示当前系统状态 ---
-    echo -e "${CYAN}📊 当前系统状态${NC}"
+    echo -e "${CYAN} 当前系统状态${NC}"
     echo "--------------------------------------------"
 
     # 物理内存状态 (使用更稳定的提取方法)
@@ -727,7 +727,7 @@ adjust_swap() {
     echo ""
 
     # 活动交换设备详情 (简洁显示)
-    echo -e "${CYAN}🔄 活动交换设备${NC}"
+    echo -e "${CYAN} 活动交换设备${NC}"
     echo "--------------------------------------------"
     if command -v swapon &> /dev/null && swapon_output=$(swapon --show 2>/dev/null); then
         # 只显示一行关键信息
@@ -746,7 +746,7 @@ adjust_swap() {
     echo ""
 
     # --- 2. 紧凑型功能菜单 ---
-    echo -e "${CYAN}🎯 请选择要执行的操作${NC}"
+    echo -e "${CYAN} 请选择要执行的操作${NC}"
     echo "============================================"
 
     # 选项1：CryoByte33推荐方案
@@ -818,7 +818,7 @@ apply_cryo_recommendation() {
         return
     fi
 
-    echo -e "${CYAN}🚀 开始应用优化配置...${NC}"
+    echo -e "${CYAN} 开始应用优化配置...${NC}"
     echo "════════════════════════════════════════════"
 
     # 步骤1: 创建16GB Swap文件
@@ -904,19 +904,19 @@ EOF
     echo -e "${GREEN}✅ CryoByte33推荐方案已成功应用！${NC}"
     echo -e "${CYAN}════════════════════════════════════════════${NC}"
     echo ""
-    echo -e "${YELLOW}📋 应用的项目：${NC}"
+    echo -e "${YELLOW} 应用的项目：${NC}"
     echo "• 16GB交换文件 (位于 /home/swapfile)"
     echo "• 优化的内核参数 (swappiness=1, vfs_cache_pressure=50等)"
     echo "• ZRAM已停用，避免双重交换"
     echo ""
-    echo -e "${YELLOW}💡 建议操作：${NC}"
+    echo -e "${YELLOW} 建议操作：${NC}"
     echo "1. 重启系统使所有设置完全生效"
     echo "2. 游戏时可在性能设置中调整交换文件使用策略"
     echo "3. 如需恢复原状，可使用本工具的[清理所有Swap配置]选项"
     echo ""
 
     # 验证显示
-    echo -e "${CYAN}📊 验证当前状态：${NC}"
+    echo -e "${CYAN} 验证当前状态：${NC}"
     echo "----------------------------------------"
     if command -v swapon &> /dev/null; then
         swapon --show | grep -E "(NAME|/home/swapfile)"
@@ -930,7 +930,7 @@ EOF
 # === 子函数：调整传统Swap文件 (现选项2) ===
 adjust_swapfile() {
     echo ""
-    echo -e "${YELLOW}🛠️  调整传统Swap文件大小${NC}"
+    echo -e "${YELLOW}️  调整传统Swap文件大小${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     # 检查当前文件大小
@@ -1056,7 +1056,7 @@ adjust_swapfile() {
 # === 子函数：配置ZRAM (现选项3) ===
 configure_zram() {
     echo ""
-    echo -e "${YELLOW}🤏 配置ZRAM (内存压缩交换)${NC}"
+    echo -e "${YELLOW}羅 配置ZRAM (内存压缩交换)${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     echo "ZRAM将部分内存作为压缩的交换空间，速度快且不磨损存储。"
@@ -1129,7 +1129,7 @@ EOF
 # === 子函数：清理Swap配置 (现选项4) ===
 cleanup_swap() {
     echo ""
-    echo -e "${YELLOW}🧹 清理所有Swap配置${NC}"
+    echo -e "${YELLOW}粒 清理所有Swap配置${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "这将："
     echo " • 停用并删除 /home/swapfile"
