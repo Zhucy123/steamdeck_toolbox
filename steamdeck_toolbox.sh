@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.0.8
+# Steam Deck 工具箱 v1.0.9
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -24,7 +24,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.0.8"  # 更新版本号
+VERSION="1.0.9"  # 更新版本号
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox" # Gitee仓库地址
 REPO_CDN_URLS=(
     "https://gitee.com/Zhucy2100/steamdeck_toolbox" # 只有Gitee地址，不使用镜像
@@ -166,7 +166,7 @@ show_main_menu() {
             echo ""
             echo -e "${CYAN}请选择要执行的功能：${NC}"
             echo ""
-            # 双系统菜单（28项）
+            # 双系统菜单（29项）
             echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装百度网盘${NC}"
             echo -e "${GREEN} 2. 安装国内源            12. 安装＆卸载宝葫芦    22. 安装Edge浏览器${NC}"
             echo -e "${GREEN} 3. 调整虚拟内存大小      13. 校准摇杆            23. 安装Google浏览器${NC}"
@@ -175,13 +175,13 @@ show_main_menu() {
             echo -e "${GREEN} 6. 修复互通盘            16. 安装ToDesk          26. 卸载已安装应用${NC}"
             echo -e "${GREEN} 7. 清理hosts缓存         17. 安装WPS Office      27. 检查工具箱更新${NC}"
             echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装QQ              28. 安装小黄鸭软件${NC}"
-            echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装微信${NC}"
+            echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装微信            29. 安装Steam社区302${NC}"
             echo -e "${GREEN}10. 安装ToMoon            20. 安装QQ音乐${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
 
-            read -p "请输入选项 (输入1-28的数字): " choice
+            read -p "请输入选项 (输入1-29的数字): " choice
 
             # 验证输入
             if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
@@ -191,8 +191,8 @@ show_main_menu() {
             fi
 
             # 检查选择是否在有效范围内
-            if [ $choice -lt 1 ] || [ $choice -gt 28 ]; then
-                echo -e "${RED}无效选择，请选择1到28之间的数字！${NC}"
+            if [ $choice -lt 1 ] || [ $choice -gt 29 ]; then
+                echo -e "${RED}无效选择，请选择1到29之间的数字！${NC}"
                 sleep 1
                 continue
             fi
@@ -227,6 +227,7 @@ show_main_menu() {
                 26) uninstall_apps ;;
                 27) check_for_updates ;;
                 28) install_yellow_duck_software ;;
+                29) install_steamcommunity_302 ;;
                 *)
                     echo -e "${RED}无效选择，请重新输入！${NC}"
                     sleep 1
@@ -239,7 +240,7 @@ show_main_menu() {
             echo ""
             echo -e "${CYAN}请选择要执行的功能：${NC}"
             echo ""
-            # 单系统菜单（26项，跳过5、6两项）
+            # 单系统菜单（27项，跳过5、6两项）
             echo -e "${GREEN} 1. 关于支持与维护的说明  10. 安装＆卸载宝葫芦    19. 安装百度网盘${NC}"
             echo -e "${GREEN} 2. 安装国内源            11. 校准摇杆            20. 安装Edge浏览器${NC}"
             echo -e "${GREEN} 3. 调整虚拟内存大小      12. 设置管理员密码      21. 安装Google浏览器${NC}"
@@ -248,12 +249,12 @@ show_main_menu() {
             echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装WPS Office      24. 卸载已安装应用${NC}"
             echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装QQ              25. 检查工具箱更新${NC}"
             echo -e "${GREEN} 8. 安装ToMoon            17. 安装微信            26. 安装小黄鸭软件${NC}"
-            echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装QQ音乐${NC}"
+            echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装QQ音乐          27. 安装Steam社区302${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
 
-            read -p "请输入选项 (输入1-26的数字): " choice
+            read -p "请输入选项 (输入1-27的数字): " choice
 
             # 验证输入
             if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
@@ -263,8 +264,8 @@ show_main_menu() {
             fi
 
             # 检查选择是否在有效范围内
-            if [ $choice -lt 1 ] || [ $choice -gt 26 ]; then
-                echo -e "${RED}无效选择，请选择1到26之间的数字！${NC}"
+            if [ $choice -lt 1 ] || [ $choice -gt 27 ]; then
+                echo -e "${RED}无效选择，请选择1到27之间的数字！${NC}"
                 sleep 1
                 continue
             fi
@@ -297,6 +298,7 @@ show_main_menu() {
                 24) uninstall_apps ;;                # 24. 卸载已安装应用
                 25) check_for_updates ;;             # 25. 检查工具箱更新
                 26) install_yellow_duck_software ;;  # 26. 安装小黄鸭软件
+                27) install_steamcommunity_302 ;;    # 27. 安装Steam社区302
                 *)
                     echo -e "${RED}无效选择，请重新输入！${NC}"
                     sleep 1
@@ -4378,6 +4380,263 @@ EOF
     rm -rf "$temp_dir"
 
     echo ""
+    read -p "按回车键返回主菜单..."
+}
+
+# 29. 安装Steam社区302（双系统）/27. 安装Steam社区302（单系统）
+install_steamcommunity_302() {
+    show_header
+    echo -e "${YELLOW}════════════════ 安装Steam社区302 ════════════════${NC}"
+    echo ""
+
+    echo -e "${CYAN}正在准备安装Steam社区302工具...${NC}"
+    echo "该工具用于解决Steam社区访问问题。"
+    echo ""
+
+    # 检查是否已安装
+    local install_dir="$HOME/SteamCommunity302"
+    local install_dir2="$HOME/Steamcommunity_302"  # 添加第二个可能的安装目录
+    local desktop_file="$DESKTOP_DIR/Steamcommunity-302.desktop"
+
+    # 检查是否存在安装目录或桌面快捷方式
+    local installed=false
+    if [ -d "$install_dir" ] || [ -d "$install_dir2" ] || [ -f "$desktop_file" ]; then
+        installed=true
+    fi
+
+    if [ "$installed" = true ]; then
+        echo -e "${GREEN}检测到可能已安装Steam社区302${NC}"
+        echo ""
+        echo "请选择要执行的操作："
+        echo "1. 重新安装Steam社区302"
+        echo "2. 卸载Steam社区302"
+        echo "3. 返回主菜单"
+        echo ""
+
+        read -p "请输入选择 [1-3]: " choice
+
+        case $choice in
+            1)
+                echo "开始重新安装Steam社区302..."
+                # 先卸载旧版本
+                echo "正在清理旧版本..."
+                # 删除安装目录
+                if [ -d "$install_dir" ]; then
+                    rm -rf "$install_dir"
+                    echo -e "${GREEN}✓ 已删除安装目录: $install_dir${NC}"
+                fi
+                if [ -d "$install_dir2" ]; then
+                    rm -rf "$install_dir2"
+                    echo -e "${GREEN}✓ 已删除安装目录: $install_dir2${NC}"
+                fi
+                # 删除桌面快捷方式
+                if [ -f "$desktop_file" ]; then
+                    rm -f "$desktop_file"
+                    echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
+                fi
+                echo -e "${GREEN}✓ 旧版本清理完成，开始新安装${NC}"
+                echo ""
+                # 继续执行安装流程
+                ;;
+            2)
+                echo "正在卸载Steam社区302..."
+                # 删除安装目录
+                if [ -d "$install_dir" ]; then
+                    rm -rf "$install_dir"
+                    echo -e "${GREEN}✓ 已删除安装目录: $install_dir${NC}"
+                fi
+                if [ -d "$install_dir2" ]; then
+                    rm -rf "$install_dir2"
+                    echo -e "${GREEN}✓ 已删除安装目录: $install_dir2${NC}"
+                fi
+                # 删除桌面快捷方式
+                if [ -f "$desktop_file" ]; then
+                    rm -f "$desktop_file"
+                    echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
+                fi
+                echo -e "${GREEN}✓ Steam社区302已卸载完成${NC}"
+                read -p "按回车键返回主菜单..."
+                return
+                ;;
+            3)
+                echo "返回主菜单..."
+                return
+                ;;
+            *)
+                echo "无效选择，返回主菜单..."
+                return
+                ;;
+        esac
+    fi
+
+    # 确认安装
+    echo "即将下载并安装Steam社区302工具..."
+    echo "该工具需要从dogfight360.com下载。"
+    echo ""
+
+    read -p "是否继续安装？(y/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "安装已取消。"
+        read -p "按回车键返回主菜单..."
+        return
+    fi
+
+    echo ""
+    echo -e "${CYAN}开始安装Steam社区302...${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # 创建安装目录（使用SteamCommunity302目录）
+    mkdir -p "$install_dir"
+    cd "$install_dir"
+
+    # 下载文件
+    echo "步骤1: 下载Steam社区302工具..."
+    echo "下载地址: https://www.dogfight360.com/blog/wp-content/uploads/2025/12/steamcommunity_302_Linux_AMD64_V14.0.01.tar.gz"
+    echo ""
+
+    # 使用wget下载文件
+    if ! command -v wget &> /dev/null; then
+        echo -e "${YELLOW}未找到wget，正在尝试安装...${NC}"
+        sudo pacman -S --noconfirm wget 2>/dev/null || {
+            echo -e "${RED}无法安装wget，请手动安装后再试。${NC}"
+            echo "安装命令: sudo pacman -S wget"
+            read -p "按回车键返回主菜单..."
+            return
+        }
+    fi
+
+    local download_url="https://www.dogfight360.com/blog/wp-content/uploads/2025/12/steamcommunity_302_Linux_AMD64_V14.0.01.tar.gz"
+    local filename="steamcommunity_302_Linux_AMD64_V14.0.01.tar.gz"
+
+    echo "正在下载文件..."
+    wget --show-progress "$download_url"
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}✗ 下载失败，请检查网络连接${NC}"
+        echo "可以尝试手动下载后放置到 $install_dir 目录"
+        read -p "按回车键返回主菜单..."
+        return
+    fi
+
+    echo -e "${GREEN}✓ 下载完成${NC}"
+    echo ""
+
+    # 解压文件
+    echo "步骤2: 解压文件..."
+    tar -xzf "$filename"
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}✗ 解压失败${NC}"
+        read -p "按回车键返回主菜单..."
+        return
+    fi
+
+    echo -e "${GREEN}✓ 解压完成${NC}"
+    echo ""
+
+    # 删除压缩包
+    rm -f "$filename"
+    echo "步骤3: 清理压缩包..."
+    echo -e "${GREEN}✓ 已清理压缩包${NC}"
+    echo ""
+
+    # 查找解压后的目录
+    local extracted_dir=""
+    for dir in *steamcommunity* *Steamcommunity*; do
+        if [ -d "$dir" ]; then
+            extracted_dir="$dir"
+            break
+        fi
+    done
+
+    if [ -z "$extracted_dir" ]; then
+        # 如果没有找到目录，检查当前目录
+        if [ -f "Steamcommunity_302" ] || [ -f "steamcommunity_302" ]; then
+            extracted_dir="."
+        else
+            echo -e "${RED}✗ 找不到解压后的文件${NC}"
+            read -p "按回车键返回主菜单..."
+            return
+        fi
+    fi
+
+    cd "$extracted_dir"
+    local extracted_path="$(pwd)"
+    echo "步骤4: 文件位置: $extracted_path"
+    echo -e "${GREEN}✓ 文件准备就绪${NC}"
+    echo ""
+
+    # 设置执行权限
+    echo "步骤5: 设置执行权限..."
+    [ -f "Steamcommunity_302" ] && chmod +x "Steamcommunity_302"
+    [ -f "steamcommunity_302" ] && chmod +x "steamcommunity_302"
+    [ -f "steamcommunity_302.cli" ] && chmod +x "steamcommunity_302.cli"
+    [ -f "steamcommunity_302.caddy" ] && chmod +x "steamcommunity_302.caddy"
+    echo -e "${GREEN}✓ 已设置执行权限${NC}"
+    echo ""
+
+    # 创建运行脚本
+    echo "步骤6: 创建运行脚本..."
+    local run_script="run运行.sh"
+    cat > "$run_script" << 'EOF'
+#!/bin/bash
+clear
+echo ""
+[ -f "Steamcommunity_302" ] && sudo ./Steamcommunity_302
+[ -f "steamcommunity_302" ] && sudo ./steamcommunity_302
+EOF
+
+    chmod +x "$run_script"
+    echo -e "${GREEN}✓ 运行脚本已创建: $run_script${NC}"
+    echo ""
+
+    # 创建桌面快捷方式
+    echo "步骤7: 创建桌面快捷方式..."
+
+    # 尝试查找steam图标
+    local steam_icon="applications-internet"
+    if [ -f "/usr/share/icons/hicolor/48x48/apps/steam.png" ]; then
+        steam_icon="steam"
+    fi
+
+    cat > "$desktop_file" << EOF
+[Desktop Entry]
+Name=Steamcommunity 302
+Comment=Steam社区302访问工具
+Exec=$extracted_path/$run_script
+Terminal=true
+Type=Application
+Categories=Network;Utility;
+Icon=$steam_icon
+Path=$extracted_path
+EOF
+
+    chmod +x "$desktop_file"
+    echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
+    echo ""
+
+    # 完成提示
+    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}✅ Steam社区302 安装完成！${NC}"
+    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${YELLOW}使用说明：${NC}"
+    echo "1. 双击桌面上的 'Steamcommunity 302' 图标启动程序"
+    echo "2. 首次使用时，请进入设置保存设置后再启动服务"
+    echo "3. 运行程序需要管理员权限，首次运行时需要输入密码"
+    echo ""
+    echo -e "${YELLOW}文件位置：${NC}"
+    echo "安装目录: $install_dir"
+    echo "运行脚本: $extracted_path/$run_script"
+    echo "桌面快捷方式: $desktop_file"
+    echo ""
+    echo -e "${YELLOW}注意：${NC}"
+    echo "1. 本工具安装在 $install_dir 目录"
+    echo "2. 如需卸载，请重新运行此功能并选择卸载选项"
+    echo "3. 卸载时会同时清理桌面快捷方式和安装文件"
+    echo ""
+
     read -p "按回车键返回主菜单..."
 }
 
