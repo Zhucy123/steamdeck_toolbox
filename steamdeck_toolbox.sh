@@ -1664,7 +1664,7 @@ install_remove_plugin_store() {
     echo -e "${YELLOW}════════════════ 安装＆卸载插件商店 ════════════════${NC}"
 
     echo "请选择操作："
-    echo "1. 安装插件商店（从 Gitee 源安装）"
+    echo "1. 安装插件商店"
     echo "2. 卸载插件商店"
     echo ""
 
