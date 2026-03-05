@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.1.0
+# Steam Deck 工具箱 v1.1.1
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -24,7 +24,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.1.0"  # 更新版本号
+VERSION="1.1.1"  # 更新版本号
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox" # Gitee仓库地址
 REPO_CDN_URLS=(
     "https://gitee.com/Zhucy2100/steamdeck_toolbox" # 只有Gitee地址，不使用镜像
@@ -1638,22 +1638,101 @@ install_xunyou_accelerator() {
     read -p "按回车键返回主菜单..."
 }
 
-# 10. 安装ToMoon
+# 10. 安装ToMoon（从Gitee手动安装）- 静默解压版
 install_tomoon() {
     show_header
     echo -e "${YELLOW}════════════════ 安装ToMoon ════════════════${NC}"
 
-    echo -e "${CYAN}正在安装ToMoon...${NC}"
-    echo "安装命令: curl -L http://i.ohmydeck.net | sh"
+    # ==================== 配置区域 ====================
+    GITEE_BASE_URL="https://gitee.com/Zhucy2100/decky-installer/raw/master"
+    PLUGIN_DIR="/home/deck/homebrew/plugins"
+    TARGET_DIR="${PLUGIN_DIR}/tomoon"
+    TMP_DIR="/tmp/tomoon_install"
+    # =================================================
 
-    # 执行ToMoon安装命令
-    if curl -L http://i.ohmydeck.net | sh; then
-        echo ""
-        echo -e "${GREEN}✓ ToMoon安装完成${NC}"
-    else
-        echo ""
-        echo -e "${RED}✗ ToMoon安装失败${NC}"
+    # 检查必要命令
+    for cmd in curl unzip sudo; do
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
+            read -p "按回车键返回主菜单..."
+            return 1
+        fi
+    done
+
+    # ========== 检测插件目录是否已存在 ==========
+    if [ -d "$TARGET_DIR" ]; then
+        echo -e "${YELLOW}检测到 ToMoon 插件已存在于 ${TARGET_DIR}${NC}"
+        read -p "是否替换安装？(y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${CYAN}已取消安装。${NC}"
+            read -p "按回车键返回主菜单..."
+            return 0
+        fi
+        echo -e "${CYAN}正在删除旧版本...${NC}"
+        sudo rm -rf "$TARGET_DIR"
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}删除旧目录失败，请检查权限。${NC}"
+            read -p "按回车键返回主菜单..."
+            return 1
+        fi
+        echo -e "${GREEN}旧版本已删除。${NC}"
     fi
+
+    # 创建临时目录
+    mkdir -p "$TMP_DIR"
+    cd "$TMP_DIR"
+
+    # 下载分卷文件
+    echo -e "${CYAN}正在从 Gitee 下载 ToMoon 分卷文件...${NC}"
+    for i in 001 002 003 004; do
+        filename="tomoon.zip.$i"
+        echo "下载 $filename ..."
+        if ! curl -L "$GITEE_BASE_URL/$filename" -o "$filename"; then
+            echo -e "${RED}下载 $filename 失败，请检查网络或文件是否存在。${NC}"
+            rm -rf "$TMP_DIR"
+            read -p "按回车键返回主菜单..."
+            return 1
+        fi
+        # 检查文件是否为空
+        if [ ! -s "$filename" ]; then
+            echo -e "${RED}下载 $filename 文件为空，可能链接有误。${NC}"
+            rm -rf "$TMP_DIR"
+            read -p "按回车键返回主菜单..."
+            return 1
+        fi
+    done
+
+    # 合并分卷
+    echo "合并分卷..."
+    cat tomoon.zip.001 tomoon.zip.002 tomoon.zip.003 tomoon.zip.004 > tomoon_full.zip
+
+    # 确保目标插件目录存在
+    echo "确保插件目录存在..."
+    sudo mkdir -p "$PLUGIN_DIR"
+    sudo chown $USER:$USER "$PLUGIN_DIR" 2>/dev/null || true
+
+    # 解压到插件目录（使用 -q 静默模式，只显示错误）
+    echo "解压到 $PLUGIN_DIR ..."
+    if unzip -q -o tomoon_full.zip -d "$PLUGIN_DIR"; then
+        echo -e "${GREEN}解压成功。${NC}"
+    else
+        echo -e "${RED}解压失败，请检查压缩包是否完整。${NC}"
+        rm -rf "$TMP_DIR"
+        read -p "按回车键返回主菜单..."
+        return 1
+    fi
+
+    # 清理临时文件
+    echo "清理临时文件..."
+    rm -rf "$TMP_DIR"
+
+    # 修正插件目录权限
+    sudo chown -R $USER:$USER "$PLUGIN_DIR" 2>/dev/null || true
+
+    echo ""
+    echo -e "${GREEN}✓ ToMoon 插件安装完成！${NC}"
+    echo "请切换回游戏模式，在 Decky 侧边栏中查看 ToMoon 是否出现。"
 
     read -p "按回车键返回主菜单..."
 }
