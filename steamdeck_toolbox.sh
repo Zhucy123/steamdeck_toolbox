@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.1.1
+# Steam Deck 工具箱 v1.1.2
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -24,7 +24,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.1.1"  # 更新版本号
+VERSION="1.1.2"  # 更新版本号
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox" # Gitee仓库地址
 REPO_CDN_URLS=(
     "https://gitee.com/Zhucy2100/steamdeck_toolbox" # 只有Gitee地址，不使用镜像
@@ -166,22 +166,22 @@ show_main_menu() {
             echo ""
             echo -e "${CYAN}请选择要执行的功能：${NC}"
             echo ""
-            # 双系统菜单（29项）
-            echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装百度网盘${NC}"
-            echo -e "${GREEN} 2. 安装国内源            12. 安装＆卸载宝葫芦    22. 安装Edge浏览器${NC}"
-            echo -e "${GREEN} 3. 调整虚拟内存大小      13. 校准摇杆            23. 安装Google浏览器${NC}"
-            echo -e "${GREEN} 4. 修复磁盘写入错误      14. 设置管理员密码      24. 清理Steam缓存${NC}"
-            echo -e "${GREEN} 5. 修复引导              15. 安装AnyDesk         25. 更新已安装应用${NC}"
-            echo -e "${GREEN} 6. 修复互通盘            16. 安装ToDesk          26. 卸载已安装应用${NC}"
-            echo -e "${GREEN} 7. 清理hosts缓存         17. 安装WPS Office      27. 检查工具箱更新${NC}"
-            echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装QQ              28. 安装小黄鸭软件${NC}"
-            echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装微信            29. 安装Steam社区302${NC}"
-            echo -e "${GREEN}10. 安装ToMoon            20. 安装QQ音乐${NC}"
+            # 双系统菜单（28项）
+echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装Edge浏览器${NC}"
+echo -e "${GREEN} 2. 安装国内源            12. 校准摇杆            22. 安装Google浏览器${NC}"
+echo -e "${GREEN} 3. 调整虚拟内存大小      13. 设置管理员密码      23. 清理Steam缓存${NC}"
+echo -e "${GREEN} 4. 修复磁盘写入错误      14. 安装AnyDesk         24. 更新已安装应用${NC}"
+echo -e "${GREEN} 5. 修复引导              15. 安装ToDesk          25. 卸载已安装应用${NC}"
+echo -e "${GREEN} 6. 修复互通盘            16. 安装WPS Office      26. 检查工具箱更新${NC}"
+echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安装小黄鸭软件${NC}"
+echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装微信            28. 安装Steam社区302${NC}"
+echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装QQ音乐${NC}"
+echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
 
-            read -p "请输入选项 (输入1-29的数字): " choice
+            read -p "请输入选项 (输入1-28的数字): " choice
 
             # 验证输入
             if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
@@ -191,43 +191,42 @@ show_main_menu() {
             fi
 
             # 检查选择是否在有效范围内
-            if [ $choice -lt 1 ] || [ $choice -gt 29 ]; then
-                echo -e "${RED}无效选择，请选择1到29之间的数字！${NC}"
+            if [ $choice -lt 1 ] || [ $choice -gt 28 ]; then
+                echo -e "${RED}无效选择，请选择1到28之间的数字！${NC}"
                 sleep 1
                 continue
             fi
 
             # 双系统菜单映射
             case $choice in
-                1) show_about ;;
-                2) install_chinese_source ;;
-                3) adjust_swap ;;
-                4) fix_disk_write_error ;;
-                5) fix_boot ;;
-                6) fix_shared_disk ;;
-                7) clear_hosts_cache ;;
-                8) install_uu_accelerator ;;
-                9) install_xunyou_accelerator ;;
-                10) install_tomoon ;;
-                11) install_remove_plugin_store ;;
-                12) install_remove_baohulu ;;
-                13) calibrate_joystick ;;
-                14) set_admin_password ;;
-                15) install_anydesk ;;
-                16) install_todesk ;;
-                17) install_wps_office ;;
-                18) install_qq ;;
-                19) install_wechat ;;
-                20) install_qqmusic ;;
-                21) install_baidunetdisk ;;
-                22) install_edge ;;
-                23) install_chrome ;;
-                24) steamdeck_cache_manager ;;
-                25) update_installed_apps ;;
-                26) uninstall_apps ;;
-                27) check_for_updates ;;
-                28) install_yellow_duck_software ;;
-                29) install_steamcommunity_302 ;;
+    1) show_about ;;
+    2) install_chinese_source ;;
+    3) adjust_swap ;;
+    4) fix_disk_write_error ;;
+    5) fix_boot ;;
+    6) fix_shared_disk ;;
+    7) clear_hosts_cache ;;
+    8) install_uu_accelerator ;;
+    9) install_xunyou_accelerator ;;
+    10) install_tomoon ;;
+    11) install_remove_plugin_store ;;
+    12) calibrate_joystick ;;        # 原13
+    13) set_admin_password ;;         # 原14
+    14) install_anydesk ;;            # 原15
+    15) install_todesk ;;             # 原16
+    16) install_wps_office ;;         # 原17
+    17) install_qq ;;                 # 原18
+    18) install_wechat ;;             # 原19
+    19) install_qqmusic ;;            # 原20
+    20) install_baidunetdisk ;;       # 原21
+    21) install_edge ;;               # 原22
+    22) install_chrome ;;             # 原23
+    23) steamdeck_cache_manager ;;    # 原24
+    24) update_installed_apps ;;      # 原25
+    25) uninstall_apps ;;             # 原26
+    26) check_for_updates ;;          # 原27
+    27) install_yellow_duck_software ;;  # 原28
+    28) install_steamcommunity_302 ;;    # 原29
                 *)
                     echo -e "${RED}无效选择，请重新输入！${NC}"
                     sleep 1
@@ -240,21 +239,21 @@ show_main_menu() {
             echo ""
             echo -e "${CYAN}请选择要执行的功能：${NC}"
             echo ""
-            # 单系统菜单（27项，跳过5、6两项）
-            echo -e "${GREEN} 1. 关于支持与维护的说明  10. 安装＆卸载宝葫芦    19. 安装百度网盘${NC}"
-            echo -e "${GREEN} 2. 安装国内源            11. 校准摇杆            20. 安装Edge浏览器${NC}"
-            echo -e "${GREEN} 3. 调整虚拟内存大小      12. 设置管理员密码      21. 安装Google浏览器${NC}"
-            echo -e "${GREEN} 4. 修复磁盘写入错误      13. 安装AnyDesk         22. 清理Steam缓存${NC}"
-            echo -e "${GREEN} 5. 清理hosts缓存         14. 安装ToDesk          23. 更新已安装应用${NC}"
-            echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装WPS Office      24. 卸载已安装应用${NC}"
-            echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装QQ              25. 检查工具箱更新${NC}"
-            echo -e "${GREEN} 8. 安装ToMoon            17. 安装微信            26. 安装小黄鸭软件${NC}"
-            echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装QQ音乐          27. 安装Steam社区302${NC}"
+            # 单系统菜单（26项，跳过5、6两项）
+echo -e "${GREEN} 1. 关于支持与维护的说明  2. 安装国内源  3. 调整虚拟内存大小${NC}"
+echo -e "${GREEN} 4. 修复磁盘写入错误      5. 清理hosts缓存  6. 安装UU加速器插件${NC}"
+echo -e "${GREEN} 7. 安装迅游加速器插件    8. 安装ToMoon  9. 安装＆卸载插件商店${NC}"
+echo -e "${GREEN}10. 校准摇杆              11. 设置管理员密码  12. 安装AnyDesk${NC}"
+echo -e "${GREEN}13. 安装ToDesk            14. 安装WPS Office  15. 安装QQ${NC}"
+echo -e "${GREEN}16. 安装微信              17. 安装QQ音乐      18. 安装百度网盘${NC}"
+echo -e "${GREEN}19. 安装Edge浏览器        20. 安装Google浏览器 21. 清理Steam缓存${NC}"
+echo -e "${GREEN}22. 更新已安装应用        23. 卸载已安装应用  24. 检查工具箱更新${NC}"
+echo -e "${GREEN}25. 安装小黄鸭软件        26. 安装Steam社区302${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
 
-            read -p "请输入选项 (输入1-27的数字): " choice
+            read -p "请输入选项 (输入1-26的数字): " choice
 
             # 验证输入
             if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
@@ -264,41 +263,65 @@ show_main_menu() {
             fi
 
             # 检查选择是否在有效范围内
-            if [ $choice -lt 1 ] || [ $choice -gt 27 ]; then
-                echo -e "${RED}无效选择，请选择1到27之间的数字！${NC}"
+            if [ $choice -lt 1 ] || [ $choice -gt 26 ]; then
+                echo -e "${RED}无效选择，请选择1到26之间的数字！${NC}"
                 sleep 1
                 continue
             fi
 
             # 单系统菜单映射（根据您提供的编号对应）
             case $choice in
-                1) show_about ;;                     # 1. 关于支持与维护的说明
-                2) install_chinese_source ;;         # 2. 安装国内源
-                3) adjust_swap ;;                    # 3. 调整虚拟内存大小
-                4) fix_disk_write_error ;;           # 4. 修复磁盘写入错误
-                5) clear_hosts_cache ;;              # 5. 清理hosts缓存
-                6) install_uu_accelerator ;;         # 6. 安装UU加速器插件
-                7) install_xunyou_accelerator ;;     # 7. 安装迅游加速器插件
-                8) install_tomoon ;;                 # 8. 安装ToMoon
-                9) install_remove_plugin_store ;;    # 9. 安装＆卸载插件商店
-                10) install_remove_baohulu ;;        # 10. 安装＆卸载宝葫芦
-                11) calibrate_joystick ;;            # 11. 校准摇杆
-                12) set_admin_password ;;            # 12. 设置管理员密码
-                13) install_anydesk ;;               # 13. 安装AnyDesk
-                14) install_todesk ;;                # 14. 安装ToDesk
-                15) install_wps_office ;;            # 15. 安装WPS Office
-                16) install_qq ;;                    # 16. 安装QQ
-                17) install_wechat ;;                # 17. 安装微信
-                18) install_qqmusic ;;               # 18. 安装QQ音乐
-                19) install_baidunetdisk ;;          # 19. 安装百度网盘
-                20) install_edge ;;                  # 20. 安装Edge浏览器
-                21) install_chrome ;;                # 21. 安装Google浏览器
-                22) steamdeck_cache_manager ;;       # 22. 清理Steam缓存
-                23) update_installed_apps ;;         # 23. 更新已安装应用
-                24) uninstall_apps ;;                # 24. 卸载已安装应用
-                25) check_for_updates ;;             # 25. 检查工具箱更新
-                26) install_yellow_duck_software ;;  # 26. 安装小黄鸭软件
-                27) install_steamcommunity_302 ;;    # 27. 安装Steam社区302
+    1) show_about ;;                     # 1. 关于支持与维护的说明
+    2) install_chinese_source ;;         # 2. 安装国内源
+    3) adjust_swap ;;                    # 3. 调整虚拟内存大小
+    4) fix_disk_write_error ;;           # 4. 修复磁盘写入错误
+    5) clear_hosts_cache ;;              # 5. 清理hosts缓存
+    6) install_uu_accelerator ;;         # 6. 安装UU加速器插件
+    7) install_xunyou_accelerator ;;     # 7. 安装迅游加速器插件
+    8) install_tomoon ;;                 # 8. 安装ToMoon
+    9) install_remove_plugin_store ;;    # 9. 安装＆卸载插件商店
+    10) calibrate_joystick ;;            # 10. 校准摇杆
+    11) set_admin_password ;;            # 11. 设置管理员密码
+    12) install_anydesk ;;               # 12. 安装AnyDesk
+    13) install_todesk ;;                # 13. 安装ToDesk
+    14) install_wps_office ;;            # 14. 安装WPS Office
+    15) install_qq ;;                    # 15. 安装QQ
+    16) install_wechat ;;                # 16. 安装微信
+    17) install_qqmusic ;;               # 17. 安装QQ音乐
+    18) install_baidunetdisk ;;          # 18. 安装百度网盘
+    19) install_edge ;;                  # 19. 安装Edge浏览器
+    20) install_chrome ;;                # 20. 安装Google浏览器
+    21) steamdeck_cache_manager ;;       # 21. 清理Steam缓存
+    22) update_installed_apps ;;         # 22. 更新已安装应用    1) show_about ;;                     # 1. 关于支持与维护的说明
+    2) install_chinese_source ;;         # 2. 安装国内源
+    3) adjust_swap ;;                    # 3. 调整虚拟内存大小
+    4) fix_disk_write_error ;;           # 4. 修复磁盘写入错误
+    5) clear_hosts_cache ;;              # 5. 清理hosts缓存
+    6) install_uu_accelerator ;;         # 6. 安装UU加速器插件
+    7) install_xunyou_accelerator ;;     # 7. 安装迅游加速器插件
+    8) install_tomoon ;;                 # 8. 安装ToMoon
+    9) install_remove_plugin_store ;;    # 9. 安装＆卸载插件商店
+    10) calibrate_joystick ;;            # 10. 校准摇杆
+    11) set_admin_password ;;            # 11. 设置管理员密码
+    12) install_anydesk ;;               # 12. 安装AnyDesk
+    13) install_todesk ;;                # 13. 安装ToDesk
+    14) install_wps_office ;;            # 14. 安装WPS Office
+    15) install_qq ;;                    # 15. 安装QQ
+    16) install_wechat ;;                # 16. 安装微信
+    17) install_qqmusic ;;               # 17. 安装QQ音乐
+    18) install_baidunetdisk ;;          # 18. 安装百度网盘
+    19) install_edge ;;                  # 19. 安装Edge浏览器
+    20) install_chrome ;;                # 20. 安装Google浏览器
+    21) steamdeck_cache_manager ;;       # 21. 清理Steam缓存
+    22) update_installed_apps ;;         # 22. 更新已安装应用
+    23) uninstall_apps ;;                # 23. 卸载已安装应用
+    24) check_for_updates ;;             # 24. 检查工具箱更新
+    25) install_yellow_duck_software ;;  # 25. 安装小黄鸭软件
+    26) install_steamcommunity_302 ;;    # 26. 安装Steam社区302
+    23) uninstall_apps ;;                # 23. 卸载已安装应用
+    24) check_for_updates ;;             # 24. 检查工具箱更新
+    25) install_yellow_duck_software ;;  # 25. 安装小黄鸭软件
+    26) install_steamcommunity_302 ;;    # 26. 安装Steam社区302
                 *)
                     echo -e "${RED}无效选择，请重新输入！${NC}"
                     sleep 1
@@ -1881,52 +1904,8 @@ install_remove_plugin_store() {
     read -p "按回车键返回主菜单..."
 }
 
-# 12. 安装＆卸载宝葫芦
-install_remove_baohulu() {
-    show_header
-    echo -e "${YELLOW}════════════════ 安装＆卸载宝葫芦 ════════════════${NC}"
 
-    echo "请选择操作："
-    echo "1. 安装宝葫芦"
-    echo "2. 卸载宝葫芦"
-    echo ""
-
-    read -p "请输入选择 [1-2]: " baohulu_choice
-
-    case $baohulu_choice in
-        1)
-            echo -e "${CYAN}正在安装宝葫芦...${NC}"
-            echo "安装命令: curl -s -L https://i.hulu.deckz.fun | sudo HULU_CHANNEL=Preview sh -"
-
-            if curl -s -L https://i.hulu.deckz.fun | sudo HULU_CHANNEL=Preview sh -; then
-                echo ""
-                echo -e "${GREEN}✓ 宝葫芦安装完成${NC}"
-            else
-                echo ""
-                echo -e "${RED}✗ 宝葫芦安装失败${NC}"
-            fi
-            ;;
-        2)
-            echo -e "${CYAN}正在卸载宝葫芦...${NC}"
-            echo "卸载命令: curl -s -L https://i.hulu.deckz.fun/u.sh | sudo sh -"
-
-            if curl -s -L https://i.hulu.deckz.fun/u.sh | sudo sh -; then
-                echo ""
-                echo -e "${GREEN}✓ 宝葫芦卸载完成${NC}"
-            else
-                echo ""
-                echo -e "${RED}✗ 宝葫芦卸载失败${NC}"
-            fi
-            ;;
-        *)
-            echo -e "${RED}无效选择${NC}"
-            ;;
-    esac
-
-    read -p "按回车键返回主菜单..."
-}
-
-# 13. 校准摇杆
+# 12. 校准摇杆
 calibrate_joystick() {
     show_header
     echo -e "${YELLOW}════════════════ 校准摇杆 ════════════════${NC}"
@@ -1946,7 +1925,7 @@ calibrate_joystick() {
     read -p "按回车键返回主菜单..."
 }
 
-# 14. 设置管理员密码
+# 13. 设置管理员密码
 set_admin_password() {
     show_header
     echo -e "${YELLOW}════════════════ 设置管理员密码 ════════════════${NC}"
@@ -1981,7 +1960,7 @@ set_admin_password() {
     read -p "按回车键返回主菜单..."
 }
 
-# 15. 安装AnyDesk
+# 14. 安装AnyDesk
 install_anydesk() {
     show_header
     echo -e "${YELLOW}════════════════ 安装AnyDesk ════════════════${NC}"
@@ -2130,7 +2109,7 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 16. 安装ToDesk
+# 15. 安装ToDesk
 install_todesk() {
     show_header
     echo -e "${YELLOW}════════════════ 安装ToDesk ════════════════${NC}"
@@ -2153,7 +2132,7 @@ install_todesk() {
     read -p "按回车键返回主菜单..."
 }
 
-# 17. 安装WPS Office
+# 16. 安装WPS Office
 install_wps_office() {
     show_header
     echo -e "${YELLOW}════════════════ 安装WPS Office ════════════════${NC}"
@@ -2318,7 +2297,7 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 18. 安装QQ
+# 17. 安装QQ
 install_qq() {
     show_header
     echo -e "${YELLOW}════════════════ 安装QQ ════════════════${NC}"
@@ -2472,7 +2451,7 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 19. 安装微信
+# 18. 安装微信
 install_wechat() {
     show_header
     echo -e "${YELLOW}════════════════ 安装微信 ════════════════${NC}"
@@ -2626,7 +2605,7 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 20. 安装QQ音乐
+# 19. 安装QQ音乐
 install_qqmusic() {
     show_header
     echo -e "${YELLOW}════════════════ 安装QQ音乐 ════════════════${NC}"
@@ -2780,7 +2759,7 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 21. 安装百度网盘
+# 20. 安装百度网盘
 install_baidunetdisk() {
     show_header
     echo -e "${YELLOW}════════════════ 安装百度网盘 ════════════════${NC}"
@@ -2936,7 +2915,7 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 22. 安装Edge浏览器
+# 21. 安装Edge浏览器
 install_edge() {
     show_header
     echo -e "${YELLOW}════════════════ 安装Edge浏览器 ════════════════${NC}"
@@ -3090,7 +3069,7 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 23. 安装Google浏览器
+# 22. 安装Google浏览器
 install_chrome() {
     show_header
     echo -e "${YELLOW}════════════════ 安装Google浏览器 ════════════════${NC}"
@@ -3244,7 +3223,7 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 24. Steam Deck缓存管理器
+# 23. Steam Deck缓存管理器
 steamdeck_cache_manager() {
     show_header
     echo -e "${YELLOW}════════════════ Steam Deck 缓存管理器 ════════════════${NC}"
@@ -3861,7 +3840,7 @@ exec_steamdeck_cache_manager() {
     read -p "按回车键返回主菜单..."
 }
 
-# 25. 更新已安装应用
+# 24. 更新已安装应用
 update_installed_apps() {
     show_header
     echo -e "${YELLOW}════════════════ 更新已安装应用 ════════════════${NC}"
@@ -4003,8 +3982,8 @@ update_all_apps() {
     fi
 }
 
-# 26. 卸载已安装应用（双系统）
-# 27. 卸载已安装应用（单系统）
+# 25. 卸载已安装应用（双系统）
+# 26. 卸载已安装应用（单系统）
 uninstall_apps() {
     show_header
     echo -e "${YELLOW}════════════════ 卸载已安装应用 ════════════════${NC}"
@@ -4129,7 +4108,7 @@ uninstall_app_by_name() {
     read -p "按回车键返回..."
 }
 
-# 28. 安装小黄鸭软件（双系统）/26. 安装小黄鸭软件（单系统）
+# 27. 安装小黄鸭软件（双系统）/25. 安装小黄鸭软件（单系统）
 install_yellow_duck_software() {
     show_header
     echo -e "${YELLOW}════════════════ 安装小黄鸭软件 ════════════════${NC}"
@@ -4550,7 +4529,7 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 29. 安装Steam社区302（双系统）/27. 安装Steam社区302（单系统）
+# 28. 安装Steam社区302（双系统）/26. 安装Steam社区302（单系统）
 install_steamcommunity_302() {
     show_header
     echo -e "${YELLOW}════════════════ 安装Steam社区302 ════════════════${NC}"
