@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.1.2
+# Steam Deck 工具箱 v1.1.3
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -24,7 +24,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.1.2"  # 更新版本号
+VERSION="1.1.3"  # 更新版本号
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox" # Gitee仓库地址
 REPO_CDN_URLS=(
     "https://gitee.com/Zhucy2100/steamdeck_toolbox" # 只有Gitee地址，不使用镜像
@@ -240,15 +240,15 @@ echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘${NC}"
             echo -e "${CYAN}请选择要执行的功能：${NC}"
             echo ""
             # 单系统菜单（26项，跳过5、6两项）
-echo -e "${GREEN} 1. 关于支持与维护的说明  2. 安装国内源  3. 调整虚拟内存大小${NC}"
-echo -e "${GREEN} 4. 修复磁盘写入错误      5. 清理hosts缓存  6. 安装UU加速器插件${NC}"
-echo -e "${GREEN} 7. 安装迅游加速器插件    8. 安装ToMoon  9. 安装＆卸载插件商店${NC}"
-echo -e "${GREEN}10. 校准摇杆              11. 设置管理员密码  12. 安装AnyDesk${NC}"
-echo -e "${GREEN}13. 安装ToDesk            14. 安装WPS Office  15. 安装QQ${NC}"
-echo -e "${GREEN}16. 安装微信              17. 安装QQ音乐      18. 安装百度网盘${NC}"
-echo -e "${GREEN}19. 安装Edge浏览器        20. 安装Google浏览器 21. 清理Steam缓存${NC}"
-echo -e "${GREEN}22. 更新已安装应用        23. 卸载已安装应用  24. 检查工具箱更新${NC}"
-echo -e "${GREEN}25. 安装小黄鸭软件        26. 安装Steam社区302${NC}"
+echo -e "${GREEN} 1. 关于支持与维护的说明  10. 校准摇杆            19. 安装Edge浏览器${NC}"
+echo -e "${GREEN} 2. 安装国内源            11. 设置管理员密码      20. 安装Google浏览器${NC}"
+echo -e "${GREEN} 3. 调整虚拟内存大小      12. 安装AnyDesk         21. 清理Steam缓存${NC}"
+echo -e "${GREEN} 4. 修复磁盘写入错误      13. 安装ToDesk          22. 更新已安装应用${NC}"
+echo -e "${GREEN} 5. 清理hosts缓存         14. 安装WPS Office      23. 卸载已安装应用${NC}"
+echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装QQ              24. 检查工具箱更新${NC}"
+echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装微信            25. 安装小黄鸭软件${NC}"
+echo -e "${GREEN} 8. 安装ToMoon            17. 安装QQ音乐          26. 安装Steam社区302${NC}"
+echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装百度网盘${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
@@ -292,32 +292,7 @@ echo -e "${GREEN}25. 安装小黄鸭软件        26. 安装Steam社区302${NC}"
     19) install_edge ;;                  # 19. 安装Edge浏览器
     20) install_chrome ;;                # 20. 安装Google浏览器
     21) steamdeck_cache_manager ;;       # 21. 清理Steam缓存
-    22) update_installed_apps ;;         # 22. 更新已安装应用    1) show_about ;;                     # 1. 关于支持与维护的说明
-    2) install_chinese_source ;;         # 2. 安装国内源
-    3) adjust_swap ;;                    # 3. 调整虚拟内存大小
-    4) fix_disk_write_error ;;           # 4. 修复磁盘写入错误
-    5) clear_hosts_cache ;;              # 5. 清理hosts缓存
-    6) install_uu_accelerator ;;         # 6. 安装UU加速器插件
-    7) install_xunyou_accelerator ;;     # 7. 安装迅游加速器插件
-    8) install_tomoon ;;                 # 8. 安装ToMoon
-    9) install_remove_plugin_store ;;    # 9. 安装＆卸载插件商店
-    10) calibrate_joystick ;;            # 10. 校准摇杆
-    11) set_admin_password ;;            # 11. 设置管理员密码
-    12) install_anydesk ;;               # 12. 安装AnyDesk
-    13) install_todesk ;;                # 13. 安装ToDesk
-    14) install_wps_office ;;            # 14. 安装WPS Office
-    15) install_qq ;;                    # 15. 安装QQ
-    16) install_wechat ;;                # 16. 安装微信
-    17) install_qqmusic ;;               # 17. 安装QQ音乐
-    18) install_baidunetdisk ;;          # 18. 安装百度网盘
-    19) install_edge ;;                  # 19. 安装Edge浏览器
-    20) install_chrome ;;                # 20. 安装Google浏览器
-    21) steamdeck_cache_manager ;;       # 21. 清理Steam缓存
     22) update_installed_apps ;;         # 22. 更新已安装应用
-    23) uninstall_apps ;;                # 23. 卸载已安装应用
-    24) check_for_updates ;;             # 24. 检查工具箱更新
-    25) install_yellow_duck_software ;;  # 25. 安装小黄鸭软件
-    26) install_steamcommunity_302 ;;    # 26. 安装Steam社区302
     23) uninstall_apps ;;                # 23. 卸载已安装应用
     24) check_for_updates ;;             # 24. 检查工具箱更新
     25) install_yellow_duck_software ;;  # 25. 安装小黄鸭软件
