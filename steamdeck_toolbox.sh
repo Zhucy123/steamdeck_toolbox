@@ -1749,21 +1749,102 @@ install_remove_plugin_store() {
 
     case $plugin_choice in
         1)
-            echo -e "${CYAN}正在从官方源安装 Decky Loader...${NC}"
+            echo -e "${CYAN}正在从 Gitee 源安装 Decky Loader...${NC}"
             
-            # 检查 curl 命令
-            if ! command -v curl &> /dev/null; then
-                echo -e "${RED}错误: 未找到 curl 命令，请先安装。${NC}"
+            # ========== 配置区域（可根据需要调整）==========
+            GITEE_BASE_URL="https://gitee.com/Zhucy2100/decky-installer/raw/master"
+            HOME_DIR="/home/deck"
+            HOMEBREW_DIR="${HOME_DIR}/homebrew"
+            SERVICE_DIR="${HOMEBREW_DIR}/services"
+            PLUGIN_DIR="${HOMEBREW_DIR}/plugins"
+            CURRENT_USER=$(whoami)
+            # =============================================
+
+            # 检查必要命令
+            for cmd in curl unzip sed systemctl sudo; do
+                if ! command -v $cmd &> /dev/null; then
+                    echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
+                    read -p "按回车键返回主菜单..."
+                    return 1
+                fi
+            done
+
+            # 目录权限修复
+            echo "检查并创建目录结构..."
+            if [ ! -d "${HOMEBREW_DIR}" ]; then
+                echo "创建 ${HOMEBREW_DIR} ..."
+                sudo mkdir -p "${HOMEBREW_DIR}"
+            fi
+            sudo chown -R ${CURRENT_USER}:${CURRENT_USER} "${HOMEBREW_DIR}" 2>/dev/null || true
+
+            mkdir -p "${SERVICE_DIR}" "${PLUGIN_DIR}" 2>/dev/null || {
+                echo "普通用户创建子目录失败，尝试使用 sudo..."
+                sudo mkdir -p "${SERVICE_DIR}" "${PLUGIN_DIR}"
+                sudo chown ${CURRENT_USER}:${CURRENT_USER} "${SERVICE_DIR}" "${PLUGIN_DIR}"
+            }
+            echo "目录创建完成，所有权已修正。"
+
+            # 下载 service 文件
+            echo "下载 plugin_loader-release.service..."
+            curl -L "${GITEE_BASE_URL}/plugin_loader-release.service" -o "${SERVICE_DIR}/plugin_loader-release.service"
+
+            # 下载分卷压缩包
+            echo "下载 PluginLoader 分卷文件..."
+            curl -L "${GITEE_BASE_URL}/PluginLoader.zip.001" -o "${SERVICE_DIR}/PluginLoader.zip.001"
+            curl -L "${GITEE_BASE_URL}/PluginLoader.zip.002" -o "${SERVICE_DIR}/PluginLoader.zip.002"
+            curl -L "${GITEE_BASE_URL}/PluginLoader.zip.003" -o "${SERVICE_DIR}/PluginLoader.zip.003"
+
+            # 合并解压
+            cd "${SERVICE_DIR}"
+            echo "合并分卷..."
+            cat PluginLoader.zip.001 PluginLoader.zip.002 PluginLoader.zip.003 > PluginLoader_full.zip
+
+            echo "解压 PluginLoader_full.zip..."
+            if unzip -o PluginLoader_full.zip; then
+                echo "解压成功。"
+            else
+                echo "解压失败，尝试下载单独的 PluginLoader 文件..."
+                curl -L "${GITEE_BASE_URL}/PluginLoader" -o "${SERVICE_DIR}/PluginLoader"
+            fi
+
+            # 确保 PluginLoader 可执行
+            if [ -f "${SERVICE_DIR}/PluginLoader" ]; then
+                chmod +x "${SERVICE_DIR}/PluginLoader"
+                echo "PluginLoader 权限已设置。"
+            else
+                echo -e "${RED}错误: PluginLoader 文件未找到，安装中止。${NC}"
                 read -p "按回车键返回主菜单..."
                 return 1
             fi
 
-            # 执行官方安装脚本
-            if curl -L https://decky.xyz/install | sh; then
-                echo -e "${GREEN}✓ Decky Loader 安装完成${NC}"
-            else
-                echo -e "${RED}✗ 安装失败，请检查网络连接或手动安装${NC}"
+            # 启用 Steam 远程调试
+            echo "启用 Steam 远程调试..."
+            touch "${HOME_DIR}/.steam/steam/.cef-enable-remote-debugging"
+            if [ -d "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/" ]; then
+                touch "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/.cef-enable-remote-debugging"
             fi
+
+            # 修改服务文件路径
+            echo "配置 systemd 服务文件..."
+            sed -i "s|\${HOMEBREW_FOLDER}|${HOMEBREW_DIR}|g" "${SERVICE_DIR}/plugin_loader-release.service"
+
+            # 安装系统服务
+            echo "安装 systemd 服务..."
+            sudo cp "${SERVICE_DIR}/plugin_loader-release.service" /etc/systemd/system/plugin_loader.service
+            sudo systemctl daemon-reload
+
+            # 启动并启用服务
+            echo "启动 plugin_loader 服务..."
+            sudo systemctl start plugin_loader
+            sudo systemctl enable plugin_loader
+
+            # 验证状态
+            echo "服务状态："
+            systemctl status plugin_loader --no-pager
+
+            echo ""
+            echo -e "${GREEN}✓ Decky Loader 安装完成${NC}"
+            echo "请切换回游戏模式，按 '...' 键打开侧边栏检查。"
             ;;
 
         2)
