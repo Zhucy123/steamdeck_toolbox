@@ -37,9 +37,9 @@ get_remote_version() {
     echo "$remote_version"
 }
 
-# 检查更新
-check_for_updates() {
-    # 静默检查远程版本
+# 静默检查更新（供主菜单使用）
+check_for_updates_silent() {
+    # 静默检查远程版本，不阻塞主菜单
     echo -e "${CYAN}正在检查工具箱更新...${NC}"
     local remote_version=$(get_remote_version)
 
@@ -185,11 +185,11 @@ update_toolbox() {
     fi
     echo ""
 
-    # 替换脚本文件
+    # 替换脚本文件（使用 sudo 强制替换）
     echo -e "${CYAN}步骤6: 替换脚本文件...${NC}"
     chmod +x "$new_script_path"
-    if cp "$new_script_path" "$SCRIPT_PATH"; then
-        chmod +x "$SCRIPT_PATH"
+    if sudo cp -f "$new_script_path" "$SCRIPT_PATH"; then
+        sudo chmod +x "$SCRIPT_PATH"
         echo -e "${GREEN}✓ 脚本文件替换成功${NC}"
     else
         echo -e "${RED}✗ 脚本文件替换失败！${NC}"
@@ -205,7 +205,7 @@ update_toolbox() {
     echo -e "${GREEN}✓ 临时文件已清理${NC}"
     echo ""
 
-    # 更新完成
+    # 更新完成，自动重启新版本
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
     echo -e "${GREEN}              ✓ 更新完成！                          ${NC}"
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
@@ -216,12 +216,12 @@ update_toolbox() {
         echo -e "${GREEN}工具箱更新完成${NC}"
     fi
     echo ""
-    echo -e "${YELLOW}提示：${NC}"
-    echo "1. 请重新启动工具箱以应用更新"
+    echo -e "${YELLOW}提示：正在自动重启工具箱以应用更新...${NC}"
     echo ""
+    sleep 2
 
-    read -p "按回车键退出当前实例，请手动重新启动工具箱..."
-    exit 0
+    # 使用 exec 替换当前进程，自动启动新脚本
+    exec "$SCRIPT_PATH"
 }
 
 # 检查网络连接
@@ -350,7 +350,6 @@ Categories=Utility;
 EOF
         chmod +x "$MAIN_LAUNCHER"
     fi
-    # 注意：不再创建更新程序快捷方式
 }
 
 # 显示主菜单（根据系统类型动态调整）
@@ -424,7 +423,7 @@ show_main_menu() {
     23) steamdeck_cache_manager ;;
     24) update_installed_apps ;;
     25) uninstall_apps ;;
-    26) check_for_updates ;;
+    26) check_for_updates_silent ;;
     27) install_yellow_duck_software ;;
     28) install_steamcommunity_302 ;;
                 *)
@@ -489,7 +488,7 @@ show_main_menu() {
     21) steamdeck_cache_manager ;;
     22) update_installed_apps ;;
     23) uninstall_apps ;;
-    24) check_for_updates ;;
+    24) check_for_updates_silent ;;
     25) install_yellow_duck_software ;;
     26) install_steamcommunity_302 ;;
                 *)
@@ -2068,7 +2067,7 @@ install_wps_office() {
             1)
                 # 创建桌面快捷方式
                 echo "正在创建桌面快捷方式..."
-                cat > "$DESKTOP_DIR/WPS_Office.desktop" << 'EOF'
+                cat > "$DESKTOP_DIR/WPS_Office.desktop" << EOF
 [Desktop Entry]
 Name=WPS Office
 Exec=flatpak run $INSTALLED_WPS
@@ -2174,7 +2173,7 @@ EOF
     # 创建桌面快捷方式
     echo ""
     echo "步骤5: 创建桌面快捷方式"
-    cat > "$DESKTOP_DIR/WPS_Office.desktop" << 'EOF'
+    cat > "$DESKTOP_DIR/WPS_Office.desktop" << EOF
 [Desktop Entry]
 Name=WPS Office
 Exec=flatpak run $FINAL_PACKAGE
@@ -2698,7 +2697,7 @@ install_baidunetdisk() {
             1)
                 # 创建桌面快捷方式
                 echo "正在创建桌面快捷方式..."
-                cat > "$DESKTOP_FILE" << 'EOF'
+                cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Name=百度网盘
 Exec=flatpak run $INSTALLED_PACKAGE
@@ -2707,7 +2706,6 @@ Type=Application
 Categories=Network;FileTransfer;
 Comment=百度网盘客户端
 EOF
-                # 注意：上面的EOF必须顶格写，不能有缩进
 
                 chmod +x "$DESKTOP_FILE"
                 echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
@@ -2791,7 +2789,7 @@ EOF
     # 创建桌面快捷方式
     echo ""
     echo "步骤4: 创建桌面快捷方式"
-    cat > "$DESKTOP_FILE" << 'EOF'
+    cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Name=百度网盘
 Exec=flatpak run $FINAL_PACKAGE
@@ -2800,7 +2798,6 @@ Type=Application
 Categories=Network;FileTransfer;
 Comment=百度网盘客户端
 EOF
-    # 注意：上面的EOF必须顶格写，不能有缩进
 
     chmod +x "$DESKTOP_FILE"
     echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
@@ -4698,8 +4695,8 @@ main() {
     # 静默检测系统类型
     detect_system_type
 
-    # 启动时检查更新
-    check_for_updates
+    # 启动时检查更新（使用静默版本）
+    check_for_updates_silent
 
     # 静默检查并创建桌面快捷方式（仅首次运行）
     create_desktop_shortcuts
