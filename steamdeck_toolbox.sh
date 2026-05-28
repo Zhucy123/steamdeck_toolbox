@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.1.6
+# Steam Deck 工具箱 v1.1.7
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -24,7 +24,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.1.6"  # 更新版本号
+VERSION="1.1.7"  # 更新版本号
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox" # Gitee仓库地址
 REPO_CDN_URLS=(
     "https://gitee.com/Zhucy2100/steamdeck_toolbox" # 只有Gitee地址，不使用镜像
@@ -1804,7 +1804,7 @@ install_remove_plugin_store() {
                 echo "解压成功。"
                 # 删除所有压缩包文件
                 echo "删除压缩包文件..."
-                rm -f PluginLoader.zip.001 PluginLoader.zip.002 PluginLoader.zip.003 PluginLoader_full.zip
+                sudo rm -f PluginLoader.zip.001 PluginLoader.zip.002 PluginLoader.zip.003 PluginLoader_full.zip
             else
                 echo "解压失败，尝试下载单独的 PluginLoader 文件..."
                 curl -L "${GITEE_BASE_URL}/PluginLoader" -o "${SERVICE_DIR}/PluginLoader"
