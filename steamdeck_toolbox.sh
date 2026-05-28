@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.1.8
+# Steam Deck 工具箱 v1.1.7
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -23,7 +23,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.1.8"
+VERSION="1.1.7"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 REMOTE_SCRIPT_URL="${REPO_URL}/raw/master/${SCRIPT_NAME}"  # 远程脚本的原始文件URL
 
