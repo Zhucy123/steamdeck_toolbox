@@ -1749,19 +1749,33 @@ install_remove_plugin_store() {
 
     case $plugin_choice in
         1)
-            echo -e "${CYAN}正在从 Gitee 源安装 Decky Loader...${NC}"
+            echo -e "${CYAN}正在从 GitHub 安装最新版 Decky Loader...${NC}"
             
-            # ========== 配置区域（可根据需要调整）==========
-            GITEE_BASE_URL="https://gitee.com/Zhucy2100/decky-installer/raw/master"
+            # ========== 配置区域 ==========
             HOME_DIR="/home/deck"
             HOMEBREW_DIR="${HOME_DIR}/homebrew"
             SERVICE_DIR="${HOMEBREW_DIR}/services"
             PLUGIN_DIR="${HOMEBREW_DIR}/plugins"
+            PLUGIN_LOADER="${SERVICE_DIR}/PluginLoader"
+            SERVICE_FILE="${SERVICE_DIR}/plugin_loader.service"
+            SERVICE_DEST="/etc/systemd/system/plugin_loader.service"
             CURRENT_USER=$(whoami)
-            # =============================================
+            # 镜像列表（按推荐顺序）
+            MIRRORS=(
+                "https://ghproxy.com/"
+                "https://mirror.ghproxy.com/"
+                "https://gh.api.99988866.xyz/"
+                "https://download.fastgit.org/"
+                "https://hub.gitmirror.com/"
+                "https://gh.ddlc.top/"
+                "https://git.xfj0.xyz/"
+                "https://github.com/"
+            )
+            DOWNLOAD_TIMEOUT=30
+            # =============================
 
             # 检查必要命令
-            for cmd in curl unzip sed systemctl sudo; do
+            for cmd in curl python3 systemctl sudo journalctl stat; do
                 if ! command -v $cmd &> /dev/null; then
                     echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
                     read -p "按回车键返回主菜单..."
@@ -1769,53 +1783,93 @@ install_remove_plugin_store() {
                 fi
             done
 
-            # 目录权限修复
-            echo "检查并创建目录结构..."
-            if [ ! -d "${HOMEBREW_DIR}" ]; then
-                echo "创建 ${HOMEBREW_DIR} ..."
-                sudo mkdir -p "${HOMEBREW_DIR}"
+            # 获取最新版本号（GitHub API）
+            echo "正在获取最新版本信息..."
+            LATEST_VERSION=$(curl -s "https://api.github.com/repos/SteamDeckHomebrew/decky-loader/releases" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    tag = data[0]['tag_name']
+    if tag.startswith('v'):
+        tag = tag[1:]
+    print(tag)
+except:
+    print('')
+")
+            if [[ -z "$LATEST_VERSION" ]]; then
+                echo -e "${RED}错误: 无法获取最新版本号，请检查网络。${NC}"
+                read -p "按回车键返回主菜单..."
+                return 1
             fi
-            sudo chown -R ${CURRENT_USER}:${CURRENT_USER} "${HOMEBREW_DIR}" 2>/dev/null || true
+            echo -e "${GREEN}最新版本: ${LATEST_VERSION}${NC}"
 
-            mkdir -p "${SERVICE_DIR}" "${PLUGIN_DIR}" 2>/dev/null || {
-                echo "普通用户创建子目录失败，尝试使用 sudo..."
-                sudo mkdir -p "${SERVICE_DIR}" "${PLUGIN_DIR}"
-                sudo chown ${CURRENT_USER}:${CURRENT_USER} "${SERVICE_DIR}" "${PLUGIN_DIR}"
+            # 检测是否已安装及版本
+            INSTALLED_VERSION=""
+            if [[ -f "$PLUGIN_LOADER" && -x "$PLUGIN_LOADER" ]]; then
+                # 尝试从服务日志获取版本
+                INSTALLED_VERSION=$(sudo journalctl -u plugin_loader --no-pager 2>/dev/null | grep -i "Starting Decky version" | tail -1 | grep -oP 'version v?\K[0-9.]+(-pre[0-9]+)?')
+                if [[ -z "$INSTALLED_VERSION" ]]; then
+                    # 备用方法：直接执行二进制（部分版本支持）
+                    INSTALLED_VERSION=$("$PLUGIN_LOADER" --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+(-pre\d+)?')
+                fi
+                if [[ -n "$INSTALLED_VERSION" ]]; then
+                    echo -e "${CYAN}当前已安装版本: ${INSTALLED_VERSION}${NC}"
+                    if [[ "$INSTALLED_VERSION" == "$LATEST_VERSION" ]]; then
+                        echo -e "${GREEN}已经是最新版本，无需安装。${NC}"
+                        read -p "按回车键返回主菜单..."
+                        return 0
+                    else
+                        echo -e "${YELLOW}发现新版本，将进行更新。${NC}"
+                    fi
+                else
+                    echo -e "${YELLOW}已安装但无法获取版本，将覆盖安装。${NC}"
+                fi
+            else
+                echo "未检测到现有安装，将进行全新安装。"
+            fi
+
+            # 创建目录结构
+            echo "创建目录并修复权限..."
+            if [[ ! -d "$HOMEBREW_DIR" ]]; then
+                sudo mkdir -p "$HOMEBREW_DIR"
+            fi
+            sudo chown -R ${CURRENT_USER}:${CURRENT_USER} "$HOMEBREW_DIR" 2>/dev/null || true
+            mkdir -p "$SERVICE_DIR" "$PLUGIN_DIR" 2>/dev/null || {
+                sudo mkdir -p "$SERVICE_DIR" "$PLUGIN_DIR"
+                sudo chown ${CURRENT_USER}:${CURRENT_USER} "$SERVICE_DIR" "$PLUGIN_DIR"
             }
-            echo "目录创建完成，所有权已修正。"
 
-            # 下载 service 文件
-            echo "下载 plugin_loader-release.service..."
-            curl -L "${GITEE_BASE_URL}/plugin_loader-release.service" -o "${SERVICE_DIR}/plugin_loader-release.service"
+            # 顺序尝试镜像下载 PluginLoader
+            DOWNLOAD_SUCCESS=false
+            TMP_FILE="${PLUGIN_LOADER}.tmp"
+            DOWNLOAD_PATH="https://github.com/SteamDeckHomebrew/decky-loader/releases/download/v${LATEST_VERSION}/PluginLoader"
 
-            # 下载分卷压缩包
-            echo "下载 PluginLoader 分卷文件..."
-            curl -L "${GITEE_BASE_URL}/PluginLoader.zip.001" -o "${SERVICE_DIR}/PluginLoader.zip.001"
-            curl -L "${GITEE_BASE_URL}/PluginLoader.zip.002" -o "${SERVICE_DIR}/PluginLoader.zip.002"
-            curl -L "${GITEE_BASE_URL}/PluginLoader.zip.003" -o "${SERVICE_DIR}/PluginLoader.zip.003"
+            for mirror in "${MIRRORS[@]}"; do
+                FULL_URL="${mirror}${DOWNLOAD_PATH}"
+                echo -e "尝试从 ${mirror} 下载..."
+                if curl -L --progress-bar --fail --max-time "$DOWNLOAD_TIMEOUT" "$FULL_URL" -o "$TMP_FILE"; then
+                    FILE_SIZE=$(stat -c%s "$TMP_FILE" 2>/dev/null || stat -f%z "$TMP_FILE" 2>/dev/null)
+                    if [[ -n "$FILE_SIZE" ]] && [[ "$FILE_SIZE" -gt 1000000 ]]; then
+                        echo -e "${GREEN}下载成功 (大小: $((FILE_SIZE/1024/1024)) MB)${NC}"
+                        # 替换旧文件
+                        if [[ -f "$PLUGIN_LOADER" ]]; then
+                            sudo rm -f "$PLUGIN_LOADER"
+                        fi
+                        mv "$TMP_FILE" "$PLUGIN_LOADER"
+                        chmod +x "$PLUGIN_LOADER"
+                        DOWNLOAD_SUCCESS=true
+                        break
+                    else
+                        echo -e "${RED}下载文件无效 (${FILE_SIZE} 字节)，尝试下一个镜像...${NC}"
+                        rm -f "$TMP_FILE"
+                    fi
+                else
+                    echo -e "${RED}下载失败，尝试下一个镜像...${NC}"
+                fi
+            done
 
-            # 合并解压
-            cd "${SERVICE_DIR}"
-            echo "合并分卷..."
-            cat PluginLoader.zip.001 PluginLoader.zip.002 PluginLoader.zip.003 > PluginLoader_full.zip
-
-            echo "解压 PluginLoader_full.zip..."
-            if unzip -o PluginLoader_full.zip; then
-                echo "解压成功。"
-                # 删除所有压缩包文件
-                echo "删除压缩包文件..."
-                sudo rm -f PluginLoader.zip.001 PluginLoader.zip.002 PluginLoader.zip.003 PluginLoader_full.zip
-            else
-                echo "解压失败，尝试下载单独的 PluginLoader 文件..."
-                curl -L "${GITEE_BASE_URL}/PluginLoader" -o "${SERVICE_DIR}/PluginLoader"
-            fi
-
-            # 确保 PluginLoader 可执行
-            if [ -f "${SERVICE_DIR}/PluginLoader" ]; then
-                chmod +x "${SERVICE_DIR}/PluginLoader"
-                echo "PluginLoader 权限已设置。"
-            else
-                echo -e "${RED}错误: PluginLoader 文件未找到，安装中止。${NC}"
+            if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
+                echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
                 read -p "按回车键返回主菜单..."
                 return 1
             fi
@@ -1823,30 +1877,41 @@ install_remove_plugin_store() {
             # 启用 Steam 远程调试
             echo "启用 Steam 远程调试..."
             touch "${HOME_DIR}/.steam/steam/.cef-enable-remote-debugging"
-            if [ -d "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/" ]; then
+            if [[ -d "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/" ]]; then
                 touch "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/.cef-enable-remote-debugging"
             fi
 
-            # 修改服务文件路径
-            echo "配置 systemd 服务文件..."
-            sed -i "s|\${HOMEBREW_FOLDER}|${HOMEBREW_DIR}|g" "${SERVICE_DIR}/plugin_loader-release.service"
+            # 创建 systemd 服务文件
+            echo "配置 systemd 服务..."
+            cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=SteamDeck Plugin Loader
+After=network-online.target
+Wants=network-online.target
 
-            # 安装系统服务
-            echo "安装 systemd 服务..."
-            sudo cp "${SERVICE_DIR}/plugin_loader-release.service" /etc/systemd/system/plugin_loader.service
+[Service]
+Type=simple
+User=deck
+Environment="HOMEBREW_FOLDER=${HOMEBREW_DIR}"
+ExecStart=${PLUGIN_LOADER}
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+            sudo cp "$SERVICE_FILE" "$SERVICE_DEST"
             sudo systemctl daemon-reload
-
-            # 启动并启用服务
-            echo "启动 plugin_loader 服务..."
-            sudo systemctl start plugin_loader
             sudo systemctl enable plugin_loader
+            sudo systemctl restart plugin_loader
 
-            # 验证状态
+            # 显示服务状态
             echo "服务状态："
             systemctl status plugin_loader --no-pager
 
             echo ""
-            echo -e "${GREEN}✓ Decky Loader 安装完成${NC}"
+            echo -e "${GREEN}✓ Decky Loader ${LATEST_VERSION} 安装/更新完成${NC}"
             echo "请切换回游戏模式，按 '...' 键打开侧边栏检查。"
             ;;
 
@@ -1881,7 +1946,6 @@ install_remove_plugin_store() {
 
     read -p "按回车键返回主菜单..."
 }
-
 
 # 12. 校准摇杆
 calibrate_joystick() {
