@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.1.7
+# Steam Deck 工具箱 v1.1.8
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -17,21 +17,245 @@ INSTALL_DIR="$HOME/Applications"
 DESKTOP_DIR="$HOME/Desktop"
 BACKUP_DIR="$HOME/backups"
 TEMP_DIR="/tmp/steamdeck_toolbox"
-MAIN_LAUNCHER="$DESKTOP_DIR/SteamDeck工具箱.desktop" # 主程序快捷方式路径
-UPDATE_LAUNCHER="$DESKTOP_DIR/更新SteamDeck工具箱.desktop" # 更新程序快捷方式路径
+MAIN_LAUNCHER="$DESKTOP_DIR/SteamDeck工具箱.desktop"
 SCRIPT_PATH="$(realpath "$0")" # 当前脚本的绝对路径
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")" # 脚本所在目录
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")" # 脚本文件名
 
 # 版本信息
-VERSION="1.1.7"  # 更新版本号
-REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox" # Gitee仓库地址
-REPO_CDN_URLS=(
-    "https://gitee.com/Zhucy2100/steamdeck_toolbox" # 只有Gitee地址，不使用镜像
-)
+VERSION="1.1.8"
+REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
+REMOTE_SCRIPT_URL="${REPO_URL}/raw/master/${SCRIPT_NAME}"  # 远程脚本的原始文件URL
 
 # 系统类型检测变量
-SYSTEM_TYPE="" # 存储检测结果：single 或 dual
+SYSTEM_TYPE=""
+
+# 获取远程版本号
+get_remote_version() {
+    # 从远程脚本中提取VERSION字段
+    local remote_version=$(curl -s "$REMOTE_SCRIPT_URL" | grep -E '^VERSION="[0-9]+\.[0-9]+\.[0-9]+"' | head -1 | sed -E 's/VERSION="([0-9]+\.[0-9]+\.[0-9]+)"/\1/')
+    echo "$remote_version"
+}
+
+# 检查更新
+check_for_updates() {
+    # 静默检查远程版本
+    echo -e "${CYAN}正在检查工具箱更新...${NC}"
+    local remote_version=$(get_remote_version)
+
+    if [ -z "$remote_version" ]; then
+        echo -e "${YELLOW}⚠ 无法获取远程版本信息，跳过更新检查。${NC}"
+        echo ""
+        return 1
+    fi
+
+    if [ "$remote_version" != "$VERSION" ]; then
+        echo -e "${YELLOW}发现新版本: ${remote_version} (当前版本: ${VERSION})${NC}"
+        echo ""
+        read -p "是否现在更新？(按回车或A键确认，其他键跳过): " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^$ ]] || [[ $REPLY =~ ^[Aa]$ ]]; then
+            update_toolbox
+        else
+            echo "跳过更新，继续启动工具箱..."
+            echo ""
+            sleep 1
+        fi
+    else
+        echo -e "${GREEN}✓ 已是最新版本${NC}"
+        echo ""
+        sleep 1
+    fi
+}
+
+# 更新工具箱
+update_toolbox() {
+    # 显示更新界面
+    clear
+    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}              Steam Deck 工具箱更新程序               ${NC}"
+    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    # 检查网络连接
+    echo -e "${CYAN}步骤1: 检查网络连接...${NC}"
+    if ! check_network_connection; then
+        echo -e "${RED}✗ 网络连接失败！${NC}"
+        echo "请检查网络连接后重试。"
+        read -p "按回车键返回..."
+        return 1
+    fi
+    echo -e "${GREEN}✓ 网络连接正常${NC}"
+    echo ""
+
+    # 检查git是否安装
+    echo -e "${CYAN}步骤2: 检查Git工具...${NC}"
+    if ! command -v git &> /dev/null; then
+        echo -e "${YELLOW}未找到git工具，正在尝试安装...${NC}"
+        if command -v pacman &> /dev/null; then
+            echo "正在安装git..."
+            sudo pacman -Sy --noconfirm git
+        elif command -v apt &> /dev/null; then
+            echo "正在安装git..."
+            sudo apt update && sudo apt install -y git
+        else
+            echo -e "${RED}无法自动安装git，请手动安装git后再试。${NC}"
+            echo "安装命令: sudo pacman -S git 或 sudo apt install git"
+            read -p "按回车键返回..."
+            return 1
+        fi
+        if ! command -v git &> /dev/null; then
+            echo -e "${RED}✗ Git安装失败！${NC}"
+            read -p "按回车键返回..."
+            return 1
+        fi
+    fi
+    echo -e "${GREEN}✓ Git工具可用${NC}"
+    echo ""
+
+    # 克隆Gitee仓库
+    echo -e "${CYAN}步骤3: 下载最新版本...${NC}"
+    local clone_dir="$HOME/steamdeck_toolbox"
+
+    if [ -d "$clone_dir" ]; then
+        echo "清理旧的下载目录..."
+        rm -rf "$clone_dir"
+    fi
+
+    echo "正在从Gitee仓库下载..."
+    echo ""
+
+    if timeout 30 git clone --depth=1 "$REPO_URL" "$clone_dir" 2>&1; then
+        echo -e "${GREEN}✓ 下载成功${NC}"
+    else
+        echo -e "${RED}✗ 下载失败！${NC}"
+        echo "请检查网络连接或稍后重试。"
+        echo ""
+        read -p "按回车键返回..."
+        rm -rf "$clone_dir"
+        return 1
+    fi
+
+    # 检查下载的文件是否有效
+    local new_script_path="$clone_dir/steamdeck_toolbox.sh"
+    if [ ! -f "$new_script_path" ]; then
+        echo -e "${RED}✗ 在仓库中未找到脚本文件！${NC}"
+        echo "请确认仓库中是否有 steamdeck_toolbox.sh 文件。"
+        rm -rf "$clone_dir"
+        read -p "按回车键返回..."
+        return 1
+    fi
+
+    # 提取新版本号
+    echo -e "${CYAN}步骤4: 检查版本信息...${NC}"
+    local new_version=$(extract_version "$new_script_path")
+    if [ -n "$new_version" ]; then
+        echo "当前版本: $VERSION"
+        echo "最新版本: $new_version"
+        if [ "$VERSION" == "$new_version" ]; then
+            echo -e "${GREEN}✓ 已经是最新版本${NC}"
+            echo ""
+            echo "无可用更新。"
+            rm -rf "$clone_dir"
+            sleep 2
+            return 0
+        else
+            echo -e "${YELLOW}发现新版本: $new_version${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  无法获取新版本号，继续更新...${NC}"
+    fi
+    echo ""
+
+    # 确认更新
+    echo -e "${CYAN}步骤5: 确认更新${NC}"
+    echo "即将更新 Steam Deck 工具箱"
+    echo "当前版本: $VERSION"
+    if [ -n "$new_version" ]; then
+        echo "更新版本: $new_version"
+    fi
+    echo ""
+    read -p "是否继续更新？(y/n): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "更新已取消。"
+        rm -rf "$clone_dir"
+        read -p "按回车键返回..."
+        return 0
+    fi
+    echo ""
+
+    # 替换脚本文件
+    echo -e "${CYAN}步骤6: 替换脚本文件...${NC}"
+    chmod +x "$new_script_path"
+    if cp "$new_script_path" "$SCRIPT_PATH"; then
+        chmod +x "$SCRIPT_PATH"
+        echo -e "${GREEN}✓ 脚本文件替换成功${NC}"
+    else
+        echo -e "${RED}✗ 脚本文件替换失败！${NC}"
+        echo "请检查文件权限。"
+        rm -rf "$clone_dir"
+        read -p "按回车键返回..."
+        return 1
+    fi
+
+    # 清理下载目录
+    echo -e "${CYAN}步骤7: 清理临时文件...${NC}"
+    rm -rf "$clone_dir"
+    echo -e "${GREEN}✓ 临时文件已清理${NC}"
+    echo ""
+
+    # 更新完成
+    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}              ✓ 更新完成！                          ${NC}"
+    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+    echo ""
+    if [ -n "$new_version" ]; then
+        echo -e "${GREEN}工具箱已从 v$VERSION 成功更新到 v$new_version${NC}"
+    else
+        echo -e "${GREEN}工具箱更新完成${NC}"
+    fi
+    echo ""
+    echo -e "${YELLOW}提示：${NC}"
+    echo "1. 请重新启动工具箱以应用更新"
+    echo ""
+
+    read -p "按回车键退出当前实例，请手动重新启动工具箱..."
+    exit 0
+}
+
+# 检查网络连接
+check_network_connection() {
+    if ping -c 2 -W 3 8.8.8.8 &> /dev/null; then
+        return 0
+    elif ping -c 2 -W 3 1.1.1.1 &> /dev/null; then
+        return 0
+    else
+        if command -v curl &> /dev/null; then
+            if curl -s --connect-timeout 5 https://www.google.com &> /dev/null; then
+                return 0
+            fi
+        elif command -v wget &> /dev/null; then
+            if wget -q --timeout=5 --tries=1 https://www.google.com -O /dev/null; then
+                return 0
+            fi
+        fi
+    fi
+    return 1
+}
+
+# 从脚本文件中提取版本号
+extract_version() {
+    local script_file="$1"
+    local version=$(grep -E "^#.*[Vv]ersion[[:space:]]*:" "$script_file" | head -1 | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+")
+    if [ -z "$version" ]; then
+        version=$(grep -E "VERSION[[:space:]]*=" "$script_file" | head -1 | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+")
+    fi
+    if [ -z "$version" ]; then
+        version=$(grep -E "v[0-9]\+\.[0-9]\+\.[0-9]\+" "$script_file" | head -1 | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+")
+    fi
+    echo "$version"
+}
 
 # 初始化目录
 init_dirs() {
@@ -106,12 +330,10 @@ show_header() {
     echo ""
 }
 
-# 创建桌面快捷方式（静默版）
+# 创建桌面快捷方式（仅主程序）
 create_desktop_shortcuts() {
     # 仅当快捷方式不存在时才创建
-    # 1. 创建主程序快捷方式
     if [ ! -f "$MAIN_LAUNCHER" ]; then
-        # 获取脚本的实际位置
         local script_dir=$(dirname "$(realpath "$0")")
         local script_name=$(basename "$0")
 
@@ -128,25 +350,7 @@ Categories=Utility;
 EOF
         chmod +x "$MAIN_LAUNCHER"
     fi
-
-    # 2. 创建更新程序快捷方式（在主程序快捷方式之后创建）
-    if [ ! -f "$UPDATE_LAUNCHER" ]; then
-        local script_dir=$(dirname "$(realpath "$0")")
-        local script_name=$(basename "$0")
-
-        cat > "$UPDATE_LAUNCHER" << EOF
-[Desktop Entry]
-Type=Application
-Name=更新SteamDeck工具箱
-Comment=更新 Steam Deck 工具箱到最新版本
-Exec=konsole -e /bin/bash -c 'cd "$script_dir" && ./"$script_name" --update && echo "" && echo "按回车键关闭窗口..." && read'
-Icon=system-software-update
-Terminal=false
-StartupNotify=true
-Categories=Utility;
-EOF
-        chmod +x "$UPDATE_LAUNCHER"
-    fi
+    # 注意：不再创建更新程序快捷方式
 }
 
 # 显示主菜单（根据系统类型动态调整）
@@ -166,38 +370,34 @@ show_main_menu() {
             echo ""
             echo -e "${CYAN}请选择要执行的功能：${NC}"
             echo ""
-            # 双系统菜单（28项）
-echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装Edge浏览器${NC}"
-echo -e "${GREEN} 2. 安装国内源            12. 校准摇杆            22. 安装Google浏览器${NC}"
-echo -e "${GREEN} 3. 调整虚拟内存大小      13. 设置管理员密码      23. 清理Steam缓存${NC}"
-echo -e "${GREEN} 4. 修复磁盘写入错误      14. 安装AnyDesk         24. 更新已安装应用${NC}"
-echo -e "${GREEN} 5. 修复引导              15. 安装ToDesk          25. 卸载已安装应用${NC}"
-echo -e "${GREEN} 6. 修复互通盘            16. 安装WPS Office      26. 检查工具箱更新${NC}"
-echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安装小黄鸭软件${NC}"
-echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装微信            28. 安装Steam社区302${NC}"
-echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装QQ音乐${NC}"
-echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘${NC}"
+            echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装Edge浏览器${NC}"
+            echo -e "${GREEN} 2. 安装国内源            12. 校准摇杆            22. 安装Google浏览器${NC}"
+            echo -e "${GREEN} 3. 调整虚拟内存大小      13. 设置管理员密码      23. 清理Steam缓存${NC}"
+            echo -e "${GREEN} 4. 修复磁盘写入错误      14. 安装AnyDesk         24. 更新已安装应用${NC}"
+            echo -e "${GREEN} 5. 修复引导              15. 安装ToDesk          25. 卸载已安装应用${NC}"
+            echo -e "${GREEN} 6. 修复互通盘            16. 安装WPS Office      26. 检查工具箱更新${NC}"
+            echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安装小黄鸭软件${NC}"
+            echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装微信            28. 安装Steam社区302${NC}"
+            echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装QQ音乐${NC}"
+            echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
 
             read -p "请输入选项 (输入1-28的数字): " choice
 
-            # 验证输入
             if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
                 echo -e "${RED}无效选择，请输入数字！${NC}"
                 sleep 1
                 continue
             fi
 
-            # 检查选择是否在有效范围内
             if [ $choice -lt 1 ] || [ $choice -gt 28 ]; then
                 echo -e "${RED}无效选择，请选择1到28之间的数字！${NC}"
                 sleep 1
                 continue
             fi
 
-            # 双系统菜单映射
             case $choice in
     1) show_about ;;
     2) install_chinese_source ;;
@@ -210,23 +410,23 @@ echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘${NC}"
     9) install_xunyou_accelerator ;;
     10) install_tomoon ;;
     11) install_remove_plugin_store ;;
-    12) calibrate_joystick ;;        # 原13
-    13) set_admin_password ;;         # 原14
-    14) install_anydesk ;;            # 原15
-    15) install_todesk ;;             # 原16
-    16) install_wps_office ;;         # 原17
-    17) install_qq ;;                 # 原18
-    18) install_wechat ;;             # 原19
-    19) install_qqmusic ;;            # 原20
-    20) install_baidunetdisk ;;       # 原21
-    21) install_edge ;;               # 原22
-    22) install_chrome ;;             # 原23
-    23) steamdeck_cache_manager ;;    # 原24
-    24) update_installed_apps ;;      # 原25
-    25) uninstall_apps ;;             # 原26
-    26) check_for_updates ;;          # 原27
-    27) install_yellow_duck_software ;;  # 原28
-    28) install_steamcommunity_302 ;;    # 原29
+    12) calibrate_joystick ;;
+    13) set_admin_password ;;
+    14) install_anydesk ;;
+    15) install_todesk ;;
+    16) install_wps_office ;;
+    17) install_qq ;;
+    18) install_wechat ;;
+    19) install_qqmusic ;;
+    20) install_baidunetdisk ;;
+    21) install_edge ;;
+    22) install_chrome ;;
+    23) steamdeck_cache_manager ;;
+    24) update_installed_apps ;;
+    25) uninstall_apps ;;
+    26) check_for_updates ;;
+    27) install_yellow_duck_software ;;
+    28) install_steamcommunity_302 ;;
                 *)
                     echo -e "${RED}无效选择，请重新输入！${NC}"
                     sleep 1
@@ -234,69 +434,64 @@ echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘${NC}"
                     ;;
             esac
         else
-            # 单系统
             echo -e "${YELLOW}当前系统: 单系统${NC}"
             echo ""
             echo -e "${CYAN}请选择要执行的功能：${NC}"
             echo ""
-            # 单系统菜单（26项，跳过5、6两项）
-echo -e "${GREEN} 1. 关于支持与维护的说明  10. 校准摇杆            19. 安装Edge浏览器${NC}"
-echo -e "${GREEN} 2. 安装国内源            11. 设置管理员密码      20. 安装Google浏览器${NC}"
-echo -e "${GREEN} 3. 调整虚拟内存大小      12. 安装AnyDesk         21. 清理Steam缓存${NC}"
-echo -e "${GREEN} 4. 修复磁盘写入错误      13. 安装ToDesk          22. 更新已安装应用${NC}"
-echo -e "${GREEN} 5. 清理hosts缓存         14. 安装WPS Office      23. 卸载已安装应用${NC}"
-echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装QQ              24. 检查工具箱更新${NC}"
-echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装微信            25. 安装小黄鸭软件${NC}"
-echo -e "${GREEN} 8. 安装ToMoon            17. 安装QQ音乐          26. 安装Steam社区302${NC}"
-echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装百度网盘${NC}"
+            echo -e "${GREEN} 1. 关于支持与维护的说明  10. 校准摇杆            19. 安装Edge浏览器${NC}"
+            echo -e "${GREEN} 2. 安装国内源            11. 设置管理员密码      20. 安装Google浏览器${NC}"
+            echo -e "${GREEN} 3. 调整虚拟内存大小      12. 安装AnyDesk         21. 清理Steam缓存${NC}"
+            echo -e "${GREEN} 4. 修复磁盘写入错误      13. 安装ToDesk          22. 更新已安装应用${NC}"
+            echo -e "${GREEN} 5. 清理hosts缓存         14. 安装WPS Office      23. 卸载已安装应用${NC}"
+            echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装QQ              24. 检查工具箱更新${NC}"
+            echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装微信            25. 安装小黄鸭软件${NC}"
+            echo -e "${GREEN} 8. 安装ToMoon            17. 安装QQ音乐          26. 安装Steam社区302${NC}"
+            echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装百度网盘${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
 
             read -p "请输入选项 (输入1-26的数字): " choice
 
-            # 验证输入
             if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
                 echo -e "${RED}无效选择，请输入数字！${NC}"
                 sleep 1
                 continue
             fi
 
-            # 检查选择是否在有效范围内
             if [ $choice -lt 1 ] || [ $choice -gt 26 ]; then
                 echo -e "${RED}无效选择，请选择1到26之间的数字！${NC}"
                 sleep 1
                 continue
             fi
 
-            # 单系统菜单映射（根据您提供的编号对应）
             case $choice in
-    1) show_about ;;                     # 1. 关于支持与维护的说明
-    2) install_chinese_source ;;         # 2. 安装国内源
-    3) adjust_swap ;;                    # 3. 调整虚拟内存大小
-    4) fix_disk_write_error ;;           # 4. 修复磁盘写入错误
-    5) clear_hosts_cache ;;              # 5. 清理hosts缓存
-    6) install_uu_accelerator ;;         # 6. 安装UU加速器插件
-    7) install_xunyou_accelerator ;;     # 7. 安装迅游加速器插件
-    8) install_tomoon ;;                 # 8. 安装ToMoon
-    9) install_remove_plugin_store ;;    # 9. 安装＆卸载插件商店
-    10) calibrate_joystick ;;            # 10. 校准摇杆
-    11) set_admin_password ;;            # 11. 设置管理员密码
-    12) install_anydesk ;;               # 12. 安装AnyDesk
-    13) install_todesk ;;                # 13. 安装ToDesk
-    14) install_wps_office ;;            # 14. 安装WPS Office
-    15) install_qq ;;                    # 15. 安装QQ
-    16) install_wechat ;;                # 16. 安装微信
-    17) install_qqmusic ;;               # 17. 安装QQ音乐
-    18) install_baidunetdisk ;;          # 18. 安装百度网盘
-    19) install_edge ;;                  # 19. 安装Edge浏览器
-    20) install_chrome ;;                # 20. 安装Google浏览器
-    21) steamdeck_cache_manager ;;       # 21. 清理Steam缓存
-    22) update_installed_apps ;;         # 22. 更新已安装应用
-    23) uninstall_apps ;;                # 23. 卸载已安装应用
-    24) check_for_updates ;;             # 24. 检查工具箱更新
-    25) install_yellow_duck_software ;;  # 25. 安装小黄鸭软件
-    26) install_steamcommunity_302 ;;    # 26. 安装Steam社区302
+    1) show_about ;;
+    2) install_chinese_source ;;
+    3) adjust_swap ;;
+    4) fix_disk_write_error ;;
+    5) clear_hosts_cache ;;
+    6) install_uu_accelerator ;;
+    7) install_xunyou_accelerator ;;
+    8) install_tomoon ;;
+    9) install_remove_plugin_store ;;
+    10) calibrate_joystick ;;
+    11) set_admin_password ;;
+    12) install_anydesk ;;
+    13) install_todesk ;;
+    14) install_wps_office ;;
+    15) install_qq ;;
+    16) install_wechat ;;
+    17) install_qqmusic ;;
+    18) install_baidunetdisk ;;
+    19) install_edge ;;
+    20) install_chrome ;;
+    21) steamdeck_cache_manager ;;
+    22) update_installed_apps ;;
+    23) uninstall_apps ;;
+    24) check_for_updates ;;
+    25) install_yellow_duck_software ;;
+    26) install_steamcommunity_302 ;;
                 *)
                     echo -e "${RED}无效选择，请重新输入！${NC}"
                     sleep 1
@@ -305,342 +500,6 @@ echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装百度网盘${NC}"
             esac
         fi
     done
-}
-
-# ============================================
-# 优化的更新功能（使用CDN镜像加速下载）
-# ============================================
-
-# 检查更新（通过菜单调用）
-check_for_updates() {
-    show_header
-    echo -e "${YELLOW}════════════════ 检查工具箱更新 ════════════════${NC}"
-    echo ""
-
-    # 直接执行更新流程，不检查运行状态
-    update_toolbox "menu"
-}
-
-# 更新工具箱（使用CDN镜像加速下载）
-update_toolbox() {
-    local update_source="${1:-"desktop"}"  # 默认来自桌面快捷方式
-    local return_to_menu=false
-
-    # 如果是菜单调用，设置返回标志
-    if [ "$update_source" == "menu" ]; then
-        return_to_menu=true
-    fi
-
-    # 显示更新界面
-    clear
-    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}              Steam Deck 工具箱更新程序               ${NC}"
-    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
-    echo ""
-
-    # 检查网络连接
-    echo -e "${CYAN}步骤1: 检查网络连接...${NC}"
-    if ! check_network_connection; then
-        echo -e "${RED}✗ 网络连接失败！${NC}"
-        echo "请检查网络连接后重试。"
-
-        if [ "$return_to_menu" = true ]; then
-            read -p "按回车键返回主菜单..."
-            return
-        else
-            read -p "按回车键退出..."
-            exit 1
-        fi
-    fi
-
-    echo -e "${GREEN}✓ 网络连接正常${NC}"
-    echo ""
-
-    # 检查git是否安装
-    echo -e "${CYAN}步骤2: 检查Git工具...${NC}"
-    if ! command -v git &> /dev/null; then
-        echo -e "${YELLOW}未找到git工具，正在尝试安装...${NC}"
-
-        # 尝试安装git
-        if command -v pacman &> /dev/null; then
-            echo "正在安装git..."
-            sudo pacman -Sy --noconfirm git
-        elif command -v apt &> /dev/null; then
-            echo "正在安装git..."
-            sudo apt update && sudo apt install -y git
-        else
-            echo -e "${RED}无法自动安装git，请手动安装git后再试。${NC}"
-            echo "安装命令: sudo pacman -S git 或 sudo apt install git"
-
-            if [ "$return_to_menu" = true ]; then
-                read -p "按回车键返回主菜单..."
-                return
-            else
-                read -p "按回车键退出..."
-                exit 1
-            fi
-        fi
-
-        # 再次检查git是否安装成功
-        if ! command -v git &> /dev/null; then
-            echo -e "${RED}✗ Git安装失败！${NC}"
-
-            if [ "$return_to_menu" = true ]; then
-                read -p "按回车键返回主菜单..."
-                return
-            else
-                read -p "按回车键退出..."
-                exit 1
-            fi
-        fi
-    fi
-
-    echo -e "${GREEN}✓ Git工具可用${NC}"
-    echo ""
-
-    # 克隆Gitee仓库
-echo -e "${CYAN}步骤3: 下载最新版本...${NC}"
-local clone_dir="$HOME/steamdeck_toolbox"
-
-# 清理旧的下载目录
-if [ -d "$clone_dir" ]; then
-    echo "清理旧的下载目录..."
-    rm -rf "$clone_dir"
-fi
-
-echo "正在从Gitee仓库下载..."
-echo ""
-
-# 直接从Gitee下载，不使用镜像
-echo "从Gitee仓库下载: $REPO_URL"
-echo "下载地址: $REPO_URL"
-
-# 清理旧的下载目录
-rm -rf "$clone_dir" 2>/dev/null
-
-# 设置超时为30秒
-if timeout 30 git clone --depth=1 "$REPO_URL" "$clone_dir" 2>&1; then
-    echo -e "${GREEN}✓ 下载成功${NC}"
-else
-    echo -e "${RED}✗ 下载失败！${NC}"
-    echo "请检查网络连接或稍后重试。"
-    echo ""
-
-    if [ "$return_to_menu" = true ]; then
-        read -p "按回车键返回主菜单..."
-        return
-    else
-        read -p "按回车键退出..."
-        exit 1
-    fi
-fi
-
-    # 检查下载的文件是否有效
-    local new_script_path="$clone_dir/steamdeck_toolbox.sh"
-    if [ ! -f "$new_script_path" ]; then
-        echo -e "${RED}✗ 在仓库中未找到脚本文件！${NC}"
-        echo "请确认仓库中是否有 steamdeck_toolbox.sh 文件。"
-
-        # 清理下载目录
-        rm -rf "$clone_dir"
-
-        if [ "$return_to_menu" = true ]; then
-            read -p "按回车键返回主菜单..."
-            return
-        else
-            read -p "按回车键退出..."
-            exit 1
-        fi
-    fi
-
-    # 检查文件是否为有效的bash脚本
-    if ! head -n 5 "$new_script_path" | grep -q "bash"; then
-        echo -e "${YELLOW}⚠️  下载的文件可能不是有效的bash脚本${NC}"
-        echo "是否继续？(y/n)"
-        read -p "选择: " -n 1 -r
-        echo ""
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo "更新已取消。"
-
-            # 清理下载目录
-            rm -rf "$clone_dir"
-
-            if [ "$return_to_menu" = true ]; then
-                read -p "按回车键返回主菜单..."
-                return
-            else
-                read -p "按回车键退出..."
-                exit 0
-            fi
-        fi
-    fi
-
-    # 提取新版本号
-    echo -e "${CYAN}步骤4: 检查版本信息...${NC}"
-    local new_version=$(extract_version "$new_script_path")
-
-    if [ -n "$new_version" ]; then
-        echo "当前版本: $VERSION"
-        echo "最新版本: $new_version"
-
-        if [ "$VERSION" == "$new_version" ]; then
-            echo -e "${GREEN}✓ 已经是最新版本${NC}"
-            echo ""
-            echo "无可用更新。"
-
-            # 清理下载目录
-            rm -rf "$clone_dir"
-
-            if [ "$return_to_menu" = true ]; then
-                echo ""
-                echo "将在3秒后返回主菜单..."
-                sleep 3
-                return
-            else
-                echo "将在3秒后自动关闭..."
-                sleep 3
-                exit 0
-            fi
-        else
-            echo -e "${YELLOW}发现新版本: $new_version${NC}"
-        fi
-    else
-        echo -e "${YELLOW}⚠️  无法获取新版本号，继续更新...${NC}"
-    fi
-
-    echo ""
-
-    # 确认更新
-    echo -e "${CYAN}步骤5: 确认更新${NC}"
-    echo "即将更新 Steam Deck 工具箱"
-    echo "当前版本: $VERSION"
-    if [ -n "$new_version" ]; then
-        echo "更新版本: $new_version"
-    fi
-    echo ""
-
-    read -p "是否继续更新？(y/n): " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "更新已取消。"
-
-        # 清理下载目录
-        rm -rf "$clone_dir"
-
-        if [ "$return_to_menu" = true ]; then
-            read -p "按回车键返回主菜单..."
-            return
-        else
-            read -p "按回车键退出..."
-            exit 0
-        fi
-    fi
-
-    echo ""
-
-    # 替换脚本文件
-    echo -e "${CYAN}步骤6: 替换脚本文件...${NC}"
-
-    # 先设置权限
-    chmod +x "$new_script_path"
-
-    # 直接替换脚本，不创建备份
-    if cp "$new_script_path" "$SCRIPT_PATH"; then
-        chmod +x "$SCRIPT_PATH"
-        echo -e "${GREEN}✓ 脚本文件替换成功${NC}"
-    else
-        echo -e "${RED}✗ 脚本文件替换失败！${NC}"
-        echo "请检查文件权限。"
-
-        # 清理下载目录
-        rm -rf "$clone_dir"
-
-        if [ "$return_to_menu" = true ]; then
-            read -p "按回车键返回主菜单..."
-            return
-        else
-            read -p "按回车键退出..."
-            exit 1
-        fi
-    fi
-
-    # 清理下载目录
-    echo -e "${CYAN}步骤7: 清理临时文件...${NC}"
-    rm -rf "$clone_dir"
-    echo -e "${GREEN}✓ 临时文件已清理${NC}"
-
-    echo ""
-
-    # 更新完成
-    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}              ✓ 更新完成！                          ${NC}"
-    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
-    echo ""
-
-    if [ -n "$new_version" ]; then
-        echo -e "${GREEN}工具箱已从 v$VERSION 成功更新到 v$new_version${NC}"
-    else
-        echo -e "${GREEN}工具箱更新完成${NC}"
-    fi
-
-    echo ""
-    echo -e "${YELLOW}提示：${NC}"
-    echo "1. 请重新启动工具箱以应用更新"
-    echo ""
-
-    # 提示用户重新启动
-    echo "更新已完成！请重新启动工具箱以使用新版本。"
-
-    if [ "$return_to_menu" = true ]; then
-        read -p "按回车键返回主菜单（重启工具箱后更新才会生效）..."
-        return
-    else
-        read -p "按回车键退出..."
-        exit 0
-    fi
-}
-
-# 检查网络连接
-check_network_connection() {
-    # 尝试ping一个可靠的服务
-    if ping -c 2 -W 3 8.8.8.8 &> /dev/null; then
-        return 0
-    elif ping -c 2 -W 3 1.1.1.1 &> /dev/null; then
-        return 0
-    else
-        # 尝试连接HTTP网站
-        if command -v curl &> /dev/null; then
-            if curl -s --connect-timeout 5 https://www.google.com &> /dev/null; then
-                return 0
-            fi
-        elif command -v wget &> /dev/null; then
-            if wget -q --timeout=5 --tries=1 https://www.google.com -O /dev/null; then
-                return 0
-            fi
-        fi
-    fi
-
-    return 1
-}
-
-# 从脚本文件中提取版本号
-extract_version() {
-    local script_file="$1"
-
-    # 尝试从脚本开头提取版本号
-    local version=$(grep -E "^#.*[Vv]ersion[[:space:]]*:" "$script_file" | head -1 | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+")
-
-    if [ -z "$version" ]; then
-        # 尝试从注释中提取
-        version=$(grep -E "VERSION[[:space:]]*=" "$script_file" | head -1 | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+")
-    fi
-
-    if [ -z "$version" ]; then
-        # 尝试从其他格式提取
-        version=$(grep -E "v[0-9]\+\.[0-9]\+\.[0-9]\+" "$script_file" | head -1 | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+")
-    fi
-
-    echo "$version"
 }
 
 # ============================================
@@ -4839,12 +4698,8 @@ main() {
     # 静默检测系统类型
     detect_system_type
 
-    # 检查是否是通过更新参数调用
-    if [ "$1" == "--update" ]; then
-        # 桌面快捷方式调用，保持原有行为
-        update_toolbox "desktop"
-        exit 0
-    fi
+    # 启动时检查更新
+    check_for_updates
 
     # 静默检查并创建桌面快捷方式（仅首次运行）
     create_desktop_shortcuts
