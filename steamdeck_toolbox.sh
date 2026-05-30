@@ -30,201 +30,72 @@ REMOTE_SCRIPT_URL="${REPO_URL}/raw/master/${SCRIPT_NAME}"  # 远程脚本的原�
 # 系统类型检测变量
 SYSTEM_TYPE=""
 
-# 获取远程版本号
-get_remote_version() {
-    # 从远程脚本中提取VERSION字段
-    local remote_version=$(curl -s "$REMOTE_SCRIPT_URL" | grep -E '^VERSION="[0-9]+\.[0-9]+\.[0-9]+"' | head -1 | sed -E 's/VERSION="([0-9]+\.[0-9]+\.[0-9]+)"/\1/')
-    echo "$remote_version"
-}
-
-# 静默检查更新（供主菜单使用）
+# 启动时自动检查更新（静默下载对比替换）
 check_for_updates_silent() {
-    # 静默检查远程版本，不阻塞主菜单
+    local remote_script_url="${REPO_URL}/raw/master/${SCRIPT_NAME}"
+    local download_dir="$HOME/Downloads"
+    local local_script_path="$SCRIPT_PATH"
+    local downloaded_file="$download_dir/steamdeck_toolbox.sh"
+
+    # 确保下载目录存在
+    mkdir -p "$download_dir"
+
     echo -e "${CYAN}正在检查工具箱更新...${NC}"
-    local remote_version=$(get_remote_version)
+
+    # 下载远程脚本（静默）
+    if ! curl -s -o "$downloaded_file" "$remote_script_url"; then
+        echo -e "${YELLOW}⚠ 无法获取远程版本信息，跳过更新检查。${NC}\n"
+        return 1
+    fi
+
+    # 提取远程版本号
+    local remote_version=$(grep -E '^VERSION="[0-9]+\.[0-9]+\.[0-9]+"' "$downloaded_file" | head -1 | sed -E 's/VERSION="([0-9]+\.[0-9]+\.[0-9]+)"/\1/')
+    if [ -z "$remote_version" ]; then
+        remote_version=$(grep -E 'VERSION="[0-9]+\.[0-9]+\.[0-9]+"' "$downloaded_file" | head -1 | sed -E 's/.*VERSION="([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+    fi
 
     if [ -z "$remote_version" ]; then
-        echo -e "${YELLOW}⚠ 无法获取远程版本信息，跳过更新检查。${NC}"
-        echo ""
+        echo -e "${YELLOW}⚠ 无法解析远程版本号，跳过更新。${NC}\n"
+        rm -f "$downloaded_file"
         return 1
     fi
 
-    if [ "$remote_version" != "$VERSION" ]; then
-        echo -e "${YELLOW}发现新版本: ${remote_version} (当前版本: ${VERSION})${NC}"
-        echo ""
-        read -p "是否现在更新？(按回车或A键确认，其他键跳过): " -n 1 -r
-        echo ""
-        if [[ $REPLY =~ ^$ ]] || [[ $REPLY =~ ^[Aa]$ ]]; then
-            update_toolbox
-        else
-            echo "跳过更新，继续启动工具箱..."
-            echo ""
-            sleep 1
-        fi
-    else
-        echo -e "${GREEN}✓ 已是最新版本${NC}"
-        echo ""
-        sleep 1
-    fi
-}
-
-# 更新工具箱
-update_toolbox() {
-    # 显示更新界面
-    clear
-    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}              Steam Deck 工具箱更新程序               ${NC}"
-    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
-    echo ""
-
-    # 检查网络连接
-    echo -e "${CYAN}步骤1: 检查网络连接...${NC}"
-    if ! check_network_connection; then
-        echo -e "${RED}✗ 网络连接失败！${NC}"
-        echo "请检查网络连接后重试。"
-        read -p "按回车键返回..."
-        return 1
-    fi
-    echo -e "${GREEN}✓ 网络连接正常${NC}"
-    echo ""
-
-    # 检查git是否安装
-    echo -e "${CYAN}步骤2: 检查Git工具...${NC}"
-    if ! command -v git &> /dev/null; then
-        echo -e "${YELLOW}未找到git工具，正在尝试安装...${NC}"
-        if command -v pacman &> /dev/null; then
-            echo "正在安装git..."
-            sudo pacman -Sy --noconfirm git
-        elif command -v apt &> /dev/null; then
-            echo "正在安装git..."
-            sudo apt update && sudo apt install -y git
-        else
-            echo -e "${RED}无法自动安装git，请手动安装git后再试。${NC}"
-            echo "安装命令: sudo pacman -S git 或 sudo apt install git"
-            read -p "按回车键返回..."
-            return 1
-        fi
-        if ! command -v git &> /dev/null; then
-            echo -e "${RED}✗ Git安装失败！${NC}"
-            read -p "按回车键返回..."
-            return 1
-        fi
-    fi
-    echo -e "${GREEN}✓ Git工具可用${NC}"
-    echo ""
-
-    # 克隆Gitee仓库
-    echo -e "${CYAN}步骤3: 下载最新版本...${NC}"
-    local clone_dir="$HOME/steamdeck_toolbox"
-
-    if [ -d "$clone_dir" ]; then
-        echo "清理旧的下载目录..."
-        rm -rf "$clone_dir"
-    fi
-
-    echo "正在从Gitee仓库下载..."
-    echo ""
-
-    if timeout 30 git clone --depth=1 "$REPO_URL" "$clone_dir" 2>&1; then
-        echo -e "${GREEN}✓ 下载成功${NC}"
-    else
-        echo -e "${RED}✗ 下载失败！${NC}"
-        echo "请检查网络连接或稍后重试。"
-        echo ""
-        read -p "按回车键返回..."
-        rm -rf "$clone_dir"
-        return 1
-    fi
-
-    # 检查下载的文件是否有效
-    local new_script_path="$clone_dir/steamdeck_toolbox.sh"
-    if [ ! -f "$new_script_path" ]; then
-        echo -e "${RED}✗ 在仓库中未找到脚本文件！${NC}"
-        echo "请确认仓库中是否有 steamdeck_toolbox.sh 文件。"
-        rm -rf "$clone_dir"
-        read -p "按回车键返回..."
-        return 1
-    fi
-
-    # 提取新版本号
-    echo -e "${CYAN}步骤4: 检查版本信息...${NC}"
-    local new_version=$(extract_version "$new_script_path")
-    if [ -n "$new_version" ]; then
-        echo "当前版本: $VERSION"
-        echo "最新版本: $new_version"
-        if [ "$VERSION" == "$new_version" ]; then
-            echo -e "${GREEN}✓ 已经是最新版本${NC}"
-            echo ""
-            echo "无可用更新。"
-            rm -rf "$clone_dir"
-            sleep 2
-            return 0
-        else
-            echo -e "${YELLOW}发现新版本: $new_version${NC}"
-        fi
-    else
-        echo -e "${YELLOW}⚠️  无法获取新版本号，继续更新...${NC}"
-    fi
-    echo ""
-
-    # 确认更新
-    echo -e "${CYAN}步骤5: 确认更新${NC}"
-    echo "即将更新 Steam Deck 工具箱"
-    echo "当前版本: $VERSION"
-    if [ -n "$new_version" ]; then
-        echo "更新版本: $new_version"
-    fi
-    echo ""
-    read -p "是否继续更新？(y/n): " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "更新已取消。"
-        rm -rf "$clone_dir"
-        read -p "按回车键返回..."
+    if [ "$remote_version" = "$VERSION" ]; then
+        # 版本一致，静默删除下载文件，不显示任何信息
+        rm -f "$downloaded_file"
         return 0
     fi
-    echo ""
 
-    # 替换脚本文件（使用 sudo 强制替换）
-    echo -e "${CYAN}步骤6: 替换脚本文件...${NC}"
-    chmod +x "$new_script_path"
-    if sudo cp -f "$new_script_path" "$SCRIPT_PATH"; then
-        sudo chmod +x "$SCRIPT_PATH"
-        echo -e "${GREEN}✓ 脚本文件替换成功${NC}"
+    # 发现新版本
+    echo -e "${YELLOW}发现新版本: ${remote_version} (当前版本: ${VERSION})${NC}"
+    echo -e "${CYAN}正在自动更新...${NC}"
+
+    # 备份原脚本
+    local backup_script="${local_script_path}.bak"
+    cp "$local_script_path" "$backup_script" 2>/dev/null
+
+    # 替换当前脚本
+    if sudo tee "$local_script_path" < "$downloaded_file" > /dev/null; then
+        sudo chmod +x "$local_script_path"
+        echo -e "${GREEN}✓ 更新完成！${NC}"
+        echo ""
+        echo -e "${YELLOW}请重启工具箱以使新版本生效。${NC}"
+        echo -e "${YELLOW}按回车键关闭本窗口，然后重新打开工具箱。${NC}"
+        read -p ""
+        rm -f "$downloaded_file"
+        exit 0
     else
-        echo -e "${RED}✗ 脚本文件替换失败！${NC}"
-        echo "请检查文件权限。"
-        rm -rf "$clone_dir"
-        read -p "按回车键返回..."
+        echo -e "${RED}✗ 更新失败，请检查权限。${NC}"
+        # 恢复备份
+        [ -f "$backup_script" ] && cp "$backup_script" "$local_script_path"
+        rm -f "$downloaded_file"
+        echo ""
+        read -p "按回车键继续使用当前版本..."
         return 1
     fi
-
-    # 清理下载目录
-    echo -e "${CYAN}步骤7: 清理临时文件...${NC}"
-    rm -rf "$clone_dir"
-    echo -e "${GREEN}✓ 临时文件已清理${NC}"
-    echo ""
-
-    # 更新完成，自动重启新版本
-    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}              ✓ 更新完成！                          ${NC}"
-    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
-    echo ""
-    if [ -n "$new_version" ]; then
-        echo -e "${GREEN}工具箱已从 v$VERSION 成功更新到 v$new_version${NC}"
-    else
-        echo -e "${GREEN}工具箱更新完成${NC}"
-    fi
-    echo ""
-    echo -e "${YELLOW}提示：正在自动重启工具箱以应用更新...${NC}"
-    echo ""
-    sleep 2
-
-    # 使用 exec 替换当前进程，自动启动新脚本
-    exec "$SCRIPT_PATH"
 }
 
-# 检查网络连接
+# 检查网络连接（保留原函数）
 check_network_connection() {
     if ping -c 2 -W 3 8.8.8.8 &> /dev/null; then
         return 0
@@ -244,7 +115,7 @@ check_network_connection() {
     return 1
 }
 
-# 从脚本文件中提取版本号
+# 从脚本文件中提取版本号（保留原函数）
 extract_version() {
     local script_file="$1"
     local version=$(grep -E "^#.*[Vv]ersion[[:space:]]*:" "$script_file" | head -1 | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+")
@@ -374,16 +245,16 @@ show_main_menu() {
             echo -e "${GREEN} 3. 调整虚拟内存大小      13. 设置管理员密码      23. 清理Steam缓存${NC}"
             echo -e "${GREEN} 4. 修复磁盘写入错误      14. 安装AnyDesk         24. 更新已安装应用${NC}"
             echo -e "${GREEN} 5. 修复引导              15. 安装ToDesk          25. 卸载已安装应用${NC}"
-            echo -e "${GREEN} 6. 修复互通盘            16. 安装WPS Office      26. 检查工具箱更新${NC}"
-            echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安装小黄鸭软件${NC}"
-            echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装微信            28. 安装Steam社区302${NC}"
+            echo -e "${GREEN} 6. 修复互通盘            16. 安装WPS Office      26. 安装小黄鸭软件${NC}"
+            echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安装Steam社区302${NC}"
+            echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装微信${NC}"
             echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装QQ音乐${NC}"
             echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
 
-            read -p "请输入选项 (输入1-28的数字): " choice
+            read -p "请输入选项 (输入1-27的数字): " choice
 
             if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
                 echo -e "${RED}无效选择，请输入数字！${NC}"
@@ -391,8 +262,8 @@ show_main_menu() {
                 continue
             fi
 
-            if [ $choice -lt 1 ] || [ $choice -gt 28 ]; then
-                echo -e "${RED}无效选择，请选择1到28之间的数字！${NC}"
+            if [ $choice -lt 1 ] || [ $choice -gt 27 ]; then
+                echo -e "${RED}无效选择，请选择1到27之间的数字！${NC}"
                 sleep 1
                 continue
             fi
@@ -423,9 +294,8 @@ show_main_menu() {
     23) steamdeck_cache_manager ;;
     24) update_installed_apps ;;
     25) uninstall_apps ;;
-    26) check_for_updates_silent ;;
-    27) install_yellow_duck_software ;;
-    28) install_steamcommunity_302 ;;
+    26) install_yellow_duck_software ;;
+    27) install_steamcommunity_302 ;;
                 *)
                     echo -e "${RED}无效选择，请重新输入！${NC}"
                     sleep 1
@@ -442,15 +312,15 @@ show_main_menu() {
             echo -e "${GREEN} 3. 调整虚拟内存大小      12. 安装AnyDesk         21. 清理Steam缓存${NC}"
             echo -e "${GREEN} 4. 修复磁盘写入错误      13. 安装ToDesk          22. 更新已安装应用${NC}"
             echo -e "${GREEN} 5. 清理hosts缓存         14. 安装WPS Office      23. 卸载已安装应用${NC}"
-            echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装QQ              24. 检查工具箱更新${NC}"
-            echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装微信            25. 安装小黄鸭软件${NC}"
-            echo -e "${GREEN} 8. 安装ToMoon            17. 安装QQ音乐          26. 安装Steam社区302${NC}"
+            echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装QQ              24. 安装小黄鸭软件${NC}"
+            echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装微信            25. 安装Steam社区302${NC}"
+            echo -e "${GREEN} 8. 安装ToMoon            17. 安装QQ音乐${NC}"
             echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装百度网盘${NC}"
             echo ""
             echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
             echo ""
 
-            read -p "请输入选项 (输入1-26的数字): " choice
+            read -p "请输入选项 (输入1-25的数字): " choice
 
             if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
                 echo -e "${RED}无效选择，请输入数字！${NC}"
@@ -458,8 +328,8 @@ show_main_menu() {
                 continue
             fi
 
-            if [ $choice -lt 1 ] || [ $choice -gt 26 ]; then
-                echo -e "${RED}无效选择，请选择1到26之间的数字！${NC}"
+            if [ $choice -lt 1 ] || [ $choice -gt 25 ]; then
+                echo -e "${RED}无效选择，请选择1到25之间的数字！${NC}"
                 sleep 1
                 continue
             fi
@@ -488,9 +358,8 @@ show_main_menu() {
     21) steamdeck_cache_manager ;;
     22) update_installed_apps ;;
     23) uninstall_apps ;;
-    24) check_for_updates_silent ;;
-    25) install_yellow_duck_software ;;
-    26) install_steamcommunity_302 ;;
+    24) install_yellow_duck_software ;;
+    25) install_steamcommunity_302 ;;
                 *)
                     echo -e "${RED}无效选择，请重新输入！${NC}"
                     sleep 1
@@ -502,7 +371,7 @@ show_main_menu() {
 }
 
 # ============================================
-# 功能实现部分
+# 以下为原有功能实现部分（未作改动，仅为了完整性保留）
 # ============================================
 
 # 1. 关于支持与维护
@@ -4695,7 +4564,7 @@ main() {
     # 静默检测系统类型
     detect_system_type
 
-    # 启动时检查更新（使用静默版本）
+    # 启动时检查更新（静默版本）
     check_for_updates_silent
 
     # 静默检查并创建桌面快捷方式（仅首次运行）
