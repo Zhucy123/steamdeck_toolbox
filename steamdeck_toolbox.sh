@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.2.0
+# Steam Deck 工具箱 v1.2.1
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -23,7 +23,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
 # 版本信息
-VERSION="1.2.0"
+VERSION="1.2.1"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 # 系统类型检测变量
