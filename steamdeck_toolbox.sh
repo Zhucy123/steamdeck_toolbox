@@ -1460,7 +1460,7 @@ install_tomoon() {
     read -p "按回车键返回主菜单..."
 }
 
-# 11. 安装＆卸载插件商店
+# 11. 安装＆卸载插件商店（支持可视化进度条 + 镜像重试）
 install_remove_plugin_store() {
     show_header
     echo -e "${YELLOW}════════════════ 安装＆卸载插件商店 ════════════════${NC}"
@@ -1485,7 +1485,7 @@ install_remove_plugin_store() {
             SERVICE_FILE="${SERVICE_DIR}/plugin_loader.service"
             SERVICE_DEST="/etc/systemd/system/plugin_loader.service"
             CURRENT_USER=$(whoami)
-            # 镜像列表（按推荐顺序，第一 ghproxy.net，第二 gh.ddlc.top，其余备选）
+            # 镜像列表（第一 ghproxy.net，第二 gh.ddlc.top）
             MIRRORS=(
                 "https://ghproxy.net/"
                 "https://gh.ddlc.top/"
@@ -1497,7 +1497,7 @@ install_remove_plugin_store() {
                 "https://github.com/"
             )
             DOWNLOAD_TIMEOUT=30
-            MAX_RETRY_PER_MIRROR=1  # 每个镜像失败后重试一次
+            MAX_RETRY_PER_MIRROR=1
             # =============================
 
             # 检查必要命令
@@ -1509,7 +1509,7 @@ install_remove_plugin_store() {
                 fi
             done
 
-            # 获取最新版本号（GitHub API）
+            # 获取最新版本号
             echo "正在获取最新版本信息..."
             LATEST_VERSION=$(curl -s "https://api.github.com/repos/SteamDeckHomebrew/decky-loader/releases" | python3 -c "
 import sys, json
@@ -1529,7 +1529,7 @@ except:
             fi
             echo -e "${GREEN}最新版本: ${LATEST_VERSION}${NC}"
 
-            # 检测是否已安装及版本
+            # 检测已安装版本
             INSTALLED_VERSION=""
             if [[ -f "$PLUGIN_LOADER" && -x "$PLUGIN_LOADER" ]]; then
                 INSTALLED_VERSION=$(sudo journalctl -u plugin_loader --no-pager 2>/dev/null | grep -i "Starting Decky version" | tail -1 | grep -oP 'version v?\K[0-9.]+(-pre[0-9]+)?')
@@ -1563,7 +1563,7 @@ except:
                 sudo chown ${CURRENT_USER}:${CURRENT_USER} "$SERVICE_DIR" "$PLUGIN_DIR"
             }
 
-            # 下载 PluginLoader（带重试机制）
+            # ========== 下载 PluginLoader（带可视化进度条） ==========
             DOWNLOAD_SUCCESS=false
             TMP_FILE="${PLUGIN_LOADER}.tmp"
             DOWNLOAD_PATH="https://github.com/SteamDeckHomebrew/decky-loader/releases/download/v${LATEST_VERSION}/PluginLoader"
@@ -1571,23 +1571,24 @@ except:
             for mirror in "${MIRRORS[@]}"; do
                 FULL_URL="${mirror}${DOWNLOAD_PATH}"
                 echo -e "尝试从 ${mirror} 下载..."
-                
-                # 单个镜像内部重试逻辑
+
                 retry_count=0
                 while [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; do
                     if [[ $retry_count -gt 0 ]]; then
                         echo -e "${YELLOW}重试下载 (第 ${retry_count} 次重试)...${NC}"
                     fi
-                    
-                    # 使用 curl 下载，输出进度条，设置超时，并获取 HTTP 状态码
-                    http_code=$(curl -L --progress-bar --fail --max-time "$DOWNLOAD_TIMEOUT" -w "%{http_code}" -o "$TMP_FILE" "$FULL_URL" 2>&1)
+
+                    # 使用 curl 下载，显示进度条（--progress-bar），同时保持超时和失败检测
+                    # 注意：--progress-bar 会将进度输出到 stderr，需要保证终端可见
+                    set +e
+                    curl -L --progress-bar --fail --max-time "$DOWNLOAD_TIMEOUT" -o "$TMP_FILE" "$FULL_URL"
                     curl_exit=$?
-                    
-                    # 检查下载是否成功且文件有效
+                    set -e
+
                     if [[ $curl_exit -eq 0 ]] && [[ -f "$TMP_FILE" ]]; then
                         FILE_SIZE=$(stat -c%s "$TMP_FILE" 2>/dev/null || stat -f%z "$TMP_FILE" 2>/dev/null)
                         if [[ -n "$FILE_SIZE" ]] && [[ "$FILE_SIZE" -gt 1000000 ]]; then
-                            echo -e "${GREEN}下载成功 (大小: $((FILE_SIZE/1024/1024)) MB)${NC}"
+                            echo -e "\n${GREEN}下载成功 (大小: $((FILE_SIZE/1024/1024)) MB)${NC}"
                             # 替换旧文件
                             if [[ -f "$PLUGIN_LOADER" ]]; then
                                 sudo rm -f "$PLUGIN_LOADER"
@@ -1595,14 +1596,14 @@ except:
                             mv "$TMP_FILE" "$PLUGIN_LOADER"
                             chmod +x "$PLUGIN_LOADER"
                             DOWNLOAD_SUCCESS=true
-                            break 2   # 跳出两层循环
+                            break 2
                         else
-                            echo -e "${RED}下载文件无效 (${FILE_SIZE} 字节)，尝试下一个镜像...${NC}"
+                            echo -e "\n${RED}下载文件无效 (${FILE_SIZE} 字节)，尝试下一个镜像...${NC}"
                             rm -f "$TMP_FILE"
-                            break   # 跳出内层循环，进入下一个镜像
+                            break
                         fi
                     else
-                        echo -e "${RED}下载失败 (退出码: $curl_exit, HTTP: $http_code)${NC}"
+                        echo -e "\n${RED}下载失败 (退出码: $curl_exit)${NC}"
                         rm -f "$TMP_FILE"
                         ((retry_count++))
                         if [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; then
@@ -1613,7 +1614,7 @@ except:
                         fi
                     fi
                 done
-                
+
                 if [[ "$DOWNLOAD_SUCCESS" == "true" ]]; then
                     break
                 fi
