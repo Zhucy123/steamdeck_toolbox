@@ -1,18 +1,13 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.2.2
-# 制作人：薯条＆DeepSeek
-
-# 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 PURPLE='\033[0;35m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# 全局变量
 INSTALL_DIR="$HOME/Applications"
 DESKTOP_DIR="$HOME/Desktop"
 BACKUP_DIR="$HOME/backups"
@@ -22,26 +17,19 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-# 版本信息
-VERSION="1.2.2"
+VERSION="1.2.3"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
-# 系统类型检测变量
 SYSTEM_TYPE=""
 
-# ============================================
-# 最高优先级：启动时自动更新检测（git clone 方式）
-# ============================================
 auto_update_check() {
     local temp_dir="/tmp/steamdeck_toolbox_update"
     local target_script="/home/deck/steamdeck_toolbox.sh"
 
     echo -e "${CYAN}正在检查工具箱更新...${NC}"
 
-    # 清理可能残留的临时目录
     rm -rf "$temp_dir"
 
-    # 检查 git 是否可用
     if ! command -v git &> /dev/null; then
         echo -e "${YELLOW}未找到 git，尝试安装...${NC}"
         sudo pacman -Sy --noconfirm git &> /dev/null || {
@@ -50,14 +38,12 @@ auto_update_check() {
         }
     fi
 
-    # 克隆仓库（只克隆最新一层）
     if ! git clone --depth=1 "$REPO_URL" "$temp_dir" &> /dev/null; then
         echo -e "${YELLOW}⚠ 无法连接仓库，跳过更新检查。${NC}"
         rm -rf "$temp_dir"
         return 1
     fi
 
-    # 检查克隆是否成功
     local remote_script="$temp_dir/steamdeck_toolbox.sh"
     if [ ! -f "$remote_script" ]; then
         echo -e "${YELLOW}⚠ 远程仓库中未找到脚本文件，跳过更新。${NC}"
@@ -65,7 +51,6 @@ auto_update_check() {
         return 1
     fi
 
-    # 提取远程版本号
     local remote_version=$(grep -E '^VERSION="[0-9]+\.[0-9]+\.[0-9]+"' "$remote_script" | head -1 | sed -E 's/VERSION="([0-9]+\.[0-9]+\.[0-9]+)"/\1/')
     if [ -z "$remote_version" ]; then
         remote_version=$(grep -E 'VERSION="[0-9]+\.[0-9]+\.[0-9]+"' "$remote_script" | head -1 | sed -E 's/.*VERSION="([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
@@ -77,7 +62,6 @@ auto_update_check() {
         return 1
     fi
 
-    # 版本一致，无需更新
     if [ "$remote_version" = "$VERSION" ]; then
         echo -e "${GREEN}✓ 已是最新版本${NC}"
         rm -rf "$temp_dir"
@@ -85,15 +69,12 @@ auto_update_check() {
         return 0
     fi
 
-    # 发现新版本，执行更新
     echo -e "${YELLOW}发现新版本: ${remote_version} (当前版本: ${VERSION})${NC}"
     echo -e "${CYAN}正在自动更新...${NC}"
 
-    # 备份当前脚本
     local backup_script="${SCRIPT_PATH}.bak"
     cp "$SCRIPT_PATH" "$backup_script" 2>/dev/null
 
-    # 覆盖当前脚本路径
     if cp "$remote_script" "$SCRIPT_PATH"; then
         chmod +x "$SCRIPT_PATH"
         echo -e "${GREEN}✓ 当前脚本已更新${NC}"
@@ -106,7 +87,6 @@ auto_update_check() {
         return 1
     fi
 
-    # 同时覆盖到 /home/deck/steamdeck_toolbox.sh（用户指定路径）
     if [ "$SCRIPT_PATH" != "$target_script" ]; then
         if cp "$remote_script" "$target_script"; then
             chmod +x "$target_script"
@@ -116,7 +96,6 @@ auto_update_check() {
         fi
     fi
 
-    # 清理临时目录
     rm -rf "$temp_dir"
 
     echo ""
@@ -127,35 +106,25 @@ auto_update_check() {
     exit 0
 }
 
-# ============================================
-# 原有功能实现（完整保留，未作任何改动）
-# ============================================
-
-# 初始化目录
 init_dirs() {
     mkdir -p "$INSTALL_DIR"
     mkdir -p "$BACKUP_DIR"
     mkdir -p "$TEMP_DIR"
 }
 
-# 静默检测系统类型（单系统或双系统）
 detect_system_type() {
-    # 静默检测，不输出检测过程
     local has_clover=0
 
-    # 方法1: 检查Clover引导目录（大小写敏感）
     if [ -d "/boot/efi/EFI/CLOVER" ] || [ -d "/boot/efi/EFI/Clover" ]; then
         has_clover=1
     fi
 
-    # 方法2: 检查efibootmgr输出中是否有Clover引导项
     if command -v efibootmgr &> /dev/null; then
         if efibootmgr 2>/dev/null | grep -i "CLOVER" &> /dev/null; then
             has_clover=1
         fi
     fi
 
-    # 方法3: 检查引导分区中的Clover文件
     if [ -f "/boot/efi/EFI/CLOVER/CLOVERX64.efi" ] || \
        [ -f "/boot/efi/EFI/CLOVER/config.plist" ] || \
        [ -f "/boot/efi/EFI/Clover/CLOVERX64.efi" ] || \
@@ -163,7 +132,6 @@ detect_system_type() {
         has_clover=1
     fi
 
-    # 方法4: 检查是否有Windows引导（作为辅助判断）
     local has_windows=0
     if [ -d "/boot/efi/EFI/Microsoft" ] || \
        [ -f "/boot/efi/EFI/Microsoft/Boot/bootmgfw.efi" ] || \
@@ -171,14 +139,12 @@ detect_system_type() {
         has_windows=1
     fi
 
-    # 判断逻辑：如果检测到Clover或Windows引导，则认为是双系统
     if [ $has_clover -eq 1 ] || [ $has_windows -eq 1 ]; then
         SYSTEM_TYPE="dual"
     else
         SYSTEM_TYPE="single"
     fi
 
-    # 如果没有检测到任何引导，尝试其他方法确认
     if [ -z "$SYSTEM_TYPE" ]; then
         local boot_entries=0
         if command -v efibootmgr &> /dev/null; then
@@ -194,7 +160,6 @@ detect_system_type() {
     fi
 }
 
-# 显示标题
 show_header() {
     clear
     echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
@@ -203,7 +168,6 @@ show_header() {
     echo ""
 }
 
-# 创建桌面快捷方式（仅主程序）
 create_desktop_shortcuts() {
     if [ ! -f "$MAIN_LAUNCHER" ]; then
         cat > "$MAIN_LAUNCHER" << EOF
@@ -221,18 +185,15 @@ EOF
     fi
 }
 
-# 显示主菜单（根据系统类型动态调整，已移除“检查工具箱更新”选项）
 show_main_menu() {
     while true; do
         clear
 
-        # 显示简洁的标题
         echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
         echo -e "${CYAN}                     Steam Deck 工具箱 - 版本: $VERSION                               ${NC}"
         echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
         echo ""
 
-        # 显示系统类型信息（简洁版）
         if [ "$SYSTEM_TYPE" == "dual" ]; then
             echo -e "${GREEN}当前系统: 双系统${NC}"
             echo ""
@@ -368,11 +329,6 @@ show_main_menu() {
     done
 }
 
-# ============================================
-# 以下为所有功能实现的完整代码（原样保留）
-# ============================================
-
-# 1. 关于支持与维护
 show_about() {
     show_header
     echo -e "${YELLOW}════════════════ 关于 steamdeck工具箱 ════════════════${NC}"
@@ -398,7 +354,6 @@ show_about() {
     read -p "按回车键返回主菜单..."
 }
 
-# 2. 安装国内源
 install_chinese_source() {
     show_header
     echo -e "${YELLOW}════════════════ 安装国内源 ════════════════${NC}"
@@ -406,12 +361,10 @@ install_chinese_source() {
     echo "正在配置国内源..."
     echo ""
 
-    # 禁用SteamOS只读模式
     echo -e "${CYAN}步骤1: 禁用SteamOS只读模式${NC}"
     sudo steamos-readonly disable 2>/dev/null || true
     echo -e "${GREEN}✓ 已禁用只读模式${NC}"
 
-    # 配置Flatpak国内源
     echo ""
     echo -e "${CYAN}步骤2: 配置Flatpak国内源${NC}"
     flatpak remote-modify flathub --url=https://mirror.sjtu.edu.cn/flathub 2>/dev/null || true
@@ -423,19 +376,15 @@ install_chinese_source() {
     read -p "按回车键返回主菜单..."
 }
 
-# 3. 调整虚拟内存大小 (集成CryoByte33思路与btrfs修复)
 adjust_swap() {
     show_header
     echo -e "${YELLOW}════════════════ 调整虚拟内存大小 ════════════════${NC}"
     echo ""
 
-    # --- 1. 显示当前系统状态 ---
     echo -e "${CYAN} 当前系统状态${NC}"
     echo "--------------------------------------------"
 
-    # 物理内存状态 (使用更稳定的提取方法)
     if command -v free &> /dev/null; then
-        # 获取内存信息，确保使用英文输出
         LANG=C free -h | while read line; do
             if [[ $line =~ ^Mem: ]]; then
                 read -ra mem <<< "$line"
@@ -451,14 +400,11 @@ adjust_swap() {
 
     echo ""
 
-    # 活动交换设备详情 (简洁显示)
     echo -e "${CYAN} 活动交换设备${NC}"
     echo "--------------------------------------------"
     if command -v swapon &> /dev/null && swapon_output=$(swapon --show 2>/dev/null); then
-        # 只显示一行关键信息
         echo "$swapon_output" | while read line; do
             if [[ ! $line == NAME* ]]; then
-                # 提取并格式化显示
                 read -ra parts <<< "$line"
                 if [ "${#parts[@]}" -ge 4 ]; then
                     echo -e "${GREEN}${parts[0]}${NC} (${CYAN}${parts[1]}${NC}): ${parts[2]} | 已用: ${YELLOW}${parts[3]}${NC}"
@@ -470,26 +416,21 @@ adjust_swap() {
     fi
     echo ""
 
-    # --- 2. 紧凑型功能菜单 ---
     echo -e "${CYAN} 请选择要执行的操作${NC}"
     echo "============================================"
 
-    # 选项1：CryoByte33推荐方案
     echo -e "${GREEN}[1] 一键应用CryoByte33推荐方案${NC}"
     echo -e "    ${YELLOW}★ 推荐选项${NC} - 16GB Swap + 游戏专用优化参数    为现代大型游戏提供最佳兼容性与性能"
     echo ""
 
-    # 选项2：调整传统Swap文件
     echo -e "${GREEN}[2] 调整传统Swap文件大小${NC}"
     echo -e "    手动设置位于 /home/swapfile 的交换文件，适用于需要精确控制或大容量后备的情况"
     echo ""
 
-    # 选项3：配置ZRAM
     echo -e "${GREEN}[3] 配置ZRAM (内存压缩交换)${NC}"
     echo -e "    配置不依赖存储的快速内存交换，响应快、不损耗存储，适合日常使用"
     echo ""
 
-    # 选项4：清理重置
     echo -e "${GREEN}[4] 清理所有Swap配置并重新开始${NC}"
     echo -e "    ${RED}重置选项${NC} - 停用并删除现有配置，切换方案或排除故障时使用"
     echo "============================================"
@@ -519,7 +460,6 @@ adjust_swap() {
     esac
 }
 
-# === 子函数：一键应用CryoByte33推荐 ===
 apply_cryo_recommendation() {
     echo ""
     echo -e "${YELLOW}═══════════════ 应用CryoByte33推荐方案 ═══════════════${NC}"
@@ -546,28 +486,23 @@ apply_cryo_recommendation() {
     echo -e "${CYAN} 开始应用优化配置...${NC}"
     echo "════════════════════════════════════════════"
 
-    # 步骤1: 创建16GB Swap文件
     echo -e "\n${CYAN}步骤1/3: 创建16GB交换文件${NC}"
     echo "----------------------------------------"
 
     local swap_size_gb=16
     local block_count=$((swap_size_gb * 1024))
 
-    # 1.1 停用现有Swap
     echo "• 停用现有交换文件..."
     sudo swapoff /home/swapfile 2>/dev/null
     sudo swapoff -a 2>/dev/null
 
-    # 1.2 删除旧文件
     echo "• 删除旧文件..."
     sudo rm -f /home/swapfile
 
-    # 1.3 针对btrfs创建文件 (关键步骤)
     echo "• 创建新文件 (针对btrfs文件系统)..."
     sudo touch /home/swapfile
     sudo chattr +C /home/swapfile 2>/dev/null || echo -e "${YELLOW}  提示: chattr +C 可能失败，继续执行...${NC}"
 
-    # 1.4 填充文件
     echo "• 填充16GB数据 (这需要几分钟)..."
     sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$block_count conv=fsync status=progress 2>/dev/null
 
@@ -576,45 +511,33 @@ apply_cryo_recommendation() {
         return
     fi
 
-    # 1.5 设置权限并格式化
     echo "• 设置权限并格式化..."
     sudo chmod 600 /home/swapfile
     sudo mkswap /home/swapfile
 
-    # 1.6 启用并配置自动加载
     echo "• 启用交换文件..."
     sudo swapon /home/swapfile
 
-    # 更新fstab配置
     sudo sed -i '\|/home/swapfile|d' /etc/fstab 2>/dev/null
     echo "/home/swapfile none swap defaults 0 0" | sudo tee -a /etc/fstab > /dev/null
 
     echo -e "${GREEN}✓ 16GB交换文件创建完成${NC}"
 
-    # 步骤2: 优化内核参数
     echo -e "\n${CYAN}步骤2/3: 优化内核参数${NC}"
     echo "----------------------------------------"
 
-    # 创建优化配置文件
     sudo tee /etc/sysctl.d/99-cryo-optimizations.conf > /dev/null <<'EOF'
-# CryoByte33 Steam Deck 优化参数
-# 减少交换倾向，优先使用物理内存
 vm.swappiness=1
-# 优化文件系统缓存压力
 vm.vfs_cache_pressure=50
-# 禁用页面集群，提高响应速度
 vm.page-cluster=0
-# 优化脏页回写策略
 vm.dirty_background_ratio=3
 vm.dirty_ratio=50
 EOF
 
-    # 立即应用参数
     sudo sysctl --system --load=/etc/sysctl.d/99-cryo-optimizations.conf
 
     echo -e "${GREEN}✓ 内核参数优化完成${NC}"
 
-    # 步骤3: 停用ZRAM避免冲突
     echo -e "\n${CYAN}步骤3/3: 配置ZRAM${NC}"
     echo "----------------------------------------"
 
@@ -624,7 +547,6 @@ EOF
 
     echo -e "${GREEN}✓ ZRAM已停用${NC}"
 
-    # 完成总结
     echo -e "\n${CYAN}════════════════════════════════════════════${NC}"
     echo -e "${GREEN}✅ CryoByte33推荐方案已成功应用！${NC}"
     echo -e "${CYAN}════════════════════════════════════════════${NC}"
@@ -640,7 +562,6 @@ EOF
     echo "3. 如需恢复原状，可使用本工具的[清理所有Swap配置]选项"
     echo ""
 
-    # 验证显示
     echo -e "${CYAN} 验证当前状态：${NC}"
     echo "----------------------------------------"
     if command -v swapon &> /dev/null; then
@@ -652,13 +573,11 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# === 子函数：调整传统Swap文件 ===
 adjust_swapfile() {
     echo ""
     echo -e "${YELLOW}️  调整传统Swap文件大小${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    # 检查当前文件大小
     if [ -f "/home/swapfile" ]; then
         current_size=$(sudo du -h /home/swapfile 2>/dev/null | cut -f1)
         echo -e "现有文件大小: ${GREEN}$current_size${NC}"
@@ -666,14 +585,12 @@ adjust_swapfile() {
         echo -e "现有文件: ${YELLOW}未找到${NC}"
     fi
 
-    # 显示磁盘空间
     echo ""
     echo -e "${CYAN}磁盘空间信息 (/) ${NC}"
     df -h / | tail -1
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
-    # 选择大小
     echo "选择新的大小:"
     echo " 1.  1GB (轻度使用)"
     echo " 2.  4GB (基础游戏)"
@@ -703,7 +620,6 @@ adjust_swapfile() {
         *) echo -e "${RED}无效选择。${NC}"; return;;
     esac
 
-    # 确认
     echo ""
     echo -e "${YELLOW}即将创建 ${swap_size_gb}GB 的Swap文件。${NC}"
     echo "这会花费几分钟，并且需要临时磁盘空间。"
@@ -716,21 +632,16 @@ adjust_swapfile() {
     echo -e "${CYAN}开始创建Swap文件...${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    # 关键步骤：针对btrfs的正确顺序
-    # 1. 停用现有
     echo "1. 停用现有的Swap文件..."
     sudo swapoff /home/swapfile 2>/dev/null
 
-    # 2. 删除旧文件
     echo "2. 删除旧文件..."
     sudo rm -f /home/swapfile
 
-    # 3. 创建空文件并立即禁用COW（针对btrfs的关键步骤！）
     echo "3. 创建空文件并禁用Copy-on-Write (针对btrfs)..."
     sudo touch /home/swapfile
     sudo chattr +C /home/swapfile 2>/dev/null || echo -e "${YELLOW}⚠  警告: chattr +C 失败，但继续执行。${NC}"
 
-    # 4. 用dd填充文件（避免稀疏文件）
     echo "4. 填充文件 (${swap_size_gb}GB)..."
     block_count=$((swap_size_gb * 1024))
     sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$block_count status=progress conv=fsync 2>/dev/null
@@ -741,22 +652,18 @@ adjust_swapfile() {
         return
     fi
 
-    # 5. 设置权限
     echo "5. 设置文件权限..."
     sudo chmod 600 /home/swapfile
 
-    # 6. 格式化为Swap
     echo "6. 格式化..."
     sudo mkswap /home/swapfile
 
-    # 7. 启用
     echo "7. 启用Swap文件..."
     sudo swapon /home/swapfile
 
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ Swap文件已创建并启用。${NC}"
 
-        # 8. 添加到fstab (如果不存在)
         if ! grep -q "/home/swapfile" /etc/fstab 2>/dev/null; then
             echo "8. 添加到 /etc/fstab (永久生效)..."
             echo "/home/swapfile none swap defaults 0 0" | sudo tee -a /etc/fstab > /dev/null
@@ -764,7 +671,6 @@ adjust_swapfile() {
             echo "8. /etc/fstab 中已存在配置。"
         fi
 
-        # 验证
         echo ""
         echo -e "${CYAN}✅ 创建成功！验证:${NC}"
         ls -lh /home/swapfile
@@ -778,7 +684,6 @@ adjust_swapfile() {
     read -p "按回车键返回主菜单..."
 }
 
-# === 子函数：配置ZRAM ===
 configure_zram() {
     echo ""
     echo -e "${YELLOW}羅 配置ZRAM (内存压缩交换)${NC}"
@@ -804,7 +709,6 @@ configure_zram() {
     echo ""
     echo -e "${CYAN}安装并配置ZRAM...${NC}"
 
-    # 安装
     if ! command -v systemctl &> /dev/null; then
         echo -e "${RED}系统不支持systemd。${NC}"
         return
@@ -813,10 +717,8 @@ configure_zram() {
     echo "1. 安装 systemd-zram-generator..."
     sudo pacman -S --noconfirm systemd-zram-generator 2>/dev/null || {
         echo -e "${YELLOW}无法通过pacman安装，尝试其他方法...${NC}"
-        # 可以添加备用安装方法
     }
 
-    # 创建配置
     echo "2. 创建配置文件..."
     sudo tee /etc/systemd/zram-generator.conf > /dev/null <<EOF
 [zram0]
@@ -825,7 +727,6 @@ compression-algorithm = lz4
 swap-priority = 100
 EOF
 
-    # 启用服务
     echo "3. 启用服务..."
     sudo systemctl daemon-reload
     sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
@@ -835,7 +736,6 @@ EOF
     echo "4. 等待ZRAM初始化..."
     sleep 2
 
-    # 验证
     if swapon --show | grep -q zram; then
         echo -e "${GREEN}✓ ZRAM 已启用。${NC}"
         swapon --show | grep zram
@@ -843,7 +743,6 @@ EOF
         echo -e "${YELLOW}⚠  ZRAM可能未启动，尝试重启后生效。${NC}"
     fi
 
-    # 提示关闭传统Swap以避免冲突（可选）
     echo ""
     echo -e "${YELLOW}提示：${NC}你现在同时启用了ZRAM和传统Swap。"
     echo "如需仅使用ZRAM，可在主菜单使用选项4清理传统Swap。"
@@ -851,7 +750,6 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# === 子函数：清理Swap配置 ===
 cleanup_swap() {
     echo ""
     echo -e "${YELLOW}粒 清理所有Swap配置${NC}"
@@ -870,16 +768,12 @@ cleanup_swap() {
 
     echo -e "${CYAN}正在清理...${NC}"
 
-    # 停用所有Swap
     sudo swapoff -a
 
-    # 删除文件
     sudo rm -f /home/swapfile
 
-    # 清理fstab
     sudo sed -i '\|/home/swapfile|d' /etc/fstab
 
-    # 停用ZRAM
     sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
     sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null
     sudo rm -f /etc/systemd/zram-generator.conf 2>/dev/null
@@ -891,7 +785,6 @@ cleanup_swap() {
     read -p "按回车键返回主菜单..."
 }
 
-# 4. 修复磁盘写入错误
 fix_disk_write_error() {
     show_header
     echo -e "${YELLOW}════════════════ 修复磁盘写入错误 ════════════════${NC}"
@@ -899,10 +792,8 @@ fix_disk_write_error() {
     echo -e "${CYAN}正在修复磁盘写入错误...${NC}"
     echo ""
 
-    # 步骤1: 检查并禁用SteamOS只读模式（优化版）
     echo "步骤1: 检查并禁用SteamOS只读模式"
 
-    # 首先检查当前只读状态，避免不必要的操作
     if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
         echo "检测到只读模式已启用，正在禁用..."
         sudo steamos-readonly disable 2>/dev/null
@@ -916,7 +807,6 @@ fix_disk_write_error() {
         echo -e "${GREEN}✓ 系统已处于读写模式${NC}"
     fi
 
-    # 步骤2: 检查设备是否存在
     echo ""
     echo "步骤2: 检查磁盘设备"
     DISK_DEVICE="/dev/nvme0n1p10"
@@ -924,7 +814,6 @@ fix_disk_write_error() {
     if [ -b "$DISK_DEVICE" ]; then
         echo -e "${GREEN}✓ 找到磁盘设备: $DISK_DEVICE${NC}"
 
-        # 获取设备信息
         echo "设备信息:"
         sudo fdisk -l "$DISK_DEVICE" 2>/dev/null | head -5
     else
@@ -934,7 +823,6 @@ fix_disk_write_error() {
         return
     fi
 
-    # 步骤3: 检查分区是否已挂载
     echo ""
     echo "步骤3: 检查分区挂载状态"
 
@@ -943,17 +831,14 @@ fix_disk_write_error() {
         echo "分区已挂载到: $MOUNT_POINT"
         echo "正在卸载分区..."
 
-        # 尝试卸载分区
         if sudo umount "$DISK_DEVICE" 2>/dev/null; then
             echo -e "${GREEN}✓ 分区卸载成功${NC}"
         else
-            # 如果卸载失败，尝试强制卸载
             echo "尝试强制卸载..."
             if sudo umount -f "$DISK_DEVICE" 2>/dev/null; then
                 echo -e "${GREEN}✓ 分区强制卸载成功${NC}"
             else
                 echo -e "${YELLOW}⚠️  分区卸载失败，尝试继续修复${NC}"
-                # 检查是否有进程占用
                 echo "检查占用进程..."
                 sudo lsof "$DISK_DEVICE" 2>/dev/null | head -5
             fi
@@ -963,22 +848,18 @@ fix_disk_write_error() {
         echo -e "${GREEN}✓ 分区未挂载，可直接进行修复${NC}"
     fi
 
-    # 步骤4: 修复NTFS文件系统
     echo ""
     echo "步骤4: 修复NTFS文件系统"
     echo "正在修复 $DISK_DEVICE..."
 
-    # 先检查是否已卸载
     if mount | grep -q "$DISK_DEVICE"; then
         echo -e "${YELLOW}⚠️  分区仍处于挂载状态，尝试强制修复${NC}"
-        # 即使挂载也尝试修复，使用-d参数允许在挂载状态下修复
         if sudo ntfsfix -d "$DISK_DEVICE" 2>/dev/null; then
             echo -e "${GREEN}✓ NTFS修复完成${NC}"
         else
             echo -e "${YELLOW}⚠️  NTFS修复可能存在问题${NC}"
         fi
     else
-        # 分区已卸载，正常修复
         if sudo ntfsfix "$DISK_DEVICE" 2>/dev/null; then
             echo -e "${GREEN}✓ NTFS修复完成${NC}"
         else
@@ -986,13 +867,10 @@ fix_disk_write_error() {
         fi
     fi
 
-    # 步骤5: 重新挂载分区（如果需要）
     echo ""
     echo "步骤5: 重新挂载分区"
 
-    # 检查是否需要重新挂载
     if [ -n "$MOUNT_POINT" ] && [ ! -d "$MOUNT_POINT" ]; then
-        # 原始挂载点不存在，创建挂载点
         sudo mkdir -p "$MOUNT_POINT" 2>/dev/null
     fi
 
@@ -1038,26 +916,20 @@ fix_disk_write_error() {
     read -p "按回车键返回主菜单..."
 }
 
-# 5. 修复引导
 fix_boot() {
     show_header
     echo -e "${YELLOW}════════════════ 修复引导 ════════════════${NC}"
 
     echo -e "${CYAN}正在运行引导修复脚本...${NC}"
 
-    # 将修复引导脚本保存到临时文件
     cat > "$TEMP_DIR/fix_boot.sh" << 'EOF'
 #!/bin/bash
-
-# 脚本：自动设置Clover为第一启动项（自动权限提升版）
-# 适用于Steam Deck双系统
 
 echo "========================================"
 echo "  Clover启动顺序自动设置脚本"
 echo "========================================"
 echo ""
 
-# 自动权限提升：如果不是root，则用sudo重新运行自身
 if [ "$EUID" -ne 0 ]; then
     echo "⚠️ 检测到需要管理员权限，正在提升权限..."
     echo "   如需修改启动顺序，请输入您的用户密码（输入时不会显示）"
@@ -1066,7 +938,6 @@ if [ "$EUID" -ne 0 ]; then
     exit $?
 fi
 
-# 检查efibootmgr是否存在
 if ! command -v efibootmgr &> /dev/null; then
     echo "❌ 错误：未找到efibootmgr命令。"
     echo "   请确保系统已安装efibootmgr工具。"
@@ -1076,14 +947,12 @@ fi
 echo "1. 正在扫描UEFI启动项..."
 echo "----------------------------------------"
 
-# 获取当前启动项信息并保存备份
 BACKUP_FILE="/tmp/boot_backup_$(date +%Y%m%d_%H%M%S).txt"
 CURRENT_BOOT_ORDER=$(efibootmgr | grep "BootOrder")
 echo "当前启动顺序: $CURRENT_BOOT_ORDER"
 efibootmgr -v > "$BACKUP_FILE"
 echo "启动项备份已保存到: $BACKUP_FILE"
 
-# 查找CLOVER启动项
 echo ""
 echo "2. 正在查找Clover启动项..."
 echo "----------------------------------------"
@@ -1103,14 +972,12 @@ if [ -z "$CLOVER_ENTRY" ]; then
     exit 1
 fi
 
-# 提取Clover的启动编号
 CLOVER_BOOTNUM=$(echo "$CLOVER_ENTRY" | grep -o 'Boot[0-9A-F]\{4\}' | head -1 | sed 's/Boot//')
 
 echo "✅ 找到Clover启动项："
 echo "   启动编号: Boot$CLOVER_BOOTNUM"
 echo "   描述: $CLOVER_ENTRY"
 
-# 获取当前启动顺序
 echo ""
 echo "3. 正在分析当前启动顺序..."
 echo "----------------------------------------"
@@ -1121,21 +988,18 @@ if [ -z "$CURRENT_ORDER" ]; then
     echo "⚠️  无法获取当前启动顺序，将创建新顺序。"
     NEW_ORDER="$CLOVER_BOOTNUM"
 else
-    # 检查Clover是否已在首位
     if [[ "$CURRENT_ORDER" == "$CLOVER_BOOTNUM,"* ]] || [[ "$CURRENT_ORDER" == "$CLOVER_BOOTNUM" ]]; then
         echo "✅ Clover已在启动顺序的首位，无需修改。"
         echo "   当前顺序: $CURRENT_ORDER"
         exit 0
     fi
 
-    # 从当前顺序中移除Clover编号（如果已存在）
     NEW_ORDER="$CLOVER_BOOTNUM,$(echo "$CURRENT_ORDER" | tr ',' '\n' | grep -v "^$CLOVER_BOOTNUM$" | tr '\n' ',' | sed 's/,$//')"
 fi
 
 echo "当前顺序: $CURRENT_ORDER"
 echo "新顺序: $NEW_ORDER"
 
-# 确认操作
 echo ""
 echo "4. 确认设置"
 echo "----------------------------------------"
@@ -1152,14 +1016,12 @@ if [[ ! $CONFIRM =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-# 执行设置
 echo ""
 echo "5. 正在设置启动顺序..."
 echo "----------------------------------------"
 
 efibootmgr -o "$NEW_ORDER"
 
-# 验证结果
 echo ""
 echo "6. 验证设置结果"
 echo "----------------------------------------"
@@ -1186,7 +1048,6 @@ echo "========================================"
 echo "提示：如需恢复原设置，可参考备份文件: $BACKUP_FILE"
 EOF
 
-    # 设置执行权限并运行脚本
     chmod +x "$TEMP_DIR/fix_boot.sh"
     "$TEMP_DIR/fix_boot.sh"
 
@@ -1195,30 +1056,24 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 6. 修复互通盘
 fix_shared_disk() {
     show_header
     echo -e "${YELLOW}════════════════ 修复互通盘 ════════════════${NC}"
 
     echo -e "${CYAN}正在修复互通盘...${NC}"
 
-    # 步骤1: 禁用SteamOS只读模式
     echo "步骤1: 禁用SteamOS只读模式"
     sudo steamos-readonly disable
     echo -e "${GREEN}✓ 已禁用只读模式${NC}"
 
-    # 步骤2: 修改UDisks2权限文件
     echo "步骤2: 修改UDisks2权限文件"
     UDISKS2_FILE="/usr/share/polkit-1/actions/org.freedesktop.UDisks2.policy"
 
     if [ -f "$UDISKS2_FILE" ]; then
-        # 备份原文件
         sudo cp "$UDISKS2_FILE" "$UDISKS2_FILE.backup.$(date +%Y%m%d)"
 
-        # 修改第181行的<allow_active>标签内容为yes
         sudo sed -i '181s/<allow_active>[^<]*<\/allow_active>/<allow_active>yes<\/allow_active>/' "$UDISKS2_FILE"
 
-        # 检查是否修改成功
         if grep -q "<allow_active>yes</allow_active>" "$UDISKS2_FILE"; then
             echo -e "${GREEN}✓ UDisks2权限文件修改成功${NC}"
         else
@@ -1228,20 +1083,16 @@ fix_shared_disk() {
         echo -e "${RED}✗ 未找到UDisks2权限文件: $UDISKS2_FILE${NC}"
     fi
 
-    # 步骤3: 检查并添加fstab配置
     echo "步骤3: 检查并添加fstab配置"
     FSTAB_FILE="/etc/fstab"
     FSTAB_ENTRY="LABEL=Game  /run/media/deck/Game  ntfs   defaults,nofail,uid=1000,gid=1000,umask=022   0 0"
 
     if [ -f "$FSTAB_FILE" ]; then
-        # 检查是否已存在该配置
         if grep -q "LABEL=Game" "$FSTAB_FILE"; then
             echo -e "${GREEN}✓ fstab中已存在Game盘配置${NC}"
         else
-            # 备份原文件
             sudo cp "$FSTAB_FILE" "$FSTAB_FILE.backup.$(date +%Y%m%d)"
 
-            # 添加配置
             echo "$FSTAB_ENTRY" | sudo tee -a "$FSTAB_FILE" > /dev/null
             echo -e "${GREEN}✓ 已添加Game盘配置到fstab${NC}"
         fi
@@ -1249,24 +1100,20 @@ fix_shared_disk() {
         echo -e "${RED}✗ 未找到fstab文件: $FSTAB_FILE${NC}"
     fi
 
-    # 步骤4: 创建目录并尝试挂载
     echo "步骤4: 创建目录并尝试挂载"
     GAME_DIR="/run/media/deck/Game"
 
-    # 创建目录并设置权限
     sudo mkdir -p "$GAME_DIR"
     sudo chown deck:deck "$GAME_DIR"
 
     if [ -d "$GAME_DIR" ]; then
         echo -e "${GREEN}✓ 已创建Game目录: $GAME_DIR${NC}"
 
-        # 尝试卸载已挂载的Game盘（如果存在）
         if mountpoint -q "$GAME_DIR"; then
             echo "卸载已挂载的Game盘..."
             sudo umount "$GAME_DIR"
         fi
 
-        # 尝试挂载
         echo "尝试挂载Game盘..."
         if sudo mount -L "Game" "$GAME_DIR" 2>/dev/null; then
             echo -e "${GREEN}✓ Game盘已成功挂载${NC}"
@@ -1300,18 +1147,15 @@ fix_shared_disk() {
     read -p "按回车键返回主菜单..."
 }
 
-# 7. 清理hosts缓存
 clear_hosts_cache() {
     show_header
     echo -e "${YELLOW}════════════════ 清理hosts缓存 ════════════════${NC}"
 
     echo -e "${CYAN}正在清理hosts缓存...${NC}"
 
-    # 备份原hosts文件
     echo "备份原hosts文件..."
     sudo cp /etc/hosts /etc/hosts.backup.$(date +%Y%m%d_%H%M%S)
 
-    # 清空hosts文件内容
     echo "清空hosts文件内容..."
     sudo sh -c 'echo "" > /etc/hosts'
 
@@ -1321,7 +1165,6 @@ clear_hosts_cache() {
     read -p "按回车键返回主菜单..."
 }
 
-# 8. 安装UU加速器插件
 install_uu_accelerator() {
     show_header
     echo -e "${YELLOW}════════════════ 安装UU加速器插件 ════════════════${NC}"
@@ -1329,7 +1172,6 @@ install_uu_accelerator() {
     echo -e "${CYAN}正在安装UU加速器插件...${NC}"
     echo "安装命令: curl -s uudeck.com | sudo sh"
 
-    # 执行UU加速器插件安装命令
     if curl -s uudeck.com | sudo sh; then
         echo ""
         echo -e "${GREEN}✓ UU加速器插件安装完成${NC}"
@@ -1341,7 +1183,6 @@ install_uu_accelerator() {
     read -p "按回车键返回主菜单..."
 }
 
-# 9. 安装迅游加速器插件
 install_xunyou_accelerator() {
     show_header
     echo -e "${YELLOW}════════════════ 安装迅游加速器插件 ════════════════${NC}"
@@ -1349,7 +1190,6 @@ install_xunyou_accelerator() {
     echo -e "${CYAN}正在安装迅游加速器插件...${NC}"
     echo "安装命令: curl -s sd.xunyou.com | sudo sh"
 
-    # 执行迅游加速器插件安装命令
     if curl -s sd.xunyou.com | sudo sh; then
         echo ""
         echo -e "${GREEN}✓ 迅游加速器插件安装完成${NC}"
@@ -1361,20 +1201,30 @@ install_xunyou_accelerator() {
     read -p "按回车键返回主菜单..."
 }
 
-# 10. 安装ToMoon（从Gitee手动安装）
 install_tomoon() {
     show_header
-    echo -e "${YELLOW}════════════════ 安装ToMoon ════════════════${NC}"
+    echo -e "${YELLOW}════════════════ 安装/卸载 ToMoon 插件 ════════════════${NC}"
+    echo ""
 
-    # ==================== 配置区域 ====================
-    GITEE_BASE_URL="https://gitee.com/Zhucy2100/decky-installer/raw/master"
-    PLUGIN_DIR="/home/deck/homebrew/plugins"
-    TARGET_DIR="${PLUGIN_DIR}/tomoon"
-    TMP_DIR="/tmp/tomoon_install"
-    # =================================================
+    local GITHUB_REPO="YukiCoco/ToMoon"
+    local API_URL="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+    local PLUGIN_DIR="/home/deck/homebrew/plugins"
+    local TARGET_DIR="${PLUGIN_DIR}/tomoon"
+    local TEMP_DIR="/tmp/tomoon_install"
+    local MIRRORS=(
+        "https://ghproxy.net/"
+        "https://gh.ddlc.top/"
+        "https://mirror.ghproxy.com/"
+        "https://gh.api.99988866.xyz/"
+        "https://download.fastgit.org/"
+        "https://hub.gitmirror.com/"
+        "https://git.xfj0.xyz/"
+        "https://github.com/"
+    )
+    local DOWNLOAD_TIMEOUT=60
+    local MAX_RETRY_PER_MIRROR=1
 
-    # 检查必要命令
-    for cmd in curl unzip sudo; do
+    for cmd in curl sudo unzip; do
         if ! command -v $cmd &> /dev/null; then
             echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
             read -p "按回车键返回主菜单..."
@@ -1382,85 +1232,210 @@ install_tomoon() {
         fi
     done
 
-    # ========== 检测插件目录是否已存在 ==========
-    if [ -d "$TARGET_DIR" ]; then
-        echo -e "${YELLOW}检测到 ToMoon 插件已存在于 ${TARGET_DIR}${NC}"
-        read -p "是否替换安装？(y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${CYAN}已取消安装。${NC}"
-            read -p "按回车键返回主菜单..."
-            return 0
-        fi
-        echo -e "${CYAN}正在删除旧版本...${NC}"
-        sudo rm -rf "$TARGET_DIR"
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}删除旧目录失败，请检查权限。${NC}"
-            read -p "按回车键返回主菜单..."
-            return 1
-        fi
-        echo -e "${GREEN}旧版本已删除。${NC}"
-    fi
-
-    # 创建临时目录
-    mkdir -p "$TMP_DIR"
-    cd "$TMP_DIR"
-
-    # 下载分卷文件
-    echo -e "${CYAN}正在从 Gitee 下载 ToMoon 分卷文件...${NC}"
-    for i in 001 002 003 004; do
-        filename="tomoon.zip.$i"
-        echo "下载 $filename ..."
-        if ! curl -L "$GITEE_BASE_URL/$filename" -o "$filename"; then
-            echo -e "${RED}下载 $filename 失败，请检查网络或文件是否存在。${NC}"
-            rm -rf "$TMP_DIR"
-            read -p "按回车键返回主菜单..."
-            return 1
-        fi
-        # 检查文件是否为空
-        if [ ! -s "$filename" ]; then
-            echo -e "${RED}下载 $filename 文件为空，可能链接有误。${NC}"
-            rm -rf "$TMP_DIR"
-            read -p "按回车键返回主菜单..."
-            return 1
-        fi
-    done
-
-    # 合并分卷
-    echo "合并分卷..."
-    cat tomoon.zip.001 tomoon.zip.002 tomoon.zip.003 tomoon.zip.004 > tomoon_full.zip
-
-    # 确保目标插件目录存在
-    echo "确保插件目录存在..."
-    sudo mkdir -p "$PLUGIN_DIR"
-    sudo chown $USER:$USER "$PLUGIN_DIR" 2>/dev/null || true
-
-    # 解压到插件目录（使用 -q 静默模式，只显示错误）
-    echo "解压到 $PLUGIN_DIR ..."
-    if unzip -q -o tomoon_full.zip -d "$PLUGIN_DIR"; then
-        echo -e "${GREEN}解压成功。${NC}"
-    else
-        echo -e "${RED}解压失败，请检查压缩包是否完整。${NC}"
-        rm -rf "$TMP_DIR"
-        read -p "按回车键返回主菜单..."
-        return 1
-    fi
-
-    # 清理临时文件
-    echo "清理临时文件..."
-    rm -rf "$TMP_DIR"
-
-    # 修正插件目录权限
-    sudo chown -R $USER:$USER "$PLUGIN_DIR" 2>/dev/null || true
-
+    echo "请选择要执行的操作："
+    echo "1. 安装/更新 ToMoon 插件"
+    echo "2. 卸载 ToMoon 插件"
     echo ""
-    echo -e "${GREEN}✓ ToMoon 插件安装完成！${NC}"
-    echo "请切换回游戏模式，在 Decky 侧边栏中查看 ToMoon 是否出现。"
+
+    read -p "请输入选择 [1-2] (输入其他键返回): " action_choice
+
+    case $action_choice in
+        1)
+            echo -e "${CYAN}正在从 GitHub 获取最新版本信息...${NC}"
+            local latest_version=$(curl -s "$API_URL" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//; s/".*//')
+
+            if [ -z "$latest_version" ]; then
+                echo -e "${RED}错误: 无法从 GitHub API 获取最新版本，请检查网络连接。${NC}"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            echo -e "${GREEN}最新版本: ${latest_version}${NC}"
+
+            local installed_version="未安装"
+            local is_installed=false
+            if [ -f "$TARGET_DIR/bin/tomoon" ]; then
+                is_installed=true
+                if [ -f "$TARGET_DIR/package.json" ]; then
+                    installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
+                    if [ -n "$installed_version" ]; then
+                        echo -e "${CYAN}已安装版本: ${installed_version}${NC}"
+                        if [ "$installed_version" = "${latest_version#v}" ]; then
+                            echo -e "${GREEN}已经是最新版本，无需更新。${NC}"
+                            read -p "按回车键返回主菜单..."
+                            return 0
+                        else
+                            echo -e "${YELLOW}发现新版本，将进行更新。${NC}"
+                        fi
+                    else
+                        echo -e "${YELLOW}已安装但无法获取版本，将覆盖安装。${NC}"
+                    fi
+                else
+                    echo -e "${YELLOW}已安装但 package.json 缺失，将覆盖安装。${NC}"
+                fi
+            else
+                echo "未检测到 ToMoon 插件安装，将进行全新安装。"
+            fi
+
+            if [ ! -f "/etc/systemd/system/plugin_loader.service" ]; then
+                echo -e "${YELLOW}⚠ 警告: 未检测到 Decky Loader 插件商店。${NC}"
+                echo "ToMoon 插件需要先安装 Decky Loader 才能正常工作。"
+                read -p "是否继续安装？(y/N): " -n 1 -r
+                echo ""
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    echo "安装已取消。"
+                    read -p "按回车键返回主菜单..."
+                    return 1
+                fi
+            fi
+
+            echo -e "${CYAN}准备安装/更新 ToMoon 插件...${NC}"
+            read -p "是否继续？(y/N): " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "操作已取消。"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            rm -rf "$TEMP_DIR"
+            mkdir -p "$TEMP_DIR"
+            cd "$TEMP_DIR"
+
+            local zip_filename="tomoon-${latest_version}.zip"
+            local download_path="https://github.com/${GITHUB_REPO}/releases/download/${latest_version}/${zip_filename}"
+            local DOWNLOAD_SUCCESS=false
+
+            for mirror in "${MIRRORS[@]}"; do
+                local full_url="${mirror}${download_path}"
+                echo -e "尝试从 ${mirror} 下载..."
+
+                local retry_count=0
+                while [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; do
+                    if [[ $retry_count -gt 0 ]]; then
+                        echo -e "${YELLOW}重试下载 (第 ${retry_count} 次重试)...${NC}"
+                    fi
+
+                    curl -L --progress-bar --max-time "$DOWNLOAD_TIMEOUT" -o "$zip_filename" "$full_url"
+                    local curl_exit=$?
+
+                    if [[ $curl_exit -eq 0 ]] && [[ -f "$zip_filename" ]]; then
+                        local file_size=$(stat -c%s "$zip_filename" 2>/dev/null || stat -f%z "$zip_filename" 2>/dev/null)
+                        if [[ -n "$file_size" ]] && [[ "$file_size" -gt 10000 ]]; then
+                            echo -e "\n${GREEN}下载成功 (大小: $((file_size/1024)) KB)${NC}"
+                            DOWNLOAD_SUCCESS=true
+                            break 2
+                        else
+                            echo -e "\n${RED}下载文件无效 (${file_size} 字节)，尝试下一个镜像...${NC}"
+                            rm -f "$zip_filename"
+                            break
+                        fi
+                    else
+                        echo -e "\n${RED}下载失败 (退出码: $curl_exit)${NC}"
+                        rm -f "$zip_filename"
+                        ((retry_count++))
+                        if [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; then
+                            echo "将进行重试..."
+                            sleep 2
+                        else
+                            echo "该镜像重试次数用完，切换到下一个镜像。"
+                        fi
+                    fi
+                done
+            done
+
+            if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
+                echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            echo -e "${CYAN}正在解压...${NC}"
+            if ! unzip -q "$zip_filename"; then
+                echo -e "${RED}解压失败，文件可能已损坏。${NC}"
+                rm -rf "$TEMP_DIR"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            sudo mkdir -p "$PLUGIN_DIR"
+
+            if [ -d "$TARGET_DIR" ]; then
+                echo "检测到旧版本目录，正在删除..."
+                sudo rm -rf "$TARGET_DIR"
+            fi
+
+            # 智能查找解压后的插件目录
+            local extracted_dir=""
+            extracted_dir=$(find "$TEMP_DIR" -maxdepth 2 -type f \( -name "tomoon" -o -name "package.json" \) -exec dirname {} \; | head -1)
+            if [ -z "$extracted_dir" ]; then
+                extracted_dir=$(find "$TEMP_DIR" -maxdepth 1 -type d -name "tomoon*" | head -1)
+            fi
+            if [ -z "$extracted_dir" ]; then
+                local subdirs=($(find "$TEMP_DIR" -maxdepth 1 -type d ! -path "$TEMP_DIR"))
+                if [ ${#subdirs[@]} -eq 1 ]; then
+                    extracted_dir="${subdirs[0]}"
+                fi
+            fi
+            if [ -z "$extracted_dir" ]; then
+                if [ -f "$TEMP_DIR/package.json" ] || [ -d "$TEMP_DIR/bin" ]; then
+                    extracted_dir="$TEMP_DIR"
+                fi
+            fi
+
+            if [ -z "$extracted_dir" ] || [ ! -d "$extracted_dir" ]; then
+                echo -e "${RED}错误: 解压后未找到 ToMoon 插件目录。${NC}"
+                echo "解压后的文件列表："
+                ls -la "$TEMP_DIR"
+                rm -rf "$TEMP_DIR"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            echo -e "${CYAN}正在安装插件到 ${TARGET_DIR}...${NC}"
+            sudo mv "$extracted_dir" "$TARGET_DIR"
+
+            sudo chown -R deck:deck "$TARGET_DIR"
+
+            rm -rf "$TEMP_DIR"
+
+            echo ""
+            echo -e "${GREEN}✅ ToMoon 插件 (${latest_version}) 安装/更新完成！${NC}"
+            echo "请切换回游戏模式，在 Decky 侧边栏中查看 ToMoon 是否出现。"
+            ;;
+
+        2)
+            echo -e "${CYAN}正在卸载 ToMoon 插件...${NC}"
+            echo "这将删除目录: ${TARGET_DIR}"
+
+            read -p "确定要卸载吗？(y/N): " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "卸载已取消。"
+                read -p "按回车键返回主菜单..."
+                return 0
+            fi
+
+            if [ -d "$TARGET_DIR" ]; then
+                if sudo rm -rf "$TARGET_DIR"; then
+                    echo -e "${GREEN}✅ ToMoon 插件已卸载。${NC}"
+                else
+                    echo -e "${RED}卸载失败，请检查权限。${NC}"
+                fi
+            else
+                echo -e "${YELLOW}未检测到 ToMoon 插件安装。${NC}"
+            fi
+            ;;
+
+        *)
+            echo "返回主菜单..."
+            return
+            ;;
+    esac
 
     read -p "按回车键返回主菜单..."
 }
 
-# 11. 安装＆卸载插件商店（稳健版，支持可视化进度条 + 镜像重试）
 install_remove_plugin_store() {
     show_header
     echo -e "${YELLOW}════════════════ 安装＆卸载插件商店 ════════════════${NC}"
@@ -1475,8 +1450,7 @@ install_remove_plugin_store() {
     case $plugin_choice in
         1)
             echo -e "${CYAN}正在从 GitHub 安装最新版 Decky Loader...${NC}"
-            
-            # ========== 配置区域 ==========
+
             HOME_DIR="/home/deck"
             HOMEBREW_DIR="${HOME_DIR}/homebrew"
             SERVICE_DIR="${HOMEBREW_DIR}/services"
@@ -1485,7 +1459,6 @@ install_remove_plugin_store() {
             SERVICE_FILE="${SERVICE_DIR}/plugin_loader.service"
             SERVICE_DEST="/etc/systemd/system/plugin_loader.service"
             CURRENT_USER=$(whoami)
-            # 镜像列表（第一 ghproxy.net，第二 gh.ddlc.top）
             MIRRORS=(
                 "https://ghproxy.net/"
                 "https://gh.ddlc.top/"
@@ -1496,11 +1469,9 @@ install_remove_plugin_store() {
                 "https://git.xfj0.xyz/"
                 "https://github.com/"
             )
-            DOWNLOAD_TIMEOUT=60        # 增加超时时间到60秒
-            MAX_RETRY_PER_MIRROR=1     # 每个镜像失败后重试一次
-            # =============================
+            DOWNLOAD_TIMEOUT=60
+            MAX_RETRY_PER_MIRROR=1
 
-            # 检查必要命令
             for cmd in curl python3 systemctl sudo journalctl stat; do
                 if ! command -v $cmd &> /dev/null; then
                     echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
@@ -1509,7 +1480,6 @@ install_remove_plugin_store() {
                 fi
             done
 
-            # 获取最新版本号
             echo "正在获取最新版本信息..."
             LATEST_VERSION=$(curl -s "https://api.github.com/repos/SteamDeckHomebrew/decky-loader/releases" | python3 -c "
 import sys, json
@@ -1529,7 +1499,6 @@ except:
             fi
             echo -e "${GREEN}最新版本: ${LATEST_VERSION}${NC}"
 
-            # 检测已安装版本
             INSTALLED_VERSION=""
             if [[ -f "$PLUGIN_LOADER" && -x "$PLUGIN_LOADER" ]]; then
                 INSTALLED_VERSION=$(sudo journalctl -u plugin_loader --no-pager 2>/dev/null | grep -i "Starting Decky version" | tail -1 | grep -oP 'version v?\K[0-9.]+(-pre[0-9]+)?')
@@ -1552,7 +1521,6 @@ except:
                 echo "未检测到现有安装，将进行全新安装。"
             fi
 
-            # 创建目录结构
             echo "创建目录并修复权限..."
             if [[ ! -d "$HOMEBREW_DIR" ]]; then
                 sudo mkdir -p "$HOMEBREW_DIR"
@@ -1563,7 +1531,6 @@ except:
                 sudo chown ${CURRENT_USER}:${CURRENT_USER} "$SERVICE_DIR" "$PLUGIN_DIR"
             }
 
-            # ========== 下载 PluginLoader（带可视化进度条） ==========
             DOWNLOAD_SUCCESS=false
             TMP_FILE="${PLUGIN_LOADER}.tmp"
             DOWNLOAD_PATH="https://github.com/SteamDeckHomebrew/decky-loader/releases/download/v${LATEST_VERSION}/PluginLoader"
@@ -1578,7 +1545,6 @@ except:
                         echo -e "${YELLOW}重试下载 (第 ${retry_count} 次重试)...${NC}"
                     fi
 
-                    # 使用 curl 下载，显示进度条（--progress-bar），不使用 --fail 以避免自动退出
                     curl -L --progress-bar --max-time "$DOWNLOAD_TIMEOUT" -o "$TMP_FILE" "$FULL_URL"
                     curl_exit=$?
 
@@ -1586,7 +1552,6 @@ except:
                         FILE_SIZE=$(stat -c%s "$TMP_FILE" 2>/dev/null || stat -f%z "$TMP_FILE" 2>/dev/null)
                         if [[ -n "$FILE_SIZE" ]] && [[ "$FILE_SIZE" -gt 1000000 ]]; then
                             echo -e "\n${GREEN}下载成功 (大小: $((FILE_SIZE/1024/1024)) MB)${NC}"
-                            # 替换旧文件
                             if [[ -f "$PLUGIN_LOADER" ]]; then
                                 sudo rm -f "$PLUGIN_LOADER"
                             fi
@@ -1623,14 +1588,12 @@ except:
                 return 1
             fi
 
-            # 启用 Steam 远程调试
             echo "启用 Steam 远程调试..."
             touch "${HOME_DIR}/.steam/steam/.cef-enable-remote-debugging"
             if [[ -d "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/" ]]; then
                 touch "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/.cef-enable-remote-debugging"
             fi
 
-            # 创建 systemd 服务文件
             echo "配置 systemd 服务..."
             cat > "$SERVICE_FILE" <<EOF
 [Unit]
@@ -1695,14 +1658,12 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 12. 校准摇杆
 calibrate_joystick() {
     show_header
     echo -e "${YELLOW}════════════════ 校准摇杆 ════════════════${NC}"
 
     echo -e "${CYAN}正在校准摇杆...${NC}"
 
-    # 执行摇杆校准命令
     if thumbstick_cal; then
         echo ""
         echo -e "${GREEN}✓ 摇杆校准完成${NC}"
@@ -1715,14 +1676,12 @@ calibrate_joystick() {
     read -p "按回车键返回主菜单..."
 }
 
-# 13. 设置管理员密码
 set_admin_password() {
     show_header
     echo -e "${YELLOW}════════════════ 设置管理员密码 ════════════════${NC}"
 
     echo -e "${CYAN}正在检查是否已设置管理员密码...${NC}"
 
-    # 检查是否已经设置密码
     if sudo -n true 2>/dev/null; then
         echo -e "${GREEN}✓ 管理员密码已经设置${NC}"
         echo "无需重复设置"
@@ -1733,7 +1692,6 @@ set_admin_password() {
         echo "请按照提示输入您要设置的密码"
         echo ""
 
-        # 执行设置密码
         sudo passwd
 
         if [ $? -eq 0 ]; then
@@ -1750,7 +1708,6 @@ set_admin_password() {
     read -p "按回车键返回主菜单..."
 }
 
-# 14. 安装AnyDesk
 install_anydesk() {
     show_header
     echo -e "${YELLOW}════════════════ 安装AnyDesk ════════════════${NC}"
@@ -1758,10 +1715,8 @@ install_anydesk() {
     APP_NAME="AnyDesk"
     DESKTOP_FILE="$DESKTOP_DIR/AnyDesk.desktop"
 
-    # 首先检查是否已安装AnyDesk
     echo "正在检查是否已安装AnyDesk..."
 
-    # 尝试查找已安装的AnyDesk包
     INSTALLED_PACKAGE=""
     for PACKAGE in com.anydesk.Anydesk; do
         if flatpak list | grep -q "$PACKAGE"; then
@@ -1771,12 +1726,10 @@ install_anydesk() {
     done
 
     if [ -n "$INSTALLED_PACKAGE" ]; then
-        # 已安装AnyDesk
         echo -e "${GREEN}✓ 检测到已安装AnyDesk${NC}"
         echo "已安装的包名: $INSTALLED_PACKAGE"
         echo ""
 
-        # 询问用户要执行的操作
         echo "请选择要执行的操作："
         echo "1. 创建桌面快捷方式"
         echo "2. 卸载AnyDesk"
@@ -1786,7 +1739,6 @@ install_anydesk() {
 
         case $app_choice in
             1)
-                # 创建桌面快捷方式
                 echo "正在创建桌面快捷方式..."
                 cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
@@ -1802,11 +1754,9 @@ EOF
                 echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
                 ;;
             2)
-                # 卸载AnyDesk
                 echo "正在卸载AnyDesk..."
                 if flatpak uninstall "$INSTALLED_PACKAGE" -y; then
                     echo -e "${GREEN}✓ AnyDesk卸载完成${NC}"
-                    # 删除桌面快捷方式
                     rm -f "$DESKTOP_FILE"
                 else
                     echo -e "${RED}✗ AnyDesk卸载失败${NC}"
@@ -1822,11 +1772,9 @@ EOF
         return
     fi
 
-    # 未安装AnyDesk，执行安装流程
     echo -e "${CYAN}未检测到AnyDesk，开始安装...${NC}"
     echo ""
 
-    # 添加 Flathub 仓库（如果尚未添加）
     echo "步骤1: 添加Flathub仓库"
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null
 
@@ -1836,7 +1784,6 @@ EOF
         echo -e "${YELLOW}⚠️  Flathub仓库添加失败，尝试继续安装${NC}"
     fi
 
-    # 更新 Flatpak 仓库信息
     echo ""
     echo "步骤2: 更新Flatpak仓库信息"
     flatpak update --appstream 2>/dev/null
@@ -1847,7 +1794,6 @@ EOF
         echo -e "${YELLOW}⚠️  Flatpak仓库信息更新失败，尝试继续安装${NC}"
     fi
 
-    # 安装 AnyDesk
     echo ""
     echo "步骤3: 安装AnyDesk"
 
@@ -1861,7 +1807,6 @@ EOF
         FINAL_PACKAGE="$PACKAGE"
     fi
 
-    # 如果安装失败，提示用户
     if [ "$INSTALL_SUCCESS" = false ]; then
         echo -e "${RED}✗ 在Flathub仓库中未找到AnyDesk包${NC}"
         echo ""
@@ -1872,7 +1817,6 @@ EOF
         return
     fi
 
-    # 创建桌面快捷方式
     echo ""
     echo "步骤4: 创建桌面快捷方式"
     cat > "$DESKTOP_FILE" << EOF
@@ -1899,18 +1843,15 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 15. 安装ToDesk
 install_todesk() {
     show_header
     echo -e "${YELLOW}════════════════ 安装ToDesk ════════════════${NC}"
 
     echo -e "${CYAN}正在安装ToDesk...${NC}"
 
-    # 禁用只读模式
     echo "禁用SteamOS只读模式..."
     sudo steamos-readonly disable
 
-    # 执行安装命令
     echo "执行安装命令: curl -L todesk.lanbai.top | sh"
     curl -L todesk.lanbai.top | sh
 
@@ -1922,15 +1863,12 @@ install_todesk() {
     read -p "按回车键返回主菜单..."
 }
 
-# 16. 安装WPS Office
 install_wps_office() {
     show_header
     echo -e "${YELLOW}════════════════ 安装WPS Office ════════════════${NC}"
 
-    # 首先检查是否已安装WPS Office
     echo "正在检查是否已安装WPS Office..."
 
-    # 尝试查找已安装的WPS Office包
     INSTALLED_WPS=""
     for PACKAGE in com.wps.Office cn.wps.wps-office com.kingsoft.wps org.wps.Office; do
         if flatpak list | grep -q "$PACKAGE"; then
@@ -1940,12 +1878,10 @@ install_wps_office() {
     done
 
     if [ -n "$INSTALLED_WPS" ]; then
-        # 已安装WPS Office
         echo -e "${GREEN}✓ 检测到已安装WPS Office${NC}"
         echo "已安装的包名: $INSTALLED_WPS"
         echo ""
 
-        # 询问用户要执行的操作
         echo "请选择要执行的操作："
         echo "1. 创建桌面快捷方式"
         echo "2. 卸载WPS Office"
@@ -1955,7 +1891,6 @@ install_wps_office() {
 
         case $wps_choice in
             1)
-                # 创建桌面快捷方式
                 echo "正在创建桌面快捷方式..."
                 cat > "$DESKTOP_DIR/WPS_Office.desktop" << EOF
 [Desktop Entry]
@@ -1971,11 +1906,9 @@ EOF
                 echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
                 ;;
             2)
-                # 卸载WPS Office
                 echo "正在卸载WPS Office..."
                 if flatpak uninstall "$INSTALLED_WPS" -y; then
                     echo -e "${GREEN}✓ WPS Office卸载完成${NC}"
-                    # 删除桌面快捷方式
                     rm -f "$DESKTOP_DIR/WPS_Office.desktop"
                 else
                     echo -e "${RED}✗ WPS Office卸载失败${NC}"
@@ -1991,11 +1924,9 @@ EOF
         return
     fi
 
-    # 未安装WPS Office，执行安装流程
     echo -e "${CYAN}未检测到WPS Office，开始安装...${NC}"
     echo ""
 
-    # 添加 Flathub 仓库（如果尚未添加）
     echo "步骤1: 添加Flathub仓库"
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null
 
@@ -2005,7 +1936,6 @@ EOF
         echo -e "${YELLOW}⚠️  Flathub仓库添加失败，尝试继续安装${NC}"
     fi
 
-    # 更新 Flatpak 仓库信息
     echo ""
     echo "步骤2: 更新Flatpak仓库信息"
     flatpak update --appstream 2>/dev/null
@@ -2016,27 +1946,22 @@ EOF
         echo -e "${YELLOW}⚠️  Flatpak仓库信息更新失败，尝试继续安装${NC}"
     fi
 
-    # 搜索WPS Office的正确包名
     echo ""
     echo "步骤3: 搜索WPS Office包"
     echo "正在搜索可用的WPS Office包..."
 
-    # 尝试搜索WPS包
     if flatpak search wps 2>/dev/null | grep -i wps; then
         echo -e "${GREEN}✓ 找到WPS Office包${NC}"
-        # 提取包名
         WPS_PACKAGE=$(flatpak search wps 2>/dev/null | grep -i "wps" | head -1 | awk '{print $1}')
     else
         WPS_PACKAGE=""
     fi
 
-    # 安装 WPS Office - 尝试不同的包名
     echo ""
     echo "步骤4: 安装WPS Office"
 
     INSTALL_SUCCESS=false
 
-    # 尝试可能的包名列表
     PACKAGE_NAMES=("com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps" "org.wps.Office")
 
     for PACKAGE in "${PACKAGE_NAMES[@]}"; do
@@ -2049,7 +1974,6 @@ EOF
         fi
     done
 
-    # 如果所有包名都失败，提示用户
     if [ "$INSTALL_SUCCESS" = false ]; then
         echo -e "${RED}✗ 在Flathub仓库中未找到WPS Office包${NC}"
         echo ""
@@ -2060,7 +1984,6 @@ EOF
         return
     fi
 
-    # 创建桌面快捷方式
     echo ""
     echo "步骤5: 创建桌面快捷方式"
     cat > "$DESKTOP_DIR/WPS_Office.desktop" << EOF
@@ -2087,7 +2010,6 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 17. 安装QQ
 install_qq() {
     show_header
     echo -e "${YELLOW}════════════════ 安装QQ ════════════════${NC}"
@@ -2095,10 +2017,8 @@ install_qq() {
     APP_NAME="QQ"
     DESKTOP_FILE="$DESKTOP_DIR/QQ.desktop"
 
-    # 首先检查是否已安装QQ
     echo "正在检查是否已安装QQ..."
 
-    # 尝试查找已安装的QQ包
     INSTALLED_PACKAGE=""
     for PACKAGE in com.qq.QQ com.tencent.qq linuxqq; do
         if flatpak list | grep -q "$PACKAGE"; then
@@ -2108,12 +2028,10 @@ install_qq() {
     done
 
     if [ -n "$INSTALLED_PACKAGE" ]; then
-        # 已安装QQ
         echo -e "${GREEN}✓ 检测到已安装QQ${NC}"
         echo "已安装的包名: $INSTALLED_PACKAGE"
         echo ""
 
-        # 询问用户要执行的操作
         echo "请选择要执行的操作："
         echo "1. 创建桌面快捷方式"
         echo "2. 卸载QQ"
@@ -2123,7 +2041,6 @@ install_qq() {
 
         case $app_choice in
             1)
-                # 创建桌面快捷方式
                 echo "正在创建桌面快捷方式..."
                 cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
@@ -2139,11 +2056,9 @@ EOF
                 echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
                 ;;
             2)
-                # 卸载QQ
                 echo "正在卸载QQ..."
                 if flatpak uninstall "$INSTALLED_PACKAGE" -y; then
                     echo -e "${GREEN}✓ QQ卸载完成${NC}"
-                    # 删除桌面快捷方式
                     rm -f "$DESKTOP_FILE"
                 else
                     echo -e "${RED}✗ QQ卸载失败${NC}"
@@ -2159,11 +2074,9 @@ EOF
         return
     fi
 
-    # 未安装QQ，执行安装流程
     echo -e "${CYAN}未检测到QQ，开始安装...${NC}"
     echo ""
 
-    # 添加 Flathub 仓库（如果尚未添加）
     echo "步骤1: 添加Flathub仓库"
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null
 
@@ -2173,7 +2086,6 @@ EOF
         echo -e "${YELLOW}⚠️  Flathub仓库添加失败，尝试继续安装${NC}"
     fi
 
-    # 更新 Flatpak 仓库信息
     echo ""
     echo "步骤2: 更新Flatpak仓库信息"
     flatpak update --appstream 2>/dev/null
@@ -2184,13 +2096,11 @@ EOF
         echo -e "${YELLOW}⚠️  Flatpak仓库信息更新失败，尝试继续安装${NC}"
     fi
 
-    # 安装 QQ - 尝试不同的包名
     echo ""
     echo "步骤3: 安装QQ"
 
     INSTALL_SUCCESS=false
 
-    # 尝试可能的包名列表
     PACKAGE_NAMES=("com.qq.QQ" "com.tencent.qq" "io.github.msojocs.qq")
 
     for PACKAGE in "${PACKAGE_NAMES[@]}"; do
@@ -2203,7 +2113,6 @@ EOF
         fi
     done
 
-    # 如果所有包名都失败，提示用户
     if [ "$INSTALL_SUCCESS" = false ]; then
         echo -e "${RED}✗ 在Flathub仓库中未找到QQ包${NC}"
         echo ""
@@ -2214,7 +2123,6 @@ EOF
         return
     fi
 
-    # 创建桌面快捷方式
     echo ""
     echo "步骤4: 创建桌面快捷方式"
     cat > "$DESKTOP_FILE" << EOF
@@ -2241,7 +2149,6 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 18. 安装微信
 install_wechat() {
     show_header
     echo -e "${YELLOW}════════════════ 安装微信 ════════════════${NC}"
@@ -2249,10 +2156,8 @@ install_wechat() {
     APP_NAME="微信"
     DESKTOP_FILE="$DESKTOP_DIR/WeChat.desktop"
 
-    # 首先检查是否已安装微信
     echo "正在检查是否已安装微信..."
 
-    # 尝试查找已安装的微信包
     INSTALLED_PACKAGE=""
     for PACKAGE in com.tencent.WeChat com.qq.weixin com.tencent.wechat io.github.msojocs.wechat; do
         if flatpak list | grep -q "$PACKAGE"; then
@@ -2262,12 +2167,10 @@ install_wechat() {
     done
 
     if [ -n "$INSTALLED_PACKAGE" ]; then
-        # 已安装微信
         echo -e "${GREEN}✓ 检测到已安装微信${NC}"
         echo "已安装的包名: $INSTALLED_PACKAGE"
         echo ""
 
-        # 询问用户要执行的操作
         echo "请选择要执行的操作："
         echo "1. 创建桌面快捷方式"
         echo "2. 卸载微信"
@@ -2277,7 +2180,6 @@ install_wechat() {
 
         case $app_choice in
             1)
-                # 创建桌面快捷方式
                 echo "正在创建桌面快捷方式..."
                 cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
@@ -2293,11 +2195,9 @@ EOF
                 echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
                 ;;
             2)
-                # 卸载微信
                 echo "正在卸载微信..."
                 if flatpak uninstall "$INSTALLED_PACKAGE" -y; then
                     echo -e "${GREEN}✓ 微信卸载完成${NC}"
-                    # 删除桌面快捷方式
                     rm -f "$DESKTOP_FILE"
                 else
                     echo -e "${RED}✗ 微信卸载失败${NC}"
@@ -2313,11 +2213,9 @@ EOF
         return
     fi
 
-    # 未安装微信，执行安装流程
     echo -e "${CYAN}未检测到微信，开始安装...${NC}"
     echo ""
 
-    # 添加 Flathub 仓库（如果尚未添加）
     echo "步骤1: 添加Flathub仓库"
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null
 
@@ -2327,7 +2225,6 @@ EOF
         echo -e "${YELLOW}⚠️  Flathub仓库添加失败，尝试继续安装${NC}"
     fi
 
-    # 更新 Flatpak 仓库信息
     echo ""
     echo "步骤2: 更新Flatpak仓库信息"
     flatpak update --appstream 2>/dev/null
@@ -2338,13 +2235,11 @@ EOF
         echo -e "${YELLOW}⚠️  Flatpak仓库信息更新失败，尝试继续安装${NC}"
     fi
 
-    # 安装 微信 - 尝试不同的包名
     echo ""
     echo "步骤3: 安装微信"
 
     INSTALL_SUCCESS=false
 
-    # 尝试可能的包名列表（已将 com.tencent.WeChat 放在首位）
     PACKAGE_NAMES=("com.tencent.WeChat" "com.qq.weixin" "com.tencent.wechat" "io.github.msojocs.wechat")
 
     for PACKAGE in "${PACKAGE_NAMES[@]}"; do
@@ -2357,7 +2252,6 @@ EOF
         fi
     done
 
-    # 如果所有包名都失败，提示用户
     if [ "$INSTALL_SUCCESS" = false ]; then
         echo -e "${RED}✗ 在Flathub仓库中未找到微信包${NC}"
         echo ""
@@ -2368,7 +2262,6 @@ EOF
         return
     fi
 
-    # 创建桌面快捷方式
     echo ""
     echo "步骤4: 创建桌面快捷方式"
     cat > "$DESKTOP_FILE" << EOF
@@ -2395,7 +2288,6 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 19. 安装QQ音乐
 install_qqmusic() {
     show_header
     echo -e "${YELLOW}════════════════ 安装QQ音乐 ════════════════${NC}"
@@ -2403,10 +2295,8 @@ install_qqmusic() {
     APP_NAME="QQ音乐"
     DESKTOP_FILE="$DESKTOP_DIR/com.qq.QQmusic.desktop"
 
-    # 首先检查是否已安装QQ音乐
     echo "正在检查是否已安装QQ音乐..."
 
-    # 尝试查找已安装的QQ音乐包
     INSTALLED_PACKAGE=""
     for PACKAGE in com.qq.music com.qq.QQmusic; do
         if flatpak list | grep -q "$PACKAGE"; then
@@ -2416,12 +2306,10 @@ install_qqmusic() {
     done
 
     if [ -n "$INSTALLED_PACKAGE" ]; then
-        # 已安装QQ音乐
         echo -e "${GREEN}✓ 检测到已安装QQ音乐${NC}"
         echo "已安装的包名: $INSTALLED_PACKAGE"
         echo ""
 
-        # 询问用户要执行的操作
         echo "请选择要执行的操作："
         echo "1. 创建桌面快捷方式"
         echo "2. 卸载QQ音乐"
@@ -2431,7 +2319,6 @@ install_qqmusic() {
 
         case $app_choice in
             1)
-                # 创建桌面快捷方式
                 echo "正在创建桌面快捷方式..."
                 cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
@@ -2447,11 +2334,9 @@ EOF
                 echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
                 ;;
             2)
-                # 卸载QQ音乐
                 echo "正在卸载QQ音乐..."
                 if flatpak uninstall "$INSTALLED_PACKAGE" -y; then
                     echo -e "${GREEN}✓ QQ音乐卸载完成${NC}"
-                    # 删除桌面快捷方式
                     rm -f "$DESKTOP_FILE"
                 else
                     echo -e "${RED}✗ QQ音乐卸载失败${NC}"
@@ -2467,11 +2352,9 @@ EOF
         return
     fi
 
-    # 未安装QQ音乐，执行安装流程
     echo -e "${CYAN}未检测到QQ音乐，开始安装...${NC}"
     echo ""
 
-    # 添加 Flathub 仓库（如果尚未添加）
     echo "步骤1: 添加Flathub仓库"
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null
 
@@ -2481,7 +2364,6 @@ EOF
         echo -e "${YELLOW}⚠️  Flathub仓库添加失败，尝试继续安装${NC}"
     fi
 
-    # 更新 Flatpak 仓库信息
     echo ""
     echo "步骤2: 更新Flatpak仓库信息"
     flatpak update --appstream 2>/dev/null
@@ -2492,13 +2374,11 @@ EOF
         echo -e "${YELLOW}⚠️  Flatpak仓库信息更新失败，尝试继续安装${NC}"
     fi
 
-    # 安装 QQ音乐 - 尝试不同的包名
     echo ""
     echo "步骤3: 安装QQ音乐"
 
     INSTALL_SUCCESS=false
 
-    # 尝试可能的包名列表
     PACKAGE_NAMES=("com.qq.QQmusic" "com.tencent.QQmusic")
 
     for PACKAGE in "${PACKAGE_NAMES[@]}"; do
@@ -2511,7 +2391,6 @@ EOF
         fi
     done
 
-    # 如果所有包名都失败，提示用户
     if [ "$INSTALL_SUCCESS" = false ]; then
         echo -e "${RED}✗ 在Flathub仓库中未找到QQ音乐包${NC}"
         echo ""
@@ -2522,7 +2401,6 @@ EOF
         return
     fi
 
-    # 创建桌面快捷方式
     echo ""
     echo "步骤4: 创建桌面快捷方式"
     cat > "$DESKTOP_FILE" << EOF
@@ -2549,7 +2427,6 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 20. 安装百度网盘
 install_baidunetdisk() {
     show_header
     echo -e "${YELLOW}════════════════ 安装百度网盘 ════════════════${NC}"
@@ -2557,10 +2434,8 @@ install_baidunetdisk() {
     APP_NAME="百度网盘"
     DESKTOP_FILE="$DESKTOP_DIR/com.baidu.NetDisk.desktop"
 
-    # 首先检查是否已安装百度网盘
     echo "正在检查是否已安装百度网盘..."
 
-    # 尝试查找已安装的百度网盘包
     INSTALLED_PACKAGE=""
     for PACKAGE in com.baidu.NetDisk com.baidu.pan; do
         if flatpak list | grep -q "$PACKAGE"; then
@@ -2570,12 +2445,10 @@ install_baidunetdisk() {
     done
 
     if [ -n "$INSTALLED_PACKAGE" ]; then
-        # 已安装百度网盘
         echo -e "${GREEN}✓ 检测到已安装百度网盘${NC}"
         echo "已安装的包名: $INSTALLED_PACKAGE"
         echo ""
 
-        # 询问用户要执行的操作
         echo "请选择要执行的操作："
         echo "1. 创建桌面快捷方式"
         echo "2. 卸载百度网盘"
@@ -2585,7 +2458,6 @@ install_baidunetdisk() {
 
         case $app_choice in
             1)
-                # 创建桌面快捷方式
                 echo "正在创建桌面快捷方式..."
                 cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
@@ -2601,11 +2473,9 @@ EOF
                 echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
                 ;;
             2)
-                # 卸载百度网盘
                 echo "正在卸载百度网盘..."
                 if flatpak uninstall "$INSTALLED_PACKAGE" -y; then
                     echo -e "${GREEN}✓ 百度网盘卸载完成${NC}"
-                    # 删除桌面快捷方式
                     rm -f "$DESKTOP_FILE"
                 else
                     echo -e "${RED}✗ 百度网盘卸载失败${NC}"
@@ -2621,11 +2491,9 @@ EOF
         return
     fi
 
-    # 未安装百度网盘，执行安装流程
     echo -e "${CYAN}未检测到百度网盘，开始安装...${NC}"
     echo ""
 
-    # 添加 Flathub 仓库（如果尚未添加）
     echo "步骤1: 添加Flathub仓库"
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null
 
@@ -2635,7 +2503,6 @@ EOF
         echo -e "${YELLOW}⚠️  Flathub仓库添加失败，尝试继续安装${NC}"
     fi
 
-    # 更新 Flatpak 仓库信息
     echo ""
     echo "步骤2: 更新Flatpak仓库信息"
     flatpak update --appstream 2>/dev/null
@@ -2646,13 +2513,11 @@ EOF
         echo -e "${YELLOW}⚠️  Flatpak仓库信息更新失败，尝试继续安装${NC}"
     fi
 
-    # 安装 百度网盘 - 尝试不同的包名
     echo ""
     echo "步骤3: 安装百度网盘"
 
     INSTALL_SUCCESS=false
 
-    # 尝试可能的包名列表
     PACKAGE_NAMES=("com.baidu.NetDisk" "com.baidu.pan")
 
     for PACKAGE in "${PACKAGE_NAMES[@]}"; do
@@ -2665,7 +2530,6 @@ EOF
         fi
     done
 
-    # 如果所有包名都失败，提示用户
     if [ "$INSTALL_SUCCESS" = false ]; then
         echo -e "${RED}✗ 在Flathub仓库中未找到百度网盘包${NC}"
         echo ""
@@ -2676,7 +2540,6 @@ EOF
         return
     fi
 
-    # 创建桌面快捷方式
     echo ""
     echo "步骤4: 创建桌面快捷方式"
     cat > "$DESKTOP_FILE" << EOF
@@ -2703,7 +2566,6 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 21. 安装Edge浏览器
 install_edge() {
     show_header
     echo -e "${YELLOW}════════════════ 安装Edge浏览器 ════════════════${NC}"
@@ -2711,10 +2573,8 @@ install_edge() {
     APP_NAME="Edge浏览器"
     DESKTOP_FILE="$DESKTOP_DIR/Microsoft_Edge.desktop"
 
-    # 首先检查是否已安装Edge浏览器
     echo "正在检查是否已安装Edge浏览器..."
 
-    # 尝试查找已安装的Edge浏览器包
     INSTALLED_PACKAGE=""
     for PACKAGE in com.microsoft.Edge org.mozilla.firefox; do
         if flatpak list | grep -q "$PACKAGE"; then
@@ -2724,12 +2584,10 @@ install_edge() {
     done
 
     if [ -n "$INSTALLED_PACKAGE" ]; then
-        # 已安装Edge浏览器
         echo -e "${GREEN}✓ 检测到已安装Edge浏览器${NC}"
         echo "已安装的包名: $INSTALLED_PACKAGE"
         echo ""
 
-        # 询问用户要执行的操作
         echo "请选择要执行的操作："
         echo "1. 创建桌面快捷方式"
         echo "2. 卸载Edge浏览器"
@@ -2739,7 +2597,6 @@ install_edge() {
 
         case $app_choice in
             1)
-                # 创建桌面快捷方式
                 echo "正在创建桌面快捷方式..."
                 cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
@@ -2755,11 +2612,9 @@ EOF
                 echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
                 ;;
             2)
-                # 卸载Edge浏览器
                 echo "正在卸载Edge浏览器..."
                 if flatpak uninstall "$INSTALLED_PACKAGE" -y; then
                     echo -e "${GREEN}✓ Edge浏览器卸载完成${NC}"
-                    # 删除桌面快捷方式
                     rm -f "$DESKTOP_FILE"
                 else
                     echo -e "${RED}✗ Edge浏览器卸载失败${NC}"
@@ -2775,11 +2630,9 @@ EOF
         return
     fi
 
-    # 未安装Edge浏览器，执行安装流程
     echo -e "${CYAN}未检测到Edge浏览器，开始安装...${NC}"
     echo ""
 
-    # 添加 Flathub 仓库（如果尚未添加）
     echo "步骤1: 添加Flathub仓库"
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null
 
@@ -2789,7 +2642,6 @@ EOF
         echo -e "${YELLOW}⚠️  Flathub仓库添加失败，尝试继续安装${NC}"
     fi
 
-    # 更新 Flatpak 仓库信息
     echo ""
     echo "步骤2: 更新Flatpak仓库信息"
     flatpak update --appstream 2>/dev/null
@@ -2800,13 +2652,11 @@ EOF
         echo -e "${YELLOW}⚠️  Flatpak仓库信息更新失败，尝试继续安装${NC}"
     fi
 
-    # 安装 Edge浏览器 - 尝试不同的包名
     echo ""
     echo "步骤3: 安装Edge浏览器"
 
     INSTALL_SUCCESS=false
 
-    # 尝试可能的包名列表
     PACKAGE_NAMES=("com.microsoft.Edge" "org.mozilla.firefox" "com.google.Chrome")
 
     for PACKAGE in "${PACKAGE_NAMES[@]}"; do
@@ -2819,7 +2669,6 @@ EOF
         fi
     done
 
-    # 如果所有包名都失败，提示用户
     if [ "$INSTALL_SUCCESS" = false ]; then
         echo -e "${RED}✗ 在Flathub仓库中未找到Edge浏览器包${NC}"
         echo ""
@@ -2830,7 +2679,6 @@ EOF
         return
     fi
 
-    # 创建桌面快捷方式
     echo ""
     echo "步骤4: 创建桌面快捷方式"
     cat > "$DESKTOP_FILE" << EOF
@@ -2857,7 +2705,6 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 22. 安装Google浏览器
 install_chrome() {
     show_header
     echo -e "${YELLOW}════════════════ 安装Google浏览器 ════════════════${NC}"
@@ -2865,10 +2712,8 @@ install_chrome() {
     APP_NAME="Google浏览器"
     DESKTOP_FILE="$DESKTOP_DIR/Google_Chrome.desktop"
 
-    # 首先检查是否已安装Google浏览器
     echo "正在检查是否已安装Google浏览器..."
 
-    # 尝试查找已安装的Google浏览器包
     INSTALLED_PACKAGE=""
     for PACKAGE in com.google.Chrome org.chromium.Chromium; do
         if flatpak list | grep -q "$PACKAGE"; then
@@ -2878,12 +2723,10 @@ install_chrome() {
     done
 
     if [ -n "$INSTALLED_PACKAGE" ]; then
-        # 已安装Google浏览器
         echo -e "${GREEN}✓ 检测到已安装Google浏览器${NC}"
         echo "已安装的包名: $INSTALLED_PACKAGE"
         echo ""
 
-        # 询问用户要执行的操作
         echo "请选择要执行的操作："
         echo "1. 创建桌面快捷方式"
         echo "2. 卸载Google浏览器"
@@ -2893,7 +2736,6 @@ install_chrome() {
 
         case $app_choice in
             1)
-                # 创建桌面快捷方式
                 echo "正在创建桌面快捷方式..."
                 cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
@@ -2909,11 +2751,9 @@ EOF
                 echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
                 ;;
             2)
-                # 卸载Google浏览器
                 echo "正在卸载Google浏览器..."
                 if flatpak uninstall "$INSTALLED_PACKAGE" -y; then
                     echo -e "${GREEN}✓ Google浏览器卸载完成${NC}"
-                    # 删除桌面快捷方式
                     rm -f "$DESKTOP_FILE"
                 else
                     echo -e "${RED}✗ Google浏览器卸载失败${NC}"
@@ -2929,11 +2769,9 @@ EOF
         return
     fi
 
-    # 未安装Google浏览器，执行安装流程
     echo -e "${CYAN}未检测到Google浏览器，开始安装...${NC}"
     echo ""
 
-    # 添加 Flathub 仓库（如果尚未添加）
     echo "步骤1: 添加Flathub仓库"
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null
 
@@ -2943,7 +2781,6 @@ EOF
         echo -e "${YELLOW}⚠️  Flathub仓库添加失败，尝试继续安装${NC}"
     fi
 
-    # 更新 Flatpak 仓库信息
     echo ""
     echo "步骤2: 更新Flatpak仓库信息"
     flatpak update --appstream 2>/dev/null
@@ -2954,13 +2791,11 @@ EOF
         echo -e "${YELLOW}⚠️  Flatpak仓库信息更新失败，尝试继续安装${NC}"
     fi
 
-    # 安装 Google浏览器 - 尝试不同的包名
     echo ""
     echo "步骤3: 安装Google浏览器"
 
     INSTALL_SUCCESS=false
 
-    # 尝试可能的包名列表
     PACKAGE_NAMES=("com.google.Chrome" "org.chromium.Chromium")
 
     for PACKAGE in "${PACKAGE_NAMES[@]}"; do
@@ -2973,7 +2808,6 @@ EOF
         fi
     done
 
-    # 如果所有包名都失败，提示用户
     if [ "$INSTALL_SUCCESS" = false ]; then
         echo -e "${RED}✗ 在Flathub仓库中未找到Google浏览器包${NC}"
         echo ""
@@ -2984,7 +2818,6 @@ EOF
         return
     fi
 
-    # 创建桌面快捷方式
     echo ""
     echo "步骤4: 创建桌面快捷方式"
     cat > "$DESKTOP_FILE" << EOF
@@ -3011,7 +2844,6 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# 23. Steam Deck缓存管理器
 steamdeck_cache_manager() {
     show_header
     echo -e "${YELLOW}════════════════ Steam Deck 缓存管理器 ════════════════${NC}"
@@ -3021,7 +2853,6 @@ steamdeck_cache_manager() {
     echo "该功能需要图形界面支持，请确保您在桌面模式下运行。"
     echo ""
 
-    # 检查是否在桌面模式下
     if [ -z "$DISPLAY" ]; then
         echo -e "${RED}错误：未检测到图形界面环境。${NC}"
         echo "请确保在桌面模式下运行此功能。"
@@ -3030,11 +2861,9 @@ steamdeck_cache_manager() {
         return
     fi
 
-    # 检查zenity是否安装
     if ! command -v zenity &> /dev/null; then
         echo -e "${YELLOW}未找到zenity工具，正在尝试安装...${NC}"
 
-        # 尝试安装zenity
         if command -v pacman &> /dev/null; then
             echo "正在安装zenity..."
             sudo pacman -Sy --noconfirm zenity
@@ -3049,7 +2878,6 @@ steamdeck_cache_manager() {
             return
         fi
 
-        # 再次检查zenity是否安装成功
         if ! command -v zenity &> /dev/null; then
             echo -e "${RED}✗ Zenity安装失败！${NC}"
             echo ""
@@ -3061,25 +2889,20 @@ steamdeck_cache_manager() {
     echo -e "${GREEN}✓ 环境检查完成，启动缓存管理器...${NC}"
     echo ""
 
-    # 执行缓存管理器
     exec_steamdeck_cache_manager
 }
 
-# 执行缓存管理器主程序
 exec_steamdeck_cache_manager() {
-    # 缓存管理器配置
     local live=1
     local tmp_dir="$TEMP_DIR/steamdeck_cache_manager"
     local steamapps_dir="/home/deck/.local/share/Steam/steamapps"
     local cache_type="shadercache"
 
-    # 创建临时目录
     function create_temp_dirs() {
         mkdir -p "$tmp_dir"
         echo "临时目录: $tmp_dir"
     }
 
-    # 检查环境
     function check_environment() {
         if [ ! -d "$steamapps_dir" ]; then
             zenity --error --width=400 \
@@ -3094,18 +2917,14 @@ exec_steamdeck_cache_manager() {
         return 0
     }
 
-    # 查找所有Steam库目录
     function find_steam_libraries() {
         local libraries=()
 
-        # 首先添加默认库
         if [ -d "$steamapps_dir" ]; then
             libraries+=("$steamapps_dir")
         fi
 
-        # 从libraryfolders.vdf中查找其他库
         if [ -f "$steamapps_dir/libraryfolders.vdf" ]; then
-            # 使用更简单的方法解析VDF文件，避免grep警告
             while read -r line; do
                 if [[ "$line" =~ \"path\"[[:space:]]*\"([^\"]*)\" ]]; then
                     local path="${BASH_REMATCH[1]}"
@@ -3122,7 +2941,6 @@ exec_steamdeck_cache_manager() {
         echo "${libraries[@]}"
     }
 
-    # 获取游戏安装信息
     function get_game_install_info() {
         local app_id="$1"
         local libraries=($(find_steam_libraries))
@@ -3130,12 +2948,10 @@ exec_steamdeck_cache_manager() {
         for lib in "${libraries[@]}"; do
             local manifest="$lib/appmanifest_${app_id}.acf"
             if [ -f "$manifest" ]; then
-                # 从manifest文件中提取游戏名称和安装目录
                 local game_name=$(grep '"name"' "$manifest" | cut -d'"' -f4)
                 local install_dir=$(grep '"installdir"' "$manifest" | cut -d'"' -f4)
 
                 if [ -n "$game_name" ] && [ -n "$install_dir" ]; then
-                    # 查找游戏实际安装路径
                     local game_path="$lib/common/$install_dir"
                     if [ -d "$game_path" ]; then
                         echo "$game_name|$game_path"
@@ -3149,42 +2965,34 @@ exec_steamdeck_cache_manager() {
         return 1
     }
 
-    # 获取删除列表（着色器缓存或兼容数据）
     function get_delete_list() {
         local cache_type="$1"
 
-        # 清空临时文件
         rm -f "$tmp_dir/delete_list.txt" 2>/dev/null
 
-        # 检查缓存目录是否存在
         if [ ! -d "$steamapps_dir/$cache_type" ]; then
             echo "FALSE|0|0|No $cache_type directory found|N/A|$steamapps_dir/$cache_type" > "$tmp_dir/delete_list.txt"
             return
         fi
 
-        # 遍历缓存目录
         local count=0
         for cache_dir in "$steamapps_dir/$cache_type"/*; do
             if [ -d "$cache_dir" ]; then
                 local app_id=$(basename "$cache_dir")
 
-                # 跳过非数字目录（如Proton版本）
                 if [[ ! "$app_id" =~ ^[0-9]+$ ]]; then
                     continue
                 fi
 
-                # 计算大小
                 local size=$(du -sm "$cache_dir" 2>/dev/null | cut -f1)
                 if [ -z "$size" ] || [ "$size" -eq 0 ]; then
                     continue
                 fi
 
-                # 获取游戏信息
                 local game_info=$(get_game_install_info "$app_id")
                 local game_name=$(echo "$game_info" | cut -d'|' -f1)
                 local game_path=$(echo "$game_info" | cut -d'|' -f2)
 
-                # 判断状态
                 local status="Unknown"
                 if [ "$game_name" != "Unknown" ] && [ -d "$game_path" ]; then
                     status="Installed"
@@ -3192,42 +3000,34 @@ exec_steamdeck_cache_manager() {
                     status="Uninstalled"
                 fi
 
-                # 添加到列表
                 echo "FALSE|$size|$app_id|$game_name|$status|$cache_dir" >> "$tmp_dir/delete_list.txt"
                 count=$((count+1))
             fi
         done
 
-        # 如果没有找到任何缓存
         if [ $count -eq 0 ]; then
             echo "FALSE|0|0|No $cache_type found|N/A|$steamapps_dir/$cache_type" > "$tmp_dir/delete_list.txt"
         fi
     }
 
-    # 获取移动列表（着色器缓存或兼容数据）
     function get_move_list() {
         local cache_type="$1"
 
-        # 清空临时文件
         rm -f "$tmp_dir/move_list.txt" 2>/dev/null
 
-        # 检查缓存目录是否存在
         if [ ! -d "$steamapps_dir/$cache_type" ]; then
             echo "FALSE|0|0|No $cache_type directory found|N/A|N/A" > "$tmp_dir/move_list.txt"
             return
         fi
 
-        # 查找所有已安装的游戏（在非默认位置）
         local libraries=($(find_steam_libraries))
         local count=0
 
         for lib in "${libraries[@]}"; do
-            # 跳过默认库，只处理其他位置的库
             if [ "$lib" == "$steamapps_dir" ]; then
                 continue
             fi
 
-            # 查找该库中的所有游戏
             for manifest in "$lib"/appmanifest_*.acf; do
                 if [ -f "$manifest" ]; then
                     local app_id=$(basename "$manifest" | sed 's/appmanifest_\(.*\)\.acf/\1/')
@@ -3235,16 +3035,12 @@ exec_steamdeck_cache_manager() {
                     local install_dir=$(grep '"installdir"' "$manifest" | cut -d'"' -f4)
 
                     if [ -n "$app_id" ] && [ -n "$game_name" ] && [ -n "$install_dir" ]; then
-                        # 检查该游戏是否有缓存
                         local cache_dir="$steamapps_dir/$cache_type/$app_id"
                         if [ -d "$cache_dir" ] && [ ! -L "$cache_dir" ]; then
-                            # 计算缓存大小
                             local size=$(du -sm "$cache_dir" 2>/dev/null | cut -f1)
                             if [ -n "$size" ] && [ "$size" -gt 0 ]; then
-                                # 游戏安装路径
                                 local game_path="$lib/common/$install_dir"
 
-                                # 添加到列表
                                 echo "FALSE|$size|$app_id|$game_name|$game_path" >> "$tmp_dir/move_list.txt"
                                 count=$((count+1))
                             fi
@@ -3254,13 +3050,11 @@ exec_steamdeck_cache_manager() {
             done
         done
 
-        # 如果没有找到可移动的缓存
         if [ $count -eq 0 ]; then
             echo "FALSE|0|0|No $cache_type to move|N/A" > "$tmp_dir/move_list.txt"
         fi
     }
 
-    # 显示删除对话框
     function show_delete_dialog() {
         local cache_type="$1"
         local title="选择要删除的$cache_type"
@@ -3269,7 +3063,6 @@ exec_steamdeck_cache_manager() {
             title="⚠  警告：选择要删除的兼容数据（将破坏游戏配置！）"
         fi
 
-        # 读取列表文件
         local zenity_items=()
         while IFS='|' read -r check size app_id game_name status path; do
             if [ "$size" != "0" ] && [ "$app_id" != "0" ]; then
@@ -3277,14 +3070,12 @@ exec_steamdeck_cache_manager() {
             fi
         done < "$tmp_dir/delete_list.txt"
 
-        # 如果没有项目，显示提示并返回
         if [ ${#zenity_items[@]} -eq 0 ]; then
             zenity --info --width=400 --text="没有找到可删除的$cache_type。"
             echo "empty"
             return
         fi
 
-        # 显示选择对话框
         local selected=$(zenity --list \
             --title="$title" \
             --width=1200 --height=600 \
@@ -3304,11 +3095,9 @@ exec_steamdeck_cache_manager() {
         echo "$selected"
     }
 
-    # 显示移动对话框
     function show_move_dialog() {
         local cache_type="$1"
 
-        # 读取列表文件
         local zenity_items=()
         while IFS='|' read -r check size app_id game_name game_path; do
             if [ "$size" != "0" ] && [ "$app_id" != "0" ]; then
@@ -3316,14 +3105,12 @@ exec_steamdeck_cache_manager() {
             fi
         done < "$tmp_dir/move_list.txt"
 
-        # 如果没有项目，显示提示并返回
         if [ ${#zenity_items[@]} -eq 0 ]; then
             zenity --info --width=400 --text="没有找到可移动的$cache_type。"
             echo "empty"
             return
         fi
 
-        # 显示选择对话框
         local selected=$(zenity --list \
             --title="选择要移动到游戏安装目录的$cache_type" \
             --width=1200 --height=600 \
@@ -3342,7 +3129,6 @@ exec_steamdeck_cache_manager() {
         echo "$selected"
     }
 
-    # 执行删除操作
     function perform_delete() {
         local cache_type="$1"
         local selected_items="$2"
@@ -3351,7 +3137,6 @@ exec_steamdeck_cache_manager() {
             return 1
         fi
 
-        # 将选中的项目转换为数组
         IFS='|' read -ra selected_array <<< "$selected_items"
 
         if [ ${#selected_array[@]} -eq 0 ]; then
@@ -3359,7 +3144,6 @@ exec_steamdeck_cache_manager() {
             return 1
         fi
 
-        # 显示确认对话框
         if [ "$cache_type" = "compatdata" ]; then
             zenity --question --width=500 \
                 --text="⚠  严重警告！\n\n删除兼容数据将：\n• 删除游戏存档和设置\n• 删除Wine前缀配置\n• 可能导致游戏无法启动\n\n仅当您知道自己在做什么时才继续！\n确定要删除选中的兼容数据吗？"
@@ -3376,7 +3160,6 @@ exec_steamdeck_cache_manager() {
             fi
         fi
 
-        # 显示进度条
         (
             local total=${#selected_array[@]}
             local current=0
@@ -3409,7 +3192,6 @@ exec_steamdeck_cache_manager() {
         return $?
     }
 
-    # 执行移动操作
     function perform_move() {
         local cache_type="$1"
         local selected_items="$2"
@@ -3418,7 +3200,6 @@ exec_steamdeck_cache_manager() {
             return 1
         fi
 
-        # 将选中的项目转换为数组
         IFS='|' read -ra selected_array <<< "$selected_items"
 
         if [ ${#selected_array[@]} -eq 0 ]; then
@@ -3426,7 +3207,6 @@ exec_steamdeck_cache_manager() {
             return 1
         fi
 
-        # 显示进度条
         (
             local total=${#selected_array[@]}
             local current=0
@@ -3435,7 +3215,6 @@ exec_steamdeck_cache_manager() {
                 ((current++))
                 local percentage=$((current * 100 / total))
 
-                # 查找游戏信息
                 local game_info=$(get_game_install_info "$app_id")
                 local game_name=$(echo "$game_info" | cut -d'|' -f1)
                 local game_path=$(echo "$game_info" | cut -d'|' -f2)
@@ -3447,15 +3226,11 @@ exec_steamdeck_cache_manager() {
                     local source_dir="$steamapps_dir/$cache_type/$app_id"
                     local target_dir="$game_path/$cache_type"
 
-                    # 创建目标目录
                     mkdir -p "$target_dir" 2>/dev/null
 
-                    # 复制文件
                     if cp -r "$source_dir" "$target_dir/" 2>/dev/null; then
-                        # 删除原始文件
                         rm -rf "$source_dir" 2>/dev/null
 
-                        # 创建符号链接
                         ln -s "$target_dir/$app_id" "$source_dir" 2>/dev/null
                     fi
                 fi
@@ -3477,7 +3252,6 @@ exec_steamdeck_cache_manager() {
         return $?
     }
 
-    # 显示主菜单
     function show_main_menu() {
         local choice=$(zenity --list \
             --title="Steam Deck 缓存管理器" \
@@ -3495,7 +3269,6 @@ exec_steamdeck_cache_manager() {
         echo "$choice"
     }
 
-    # 显示状态信息
     function show_status() {
         local mode_text=""
         if [ $live -eq 1 ]; then
@@ -3523,17 +3296,12 @@ exec_steamdeck_cache_manager() {
         echo "============================="
     }
 
-    # 主程序
     function cache_manager_main() {
-        # 检查环境
         check_environment || return 1
 
-        # 创建临时目录
         create_temp_dirs
 
-        # 主循环
         while true; do
-            # 显示主菜单
             local choice=$(show_main_menu)
 
             if [ $? -ne 0 ] || [ -z "$choice" ]; then
@@ -3620,7 +3388,6 @@ exec_steamdeck_cache_manager() {
         done
     }
 
-    # 运行缓存管理器
     cache_manager_main
 
     echo ""
@@ -3628,7 +3395,6 @@ exec_steamdeck_cache_manager() {
     read -p "按回车键返回主菜单..."
 }
 
-# 24. 更新已安装应用
 update_installed_apps() {
     show_header
     echo -e "${YELLOW}════════════════ 更新已安装应用 ════════════════${NC}"
@@ -3643,11 +3409,9 @@ update_installed_apps() {
 
     case $update_choice in
         1)
-            # 更新指定应用
             update_specific_app
             ;;
         2)
-            # 更新全部应用
             update_all_apps
             ;;
         *)
@@ -3659,7 +3423,6 @@ update_installed_apps() {
     read -p "按回车键返回主菜单..."
 }
 
-# 更新指定应用
 update_specific_app() {
     show_header
     echo -e "${YELLOW}════════════════ 更新指定应用 ════════════════${NC}"
@@ -3680,35 +3443,27 @@ update_specific_app() {
 
     case $app_choice in
         1)
-            # 更新AnyDesk
             update_app_by_name "AnyDesk" "com.anydesk.Anydesk"
             ;;
         2)
-            # 更新WPS Office
             update_app_by_name "WPS Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps" "org.wps.Office"
             ;;
         3)
-            # 更新QQ
             update_app_by_name "QQ" "com.qq.QQ" "com.tencent.qq" "io.github.msojocs.qq"
             ;;
         4)
-            # 更新微信
             update_app_by_name "微信" "com.tencent.WeChat" "com.qq.weixin" "com.tencent.wechat" "io.github.msojocs.wechat"
             ;;
         5)
-            # 更新QQ音乐
             update_app_by_name "QQ音乐" "com.qq.QQmusic" "com.tencent.QQmusic"
             ;;
         6)
-            # 更新百度网盘
             update_app_by_name "百度网盘" "com.baidu.NetDisk" "com.baidu.pan"
             ;;
         7)
-            # 更新Edge浏览器
             update_app_by_name "Edge浏览器" "com.microsoft.Edge" "org.mozilla.firefox" "com.google.Chrome"
             ;;
         8)
-            # 更新Google浏览器
             update_app_by_name "Google浏览器" "com.google.Chrome" "org.chromium.Chromium"
             ;;
         *)
@@ -3719,7 +3474,6 @@ update_specific_app() {
     esac
 }
 
-# 通用应用更新函数
 update_app_by_name() {
     local app_name="$1"
     shift
@@ -3728,7 +3482,6 @@ update_app_by_name() {
     echo ""
     echo -e "${CYAN}正在检查$app_name的更新...${NC}"
 
-    # 查找已安装的包
     local installed_package=""
     for package in "${packages[@]}"; do
         if flatpak list | grep -q "$package"; then
@@ -3752,7 +3505,6 @@ update_app_by_name() {
     fi
 }
 
-# 更新全部应用
 update_all_apps() {
     show_header
     echo -e "${YELLOW}════════════════ 更新全部应用 ════════════════${NC}"
@@ -3760,7 +3512,6 @@ update_all_apps() {
 
     echo -e "${CYAN}正在更新所有已安装的应用...${NC}"
 
-    # 更新所有应用
     flatpak update -y 2>/dev/null
 
     if [ $? -eq 0 ]; then
@@ -3770,7 +3521,6 @@ update_all_apps() {
     fi
 }
 
-# 25. 卸载已安装应用
 uninstall_apps() {
     show_header
     echo -e "${YELLOW}════════════════ 卸载已安装应用 ════════════════${NC}"
@@ -3791,35 +3541,27 @@ uninstall_apps() {
 
     case $app_choice in
         1)
-            # 卸载AnyDesk
             uninstall_app_by_name "AnyDesk" "com.anydesk.Anydesk" "$DESKTOP_DIR/AnyDesk.desktop"
             ;;
         2)
-            # 卸载WPS Office
             uninstall_app_by_name "WPS Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps" "org.wps.Office" "$DESKTOP_DIR/WPS_Office.desktop"
             ;;
         3)
-            # 卸载QQ
             uninstall_app_by_name "QQ" "com.qq.QQ" "com.tencent.qq" "io.github.msojocs.qq" "$DESKTOP_DIR/QQ.desktop"
             ;;
         4)
-            # 卸载微信
             uninstall_app_by_name "微信" "com.tencent.WeChat" "com.qq.weixin" "com.tencent.wechat" "io.github.msojocs.wechat" "$DESKTOP_DIR/WeChat.desktop"
             ;;
         5)
-            # 卸载QQ音乐
             uninstall_app_by_name "QQ音乐" "com.qq.QQmusic" "com.tencent.QQmusic" "$DESKTOP_DIR/com.qq.QQmusic.desktop"
             ;;
         6)
-            # 卸载百度网盘
             uninstall_app_by_name "百度网盘" "com.baidu.NetDisk" "com.baidu.pan" "$DESKTOP_DIR/com.baidu.NetDisk.desktop"
             ;;
         7)
-            # 卸载Edge浏览器
             uninstall_app_by_name "Edge浏览器" "com.microsoft.Edge" "org.mozilla.firefox" "com.google.Chrome" "$DESKTOP_DIR/Microsoft_Edge.desktop"
             ;;
         8)
-            # 卸载Google浏览器
             uninstall_app_by_name "Google浏览器" "com.google.Chrome" "org.chromium.Chromium" "$DESKTOP_DIR/Google_Chrome.desktop"
             ;;
         *)
@@ -3829,21 +3571,17 @@ uninstall_apps() {
     esac
 }
 
-# 通用应用卸载函数
 uninstall_app_by_name() {
     local app_name="$1"
     shift
     local packages=("$@")
 
-    # 最后一个参数是桌面快捷方式路径
     local desktop_file="${!#}"
-    # 移除最后一个参数（桌面快捷方式路径）
     set -- "${@:1:$(($#-1))}"
 
     echo ""
     echo -e "${CYAN}正在检查是否已安装$app_name...${NC}"
 
-    # 查找已安装的包
     local installed_package=""
     for package in "${packages[@]}"; do
         if flatpak list | grep -q "$package"; then
@@ -3868,7 +3606,6 @@ uninstall_app_by_name() {
         if flatpak uninstall "$installed_package" -y 2>/dev/null; then
             echo -e "${GREEN}✓ $app_name 卸载完成${NC}"
 
-            # 删除桌面快捷方式
             if [ -f "$desktop_file" ]; then
                 rm -f "$desktop_file"
                 echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
@@ -3880,7 +3617,6 @@ uninstall_app_by_name() {
         echo -e "${YELLOW}⚠️  未检测到已安装的$app_name${NC}"
         echo "无需卸载。"
 
-        # 如果桌面快捷方式存在但应用未安装，询问是否删除快捷方式
         if [ -f "$desktop_file" ]; then
             echo "检测到残留的桌面快捷方式。"
             read -p "是否删除桌面快捷方式？(输入 y 确认，其他键取消): " -n 1 -r
@@ -3895,21 +3631,16 @@ uninstall_app_by_name() {
     read -p "按回车键返回..."
 }
 
-# 26. 安装小黄鸭软件
 install_yellow_duck_software() {
     show_header
     echo -e "${YELLOW}════════════════ 安装小黄鸭软件 ════════════════${NC}"
 
-    # 保存到临时文件并执行
     local temp_dir="$TEMP_DIR/yellow_duck_software"
     mkdir -p "$temp_dir"
 
     cat > "$temp_dir/install_lossless_scaling.sh" << 'EOF'
 #!/bin/bash
 
-# ==========================================
-# 函数：检测是否已安装小黄鸭软件
-# ==========================================
 check_lossless_scaling() {
     echo "检测小黄鸭软件安装状态..."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -3943,20 +3674,15 @@ check_lossless_scaling() {
     fi
 }
 
-# ==========================================
-# 函数：检查并安装解压工具
-# ==========================================
 check_zip_tools() {
     echo "检查必要的解压工具..."
 
     local missing_tools=()
 
-    # 检查 zip 工具（用于分卷解压）
     if ! command -v zip &> /dev/null; then
         missing_tools+=("zip")
     fi
 
-    # 检查 unzip 工具
     if ! command -v unzip &> /dev/null; then
         missing_tools+=("unzip")
     fi
@@ -3970,7 +3696,6 @@ check_zip_tools() {
             echo "正在安装必要的工具..."
             sudo pacman -S --needed --noconfirm "${missing_tools[@]}"
 
-            # 再次检查是否安装成功
             for tool in "${missing_tools[@]}"; do
                 if ! command -v "$tool" &> /dev/null; then
                     echo "❌ 安装 $tool 失败，请手动安装后再运行脚本。"
@@ -3988,14 +3713,10 @@ check_zip_tools() {
     echo ""
 }
 
-# ==========================================
-# 函数：从Gitee克隆仓库
-# ==========================================
 clone_from_gitee() {
     local CLONE_DIR="$HOME/lossless-scaling-repo"
     local GITEE_REPO="https://gitee.com/Zhucy2100/lossless-scaling.git"
 
-    # 清理旧目录
     if [[ -d "$CLONE_DIR" ]]; then
         echo "清理旧仓库目录..."
         rm -rf "$CLONE_DIR"
@@ -4025,12 +3746,8 @@ clone_from_gitee() {
     fi
 }
 
-# ==========================================
-# 函数：验证分卷文件（7个分卷）
-# ==========================================
 validate_split_files() {
     local CLONE_DIR="$1"
-    # 定义7个分卷文件
     local split_files=(
         "Lossless Scaling.zip.001"
         "Lossless Scaling.zip.002"
@@ -4061,12 +3778,10 @@ validate_split_files() {
         return 1
     fi
 
-    # 显示找到的文件
     echo "✅ 找到所有7个分卷文件:"
     for file in "${split_files[@]}"; do
         local file_size=$(stat -c%s "$CLONE_DIR/$file" 2>/dev/null || stat -f%z "$CLONE_DIR/$file" 2>/dev/null)
         if [[ $file_size -gt 0 ]]; then
-            # 将字节转换为MB
             local size_mb=$(echo "scale=2; $file_size / 1024 / 1024" | bc)
             echo "   - $file (${size_mb} MB)"
         else
@@ -4079,9 +3794,6 @@ validate_split_files() {
     return 0
 }
 
-# ==========================================
-# 函数：合并并解压7个分卷文件
-# ==========================================
 extract_split_files() {
     local CLONE_DIR="$1"
     local TARGET_DIR="/home/deck/.local/share/Steam/steamapps/common"
@@ -4091,7 +3803,6 @@ extract_split_files() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
-    # 1. 确保目标目录存在
     echo "检查目标目录: $TARGET_DIR"
     if [[ ! -d "$TARGET_DIR" ]]; then
         echo "创建目标目录..."
@@ -4099,23 +3810,19 @@ extract_split_files() {
         sudo chown deck:deck "$TARGET_DIR"
     fi
 
-    # 2. 切换到克隆目录
     cd "$CLONE_DIR" || {
         echo "❌ 无法进入目录: $CLONE_DIR"
         return 1
     }
 
-    # 3. 合并7个分卷文件
     echo "正在合并7个分卷文件..."
     echo "注意：合并过程可能需要一些时间，请耐心等待..."
 
-    # 检查是否有合并所需的文件
     if ls "Lossless Scaling.zip."* > /dev/null 2>&1; then
         echo "找到分卷文件，开始合并..."
         if cat "Lossless Scaling.zip."* > "Lossless-Scaling-Combined.zip"; then
             echo "✅ 7个分卷文件合并完成。"
 
-            # 4. 验证合并后的zip文件
             echo "验证合并后的文件..."
             if unzip -tq "Lossless-Scaling-Combined.zip" > /dev/null 2>&1; then
                 echo "✅ ZIP文件完整性验证通过。"
@@ -4123,29 +3830,23 @@ extract_split_files() {
                 echo "⚠️  ZIP文件完整性验证失败，但继续解压..."
             fi
 
-            # 5. 解压文件
             echo ""
             echo "正在解压到目标目录: $TARGET_DIR"
 
-            # 使用unzip解压，保持原始权限
             if unzip -o "Lossless-Scaling-Combined.zip" -d "$TARGET_DIR" 2>&1 | tail -20; then
                 echo ""
                 echo "✅ 解压完成！"
 
-                # 6. 清理合并的临时文件
                 echo "清理临时文件..."
                 rm -f "Lossless-Scaling-Combined.zip"
 
-                # 7. 检查解压结果
                 local EXTRACTED_DIR="$TARGET_DIR/Lossless Scaling"
                 if [[ -d "$EXTRACTED_DIR" ]]; then
                     echo "解压目录: $EXTRACTED_DIR"
 
-                    # 确保文件权限正确
                     sudo chown -R deck:deck "$EXTRACTED_DIR"
                     sudo chmod -R 755 "$EXTRACTED_DIR"
 
-                    # 检查是否有可执行文件
                     local exe_files=$(find "$EXTRACTED_DIR" -name "*.exe" -o -name "*.EXE" | head -5)
                     if [[ -n "$exe_files" ]]; then
                         echo "找到的可执行文件:"
@@ -4154,7 +3855,6 @@ extract_split_files() {
                         done
                     fi
 
-                    # 计算并显示总大小
                     local total_size=$(du -sh "$EXTRACTED_DIR" 2>/dev/null | cut -f1)
                     echo "安装总大小: $total_size"
 
@@ -4187,9 +3887,6 @@ extract_split_files() {
     fi
 }
 
-# ==========================================
-# 函数：清理仓库
-# ==========================================
 cleanup_repository() {
     local CLONE_DIR="$1"
 
@@ -4204,9 +3901,6 @@ cleanup_repository() {
     fi
 }
 
-# ==========================================
-# 函数：显示安装完成信息
-# ==========================================
 show_installation_complete() {
     local INSTALL_DIR="/home/deck/.local/share/Steam/steamapps/common/Lossless Scaling"
 
@@ -4231,9 +3925,6 @@ show_installation_complete() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
-# ==========================================
-# 主函数
-# ==========================================
 main() {
     clear
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -4242,17 +3933,12 @@ main() {
     echo "使用国内Gitee仓库，下载速度更快"
     echo ""
 
-    # 步骤1: 检查是否已安装
     if check_lossless_scaling; then
-        # 如果已安装且用户选择不卸载，脚本会退出
-        # 如果用户选择卸载，卸载后也会退出
         return
     fi
 
-    # 步骤2: 检查解压工具
     check_zip_tools
 
-    # 步骤3: 确认安装
     echo ""
     echo "即将安装小黄鸭软件 (Lossless Scaling)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -4270,53 +3956,41 @@ main() {
         exit 0
     fi
 
-    # 步骤4: 从Gitee克隆仓库
     clone_from_gitee
     local CLONE_DIR="$HOME/lossless-scaling-repo"
 
-    # 步骤5: 验证7个分卷文件
     if ! validate_split_files "$CLONE_DIR"; then
         cleanup_repository "$CLONE_DIR"
         exit 1
     fi
 
-    # 步骤6: 合并并解压7个分卷文件
     if ! extract_split_files "$CLONE_DIR"; then
         cleanup_repository "$CLONE_DIR"
         exit 1
     fi
 
-    # 步骤7: 清理仓库
     cleanup_repository "$CLONE_DIR"
 
-    # 步骤8: 显示完成信息
     show_installation_complete
 
-    # 步骤9: 等待用户确认
     echo ""
     read -p "按回车键退出..."
 }
 
-# ==========================================
-# 脚本入口
-# ==========================================
 main
 EOF
 
-    # 设置执行权限并运行安装脚本
     chmod +x "$temp_dir/install_lossless_scaling.sh"
     echo "正在启动小黄鸭软件安装助手..."
     echo ""
     "$temp_dir/install_lossless_scaling.sh"
 
-    # 清理临时文件
     rm -rf "$temp_dir"
 
     echo ""
     read -p "按回车键返回主菜单..."
 }
 
-# 27. 安装Steam社区302
 install_steamcommunity_302() {
     show_header
     echo -e "${YELLOW}════════════════ 安装Steam社区302 ════════════════${NC}"
@@ -4326,12 +4000,10 @@ install_steamcommunity_302() {
     echo "该工具用于解决Steam社区访问问题。"
     echo ""
 
-    # 检查是否已安装
     local install_dir="$HOME/SteamCommunity302"
-    local install_dir2="$HOME/Steamcommunity_302"  # 添加第二个可能的安装目录
+    local install_dir2="$HOME/Steamcommunity_302"
     local desktop_file="$DESKTOP_DIR/Steamcommunity-302.desktop"
 
-    # 检查是否存在安装目录或桌面快捷方式
     local installed=false
     if [ -d "$install_dir" ] || [ -d "$install_dir2" ] || [ -f "$desktop_file" ]; then
         installed=true
@@ -4351,9 +4023,7 @@ install_steamcommunity_302() {
         case $choice in
             1)
                 echo "开始重新安装Steam社区302..."
-                # 先卸载旧版本
                 echo "正在清理旧版本..."
-                # 删除安装目录
                 if [ -d "$install_dir" ]; then
                     rm -rf "$install_dir"
                     echo -e "${GREEN}✓ 已删除安装目录: $install_dir${NC}"
@@ -4362,18 +4032,15 @@ install_steamcommunity_302() {
                     rm -rf "$install_dir2"
                     echo -e "${GREEN}✓ 已删除安装目录: $install_dir2${NC}"
                 fi
-                # 删除桌面快捷方式
                 if [ -f "$desktop_file" ]; then
                     rm -f "$desktop_file"
                     echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
                 fi
                 echo -e "${GREEN}✓ 旧版本清理完成，开始新安装${NC}"
                 echo ""
-                # 继续执行安装流程
                 ;;
             2)
                 echo "正在卸载Steam社区302..."
-                # 删除安装目录
                 if [ -d "$install_dir" ]; then
                     rm -rf "$install_dir"
                     echo -e "${GREEN}✓ 已删除安装目录: $install_dir${NC}"
@@ -4382,7 +4049,6 @@ install_steamcommunity_302() {
                     rm -rf "$install_dir2"
                     echo -e "${GREEN}✓ 已删除安装目录: $install_dir2${NC}"
                 fi
-                # 删除桌面快捷方式
                 if [ -f "$desktop_file" ]; then
                     rm -f "$desktop_file"
                     echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
@@ -4402,7 +4068,6 @@ install_steamcommunity_302() {
         esac
     fi
 
-    # 确认安装
     echo "即将下载并安装Steam社区302工具..."
     echo "该工具需要从dogfight360.com下载。"
     echo ""
@@ -4419,16 +4084,13 @@ install_steamcommunity_302() {
     echo -e "${CYAN}开始安装Steam社区302...${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    # 创建安装目录（使用SteamCommunity302目录）
     mkdir -p "$install_dir"
     cd "$install_dir"
 
-    # 下载文件
     echo "步骤1: 下载Steam社区302工具..."
     echo "下载地址: https://www.dogfight360.com/blog/wp-content/uploads/2025/12/steamcommunity_302_Linux_AMD64_V14.0.01.tar.gz"
     echo ""
 
-    # 使用wget下载文件
     if ! command -v wget &> /dev/null; then
         echo -e "${YELLOW}未找到wget，正在尝试安装...${NC}"
         sudo pacman -S --noconfirm wget 2>/dev/null || {
@@ -4455,7 +4117,6 @@ install_steamcommunity_302() {
     echo -e "${GREEN}✓ 下载完成${NC}"
     echo ""
 
-    # 解压文件
     echo "步骤2: 解压文件..."
     tar -xzf "$filename"
 
@@ -4468,13 +4129,11 @@ install_steamcommunity_302() {
     echo -e "${GREEN}✓ 解压完成${NC}"
     echo ""
 
-    # 删除压缩包
     rm -f "$filename"
     echo "步骤3: 清理压缩包..."
     echo -e "${GREEN}✓ 已清理压缩包${NC}"
     echo ""
 
-    # 查找解压后的目录
     local extracted_dir=""
     for dir in *steamcommunity* *Steamcommunity*; do
         if [ -d "$dir" ]; then
@@ -4484,7 +4143,6 @@ install_steamcommunity_302() {
     done
 
     if [ -z "$extracted_dir" ]; then
-        # 如果没有找到目录，检查当前目录
         if [ -f "Steamcommunity_302" ] || [ -f "steamcommunity_302" ]; then
             extracted_dir="."
         else
@@ -4500,7 +4158,6 @@ install_steamcommunity_302() {
     echo -e "${GREEN}✓ 文件准备就绪${NC}"
     echo ""
 
-    # 设置执行权限
     echo "步骤5: 设置执行权限..."
     [ -f "Steamcommunity_302" ] && chmod +x "Steamcommunity_302"
     [ -f "steamcommunity_302" ] && chmod +x "steamcommunity_302"
@@ -4509,7 +4166,6 @@ install_steamcommunity_302() {
     echo -e "${GREEN}✓ 已设置执行权限${NC}"
     echo ""
 
-    # 创建运行脚本
     echo "步骤6: 创建运行脚本..."
     local run_script="run运行.sh"
     cat > "$run_script" << 'EOF'
@@ -4524,10 +4180,8 @@ EOF
     echo -e "${GREEN}✓ 运行脚本已创建: $run_script${NC}"
     echo ""
 
-    # 创建桌面快捷方式
     echo "步骤7: 创建桌面快捷方式..."
 
-    # 尝试查找steam图标
     local steam_icon="applications-internet"
     if [ -f "/usr/share/icons/hicolor/48x48/apps/steam.png" ]; then
         steam_icon="steam"
@@ -4549,7 +4203,6 @@ EOF
     echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
     echo ""
 
-    # 完成提示
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
     echo -e "${GREEN}✅ Steam社区302 安装完成！${NC}"
     echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
@@ -4573,22 +4226,15 @@ EOF
     read -p "按回车键返回主菜单..."
 }
 
-# ============================================
-# 主程序
-# ============================================
 main() {
     init_dirs
     detect_system_type
 
-    # 最高优先级：自动更新检测
     auto_update_check
 
-    # 创建桌面快捷方式
     create_desktop_shortcuts
 
-    # 显示主菜单
     show_main_menu
 }
 
-# 运行主程序
 main "$@"
