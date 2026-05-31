@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Steam Deck 工具箱 v1.1.9
+# Steam Deck 工具箱 v1.2.0
 # 制作人：薯条＆DeepSeek
 
 # 颜色定义
@@ -23,7 +23,7 @@ SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
 # 版本信息
-VERSION="1.1.9"
+VERSION="1.2.0"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 # 系统类型检测变量
@@ -1485,18 +1485,19 @@ install_remove_plugin_store() {
             SERVICE_FILE="${SERVICE_DIR}/plugin_loader.service"
             SERVICE_DEST="/etc/systemd/system/plugin_loader.service"
             CURRENT_USER=$(whoami)
-            # 镜像列表（按推荐顺序）
+            # 镜像列表（按推荐顺序，第一 ghproxy.net，第二 gh.ddlc.top，其余备选）
             MIRRORS=(
-                "https://ghproxy.com/"
+                "https://ghproxy.net/"
+                "https://gh.ddlc.top/"
                 "https://mirror.ghproxy.com/"
                 "https://gh.api.99988866.xyz/"
                 "https://download.fastgit.org/"
                 "https://hub.gitmirror.com/"
-                "https://gh.ddlc.top/"
                 "https://git.xfj0.xyz/"
                 "https://github.com/"
             )
             DOWNLOAD_TIMEOUT=30
+            MAX_RETRY_PER_MIRROR=1  # 每个镜像失败后重试一次
             # =============================
 
             # 检查必要命令
@@ -1531,10 +1532,8 @@ except:
             # 检测是否已安装及版本
             INSTALLED_VERSION=""
             if [[ -f "$PLUGIN_LOADER" && -x "$PLUGIN_LOADER" ]]; then
-                # 尝试从服务日志获取版本
                 INSTALLED_VERSION=$(sudo journalctl -u plugin_loader --no-pager 2>/dev/null | grep -i "Starting Decky version" | tail -1 | grep -oP 'version v?\K[0-9.]+(-pre[0-9]+)?')
                 if [[ -z "$INSTALLED_VERSION" ]]; then
-                    # 备用方法：直接执行二进制（部分版本支持）
                     INSTALLED_VERSION=$("$PLUGIN_LOADER" --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+(-pre\d+)?')
                 fi
                 if [[ -n "$INSTALLED_VERSION" ]]; then
@@ -1564,7 +1563,7 @@ except:
                 sudo chown ${CURRENT_USER}:${CURRENT_USER} "$SERVICE_DIR" "$PLUGIN_DIR"
             }
 
-            # 顺序尝试镜像下载 PluginLoader
+            # 下载 PluginLoader（带重试机制）
             DOWNLOAD_SUCCESS=false
             TMP_FILE="${PLUGIN_LOADER}.tmp"
             DOWNLOAD_PATH="https://github.com/SteamDeckHomebrew/decky-loader/releases/download/v${LATEST_VERSION}/PluginLoader"
@@ -1572,24 +1571,51 @@ except:
             for mirror in "${MIRRORS[@]}"; do
                 FULL_URL="${mirror}${DOWNLOAD_PATH}"
                 echo -e "尝试从 ${mirror} 下载..."
-                if curl -L --progress-bar --fail --max-time "$DOWNLOAD_TIMEOUT" "$FULL_URL" -o "$TMP_FILE"; then
-                    FILE_SIZE=$(stat -c%s "$TMP_FILE" 2>/dev/null || stat -f%z "$TMP_FILE" 2>/dev/null)
-                    if [[ -n "$FILE_SIZE" ]] && [[ "$FILE_SIZE" -gt 1000000 ]]; then
-                        echo -e "${GREEN}下载成功 (大小: $((FILE_SIZE/1024/1024)) MB)${NC}"
-                        # 替换旧文件
-                        if [[ -f "$PLUGIN_LOADER" ]]; then
-                            sudo rm -f "$PLUGIN_LOADER"
-                        fi
-                        mv "$TMP_FILE" "$PLUGIN_LOADER"
-                        chmod +x "$PLUGIN_LOADER"
-                        DOWNLOAD_SUCCESS=true
-                        break
-                    else
-                        echo -e "${RED}下载文件无效 (${FILE_SIZE} 字节)，尝试下一个镜像...${NC}"
-                        rm -f "$TMP_FILE"
+                
+                # 单个镜像内部重试逻辑
+                retry_count=0
+                while [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; do
+                    if [[ $retry_count -gt 0 ]]; then
+                        echo -e "${YELLOW}重试下载 (第 ${retry_count} 次重试)...${NC}"
                     fi
-                else
-                    echo -e "${RED}下载失败，尝试下一个镜像...${NC}"
+                    
+                    # 使用 curl 下载，输出进度条，设置超时，并获取 HTTP 状态码
+                    http_code=$(curl -L --progress-bar --fail --max-time "$DOWNLOAD_TIMEOUT" -w "%{http_code}" -o "$TMP_FILE" "$FULL_URL" 2>&1)
+                    curl_exit=$?
+                    
+                    # 检查下载是否成功且文件有效
+                    if [[ $curl_exit -eq 0 ]] && [[ -f "$TMP_FILE" ]]; then
+                        FILE_SIZE=$(stat -c%s "$TMP_FILE" 2>/dev/null || stat -f%z "$TMP_FILE" 2>/dev/null)
+                        if [[ -n "$FILE_SIZE" ]] && [[ "$FILE_SIZE" -gt 1000000 ]]; then
+                            echo -e "${GREEN}下载成功 (大小: $((FILE_SIZE/1024/1024)) MB)${NC}"
+                            # 替换旧文件
+                            if [[ -f "$PLUGIN_LOADER" ]]; then
+                                sudo rm -f "$PLUGIN_LOADER"
+                            fi
+                            mv "$TMP_FILE" "$PLUGIN_LOADER"
+                            chmod +x "$PLUGIN_LOADER"
+                            DOWNLOAD_SUCCESS=true
+                            break 2   # 跳出两层循环
+                        else
+                            echo -e "${RED}下载文件无效 (${FILE_SIZE} 字节)，尝试下一个镜像...${NC}"
+                            rm -f "$TMP_FILE"
+                            break   # 跳出内层循环，进入下一个镜像
+                        fi
+                    else
+                        echo -e "${RED}下载失败 (退出码: $curl_exit, HTTP: $http_code)${NC}"
+                        rm -f "$TMP_FILE"
+                        ((retry_count++))
+                        if [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; then
+                            echo "将进行重试..."
+                            sleep 2
+                        else
+                            echo "该镜像重试次数用完，切换到下一个镜像。"
+                        fi
+                    fi
+                done
+                
+                if [[ "$DOWNLOAD_SUCCESS" == "true" ]]; then
+                    break
                 fi
             done
 
