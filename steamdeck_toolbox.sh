@@ -17,7 +17,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.2.3"
+VERSION="1.2.4"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -194,138 +194,142 @@ show_main_menu() {
         echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
         echo ""
 
-        if [ "$SYSTEM_TYPE" == "dual" ]; then
-            echo -e "${GREEN}当前系统: 双系统${NC}"
-            echo ""
-            echo -e "${CYAN}请选择要执行的功能：${NC}"
-            echo ""
-            echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装Edge浏览器${NC}"
-            echo -e "${GREEN} 2. 安装国内源            12. 校准摇杆            22. 安装Google浏览器${NC}"
-            echo -e "${GREEN} 3. 调整虚拟内存大小      13. 设置管理员密码      23. 清理Steam缓存${NC}"
-            echo -e "${GREEN} 4. 修复磁盘写入错误      14. 安装AnyDesk         24. 更新已安装应用${NC}"
-            echo -e "${GREEN} 5. 修复引导              15. 安装ToDesk          25. 卸载已安装应用${NC}"
-            echo -e "${GREEN} 6. 修复互通盘            16. 安装WPS Office      26. 安装小黄鸭软件${NC}"
-            echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安装Steam社区302${NC}"
-            echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装微信${NC}"
-            echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装QQ音乐${NC}"
-            echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘${NC}"
-            echo ""
-            echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
-            echo ""
+if [ "$SYSTEM_TYPE" == "dual" ]; then
+    echo -e "${GREEN}当前系统: 双系统${NC}"
+    echo ""
+    echo -e "${CYAN}请选择要执行的功能：${NC}"
+    echo ""
+    echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装Edge浏览器${NC}"
+    echo -e "${GREEN} 2. 安装国内源            12. 校准摇杆            22. 安装Google浏览器${NC}"
+    echo -e "${GREEN} 3. 调整虚拟内存大小      13. 设置管理员密码      23. 清理Steam缓存${NC}"
+    echo -e "${GREEN} 4. 修复磁盘写入错误      14. 安装AnyDesk         24. 更新已安装应用${NC}"
+    echo -e "${GREEN} 5. 修复引导              15. 安装ToDesk          25. 卸载已安装应用${NC}"
+    echo -e "${GREEN} 6. 修复互通盘            16. 安装WPS Office      26. 安装小黄鸭软件${NC}"
+    echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安装Steam社区302${NC}"
+    echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装微信            28. 安装LSFG-VK插件${NC}"
+    echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装QQ音乐          29. 安装Framegen插件${NC}"
+    echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘${NC}"
+    echo ""
+    echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
+    echo ""
 
-            read -p "请输入选项 (输入1-27的数字): " choice
+    read -p "请输入选项 (输入1-29的数字): " choice
 
-            if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
-                echo -e "${RED}无效选择，请输入数字！${NC}"
-                sleep 1
-                continue
-            fi
+    if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}无效选择，请输入数字！${NC}"
+        sleep 1
+        continue
+    fi
 
-            if [ $choice -lt 1 ] || [ $choice -gt 27 ]; then
-                echo -e "${RED}无效选择，请选择1到27之间的数字！${NC}"
-                sleep 1
-                continue
-            fi
+    if [ $choice -lt 1 ] || [ $choice -gt 29 ]; then
+        echo -e "${RED}无效选择，请选择1到29之间的数字！${NC}"
+        sleep 1
+        continue
+    fi
 
-            case $choice in
-                1) show_about ;;
-                2) install_chinese_source ;;
-                3) adjust_swap ;;
-                4) fix_disk_write_error ;;
-                5) fix_boot ;;
-                6) fix_shared_disk ;;
-                7) clear_hosts_cache ;;
-                8) install_uu_accelerator ;;
-                9) install_xunyou_accelerator ;;
-                10) install_tomoon ;;
-                11) install_remove_plugin_store ;;
-                12) calibrate_joystick ;;
-                13) set_admin_password ;;
-                14) install_anydesk ;;
-                15) install_todesk ;;
-                16) install_wps_office ;;
-                17) install_qq ;;
-                18) install_wechat ;;
-                19) install_qqmusic ;;
-                20) install_baidunetdisk ;;
-                21) install_edge ;;
-                22) install_chrome ;;
-                23) steamdeck_cache_manager ;;
-                24) update_installed_apps ;;
-                25) uninstall_apps ;;
-                26) install_yellow_duck_software ;;
-                27) install_steamcommunity_302 ;;
-                *)
-                    echo -e "${RED}无效选择，请重新输入！${NC}"
-                    sleep 1
-                    continue
-                    ;;
-            esac
-        else
-            echo -e "${YELLOW}当前系统: 单系统${NC}"
-            echo ""
-            echo -e "${CYAN}请选择要执行的功能：${NC}"
-            echo ""
-            echo -e "${GREEN} 1. 关于支持与维护的说明  10. 校准摇杆            19. 安装Edge浏览器${NC}"
-            echo -e "${GREEN} 2. 安装国内源            11. 设置管理员密码      20. 安装Google浏览器${NC}"
-            echo -e "${GREEN} 3. 调整虚拟内存大小      12. 安装AnyDesk         21. 清理Steam缓存${NC}"
-            echo -e "${GREEN} 4. 修复磁盘写入错误      13. 安装ToDesk          22. 更新已安装应用${NC}"
-            echo -e "${GREEN} 5. 清理hosts缓存         14. 安装WPS Office      23. 卸载已安装应用${NC}"
-            echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装QQ              24. 安装小黄鸭软件${NC}"
-            echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装微信            25. 安装Steam社区302${NC}"
-            echo -e "${GREEN} 8. 安装ToMoon            17. 安装QQ音乐${NC}"
-            echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装百度网盘${NC}"
-            echo ""
-            echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
-            echo ""
+    case $choice in
+        1) show_about ;;
+        2) install_chinese_source ;;
+        3) adjust_swap ;;
+        4) fix_disk_write_error ;;
+        5) fix_boot ;;
+        6) fix_shared_disk ;;
+        7) clear_hosts_cache ;;
+        8) install_uu_accelerator ;;
+        9) install_xunyou_accelerator ;;
+        10) install_tomoon ;;
+        11) install_remove_plugin_store ;;
+        12) calibrate_joystick ;;
+        13) set_admin_password ;;
+        14) install_anydesk ;;
+        15) install_todesk ;;
+        16) install_wps_office ;;
+        17) install_qq ;;
+        18) install_wechat ;;
+        19) install_qqmusic ;;
+        20) install_baidunetdisk ;;
+        21) install_edge ;;
+        22) install_chrome ;;
+        23) steamdeck_cache_manager ;;
+        24) update_installed_apps ;;
+        25) uninstall_apps ;;
+        26) install_yellow_duck_software ;;
+        27) install_steamcommunity_302 ;;
+        28) install_decky_lsfg_vk ;;
+        29) install_decky_framegen ;;
+        *)
+            echo -e "${RED}无效选择，请重新输入！${NC}"
+            sleep 1
+            continue
+            ;;
+    esac
+else
+    echo -e "${YELLOW}当前系统: 单系统${NC}"
+    echo ""
+    echo -e "${CYAN}请选择要执行的功能：${NC}"
+    echo ""
+    echo -e "${GREEN} 1. 关于支持与维护的说明  10. 校准摇杆            19. 安装Edge浏览器${NC}"
+    echo -e "${GREEN} 2. 安装国内源            11. 设置管理员密码      20. 安装Google浏览器${NC}"
+    echo -e "${GREEN} 3. 调整虚拟内存大小      12. 安装AnyDesk         21. 清理Steam缓存${NC}"
+    echo -e "${GREEN} 4. 修复磁盘写入错误      13. 安装ToDesk          22. 更新已安装应用${NC}"
+    echo -e "${GREEN} 5. 清理hosts缓存         14. 安装WPS Office      23. 卸载已安装应用${NC}"
+    echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装QQ              24. 安装小黄鸭软件${NC}"
+    echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装微信            25. 安装Steam社区302${NC}"
+    echo -e "${GREEN} 8. 安装ToMoon            17. 安装QQ音乐          26. 安装LSFG-VK插件${NC}"
+    echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装百度网盘        27. 安装Framegen插件${NC}"
+    echo ""
+    echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
+    echo ""
 
-            read -p "请输入选项 (输入1-25的数字): " choice
+    read -p "请输入选项 (输入1-27的数字): " choice
 
-            if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
-                echo -e "${RED}无效选择，请输入数字！${NC}"
-                sleep 1
-                continue
-            fi
+    if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}无效选择，请输入数字！${NC}"
+        sleep 1
+        continue
+    fi
 
-            if [ $choice -lt 1 ] || [ $choice -gt 25 ]; then
-                echo -e "${RED}无效选择，请选择1到25之间的数字！${NC}"
-                sleep 1
-                continue
-            fi
+    if [ $choice -lt 1 ] || [ $choice -gt 27 ]; then
+        echo -e "${RED}无效选择，请选择1到27之间的数字！${NC}"
+        sleep 1
+        continue
+    fi
 
-            case $choice in
-                1) show_about ;;
-                2) install_chinese_source ;;
-                3) adjust_swap ;;
-                4) fix_disk_write_error ;;
-                5) clear_hosts_cache ;;
-                6) install_uu_accelerator ;;
-                7) install_xunyou_accelerator ;;
-                8) install_tomoon ;;
-                9) install_remove_plugin_store ;;
-                10) calibrate_joystick ;;
-                11) set_admin_password ;;
-                12) install_anydesk ;;
-                13) install_todesk ;;
-                14) install_wps_office ;;
-                15) install_qq ;;
-                16) install_wechat ;;
-                17) install_qqmusic ;;
-                18) install_baidunetdisk ;;
-                19) install_edge ;;
-                20) install_chrome ;;
-                21) steamdeck_cache_manager ;;
-                22) update_installed_apps ;;
-                23) uninstall_apps ;;
-                24) install_yellow_duck_software ;;
-                25) install_steamcommunity_302 ;;
-                *)
-                    echo -e "${RED}无效选择，请重新输入！${NC}"
-                    sleep 1
-                    continue
-                    ;;
-            esac
-        fi
+    case $choice in
+        1) show_about ;;
+        2) install_chinese_source ;;
+        3) adjust_swap ;;
+        4) fix_disk_write_error ;;
+        5) clear_hosts_cache ;;
+        6) install_uu_accelerator ;;
+        7) install_xunyou_accelerator ;;
+        8) install_tomoon ;;
+        9) install_remove_plugin_store ;;
+        10) calibrate_joystick ;;
+        11) set_admin_password ;;
+        12) install_anydesk ;;
+        13) install_todesk ;;
+        14) install_wps_office ;;
+        15) install_qq ;;
+        16) install_wechat ;;
+        17) install_qqmusic ;;
+        18) install_baidunetdisk ;;
+        19) install_edge ;;
+        20) install_chrome ;;
+        21) steamdeck_cache_manager ;;
+        22) update_installed_apps ;;
+        23) uninstall_apps ;;
+        24) install_yellow_duck_software ;;
+        25) install_steamcommunity_302 ;;
+        26) install_decky_lsfg_vk ;;
+        27) install_decky_framegen ;;
+        *)
+            echo -e "${RED}无效选择，请重新输入！${NC}"
+            sleep 1
+            continue
+            ;;
+    esac
+fi
     done
 }
 
@@ -4222,6 +4226,474 @@ EOF
     echo "2. 如需卸载，请重新运行此功能并选择卸载选项"
     echo "3. 卸载时会同时清理桌面快捷方式和安装文件"
     echo ""
+
+    read -p "按回车键返回主菜单..."
+}
+
+install_decky_lsfg_vk() {
+    show_header
+    echo -e "${YELLOW}════════════════ 安装/卸载 LSFG-VK 插件 ════════════════${NC}"
+    echo ""
+
+    local GITHUB_REPO="xXJSONDeruloXx/decky-lsfg-vk"
+    local API_URL="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+    local PLUGIN_DIR="/home/deck/homebrew/plugins"
+    local TARGET_DIR="${PLUGIN_DIR}/Decky-LSFG-VK"
+    local TEMP_DIR="/tmp/decky_lsfg_vk_install"
+    local MIRRORS=(
+        "https://ghproxy.net/"
+        "https://gh.ddlc.top/"
+        "https://mirror.ghproxy.com/"
+        "https://gh.api.99988866.xyz/"
+        "https://download.fastgit.org/"
+        "https://hub.gitmirror.com/"
+        "https://git.xfj0.xyz/"
+        "https://github.com/"
+    )
+    local DOWNLOAD_TIMEOUT=60
+    local MAX_RETRY_PER_MIRROR=1
+
+    for cmd in curl sudo unzip; do
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
+            read -p "按回车键返回主菜单..."
+            return 1
+        fi
+    done
+
+    echo "请选择要执行的操作："
+    echo "1. 安装/更新 LSFG-VK 插件"
+    echo "2. 卸载 LSFG-VK 插件"
+    echo ""
+
+    read -p "请输入选择 [1-2] (输入其他键返回): " action_choice
+
+    case $action_choice in
+        1)
+            echo -e "${CYAN}正在从 GitHub 获取最新版本信息...${NC}"
+            local latest_version=$(curl -s "$API_URL" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//; s/".*//')
+
+            if [ -z "$latest_version" ]; then
+                echo -e "${RED}错误: 无法从 GitHub API 获取最新版本，请检查网络连接。${NC}"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            echo -e "${GREEN}最新版本: ${latest_version}${NC}"
+
+            local installed_version="未安装"
+            local is_installed=false
+            if [ -f "$TARGET_DIR/bin/lsfg-vk" ] || [ -f "$TARGET_DIR/plugin.py" ]; then
+                is_installed=true
+                if [ -f "$TARGET_DIR/plugin.json" ]; then
+                    installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/plugin.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
+                elif [ -f "$TARGET_DIR/package.json" ]; then
+                    installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
+                fi
+                if [ -n "$installed_version" ]; then
+                    echo -e "${CYAN}已安装版本: ${installed_version}${NC}"
+                    if [ "$installed_version" = "${latest_version#v}" ]; then
+                        echo -e "${GREEN}已经是最新版本，无需更新。${NC}"
+                        read -p "按回车键返回主菜单..."
+                        return 0
+                    else
+                        echo -e "${YELLOW}发现新版本，将进行更新。${NC}"
+                    fi
+                else
+                    echo -e "${YELLOW}已安装但无法获取版本，将覆盖安装。${NC}"
+                fi
+            else
+                echo "未检测到 LSFG-VK 插件安装，将进行全新安装。"
+            fi
+
+            if [ ! -f "/etc/systemd/system/plugin_loader.service" ]; then
+                echo -e "${YELLOW}⚠ 警告: 未检测到 Decky Loader 插件商店。${NC}"
+                echo "LSFG-VK 插件需要先安装 Decky Loader 才能正常工作。"
+                read -p "是否继续安装？(y/N): " -n 1 -r
+                echo ""
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    echo "安装已取消。"
+                    read -p "按回车键返回主菜单..."
+                    return 1
+                fi
+            fi
+
+            echo -e "${CYAN}准备安装/更新 LSFG-VK 插件...${NC}"
+            read -p "是否继续？(y/N): " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "操作已取消。"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            rm -rf "$TEMP_DIR"
+            mkdir -p "$TEMP_DIR"
+            cd "$TEMP_DIR"
+
+            local zip_filename="Decky.LSFG-VK.zip"
+            local download_path="https://github.com/${GITHUB_REPO}/releases/download/${latest_version}/${zip_filename}"
+            local DOWNLOAD_SUCCESS=false
+
+            for mirror in "${MIRRORS[@]}"; do
+                local full_url="${mirror}${download_path}"
+                echo -e "尝试从 ${mirror} 下载..."
+
+                local retry_count=0
+                while [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; do
+                    if [[ $retry_count -gt 0 ]]; then
+                        echo -e "${YELLOW}重试下载 (第 ${retry_count} 次重试)...${NC}"
+                    fi
+
+                    curl -L --progress-bar --max-time "$DOWNLOAD_TIMEOUT" -o "$zip_filename" "$full_url"
+                    local curl_exit=$?
+
+                    if [[ $curl_exit -eq 0 ]] && [[ -f "$zip_filename" ]]; then
+                        local file_size=$(stat -c%s "$zip_filename" 2>/dev/null || stat -f%z "$zip_filename" 2>/dev/null)
+                        if [[ -n "$file_size" ]] && [[ "$file_size" -gt 10000 ]]; then
+                            echo -e "\n${GREEN}下载成功 (大小: $((file_size/1024)) KB)${NC}"
+                            DOWNLOAD_SUCCESS=true
+                            break 2
+                        else
+                            echo -e "\n${RED}下载文件无效 (${file_size} 字节)，尝试下一个镜像...${NC}"
+                            rm -f "$zip_filename"
+                            break
+                        fi
+                    else
+                        echo -e "\n${RED}下载失败 (退出码: $curl_exit)${NC}"
+                        rm -f "$zip_filename"
+                        ((retry_count++))
+                        if [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; then
+                            echo "将进行重试..."
+                            sleep 2
+                        else
+                            echo "该镜像重试次数用完，切换到下一个镜像。"
+                        fi
+                    fi
+                done
+            done
+
+            if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
+                echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            echo -e "${CYAN}正在解压...${NC}"
+            if ! unzip -q "$zip_filename"; then
+                echo -e "${RED}解压失败，文件可能已损坏。${NC}"
+                rm -rf "$TEMP_DIR"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            sudo mkdir -p "$PLUGIN_DIR"
+
+            if [ -d "$TARGET_DIR" ]; then
+                echo "检测到旧版本目录，正在删除..."
+                sudo rm -rf "$TARGET_DIR"
+            fi
+
+            local extracted_dir=""
+            extracted_dir=$(find "$TEMP_DIR" -maxdepth 2 -type f \( -name "plugin.py" -o -name "plugin.json" -o -name "lsfg-vk" \) -exec dirname {} \; | head -1)
+            if [ -z "$extracted_dir" ]; then
+                extracted_dir=$(find "$TEMP_DIR" -maxdepth 1 -type d -name "*LSFG*" -o -name "*lsfg*" | head -1)
+            fi
+            if [ -z "$extracted_dir" ]; then
+                local subdirs=($(find "$TEMP_DIR" -maxdepth 1 -type d ! -path "$TEMP_DIR"))
+                if [ ${#subdirs[@]} -eq 1 ]; then
+                    extracted_dir="${subdirs[0]}"
+                fi
+            fi
+            if [ -z "$extracted_dir" ]; then
+                if [ -f "$TEMP_DIR/plugin.py" ] || [ -d "$TEMP_DIR/bin" ]; then
+                    extracted_dir="$TEMP_DIR"
+                fi
+            fi
+
+            if [ -z "$extracted_dir" ] || [ ! -d "$extracted_dir" ]; then
+                echo -e "${RED}错误: 解压后未找到 LSFG-VK 插件目录。${NC}"
+                echo "解压后的文件列表："
+                ls -la "$TEMP_DIR"
+                rm -rf "$TEMP_DIR"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            echo -e "${CYAN}正在安装插件到 ${TARGET_DIR}...${NC}"
+            sudo mv "$extracted_dir" "$TARGET_DIR"
+
+            sudo chown -R deck:deck "$TARGET_DIR"
+
+            rm -rf "$TEMP_DIR"
+
+            echo ""
+            echo -e "${GREEN}✅ LSFG-VK 插件 (${latest_version}) 安装/更新完成！${NC}"
+            echo "请切换回游戏模式，在 Decky 侧边栏中查看 LSFG-VK 是否出现。"
+            ;;
+
+        2)
+            echo -e "${CYAN}正在卸载 LSFG-VK 插件...${NC}"
+            echo "这将删除目录: ${TARGET_DIR}"
+
+            read -p "确定要卸载吗？(y/N): " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "卸载已取消。"
+                read -p "按回车键返回主菜单..."
+                return 0
+            fi
+
+            if [ -d "$TARGET_DIR" ]; then
+                if sudo rm -rf "$TARGET_DIR"; then
+                    echo -e "${GREEN}✅ LSFG-VK 插件已卸载。${NC}"
+                else
+                    echo -e "${RED}卸载失败，请检查权限。${NC}"
+                fi
+            else
+                echo -e "${YELLOW}未检测到 LSFG-VK 插件安装。${NC}"
+            fi
+            ;;
+
+        *)
+            echo "返回主菜单..."
+            return
+            ;;
+    esac
+
+    read -p "按回车键返回主菜单..."
+}
+
+install_decky_framegen() {
+    show_header
+    echo -e "${YELLOW}════════════════ 安装/卸载 Framegen 插件 ════════════════${NC}"
+    echo ""
+
+    local GITHUB_REPO="xXJSONDeruloXx/Decky-Framegen"
+    local API_URL="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+    local PLUGIN_DIR="/home/deck/homebrew/plugins"
+    local TARGET_DIR="${PLUGIN_DIR}/Decky-Framegen"
+    local TEMP_DIR="/tmp/decky_framegen_install"
+    local MIRRORS=(
+        "https://ghproxy.net/"
+        "https://gh.ddlc.top/"
+        "https://mirror.ghproxy.com/"
+        "https://gh.api.99988866.xyz/"
+        "https://download.fastgit.org/"
+        "https://hub.gitmirror.com/"
+        "https://git.xfj0.xyz/"
+        "https://github.com/"
+    )
+    local DOWNLOAD_TIMEOUT=60
+    local MAX_RETRY_PER_MIRROR=1
+
+    for cmd in curl sudo unzip; do
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
+            read -p "按回车键返回主菜单..."
+            return 1
+        fi
+    done
+
+    echo "请选择要执行的操作："
+    echo "1. 安装/更新 Framegen 插件"
+    echo "2. 卸载 Framegen 插件"
+    echo ""
+
+    read -p "请输入选择 [1-2] (输入其他键返回): " action_choice
+
+    case $action_choice in
+        1)
+            echo -e "${CYAN}正在从 GitHub 获取最新版本信息...${NC}"
+            local latest_version=$(curl -s "$API_URL" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//; s/".*//')
+
+            if [ -z "$latest_version" ]; then
+                echo -e "${RED}错误: 无法从 GitHub API 获取最新版本，请检查网络连接。${NC}"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            echo -e "${GREEN}最新版本: ${latest_version}${NC}"
+
+            local installed_version="未安装"
+            local is_installed=false
+            if [ -f "$TARGET_DIR/plugin.py" ] || [ -f "$TARGET_DIR/main.py" ]; then
+                is_installed=true
+                if [ -f "$TARGET_DIR/plugin.json" ]; then
+                    installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/plugin.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
+                elif [ -f "$TARGET_DIR/package.json" ]; then
+                    installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
+                fi
+                if [ -n "$installed_version" ]; then
+                    echo -e "${CYAN}已安装版本: ${installed_version}${NC}"
+                    if [ "$installed_version" = "${latest_version#v}" ]; then
+                        echo -e "${GREEN}已经是最新版本，无需更新。${NC}"
+                        read -p "按回车键返回主菜单..."
+                        return 0
+                    else
+                        echo -e "${YELLOW}发现新版本，将进行更新。${NC}"
+                    fi
+                else
+                    echo -e "${YELLOW}已安装但无法获取版本，将覆盖安装。${NC}"
+                fi
+            else
+                echo "未检测到 Framegen 插件安装，将进行全新安装。"
+            fi
+
+            if [ ! -f "/etc/systemd/system/plugin_loader.service" ]; then
+                echo -e "${YELLOW}⚠ 警告: 未检测到 Decky Loader 插件商店。${NC}"
+                echo "Framegen 插件需要先安装 Decky Loader 才能正常工作。"
+                read -p "是否继续安装？(y/N): " -n 1 -r
+                echo ""
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    echo "安装已取消。"
+                    read -p "按回车键返回主菜单..."
+                    return 1
+                fi
+            fi
+
+            echo -e "${CYAN}准备安装/更新 Framegen 插件...${NC}"
+            read -p "是否继续？(y/N): " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "操作已取消。"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            rm -rf "$TEMP_DIR"
+            mkdir -p "$TEMP_DIR"
+            cd "$TEMP_DIR"
+
+            local zip_filename="Decky-Framegen.zip"
+            local download_path="https://github.com/${GITHUB_REPO}/releases/download/${latest_version}/${zip_filename}"
+            local DOWNLOAD_SUCCESS=false
+
+            for mirror in "${MIRRORS[@]}"; do
+                local full_url="${mirror}${download_path}"
+                echo -e "尝试从 ${mirror} 下载..."
+
+                local retry_count=0
+                while [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; do
+                    if [[ $retry_count -gt 0 ]]; then
+                        echo -e "${YELLOW}重试下载 (第 ${retry_count} 次重试)...${NC}"
+                    fi
+
+                    curl -L --progress-bar --max-time "$DOWNLOAD_TIMEOUT" -o "$zip_filename" "$full_url"
+                    local curl_exit=$?
+
+                    if [[ $curl_exit -eq 0 ]] && [[ -f "$zip_filename" ]]; then
+                        local file_size=$(stat -c%s "$zip_filename" 2>/dev/null || stat -f%z "$zip_filename" 2>/dev/null)
+                        if [[ -n "$file_size" ]] && [[ "$file_size" -gt 10000 ]]; then
+                            echo -e "\n${GREEN}下载成功 (大小: $((file_size/1024)) KB)${NC}"
+                            DOWNLOAD_SUCCESS=true
+                            break 2
+                        else
+                            echo -e "\n${RED}下载文件无效 (${file_size} 字节)，尝试下一个镜像...${NC}"
+                            rm -f "$zip_filename"
+                            break
+                        fi
+                    else
+                        echo -e "\n${RED}下载失败 (退出码: $curl_exit)${NC}"
+                        rm -f "$zip_filename"
+                        ((retry_count++))
+                        if [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; then
+                            echo "将进行重试..."
+                            sleep 2
+                        else
+                            echo "该镜像重试次数用完，切换到下一个镜像。"
+                        fi
+                    fi
+                done
+            done
+
+            if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
+                echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            echo -e "${CYAN}正在解压...${NC}"
+            if ! unzip -q "$zip_filename"; then
+                echo -e "${RED}解压失败，文件可能已损坏。${NC}"
+                rm -rf "$TEMP_DIR"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            sudo mkdir -p "$PLUGIN_DIR"
+
+            if [ -d "$TARGET_DIR" ]; then
+                echo "检测到旧版本目录，正在删除..."
+                sudo rm -rf "$TARGET_DIR"
+            fi
+
+            local extracted_dir=""
+            extracted_dir=$(find "$TEMP_DIR" -maxdepth 2 -type f \( -name "plugin.py" -o -name "main.py" -o -name "plugin.json" \) -exec dirname {} \; 2>/dev/null | head -1)
+            if [ -z "$extracted_dir" ]; then
+                extracted_dir=$(find "$TEMP_DIR" -maxdepth 1 -type d -name "*Framegen*" -o -name "*framegen*" | head -1)
+            fi
+            if [ -z "$extracted_dir" ]; then
+                local subdirs=($(find "$TEMP_DIR" -maxdepth 1 -type d ! -path "$TEMP_DIR"))
+                if [ ${#subdirs[@]} -eq 1 ]; then
+                    extracted_dir="${subdirs[0]}"
+                fi
+            fi
+            if [ -z "$extracted_dir" ]; then
+                if [ -f "$TEMP_DIR/plugin.py" ] || [ -f "$TEMP_DIR/main.py" ]; then
+                    extracted_dir="$TEMP_DIR"
+                fi
+            fi
+
+            if [ -z "$extracted_dir" ] || [ ! -d "$extracted_dir" ]; then
+                echo -e "${RED}错误: 解压后未找到 Framegen 插件目录。${NC}"
+                echo "解压后的文件列表："
+                ls -la "$TEMP_DIR"
+                rm -rf "$TEMP_DIR"
+                read -p "按回车键返回主菜单..."
+                return 1
+            fi
+
+            echo -e "${CYAN}正在安装插件到 ${TARGET_DIR}...${NC}"
+            sudo mv "$extracted_dir" "$TARGET_DIR"
+
+            sudo chown -R deck:deck "$TARGET_DIR"
+
+            rm -rf "$TEMP_DIR"
+
+            echo ""
+            echo -e "${GREEN}✅ Framegen 插件 (${latest_version}) 安装/更新完成！${NC}"
+            echo "请切换回游戏模式，在 Decky 侧边栏中查看 Framegen 是否出现。"
+            ;;
+
+        2)
+            echo -e "${CYAN}正在卸载 Framegen 插件...${NC}"
+            echo "这将删除目录: ${TARGET_DIR}"
+
+            read -p "确定要卸载吗？(y/N): " -n 1 -r
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "卸载已取消。"
+                read -p "按回车键返回主菜单..."
+                return 0
+            fi
+
+            if [ -d "$TARGET_DIR" ]; then
+                if sudo rm -rf "$TARGET_DIR"; then
+                    echo -e "${GREEN}✅ Framegen 插件已卸载。${NC}"
+                else
+                    echo -e "${RED}卸载失败，请检查权限。${NC}"
+                fi
+            else
+                echo -e "${YELLOW}未检测到 Framegen 插件安装。${NC}"
+            fi
+            ;;
+
+        *)
+            echo "返回主菜单..."
+            return
+            ;;
+    esac
 
     read -p "按回车键返回主菜单..."
 }
