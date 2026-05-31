@@ -1460,7 +1460,7 @@ install_tomoon() {
     read -p "按回车键返回主菜单..."
 }
 
-# 11. 安装＆卸载插件商店（支持可视化进度条 + 镜像重试）
+# 11. 安装＆卸载插件商店（稳健版，支持可视化进度条 + 镜像重试）
 install_remove_plugin_store() {
     show_header
     echo -e "${YELLOW}════════════════ 安装＆卸载插件商店 ════════════════${NC}"
@@ -1496,8 +1496,8 @@ install_remove_plugin_store() {
                 "https://git.xfj0.xyz/"
                 "https://github.com/"
             )
-            DOWNLOAD_TIMEOUT=30
-            MAX_RETRY_PER_MIRROR=1
+            DOWNLOAD_TIMEOUT=60        # 增加超时时间到60秒
+            MAX_RETRY_PER_MIRROR=1     # 每个镜像失败后重试一次
             # =============================
 
             # 检查必要命令
@@ -1578,12 +1578,9 @@ except:
                         echo -e "${YELLOW}重试下载 (第 ${retry_count} 次重试)...${NC}"
                     fi
 
-                    # 使用 curl 下载，显示进度条（--progress-bar），同时保持超时和失败检测
-                    # 注意：--progress-bar 会将进度输出到 stderr，需要保证终端可见
-                    set +e
-                    curl -L --progress-bar --fail --max-time "$DOWNLOAD_TIMEOUT" -o "$TMP_FILE" "$FULL_URL"
+                    # 使用 curl 下载，显示进度条（--progress-bar），不使用 --fail 以避免自动退出
+                    curl -L --progress-bar --max-time "$DOWNLOAD_TIMEOUT" -o "$TMP_FILE" "$FULL_URL"
                     curl_exit=$?
-                    set -e
 
                     if [[ $curl_exit -eq 0 ]] && [[ -f "$TMP_FILE" ]]; then
                         FILE_SIZE=$(stat -c%s "$TMP_FILE" 2>/dev/null || stat -f%z "$TMP_FILE" 2>/dev/null)
@@ -1658,7 +1655,6 @@ EOF
             sudo systemctl enable plugin_loader
             sudo systemctl restart plugin_loader
 
-            # 显示服务状态
             echo "服务状态："
             systemctl status plugin_loader --no-pager
 
