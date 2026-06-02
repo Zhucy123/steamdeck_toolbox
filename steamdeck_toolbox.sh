@@ -17,7 +17,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.2.5"
+VERSION="1.2.6"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -4236,7 +4236,6 @@ install_decky_lsfg_vk() {
     echo ""
 
     local GITHUB_REPO="xXJSONDeruloXx/decky-lsfg-vk"
-    local API_URL="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
     local PLUGIN_DIR="/home/deck/homebrew/plugins"
     local TARGET_DIR="${PLUGIN_DIR}/Decky-LSFG-VK"
     local TEMP_DIR="/tmp/decky_lsfg_vk_install"
@@ -4270,38 +4269,135 @@ install_decky_lsfg_vk() {
 
     case $action_choice in
         1)
-    echo -e "${CYAN}正在从 GitHub 获取最新版本信息...${NC}"
-    local latest_version=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases" | grep -o '"tag_name": *"[^"]*"' | sed 's/.*"tag_name": *"//; s/".*//' | sed 's/^v//' | sort -V | tail -1)
-    latest_version="v${latest_version}"
-
-    if [ -z "$latest_version" ]; then
-        echo -e "${RED}错误: 无法从 GitHub API 获取最新版本，请检查网络连接。${NC}"
-        read -p "按回车键返回主菜单..."
-        return 1
-    fi
-
-            echo -e "${GREEN}最新版本: ${latest_version}${NC}"
-
-            local installed_version="未安装"
-            if [ -d "$TARGET_DIR" ]; then
-                if [ -f "$TARGET_DIR/package.json" ]; then
-                    installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
+            echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+            local releases_json=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases")
+            local versions_info=$(echo "$releases_json" | grep -E '("tag_name":|"prerelease":)' | paste -d ' ' - - | sed 's/.*"tag_name": "\([^"]*\)".*"prerelease": \([^,]*\).*/\1|\2/')
+            local stable_versions=()
+            local prerelease_versions=()
+            while IFS='|' read -r tag prerelease; do
+                [ -z "$tag" ] && continue
+                if [[ "$prerelease" == "true" ]]; then
+                    prerelease_versions+=("$tag")
+                else
+                    stable_versions+=("$tag")
                 fi
+            done <<< "$versions_info"
+
+            local latest_stable=""
+            local latest_prerelease=""
+            if [ ${#stable_versions[@]} -gt 0 ]; then
+                latest_stable=$(printf '%s\n' "${stable_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
+                latest_stable="v${latest_stable}"
+            fi
+            if [ ${#prerelease_versions[@]} -gt 0 ]; then
+                latest_prerelease=$(printf '%s\n' "${prerelease_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
+                latest_prerelease="v${latest_prerelease}"
+            fi
+
+            # 比较预发布版本是否高于正式版，若不是则忽略预发布
+            if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                local stable_num=$(echo "$latest_stable" | sed 's/^v//')
+                local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+                if [[ "$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)" != "$prerelease_num" ]]; then
+                    latest_prerelease=""
+                fi
+            fi
+
+            local installed_version=""
+            if [ -d "$TARGET_DIR" ] && [ -f "$TARGET_DIR/package.json" ]; then
+                installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
                 if [ -n "$installed_version" ]; then
+                    installed_version="v${installed_version}"
                     echo -e "${CYAN}已安装版本: ${installed_version}${NC}"
-                    if [ "$installed_version" = "${latest_version#v}" ]; then
-                        echo -e "${GREEN}已经是最新版本，无需更新。${NC}"
+                fi
+            fi
+
+            local target_version=""
+            if [ -n "$installed_version" ]; then
+                if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                    echo -e "${GREEN}已安装最新正式版 ${installed_version}${NC}"
+                    echo -e "${YELLOW}发现更高版本的预发布版: ${latest_prerelease}${NC}"
+                    read -p "是否升级到预发布版？(y/N): " upgrade
+                    if [[ $upgrade =~ ^[Yy]$ ]]; then
+                        target_version="$latest_prerelease"
+                    else
+                        echo "保持当前版本。"
                         read -p "按回车键返回主菜单..."
                         return 0
-                    else
-                        echo -e "${YELLOW}发现新版本，将进行更新。${NC}"
                     fi
+                elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -n "$latest_stable" ]; then
+                    echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
+                    echo -e "${YELLOW}当前正式版为: ${latest_stable}${NC}"
+                    read -p "是否切换到正式版？(y/N): " switch
+                    if [[ $switch =~ ^[Yy]$ ]]; then
+                        target_version="$latest_stable"
+                    else
+                        echo "保持当前版本。"
+                        read -p "按回车键返回主菜单..."
+                        return 0
+                    fi
+                elif [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -z "$latest_prerelease" ]; then
+                    echo -e "${GREEN}已经是最新版本 (正式版 ${installed_version})，无需更新。${NC}"
+                    read -p "按回车键返回主菜单..."
+                    return 0
+                elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -z "$latest_stable" ]; then
+                    echo -e "${GREEN}已经是最新版本 (预发布版 ${installed_version})，无需更新。${NC}"
+                    read -p "按回车键返回主菜单..."
+                    return 0
                 else
-                    echo -e "${YELLOW}已安装但无法获取版本，将覆盖安装。${NC}"
+                    echo -e "${YELLOW}已安装版本 ${installed_version} 不是最新版本。${NC}"
+                    if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                        echo "请选择要安装的版本："
+                        echo "1. 正式版 ${latest_stable}"
+                        echo "2. 预发布版 ${latest_prerelease}"
+                        read -p "请输入选择 [1-2] (默认正式版): " choice
+                        case $choice in
+                            2) target_version="$latest_prerelease" ;;
+                            *) target_version="$latest_stable" ;;
+                        esac
+                    elif [ -n "$latest_stable" ]; then
+                        target_version="$latest_stable"
+                        echo "将安装正式版 ${target_version}"
+                    elif [ -n "$latest_prerelease" ]; then
+                        target_version="$latest_prerelease"
+                        echo "将安装预发布版 ${target_version}"
+                    else
+                        echo -e "${RED}错误: 无法找到任何版本。${NC}"
+                        read -p "按回车键返回主菜单..."
+                        return 1
+                    fi
                 fi
             else
-                echo "未检测到 LSFG-VK 插件安装，将进行全新安装。"
+                echo "未检测到已安装版本。"
+                if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                    echo "请选择要安装的版本："
+                    echo "1. 正式版 ${latest_stable}"
+                    echo "2. 预发布版 ${latest_prerelease}"
+                    read -p "请输入选择 [1-2] (默认正式版): " choice
+                    case $choice in
+                        2) target_version="$latest_prerelease" ;;
+                        *) target_version="$latest_stable" ;;
+                    esac
+                elif [ -n "$latest_stable" ]; then
+                    target_version="$latest_stable"
+                    echo "将安装正式版 ${target_version}"
+                elif [ -n "$latest_prerelease" ]; then
+                    target_version="$latest_prerelease"
+                    echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
+                else
+                    echo -e "${RED}错误: 无法找到任何版本。${NC}"
+                    read -p "按回车键返回主菜单..."
+                    return 1
+                fi
             fi
+
+            if [ -z "$target_version" ]; then
+                echo "未选择任何版本，操作取消。"
+                read -p "按回车键返回主菜单..."
+                return 0
+            fi
+
+            echo -e "${GREEN}将安装版本: ${target_version}${NC}"
 
             if [ ! -f "/etc/systemd/system/plugin_loader.service" ]; then
                 echo -e "${YELLOW}⚠ 警告: 未检测到 Decky Loader 插件商店。${NC}"
@@ -4329,7 +4425,7 @@ install_decky_lsfg_vk() {
             cd "$TEMP_DIR"
 
             local zip_filename="Decky.LSFG-VK.zip"
-            local download_path="https://github.com/${GITHUB_REPO}/releases/download/${latest_version}/${zip_filename}"
+            local download_path="https://github.com/${GITHUB_REPO}/releases/download/${target_version}/${zip_filename}"
             local DOWNLOAD_SUCCESS=false
 
             for mirror in "${MIRRORS[@]}"; do
@@ -4425,7 +4521,7 @@ install_decky_lsfg_vk() {
             rm -rf "$TEMP_DIR"
 
             echo ""
-            echo -e "${GREEN}✅ LSFG-VK 插件 (${latest_version}) 安装/更新完成！${NC}"
+            echo -e "${GREEN}✅ LSFG-VK 插件 (${target_version}) 安装/更新完成！${NC}"
             echo "请切换回游戏模式，在 Decky 侧边栏中查看 LSFG-VK 是否出现。"
             ;;
 
@@ -4467,7 +4563,6 @@ install_decky_framegen() {
     echo ""
 
     local GITHUB_REPO="xXJSONDeruloXx/Decky-Framegen"
-    local API_URL="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
     local PLUGIN_DIR="/home/deck/homebrew/plugins"
     local TARGET_DIR="${PLUGIN_DIR}/Decky-Framegen"
     local TEMP_DIR="/tmp/decky_framegen_install"
@@ -4501,37 +4596,134 @@ install_decky_framegen() {
 
     case $action_choice in
         1)
-            echo -e "${CYAN}正在从 GitHub 获取最新版本信息...${NC}"
-            local latest_version=$(curl -s "$API_URL" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//; s/".*//')
+            echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+            local releases_json=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases")
+            local versions_info=$(echo "$releases_json" | grep -E '("tag_name":|"prerelease":)' | paste -d ' ' - - | sed 's/.*"tag_name": "\([^"]*\)".*"prerelease": \([^,]*\).*/\1|\2/')
+            local stable_versions=()
+            local prerelease_versions=()
+            while IFS='|' read -r tag prerelease; do
+                [ -z "$tag" ] && continue
+                if [[ "$prerelease" == "true" ]]; then
+                    prerelease_versions+=("$tag")
+                else
+                    stable_versions+=("$tag")
+                fi
+            done <<< "$versions_info"
 
-            if [ -z "$latest_version" ]; then
-                echo -e "${RED}错误: 无法从 GitHub API 获取最新版本，请检查网络连接。${NC}"
-                read -p "按回车键返回主菜单..."
-                return 1
+            local latest_stable=""
+            local latest_prerelease=""
+            if [ ${#stable_versions[@]} -gt 0 ]; then
+                latest_stable=$(printf '%s\n' "${stable_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
+                latest_stable="v${latest_stable}"
+            fi
+            if [ ${#prerelease_versions[@]} -gt 0 ]; then
+                latest_prerelease=$(printf '%s\n' "${prerelease_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
+                latest_prerelease="v${latest_prerelease}"
             fi
 
-            echo -e "${GREEN}最新版本: ${latest_version}${NC}"
-
-            local installed_version="未安装"
-            if [ -d "$TARGET_DIR" ]; then
-                if [ -f "$TARGET_DIR/package.json" ]; then
-                    installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
+            if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                local stable_num=$(echo "$latest_stable" | sed 's/^v//')
+                local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+                if [[ "$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)" != "$prerelease_num" ]]; then
+                    latest_prerelease=""
                 fi
+            fi
+
+            local installed_version=""
+            if [ -d "$TARGET_DIR" ] && [ -f "$TARGET_DIR/package.json" ]; then
+                installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
                 if [ -n "$installed_version" ]; then
+                    installed_version="v${installed_version}"
                     echo -e "${CYAN}已安装版本: ${installed_version}${NC}"
-                    if [ "$installed_version" = "${latest_version#v}" ]; then
-                        echo -e "${GREEN}已经是最新版本，无需更新。${NC}"
+                fi
+            fi
+
+            local target_version=""
+            if [ -n "$installed_version" ]; then
+                if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                    echo -e "${GREEN}已安装最新正式版 ${installed_version}${NC}"
+                    echo -e "${YELLOW}发现更高版本的预发布版: ${latest_prerelease}${NC}"
+                    read -p "是否升级到预发布版？(y/N): " upgrade
+                    if [[ $upgrade =~ ^[Yy]$ ]]; then
+                        target_version="$latest_prerelease"
+                    else
+                        echo "保持当前版本。"
                         read -p "按回车键返回主菜单..."
                         return 0
-                    else
-                        echo -e "${YELLOW}发现新版本，将进行更新。${NC}"
                     fi
+                elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -n "$latest_stable" ]; then
+                    echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
+                    echo -e "${YELLOW}当前正式版为: ${latest_stable}${NC}"
+                    read -p "是否切换到正式版？(y/N): " switch
+                    if [[ $switch =~ ^[Yy]$ ]]; then
+                        target_version="$latest_stable"
+                    else
+                        echo "保持当前版本。"
+                        read -p "按回车键返回主菜单..."
+                        return 0
+                    fi
+                elif [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -z "$latest_prerelease" ]; then
+                    echo -e "${GREEN}已经是最新版本 (正式版 ${installed_version})，无需更新。${NC}"
+                    read -p "按回车键返回主菜单..."
+                    return 0
+                elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -z "$latest_stable" ]; then
+                    echo -e "${GREEN}已经是最新版本 (预发布版 ${installed_version})，无需更新。${NC}"
+                    read -p "按回车键返回主菜单..."
+                    return 0
                 else
-                    echo -e "${YELLOW}已安装但无法获取版本，将覆盖安装。${NC}"
+                    echo -e "${YELLOW}已安装版本 ${installed_version} 不是最新版本。${NC}"
+                    if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                        echo "请选择要安装的版本："
+                        echo "1. 正式版 ${latest_stable}"
+                        echo "2. 预发布版 ${latest_prerelease}"
+                        read -p "请输入选择 [1-2] (默认正式版): " choice
+                        case $choice in
+                            2) target_version="$latest_prerelease" ;;
+                            *) target_version="$latest_stable" ;;
+                        esac
+                    elif [ -n "$latest_stable" ]; then
+                        target_version="$latest_stable"
+                        echo "将安装正式版 ${target_version}"
+                    elif [ -n "$latest_prerelease" ]; then
+                        target_version="$latest_prerelease"
+                        echo "将安装预发布版 ${target_version}"
+                    else
+                        echo -e "${RED}错误: 无法找到任何版本。${NC}"
+                        read -p "按回车键返回主菜单..."
+                        return 1
+                    fi
                 fi
             else
-                echo "未检测到 Framegen 插件安装，将进行全新安装。"
+                echo "未检测到已安装版本。"
+                if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                    echo "请选择要安装的版本："
+                    echo "1. 正式版 ${latest_stable}"
+                    echo "2. 预发布版 ${latest_prerelease}"
+                    read -p "请输入选择 [1-2] (默认正式版): " choice
+                    case $choice in
+                        2) target_version="$latest_prerelease" ;;
+                        *) target_version="$latest_stable" ;;
+                    esac
+                elif [ -n "$latest_stable" ]; then
+                    target_version="$latest_stable"
+                    echo "将安装正式版 ${target_version}"
+                elif [ -n "$latest_prerelease" ]; then
+                    target_version="$latest_prerelease"
+                    echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
+                else
+                    echo -e "${RED}错误: 无法找到任何版本。${NC}"
+                    read -p "按回车键返回主菜单..."
+                    return 1
+                fi
             fi
+
+            if [ -z "$target_version" ]; then
+                echo "未选择任何版本，操作取消。"
+                read -p "按回车键返回主菜单..."
+                return 0
+            fi
+
+            echo -e "${GREEN}将安装版本: ${target_version}${NC}"
 
             if [ ! -f "/etc/systemd/system/plugin_loader.service" ]; then
                 echo -e "${YELLOW}⚠ 警告: 未检测到 Decky Loader 插件商店。${NC}"
@@ -4559,7 +4751,7 @@ install_decky_framegen() {
             cd "$TEMP_DIR"
 
             local zip_filename="Decky-Framegen.zip"
-            local download_path="https://github.com/${GITHUB_REPO}/releases/download/${latest_version}/${zip_filename}"
+            local download_path="https://github.com/${GITHUB_REPO}/releases/download/${target_version}/${zip_filename}"
             local DOWNLOAD_SUCCESS=false
 
             for mirror in "${MIRRORS[@]}"; do
@@ -4655,7 +4847,7 @@ install_decky_framegen() {
             rm -rf "$TEMP_DIR"
 
             echo ""
-            echo -e "${GREEN}✅ Framegen 插件 (${latest_version}) 安装/更新完成！${NC}"
+            echo -e "${GREEN}✅ Framegen 插件 (${target_version}) 安装/更新完成！${NC}"
             echo "请切换回游戏模式，在 Decky 侧边栏中查看 Framegen 是否出现。"
             ;;
 
