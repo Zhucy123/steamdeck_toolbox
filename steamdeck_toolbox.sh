@@ -17,7 +17,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.2.4"
+VERSION="1.2.5"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -4270,24 +4270,21 @@ install_decky_lsfg_vk() {
 
     case $action_choice in
         1)
-            echo -e "${CYAN}正在从 GitHub 获取最新版本信息...${NC}"
-            local latest_version=$(curl -s "$API_URL" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//; s/".*//')
+    echo -e "${CYAN}正在从 GitHub 获取最新版本信息...${NC}"
+    local latest_version=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases" | grep -o '"tag_name": *"[^"]*"' | sed 's/.*"tag_name": *"//; s/".*//' | sed 's/^v//' | sort -V | tail -1)
+    latest_version="v${latest_version}"
 
-            if [ -z "$latest_version" ]; then
-                echo -e "${RED}错误: 无法从 GitHub API 获取最新版本，请检查网络连接。${NC}"
-                read -p "按回车键返回主菜单..."
-                return 1
-            fi
+    if [ -z "$latest_version" ]; then
+        echo -e "${RED}错误: 无法从 GitHub API 获取最新版本，请检查网络连接。${NC}"
+        read -p "按回车键返回主菜单..."
+        return 1
+    fi
 
             echo -e "${GREEN}最新版本: ${latest_version}${NC}"
 
             local installed_version="未安装"
-            local is_installed=false
-            if [ -f "$TARGET_DIR/bin/lsfg-vk" ] || [ -f "$TARGET_DIR/plugin.py" ]; then
-                is_installed=true
-                if [ -f "$TARGET_DIR/plugin.json" ]; then
-                    installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/plugin.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
-                elif [ -f "$TARGET_DIR/package.json" ]; then
+            if [ -d "$TARGET_DIR" ]; then
+                if [ -f "$TARGET_DIR/package.json" ]; then
                     installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
                 fi
                 if [ -n "$installed_version" ]; then
@@ -4395,7 +4392,7 @@ install_decky_lsfg_vk() {
             fi
 
             local extracted_dir=""
-            extracted_dir=$(find "$TEMP_DIR" -maxdepth 2 -type f \( -name "plugin.py" -o -name "plugin.json" -o -name "lsfg-vk" \) -exec dirname {} \; | head -1)
+            extracted_dir=$(find "$TEMP_DIR" -maxdepth 2 -type f \( -name "plugin.py" -o -name "plugin.json" -o -name "lsfg-vk" \) -exec dirname {} \; 2>/dev/null | head -1)
             if [ -z "$extracted_dir" ]; then
                 extracted_dir=$(find "$TEMP_DIR" -maxdepth 1 -type d -name "*LSFG*" -o -name "*lsfg*" | head -1)
             fi
@@ -4516,12 +4513,8 @@ install_decky_framegen() {
             echo -e "${GREEN}最新版本: ${latest_version}${NC}"
 
             local installed_version="未安装"
-            local is_installed=false
-            if [ -f "$TARGET_DIR/plugin.py" ] || [ -f "$TARGET_DIR/main.py" ]; then
-                is_installed=true
-                if [ -f "$TARGET_DIR/plugin.json" ]; then
-                    installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/plugin.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
-                elif [ -f "$TARGET_DIR/package.json" ]; then
+            if [ -d "$TARGET_DIR" ]; then
+                if [ -f "$TARGET_DIR/package.json" ]; then
                     installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
                 fi
                 if [ -n "$installed_version" ]; then
