@@ -17,7 +17,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.2.6"
+VERSION="1.2.7"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -199,21 +199,21 @@ if [ "$SYSTEM_TYPE" == "dual" ]; then
     echo ""
     echo -e "${CYAN}请选择要执行的功能：${NC}"
     echo ""
-    echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装Edge浏览器${NC}"
-    echo -e "${GREEN} 2. 安装国内源            12. 校准摇杆            22. 安装Google浏览器${NC}"
-    echo -e "${GREEN} 3. 调整虚拟内存大小      13. 设置管理员密码      23. 清理Steam缓存${NC}"
-    echo -e "${GREEN} 4. 修复磁盘写入错误      14. 安装AnyDesk         24. 更新已安装应用${NC}"
-    echo -e "${GREEN} 5. 修复引导              15. 安装ToDesk          25. 卸载已安装应用${NC}"
-    echo -e "${GREEN} 6. 修复互通盘            16. 安装WPS Office      26. 安装小黄鸭软件${NC}"
-    echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安装Steam社区302${NC}"
-    echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装微信            28. 安装LSFG-VK插件${NC}"
-    echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装QQ音乐          29. 安装Framegen插件${NC}"
-    echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘${NC}"
+echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装Edge浏览器${NC}"
+echo -e "${GREEN} 2. 安装国内源            12. 校准摇杆            22. 安装Google浏览器${NC}"
+echo -e "${GREEN} 3. 调整虚拟内存大小      13. 设置管理员密码      23. 清理Steam缓存${NC}"
+echo -e "${GREEN} 4. 修复磁盘写入错误      14. 安装AnyDesk         24. 更新已安装应用${NC}"
+echo -e "${GREEN} 5. 修复引导              15. 安装ToDesk          25. 卸载已安装应用${NC}"
+echo -e "${GREEN} 6. 修复互通盘            16. 安装WPS Office      26. 安装小黄鸭软件${NC}"
+echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安装Steam社区302${NC}"
+echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装微信            28. 安装LSFG-VK插件${NC}"
+echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装QQ音乐          29. 安装Framegen插件${NC}"
+echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘        30. 安装/重装Clover引导${NC}"
     echo ""
     echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
     echo ""
 
-    read -p "请输入选项 (输入1-29的数字): " choice
+    read -p "请输入选项 (输入1-30的数字): " choice
 
     if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
         echo -e "${RED}无效选择，请输入数字！${NC}"
@@ -221,8 +221,8 @@ if [ "$SYSTEM_TYPE" == "dual" ]; then
         continue
     fi
 
-    if [ $choice -lt 1 ] || [ $choice -gt 29 ]; then
-        echo -e "${RED}无效选择，请选择1到29之间的数字！${NC}"
+    if [ $choice -lt 1 ] || [ $choice -gt 30 ]; then
+        echo -e "${RED}无效选择，请选择1到30之间的数字！${NC}"
         sleep 1
         continue
     fi
@@ -257,6 +257,7 @@ if [ "$SYSTEM_TYPE" == "dual" ]; then
         27) install_steamcommunity_302 ;;
         28) install_decky_lsfg_vk ;;
         29) install_decky_framegen ;;
+        30) clover_install_or_reinstall ;;
         *)
             echo -e "${RED}无效选择，请重新输入！${NC}"
             sleep 1
@@ -268,20 +269,21 @@ else
     echo ""
     echo -e "${CYAN}请选择要执行的功能：${NC}"
     echo ""
-    echo -e "${GREEN} 1. 关于支持与维护的说明  10. 校准摇杆            19. 安装Edge浏览器${NC}"
-    echo -e "${GREEN} 2. 安装国内源            11. 设置管理员密码      20. 安装Google浏览器${NC}"
-    echo -e "${GREEN} 3. 调整虚拟内存大小      12. 安装AnyDesk         21. 清理Steam缓存${NC}"
-    echo -e "${GREEN} 4. 修复磁盘写入错误      13. 安装ToDesk          22. 更新已安装应用${NC}"
-    echo -e "${GREEN} 5. 清理hosts缓存         14. 安装WPS Office      23. 卸载已安装应用${NC}"
-    echo -e "${GREEN} 6. 安装UU加速器插件      15. 安装QQ              24. 安装小黄鸭软件${NC}"
-    echo -e "${GREEN} 7. 安装迅游加速器插件    16. 安装微信            25. 安装Steam社区302${NC}"
-    echo -e "${GREEN} 8. 安装ToMoon            17. 安装QQ音乐          26. 安装LSFG-VK插件${NC}"
-    echo -e "${GREEN} 9. 安装＆卸载插件商店    18. 安装百度网盘        27. 安装Framegen插件${NC}"
+echo -e "${GREEN} 1. 关于支持与维护的说明  11. 设置管理员密码      21. 清理Steam缓存${NC}"
+echo -e "${GREEN} 2. 安装国内源            12. 安装AnyDesk         22. 更新已安装应用${NC}"
+echo -e "${GREEN} 3. 调整虚拟内存大小      13. 安装ToDesk          23. 卸载已安装应用${NC}"
+echo -e "${GREEN} 4. 修复磁盘写入错误      14. 安装WPS Office      24. 安装小黄鸭软件${NC}"
+echo -e "${GREEN} 5. 清理hosts缓存         15. 安装QQ              25. 安装Steam社区302${NC}"
+echo -e "${GREEN} 6. 安装UU加速器插件      16. 安装微信            26. 安装LSFG-VK插件${NC}"
+echo -e "${GREEN} 7. 安装迅游加速器插件    17. 安装QQ音乐          27. 安装Framegen插件${NC}"
+echo -e "${GREEN} 8. 安装ToMoon            18. 安装百度网盘        28. 安装/重装Clover引导${NC}"
+echo -e "${GREEN} 9. 安装＆卸载插件商店    19. 安装Edge浏览器${NC}"
+echo -e "${GREEN}10. 校准摇杆              20. 安装Google浏览器${NC}"
     echo ""
     echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
     echo ""
 
-    read -p "请输入选项 (输入1-27的数字): " choice
+    read -p "请输入选项 (输入1-28的数字): " choice
 
     if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
         echo -e "${RED}无效选择，请输入数字！${NC}"
@@ -289,8 +291,8 @@ else
         continue
     fi
 
-    if [ $choice -lt 1 ] || [ $choice -gt 27 ]; then
-        echo -e "${RED}无效选择，请选择1到27之间的数字！${NC}"
+    if [ $choice -lt 1 ] || [ $choice -gt 28 ]; then
+        echo -e "${RED}无效选择，请选择1到28之间的数字！${NC}"
         sleep 1
         continue
     fi
@@ -323,6 +325,7 @@ else
         25) install_steamcommunity_302 ;;
         26) install_decky_lsfg_vk ;;
         27) install_decky_framegen ;;
+        28) clover_install_or_reinstall ;;
         *)
             echo -e "${RED}无效选择，请重新输入！${NC}"
             sleep 1
@@ -4880,6 +4883,156 @@ install_decky_framegen() {
             ;;
     esac
 
+    read -p "按回车键返回主菜单..."
+}
+
+clover_install_or_reinstall() {
+    show_header
+    echo -e "${YELLOW}════════════════ 安装/重装 Clover 引导 ════════════════${NC}"
+    echo ""
+    echo -e "${CYAN}此操作将安装或重新安装 Clover 图形化引导管理器。${NC}"
+    echo -e "${YELLOW}重要：请先在 Windows 中进行以下配置（如已有 Windows）：${NC}"
+    echo "  1. 以管理员身份打开命令提示符或 PowerShell"
+    echo "  2. 执行命令：bcdedit.exe -set \"{globalsettings}\" highestmode on"
+    echo "  3. 执行命令：reg add \"HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Control\\TimeZoneInformation\" /v RealTimeIsUniversal /d 1 /t REG_DWORD /f"
+    echo ""
+
+    echo "========================================="
+    echo "   Steam Deck Clover 安装助手"
+    echo "========================================="
+    echo "请选择克隆镜像源："
+    echo "1) GitHub 官方（原始，可能较慢）"
+    echo "2) ghproxy.net 镜像"
+    echo "3) gh.ddlc.top 镜像"
+    read -p "请输入数字 [1-3] (默认 1): " choice
+
+    case "$choice" in
+        2) BASE_URL="https://ghproxy.net/https://github.com" ;;
+        3) BASE_URL="https://gh.ddlc.top/https://github.com" ;;
+        *) BASE_URL="https://github.com" ;;
+    esac
+
+    REPO_FULL_PATH="ryanrudolfoba/SteamDeck-Clover-dualboot"
+    REPO_URL="${BASE_URL}/${REPO_FULL_PATH}"
+    TARGET_DIR="$HOME/SteamDeck-Clover-dualboot"
+
+    if [ -d "$TARGET_DIR" ]; then
+        echo -e "${YELLOW}目录 $TARGET_DIR 已存在。${NC}"
+        read -p "是否删除旧文件夹并重新克隆？(y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            rm -rf "$TARGET_DIR"
+        else
+            echo "操作已取消。"
+            read -p "按回车键返回主菜单..."
+            return 0
+        fi
+    fi
+
+    echo -e "${CYAN}正在克隆仓库...${NC}"
+    if ! git clone "$REPO_URL" "$TARGET_DIR"; then
+        echo -e "${RED}克隆失败，请检查网络连接或更换镜像源。${NC}"
+        read -p "按回车键返回主菜单..."
+        return 1
+    fi
+
+    cd "$TARGET_DIR" || { echo -e "${RED}无法进入目录${NC}"; return 1; }
+
+    echo -e "${CYAN}正在优化 install-Clover.sh 的下载逻辑...${NC}"
+    cp install-Clover.sh install-Clover.sh.bak
+
+    # 替换下载部分为多镜像 + 重试
+    cat > /tmp/clover_download_block.txt << 'EOF'
+echo "Downloading Clover ISO with multiple mirrors and retry..."
+
+MIRRORS=(
+    "https://ghproxy.net/https://github.com"
+    "https://gh.ddlc.top/https://github.com"
+    "https://mirror.ghproxy.com/https://github.com"
+    "https://github.com"
+)
+
+CLOVER_VERSION=5172
+CLOVER_FILE="Clover-${CLOVER_VERSION}-X64.iso.7z"
+DOWNLOAD_SUCCESS=0
+
+for mirror in "${MIRRORS[@]}"; do
+    CLOVER_URL="${mirror}/CloverHackyColor/CloverBootloader/releases/download/${CLOVER_VERSION}/${CLOVER_FILE}"
+    for attempt in 1 2; do
+        echo "尝试从 ${mirror} 下载 (尝试 ${attempt}/2)..."
+        if curl -# -L --fail --connect-timeout 10 --max-time 60 -o "${CLOVER_FILE}" "${CLOVER_URL}"; then
+            echo "✅ 下载成功！"
+            DOWNLOAD_SUCCESS=1
+            break 2
+        else
+            echo "⚠️ 下载失败 (尝试 ${attempt}/2)"
+            rm -f "${CLOVER_FILE}"
+            if [ $attempt -eq 1 ]; then
+                echo "将进行第2次重试..."
+                sleep 2
+            fi
+        fi
+    done
+done
+
+if [ ${DOWNLOAD_SUCCESS} -eq 0 ]; then
+    echo "❌ Error downloading Clover! 所有镜像源均失败，请检查网络后重试。"
+    exit 1
+fi
+
+CLOVER_ARCHIVE="${CLOVER_FILE}"
+CLOVER_BASE=$(basename -s .7z "${CLOVER_ARCHIVE}")
+
+7z x $CLOVER_ARCHIVE -aoa $CLOVER_BASE &> /dev/null
+if [ $? -eq 0 ]
+then
+    echo Clover has been downloaded from the github repo!
+else
+    echo Error downloading Clover!
+    exit
+fi
+
+EOF
+
+    sed -i -e '/# obtain Clover ISO/,/# mount Clover ISO/ {
+        /# obtain Clover ISO/ {
+            r /tmp/clover_download_block.txt
+            d
+        }
+        d
+    }' install-Clover.sh
+    rm -f /tmp/clover_download_block.txt
+
+    # 删除开头的 sleep 2
+    sed -i '/^sleep 2$/d' install-Clover.sh
+
+    # 优化 blkid 命令（只扫描 nvme0n1p1）
+    sed -i 's/blkid | grep nvme0n1p1\\: | grep Microsoft/blkid \/dev\/nvme0n1p1 | grep -i microsoft/' install-Clover.sh
+
+    echo -e "${GREEN}✓ install-Clover.sh 已优化（去除延时、加速检查、多镜像下载）。${NC}"
+
+    chmod +x install-Clover.sh || {
+        echo -e "${RED}无法设置 install-Clover.sh 执行权限。${NC}"
+        read -p "按回车键返回主菜单..."
+        return 1
+    }
+
+    echo -e "${CYAN}即将运行 Clover 安装脚本，请根据提示输入 sudo 密码（如果需要）...${NC}"
+    sleep 1
+
+    LOG_FILE="/tmp/clover_install.log"
+    ./install-Clover.sh 2>&1 | tee "$LOG_FILE"
+    INSTALL_EXIT=$?
+
+    if grep -q "Not enough space on the ESP partition!" "$LOG_FILE"; then
+        echo -e "${RED}安装失败：ESP分区空间不足，请清理后重试。${NC}"
+    elif [ $INSTALL_EXIT -eq 0 ] && grep -q "Clover install completed" "$LOG_FILE"; then
+        echo -e "${GREEN}Clover 安装/重装成功！建议重启 Steam Deck。${NC}"
+    else
+        echo -e "${RED}安装/重装失败，请检查上方输出。${NC}"
+    fi
+
+    echo ""
     read -p "按回车键返回主菜单..."
 }
 
