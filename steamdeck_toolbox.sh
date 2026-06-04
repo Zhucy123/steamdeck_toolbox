@@ -17,7 +17,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.2.8"
+VERSION="1.2.9"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -83,7 +83,7 @@ auto_update_check() {
         [ -f "$backup_script" ] && cp "$backup_script" "$SCRIPT_PATH"
         rm -rf "$temp_dir"
         echo -e "${YELLOW}按回车键继续使用当前版本...${NC}"
-        read -p ""
+        read -p "" < /dev/tty
         return 1
     fi
 
@@ -102,7 +102,7 @@ auto_update_check() {
     echo -e "${GREEN}工具箱已从 v$VERSION 更新至 v$remote_version${NC}"
     echo -e "${YELLOW}请重启工具箱以使更新生效。${NC}"
     echo -e "${YELLOW}按回车键关闭本窗口，然后重新打开工具箱。${NC}"
-    read -p ""
+    read -p "" < /dev/tty
     exit 0
 }
 
@@ -213,7 +213,7 @@ echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘        30. �
     echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
     echo ""
 
-    read -p "请输入选项 (输入1-30的数字): " choice
+    read -p "请输入选项 (输入1-30的数字): " choice < /dev/tty
 
     if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
         echo -e "${RED}无效选择，请输入数字！${NC}"
@@ -283,7 +283,7 @@ echo -e "${GREEN}10. 校准摇杆              20. 安装Google浏览器${NC}"
     echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
     echo ""
 
-    read -p "请输入选项 (输入1-28的数字): " choice
+    read -p "请输入选项 (输入1-28的数字): " choice < /dev/tty
 
     if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
         echo -e "${RED}无效选择，请输入数字！${NC}"
@@ -358,7 +358,7 @@ show_about() {
     echo "如有问题或建议，请联系店铺售后客服反馈"
     echo ""
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_chinese_source() {
@@ -380,7 +380,7 @@ install_chinese_source() {
     echo ""
     echo -e "${YELLOW}重启后生效${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 adjust_swap() {
@@ -394,10 +394,10 @@ adjust_swap() {
     if command -v free &> /dev/null; then
         LANG=C free -h | while read line; do
             if [[ $line =~ ^Mem: ]]; then
-                read -ra mem <<< "$line"
+                read -ra mem <<< "$line" < /dev/tty
                 echo -e "物理内存: ${GREEN}${mem[1]}${NC} | 已用: ${YELLOW}${mem[2]}${NC}"
             elif [[ $line =~ ^Swap: ]]; then
-                read -ra sw <<< "$line"
+                read -ra sw <<< "$line" < /dev/tty
                 echo -e "交换空间: ${GREEN}${sw[1]}${NC} | 已用: ${YELLOW}${sw[2]}${NC}"
             fi
         done
@@ -412,7 +412,7 @@ adjust_swap() {
     if command -v swapon &> /dev/null && swapon_output=$(swapon --show 2>/dev/null); then
         echo "$swapon_output" | while read line; do
             if [[ ! $line == NAME* ]]; then
-                read -ra parts <<< "$line"
+                read -ra parts <<< "$line" < /dev/tty
                 if [ "${#parts[@]}" -ge 4 ]; then
                     echo -e "${GREEN}${parts[0]}${NC} (${CYAN}${parts[1]}${NC}): ${parts[2]} | 已用: ${YELLOW}${parts[3]}${NC}"
                 fi
@@ -443,7 +443,7 @@ adjust_swap() {
     echo "============================================"
     echo ""
 
-    read -p "请输入选项 [1-4]: " main_choice
+    read -p "请输入选项 [1-4]: " main_choice < /dev/tty
 
     case $main_choice in
         1)
@@ -461,7 +461,7 @@ adjust_swap() {
         *)
             echo -e "${RED}无效选择，请重新输入${NC}"
             echo ""
-            read -p "按回车键返回主菜单..."
+            read -p "按回车键返回主菜单..." < /dev/tty
             return
             ;;
     esac
@@ -482,11 +482,11 @@ apply_cryo_recommendation() {
     echo "现有交换配置将被替换"
     echo ""
 
-    read -p "是否继续？(输入 y 确认，其他键取消): " -n 1 -r
+    read -p "是否继续？(输入 y 确认，其他键取消): " -n 1 -r < /dev/tty
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         echo -e "${YELLOW}操作已取消${NC}"
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -577,7 +577,7 @@ EOF
     echo -e "交换倾向性 (swappiness): ${GREEN}$(cat /proc/sys/vm/swappiness 2>/dev/null || echo 'N/A')${NC}"
     echo ""
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 adjust_swapfile() {
@@ -607,7 +607,7 @@ adjust_swapfile() {
     echo " 6. 自定义大小"
     echo ""
 
-    read -p "请选择 [1-6]: " size_choice
+    read -p "请选择 [1-6]: " size_choice < /dev/tty
 
     case $size_choice in
         1) swap_size_gb=1;;
@@ -616,7 +616,7 @@ adjust_swapfile() {
         4) swap_size_gb=16;;
         5) swap_size_gb=32;;
         6)
-            read -p "请输入大小 (单位GB，数字): " custom_size
+            read -p "请输入大小 (单位GB，数字): " custom_size < /dev/tty
             if [[ "$custom_size" =~ ^[0-9]+$ ]]; then
                 swap_size_gb=$custom_size
             else
@@ -630,7 +630,7 @@ adjust_swapfile() {
     echo ""
     echo -e "${YELLOW}即将创建 ${swap_size_gb}GB 的Swap文件。${NC}"
     echo "这会花费几分钟，并且需要临时磁盘空间。"
-    read -p "是否继续? (y/N): " -n 1 -r
+    read -p "是否继续? (y/N): " -n 1 -r < /dev/tty
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         return
@@ -688,7 +688,7 @@ adjust_swapfile() {
     fi
 
     echo ""
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 configure_zram() {
@@ -704,7 +704,7 @@ configure_zram() {
     echo " 3. 8GB (积极，提升大型游戏体验)"
     echo ""
 
-    read -p "请选择 [1-3]: " zram_choice
+    read -p "请选择 [1-3]: " zram_choice < /dev/tty
 
     case $zram_choice in
         1) zram_size_gb=2;;
@@ -754,7 +754,7 @@ EOF
     echo -e "${YELLOW}提示：${NC}你现在同时启用了ZRAM和传统Swap。"
     echo "如需仅使用ZRAM，可在主菜单使用选项4清理传统Swap。"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 cleanup_swap() {
@@ -767,7 +767,7 @@ cleanup_swap() {
     echo " • 停用并禁用ZRAM服务"
     echo ""
 
-    read -p "确定要清理吗？此操作不可逆。(y/N): " -n 1 -r
+    read -p "确定要清理吗？此操作不可逆。(y/N): " -n 1 -r < /dev/tty
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         return
@@ -789,7 +789,7 @@ cleanup_swap() {
     echo -e "${GREEN}✅ 已清理所有Swap配置。${NC}"
     echo "你可以重新启动本功能来配置新的Swap方案。"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 fix_disk_write_error() {
@@ -826,7 +826,7 @@ fix_disk_write_error() {
     else
         echo -e "${RED}✗ 未找到磁盘设备: $DISK_DEVICE${NC}"
         echo "请检查设备名称是否正确"
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -920,7 +920,7 @@ fix_disk_write_error() {
     echo "3. 如需更彻底的修复，建议使用Windows系统下的磁盘检查工具"
     echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 fix_boot() {
@@ -1015,7 +1015,7 @@ echo "  • 将Clover (Boot$CLOVER_BOOTNUM) 设为第一启动项"
 echo "  • 其他启动项顺序保持不变"
 echo ""
 
-read -p "是否继续？(输入 y 确认，其他键取消): " -n 1 -r CONFIRM
+read -p "是否继续？(输入 y 确认，其他键取消): " -n 1 -r CONFIRM < /dev/tty
 echo ""
 
 if [[ ! $CONFIRM =~ ^[Yy]$ ]]; then
@@ -1060,7 +1060,7 @@ EOF
 
     echo ""
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 fix_shared_disk() {
@@ -1151,7 +1151,7 @@ fix_shared_disk() {
     echo ""
     echo -e "${YELLOW}提示：如果没看到GAME盘，请去steam-设置-存储空间，添加一下GAME盘${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 clear_hosts_cache() {
@@ -1169,7 +1169,7 @@ clear_hosts_cache() {
     echo -e "${GREEN}✓ hosts缓存已清理完成${NC}"
     echo -e "${YELLOW}注意：/etc/hosts文件已被清空，如果需要默认配置，请手动恢复备份${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_uu_accelerator() {
@@ -1187,7 +1187,7 @@ install_uu_accelerator() {
         echo -e "${RED}✗ UU加速器插件安装失败${NC}"
     fi
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_xunyou_accelerator() {
@@ -1205,7 +1205,7 @@ install_xunyou_accelerator() {
         echo -e "${RED}✗ 迅游加速器插件安装失败${NC}"
     fi
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_tomoon() {
@@ -1234,7 +1234,7 @@ install_tomoon() {
     for cmd in curl sudo unzip; do
         if ! command -v $cmd &> /dev/null; then
             echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
-            read -p "按回车键返回主菜单..."
+            read -p "按回车键返回主菜单..." < /dev/tty
             return 1
         fi
     done
@@ -1244,7 +1244,7 @@ install_tomoon() {
     echo "2. 卸载 ToMoon 插件"
     echo ""
 
-    read -p "请输入选择 [1-2] (输入其他键返回): " action_choice
+    read -p "请输入选择 [1-2] (输入其他键返回): " action_choice < /dev/tty
 
     case $action_choice in
         1)
@@ -1253,7 +1253,7 @@ install_tomoon() {
 
             if [ -z "$latest_version" ]; then
                 echo -e "${RED}错误: 无法从 GitHub API 获取最新版本，请检查网络连接。${NC}"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -1269,7 +1269,7 @@ install_tomoon() {
                         echo -e "${CYAN}已安装版本: ${installed_version}${NC}"
                         if [ "$installed_version" = "${latest_version#v}" ]; then
                             echo -e "${GREEN}已经是最新版本，无需更新。${NC}"
-                            read -p "按回车键返回主菜单..."
+                            read -p "按回车键返回主菜单..." < /dev/tty
                             return 0
                         else
                             echo -e "${YELLOW}发现新版本，将进行更新。${NC}"
@@ -1287,21 +1287,21 @@ install_tomoon() {
             if [ ! -f "/etc/systemd/system/plugin_loader.service" ]; then
                 echo -e "${YELLOW}⚠ 警告: 未检测到 Decky Loader 插件商店。${NC}"
                 echo "ToMoon 插件需要先安装 Decky Loader 才能正常工作。"
-                read -p "是否继续安装？(y/N): " -n 1 -r
+                read -p "是否继续安装？(y/N): " -n 1 -r < /dev/tty
                 echo ""
                 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                     echo "安装已取消。"
-                    read -p "按回车键返回主菜单..."
+                    read -p "按回车键返回主菜单..." < /dev/tty
                     return 1
                 fi
             fi
 
             echo -e "${CYAN}准备安装/更新 ToMoon 插件...${NC}"
-            read -p "是否继续？(y/N): " -n 1 -r
+            read -p "是否继续？(y/N): " -n 1 -r < /dev/tty
             echo ""
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 echo "操作已取消。"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -1353,7 +1353,7 @@ install_tomoon() {
 
             if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
                 echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -1361,7 +1361,7 @@ install_tomoon() {
             if ! unzip -q "$zip_filename"; then
                 echo -e "${RED}解压失败，文件可能已损坏。${NC}"
                 rm -rf "$TEMP_DIR"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -1395,7 +1395,7 @@ install_tomoon() {
                 echo "解压后的文件列表："
                 ls -la "$TEMP_DIR"
                 rm -rf "$TEMP_DIR"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -1415,11 +1415,11 @@ install_tomoon() {
             echo -e "${CYAN}正在卸载 ToMoon 插件...${NC}"
             echo "这将删除目录: ${TARGET_DIR}"
 
-            read -p "确定要卸载吗？(y/N): " -n 1 -r
+            read -p "确定要卸载吗？(y/N): " -n 1 -r < /dev/tty
             echo ""
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 echo "卸载已取消。"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 0
             fi
 
@@ -1440,7 +1440,7 @@ install_tomoon() {
             ;;
     esac
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_remove_plugin_store() {
@@ -1452,7 +1452,7 @@ install_remove_plugin_store() {
     echo "2. 卸载插件商店"
     echo ""
 
-    read -p "请输入选择 [1-2]: " plugin_choice
+    read -p "请输入选择 [1-2]: " plugin_choice < /dev/tty
 
     case $plugin_choice in
         1)
@@ -1482,7 +1482,7 @@ install_remove_plugin_store() {
             for cmd in curl python3 systemctl sudo journalctl stat; do
                 if ! command -v $cmd &> /dev/null; then
                     echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
-                    read -p "按回车键返回主菜单..."
+                    read -p "按回车键返回主菜单..." < /dev/tty
                     return 1
                 fi
             done
@@ -1501,7 +1501,7 @@ except:
 ")
             if [[ -z "$LATEST_VERSION" ]]; then
                 echo -e "${RED}错误: 无法获取最新版本号，请检查网络。${NC}"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
             echo -e "${GREEN}最新版本: ${LATEST_VERSION}${NC}"
@@ -1516,7 +1516,7 @@ except:
                     echo -e "${CYAN}当前已安装版本: ${INSTALLED_VERSION}${NC}"
                     if [[ "$INSTALLED_VERSION" == "$LATEST_VERSION" ]]; then
                         echo -e "${GREEN}已经是最新版本，无需安装。${NC}"
-                        read -p "按回车键返回主菜单..."
+                        read -p "按回车键返回主菜单..." < /dev/tty
                         return 0
                     else
                         echo -e "${YELLOW}发现新版本，将进行更新。${NC}"
@@ -1591,7 +1591,7 @@ except:
 
             if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
                 echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -1639,11 +1639,11 @@ EOF
             echo "警告：这将删除整个 /home/deck/homebrew 目录，包括所有插件和插件商店。"
             echo ""
 
-            read -p "确定要卸载插件商店吗？(y/N): " -n 1 -r
+            read -p "确定要卸载插件商店吗？(y/N): " -n 1 -r < /dev/tty
             echo ""
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 echo "卸载已取消。"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return
             fi
 
@@ -1662,7 +1662,7 @@ EOF
             ;;
     esac
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 calibrate_joystick() {
@@ -1680,7 +1680,7 @@ calibrate_joystick() {
         echo "请确保系统中已安装摇杆校准工具"
     fi
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 set_admin_password() {
@@ -1712,7 +1712,7 @@ set_admin_password() {
         fi
     fi
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_anydesk() {
@@ -1742,7 +1742,7 @@ install_anydesk() {
         echo "2. 卸载AnyDesk"
         echo ""
 
-        read -p "请输入选择 [1-2] 输入其他键返回主菜单: " app_choice
+        read -p "请输入选择 [1-2] 输入其他键返回主菜单: " app_choice < /dev/tty
 
         case $app_choice in
             1)
@@ -1775,7 +1775,7 @@ EOF
                 ;;
         esac
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -1820,7 +1820,7 @@ EOF
         echo -e "${YELLOW}无法通过Flatpak安装AnyDesk。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -1847,7 +1847,7 @@ EOF
     echo -e "${GREEN}✓ 您也可以在应用菜单中找到AnyDesk${NC}"
     echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_todesk() {
@@ -1867,7 +1867,7 @@ install_todesk() {
     echo ""
     echo -e "${YELLOW}请在桌面上运行'todesk安装'或'todesk重新安装'的文件来完成安装${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_wps_office() {
@@ -1894,7 +1894,7 @@ install_wps_office() {
         echo "2. 卸载WPS Office"
         echo ""
 
-        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " wps_choice
+        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " wps_choice < /dev/tty
 
         case $wps_choice in
             1)
@@ -1927,7 +1927,7 @@ EOF
                 ;;
         esac
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -1987,7 +1987,7 @@ EOF
         echo -e "${YELLOW}无法通过Flatpak安装WPS Office。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2014,7 +2014,7 @@ EOF
     echo -e "${GREEN}✓ 您也可以在应用菜单中找到WPS Office${NC}"
     echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_qq() {
@@ -2044,7 +2044,7 @@ install_qq() {
         echo "2. 卸载QQ"
         echo ""
 
-        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice
+        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice < /dev/tty
 
         case $app_choice in
             1)
@@ -2077,7 +2077,7 @@ EOF
                 ;;
         esac
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2126,7 +2126,7 @@ EOF
         echo -e "${YELLOW}无法通过Flatpak安装QQ。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2153,7 +2153,7 @@ EOF
     echo -e "${GREEN}✓ 您也可以在应用菜单中找到QQ${NC}"
     echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_wechat() {
@@ -2183,7 +2183,7 @@ install_wechat() {
         echo "2. 卸载微信"
         echo ""
 
-        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice
+        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice < /dev/tty
 
         case $app_choice in
             1)
@@ -2216,7 +2216,7 @@ EOF
                 ;;
         esac
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2265,7 +2265,7 @@ EOF
         echo -e "${YELLOW}无法通过Flatpak安装微信。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2292,7 +2292,7 @@ EOF
     echo -e "${GREEN}✓ 您也可以在应用菜单中找到微信${NC}"
     echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_qqmusic() {
@@ -2322,7 +2322,7 @@ install_qqmusic() {
         echo "2. 卸载QQ音乐"
         echo ""
 
-        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice
+        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice < /dev/tty
 
         case $app_choice in
             1)
@@ -2355,7 +2355,7 @@ EOF
                 ;;
         esac
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2404,7 +2404,7 @@ EOF
         echo -e "${YELLOW}无法通过Flatpak安装QQ音乐。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2431,7 +2431,7 @@ EOF
     echo -e "${GREEN}✓ 您也可以在应用菜单中找到QQ音乐${NC}"
     echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_baidunetdisk() {
@@ -2461,7 +2461,7 @@ install_baidunetdisk() {
         echo "2. 卸载百度网盘"
         echo ""
 
-        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice
+        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice < /dev/tty
 
         case $app_choice in
             1)
@@ -2494,7 +2494,7 @@ EOF
                 ;;
         esac
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2543,7 +2543,7 @@ EOF
         echo -e "${YELLOW}无法通过Flatpak安装百度网盘。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2570,7 +2570,7 @@ EOF
     echo -e "${GREEN}✓ 您也可以在应用菜单中找到百度网盘${NC}"
     echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_edge() {
@@ -2600,7 +2600,7 @@ install_edge() {
         echo "2. 卸载Edge浏览器"
         echo ""
 
-        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice
+        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice < /dev/tty
 
         case $app_choice in
             1)
@@ -2633,7 +2633,7 @@ EOF
                 ;;
         esac
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2682,7 +2682,7 @@ EOF
         echo -e "${YELLOW}无法通过Flatpak安装Edge浏览器。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2709,7 +2709,7 @@ EOF
     echo -e "${GREEN}✓ 您也可以在应用菜单中找到Edge浏览器${NC}"
     echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_chrome() {
@@ -2739,7 +2739,7 @@ install_chrome() {
         echo "2. 卸载Google浏览器"
         echo ""
 
-        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice
+        read -p "请输入选择 [1-2] (输入其他键返回主菜单): " app_choice < /dev/tty
 
         case $app_choice in
             1)
@@ -2772,7 +2772,7 @@ EOF
                 ;;
         esac
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2821,7 +2821,7 @@ EOF
         echo -e "${YELLOW}无法通过Flatpak安装Google浏览器。${NC}"
         echo "请尝试其他安装方法或检查网络连接。"
 
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2848,7 +2848,7 @@ EOF
     echo -e "${GREEN}✓ 您也可以在应用菜单中找到Google浏览器${NC}"
     echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 steamdeck_cache_manager() {
@@ -2864,7 +2864,7 @@ steamdeck_cache_manager() {
         echo -e "${RED}错误：未检测到图形界面环境。${NC}"
         echo "请确保在桌面模式下运行此功能。"
         echo ""
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -2881,14 +2881,14 @@ steamdeck_cache_manager() {
             echo -e "${RED}无法自动安装zenity，请手动安装zenity后再试。${NC}"
             echo "安装命令: sudo pacman -S zenity 或 sudo apt install zenity"
             echo ""
-            read -p "按回车键返回主菜单..."
+            read -p "按回车键返回主菜单..." < /dev/tty
             return
         fi
 
         if ! command -v zenity &> /dev/null; then
             echo -e "${RED}✗ Zenity安装失败！${NC}"
             echo ""
-            read -p "按回车键返回主菜单..."
+            read -p "按回车键返回主菜单..." < /dev/tty
             return
         fi
     fi
@@ -3399,7 +3399,7 @@ exec_steamdeck_cache_manager() {
 
     echo ""
     echo "缓存管理器操作完成。"
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 update_installed_apps() {
@@ -3412,7 +3412,7 @@ update_installed_apps() {
     echo "2. 更新全部应用"
     echo ""
 
-    read -p "请输入选择 [1-2] (输入其他键返回主菜单): " update_choice
+    read -p "请输入选择 [1-2] (输入其他键返回主菜单): " update_choice < /dev/tty
 
     case $update_choice in
         1)
@@ -3427,7 +3427,7 @@ update_installed_apps() {
             ;;
     esac
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 update_specific_app() {
@@ -3446,7 +3446,7 @@ update_specific_app() {
     echo "8. Google浏览器"
     echo ""
 
-    read -p "请输入选择 [1-8] (输入其他键返回): " app_choice
+    read -p "请输入选择 [1-8] (输入其他键返回): " app_choice < /dev/tty
 
     case $app_choice in
         1)
@@ -3544,7 +3544,7 @@ uninstall_apps() {
     echo "8. Google浏览器"
     echo ""
 
-    read -p "请输入选择 [1-8] (输入其他键返回主菜单): " app_choice
+    read -p "请输入选择 [1-8] (输入其他键返回主菜单): " app_choice < /dev/tty
 
     case $app_choice in
         1)
@@ -3601,7 +3601,7 @@ uninstall_app_by_name() {
         echo "找到已安装的包: $installed_package"
         echo ""
         echo -e "${YELLOW}警告：您即将卸载 $app_name${NC}"
-        read -p "是否继续？(输入 y 确认，其他键取消): " -n 1 -r
+        read -p "是否继续？(输入 y 确认，其他键取消): " -n 1 -r < /dev/tty
         echo ""
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             echo "操作已取消。"
@@ -3626,7 +3626,7 @@ uninstall_app_by_name() {
 
         if [ -f "$desktop_file" ]; then
             echo "检测到残留的桌面快捷方式。"
-            read -p "是否删除桌面快捷方式？(输入 y 确认，其他键取消): " -n 1 -r
+            read -p "是否删除桌面快捷方式？(输入 y 确认，其他键取消): " -n 1 -r < /dev/tty
             echo ""
             if [[ $REPLY =~ ^[Yy]$ ]]; then
                 rm -f "$desktop_file"
@@ -3635,7 +3635,7 @@ uninstall_app_by_name() {
         fi
     fi
 
-    read -p "按回车键返回..."
+    read -p "按回车键返回..." < /dev/tty
 }
 
 install_yellow_duck_software() {
@@ -3659,7 +3659,7 @@ check_lossless_scaling() {
         echo "   安装目录: $LOSS_DIR"
         echo ""
 
-        read -p "是否要卸载小黄鸭软件？(y/N): " -n 1 -r
+        read -p "是否要卸载小黄鸭软件？(y/N): " -n 1 -r < /dev/tty
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             echo "开始卸载小黄鸭软件..."
@@ -3696,7 +3696,7 @@ check_zip_tools() {
 
     if [[ ${#missing_tools[@]} -gt 0 ]]; then
         echo "需要安装以下工具: ${missing_tools[*]}"
-        read -p "是否现在安装？(y/N): " -n 1 -r
+        read -p "是否现在安装？(y/N): " -n 1 -r < /dev/tty
         echo ""
 
         if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -3956,7 +3956,7 @@ main() {
     echo "• 仓库地址: https://gitee.com/Zhucy2100/lossless-scaling"
     echo ""
 
-    read -p "是否继续安装？(y/N): " -n 1 -r
+    read -p "是否继续安装？(y/N): " -n 1 -r < /dev/tty
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         echo "安装已取消。"
@@ -3981,7 +3981,7 @@ main() {
     show_installation_complete
 
     echo ""
-    read -p "按回车键退出..."
+    read -p "按回车键退出..." < /dev/tty
 }
 
 main
@@ -3995,7 +3995,7 @@ EOF
     rm -rf "$temp_dir"
 
     echo ""
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_steamcommunity_302() {
@@ -4025,7 +4025,7 @@ install_steamcommunity_302() {
         echo "3. 返回主菜单"
         echo ""
 
-        read -p "请输入选择 [1-3]: " choice
+        read -p "请输入选择 [1-3]: " choice < /dev/tty
 
         case $choice in
             1)
@@ -4061,7 +4061,7 @@ install_steamcommunity_302() {
                     echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
                 fi
                 echo -e "${GREEN}✓ Steam社区302已卸载完成${NC}"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return
                 ;;
             3)
@@ -4079,11 +4079,11 @@ install_steamcommunity_302() {
     echo "该工具需要从dogfight360.com下载。"
     echo ""
 
-    read -p "是否继续安装？(y/N): " -n 1 -r
+    read -p "是否继续安装？(y/N): " -n 1 -r < /dev/tty
     echo ""
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         echo "安装已取消。"
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -4103,7 +4103,7 @@ install_steamcommunity_302() {
         sudo pacman -S --noconfirm wget 2>/dev/null || {
             echo -e "${RED}无法安装wget，请手动安装后再试。${NC}"
             echo "安装命令: sudo pacman -S wget"
-            read -p "按回车键返回主菜单..."
+            read -p "按回车键返回主菜单..." < /dev/tty
             return
         }
     fi
@@ -4117,7 +4117,7 @@ install_steamcommunity_302() {
     if [ $? -ne 0 ]; then
         echo -e "${RED}✗ 下载失败，请检查网络连接${NC}"
         echo "可以尝试手动下载后放置到 $install_dir 目录"
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -4129,7 +4129,7 @@ install_steamcommunity_302() {
 
     if [ $? -ne 0 ]; then
         echo -e "${RED}✗ 解压失败${NC}"
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return
     fi
 
@@ -4154,7 +4154,7 @@ install_steamcommunity_302() {
             extracted_dir="."
         else
             echo -e "${RED}✗ 找不到解压后的文件${NC}"
-            read -p "按回车键返回主菜单..."
+            read -p "按回车键返回主菜单..." < /dev/tty
             return
         fi
     fi
@@ -4230,7 +4230,7 @@ EOF
     echo "3. 卸载时会同时清理桌面快捷方式和安装文件"
     echo ""
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_decky_lsfg_vk() {
@@ -4258,7 +4258,7 @@ install_decky_lsfg_vk() {
     for cmd in curl sudo unzip; do
         if ! command -v $cmd &> /dev/null; then
             echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
-            read -p "按回车键返回主菜单..."
+            read -p "按回车键返回主菜单..." < /dev/tty
             return 1
         fi
     done
@@ -4268,7 +4268,7 @@ install_decky_lsfg_vk() {
     echo "2. 卸载 LSFG-VK 插件"
     echo ""
 
-    read -p "请输入选择 [1-2] (输入其他键返回): " action_choice
+    read -p "请输入选择 [1-2] (输入其他键返回): " action_choice < /dev/tty
 
     case $action_choice in
         1)
@@ -4320,32 +4320,32 @@ install_decky_lsfg_vk() {
                 if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
                     echo -e "${GREEN}已安装最新正式版 ${installed_version}${NC}"
                     echo -e "${YELLOW}发现更高版本的预发布版: ${latest_prerelease}${NC}"
-                    read -p "是否升级到预发布版？(y/N): " upgrade
+                    read -p "是否升级到预发布版？(y/N): " upgrade < /dev/tty
                     if [[ $upgrade =~ ^[Yy]$ ]]; then
                         target_version="$latest_prerelease"
                     else
                         echo "保持当前版本。"
-                        read -p "按回车键返回主菜单..."
+                        read -p "按回车键返回主菜单..." < /dev/tty
                         return 0
                     fi
                 elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -n "$latest_stable" ]; then
                     echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
                     echo -e "${YELLOW}当前正式版为: ${latest_stable}${NC}"
-                    read -p "是否切换到正式版？(y/N): " switch
+                    read -p "是否切换到正式版？(y/N): " switch < /dev/tty
                     if [[ $switch =~ ^[Yy]$ ]]; then
                         target_version="$latest_stable"
                     else
                         echo "保持当前版本。"
-                        read -p "按回车键返回主菜单..."
+                        read -p "按回车键返回主菜单..." < /dev/tty
                         return 0
                     fi
                 elif [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -z "$latest_prerelease" ]; then
                     echo -e "${GREEN}已经是最新版本 (正式版 ${installed_version})，无需更新。${NC}"
-                    read -p "按回车键返回主菜单..."
+                    read -p "按回车键返回主菜单..." < /dev/tty
                     return 0
                 elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -z "$latest_stable" ]; then
                     echo -e "${GREEN}已经是最新版本 (预发布版 ${installed_version})，无需更新。${NC}"
-                    read -p "按回车键返回主菜单..."
+                    read -p "按回车键返回主菜单..." < /dev/tty
                     return 0
                 else
                     echo -e "${YELLOW}已安装版本 ${installed_version} 不是最新版本。${NC}"
@@ -4353,7 +4353,7 @@ install_decky_lsfg_vk() {
                         echo "请选择要安装的版本："
                         echo "1. 正式版 ${latest_stable}"
                         echo "2. 预发布版 ${latest_prerelease}"
-                        read -p "请输入选择 [1-2] (默认正式版): " choice
+                        read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
                         case $choice in
                             2) target_version="$latest_prerelease" ;;
                             *) target_version="$latest_stable" ;;
@@ -4366,7 +4366,7 @@ install_decky_lsfg_vk() {
                         echo "将安装预发布版 ${target_version}"
                     else
                         echo -e "${RED}错误: 无法找到任何版本。${NC}"
-                        read -p "按回车键返回主菜单..."
+                        read -p "按回车键返回主菜单..." < /dev/tty
                         return 1
                     fi
                 fi
@@ -4376,7 +4376,7 @@ install_decky_lsfg_vk() {
                     echo "请选择要安装的版本："
                     echo "1. 正式版 ${latest_stable}"
                     echo "2. 预发布版 ${latest_prerelease}"
-                    read -p "请输入选择 [1-2] (默认正式版): " choice
+                    read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
                     case $choice in
                         2) target_version="$latest_prerelease" ;;
                         *) target_version="$latest_stable" ;;
@@ -4389,14 +4389,14 @@ install_decky_lsfg_vk() {
                     echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
                 else
                     echo -e "${RED}错误: 无法找到任何版本。${NC}"
-                    read -p "按回车键返回主菜单..."
+                    read -p "按回车键返回主菜单..." < /dev/tty
                     return 1
                 fi
             fi
 
             if [ -z "$target_version" ]; then
                 echo "未选择任何版本，操作取消。"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 0
             fi
 
@@ -4405,21 +4405,21 @@ install_decky_lsfg_vk() {
             if [ ! -f "/etc/systemd/system/plugin_loader.service" ]; then
                 echo -e "${YELLOW}⚠ 警告: 未检测到 Decky Loader 插件商店。${NC}"
                 echo "LSFG-VK 插件需要先安装 Decky Loader 才能正常工作。"
-                read -p "是否继续安装？(y/N): " -n 1 -r
+                read -p "是否继续安装？(y/N): " -n 1 -r < /dev/tty
                 echo ""
                 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                     echo "安装已取消。"
-                    read -p "按回车键返回主菜单..."
+                    read -p "按回车键返回主菜单..." < /dev/tty
                     return 1
                 fi
             fi
 
             echo -e "${CYAN}准备安装/更新 LSFG-VK 插件...${NC}"
-            read -p "是否继续？(y/N): " -n 1 -r
+            read -p "是否继续？(y/N): " -n 1 -r < /dev/tty
             echo ""
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 echo "操作已取消。"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -4471,7 +4471,7 @@ install_decky_lsfg_vk() {
 
             if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
                 echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -4479,7 +4479,7 @@ install_decky_lsfg_vk() {
             if ! unzip -q "$zip_filename"; then
                 echo -e "${RED}解压失败，文件可能已损坏。${NC}"
                 rm -rf "$TEMP_DIR"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -4512,7 +4512,7 @@ install_decky_lsfg_vk() {
                 echo "解压后的文件列表："
                 ls -la "$TEMP_DIR"
                 rm -rf "$TEMP_DIR"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -4532,11 +4532,11 @@ install_decky_lsfg_vk() {
             echo -e "${CYAN}正在卸载 LSFG-VK 插件...${NC}"
             echo "这将删除目录: ${TARGET_DIR}"
 
-            read -p "确定要卸载吗？(y/N): " -n 1 -r
+            read -p "确定要卸载吗？(y/N): " -n 1 -r < /dev/tty
             echo ""
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 echo "卸载已取消。"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 0
             fi
 
@@ -4557,7 +4557,7 @@ install_decky_lsfg_vk() {
             ;;
     esac
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 install_decky_framegen() {
@@ -4585,7 +4585,7 @@ install_decky_framegen() {
     for cmd in curl sudo unzip; do
         if ! command -v $cmd &> /dev/null; then
             echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
-            read -p "按回车键返回主菜单..."
+            read -p "按回车键返回主菜单..." < /dev/tty
             return 1
         fi
     done
@@ -4595,7 +4595,7 @@ install_decky_framegen() {
     echo "2. 卸载 Framegen 插件"
     echo ""
 
-    read -p "请输入选择 [1-2] (输入其他键返回): " action_choice
+    read -p "请输入选择 [1-2] (输入其他键返回): " action_choice < /dev/tty
 
     case $action_choice in
         1)
@@ -4646,32 +4646,32 @@ install_decky_framegen() {
                 if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
                     echo -e "${GREEN}已安装最新正式版 ${installed_version}${NC}"
                     echo -e "${YELLOW}发现更高版本的预发布版: ${latest_prerelease}${NC}"
-                    read -p "是否升级到预发布版？(y/N): " upgrade
+                    read -p "是否升级到预发布版？(y/N): " upgrade < /dev/tty
                     if [[ $upgrade =~ ^[Yy]$ ]]; then
                         target_version="$latest_prerelease"
                     else
                         echo "保持当前版本。"
-                        read -p "按回车键返回主菜单..."
+                        read -p "按回车键返回主菜单..." < /dev/tty
                         return 0
                     fi
                 elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -n "$latest_stable" ]; then
                     echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
                     echo -e "${YELLOW}当前正式版为: ${latest_stable}${NC}"
-                    read -p "是否切换到正式版？(y/N): " switch
+                    read -p "是否切换到正式版？(y/N): " switch < /dev/tty
                     if [[ $switch =~ ^[Yy]$ ]]; then
                         target_version="$latest_stable"
                     else
                         echo "保持当前版本。"
-                        read -p "按回车键返回主菜单..."
+                        read -p "按回车键返回主菜单..." < /dev/tty
                         return 0
                     fi
                 elif [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -z "$latest_prerelease" ]; then
                     echo -e "${GREEN}已经是最新版本 (正式版 ${installed_version})，无需更新。${NC}"
-                    read -p "按回车键返回主菜单..."
+                    read -p "按回车键返回主菜单..." < /dev/tty
                     return 0
                 elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -z "$latest_stable" ]; then
                     echo -e "${GREEN}已经是最新版本 (预发布版 ${installed_version})，无需更新。${NC}"
-                    read -p "按回车键返回主菜单..."
+                    read -p "按回车键返回主菜单..." < /dev/tty
                     return 0
                 else
                     echo -e "${YELLOW}已安装版本 ${installed_version} 不是最新版本。${NC}"
@@ -4679,7 +4679,7 @@ install_decky_framegen() {
                         echo "请选择要安装的版本："
                         echo "1. 正式版 ${latest_stable}"
                         echo "2. 预发布版 ${latest_prerelease}"
-                        read -p "请输入选择 [1-2] (默认正式版): " choice
+                        read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
                         case $choice in
                             2) target_version="$latest_prerelease" ;;
                             *) target_version="$latest_stable" ;;
@@ -4692,7 +4692,7 @@ install_decky_framegen() {
                         echo "将安装预发布版 ${target_version}"
                     else
                         echo -e "${RED}错误: 无法找到任何版本。${NC}"
-                        read -p "按回车键返回主菜单..."
+                        read -p "按回车键返回主菜单..." < /dev/tty
                         return 1
                     fi
                 fi
@@ -4702,7 +4702,7 @@ install_decky_framegen() {
                     echo "请选择要安装的版本："
                     echo "1. 正式版 ${latest_stable}"
                     echo "2. 预发布版 ${latest_prerelease}"
-                    read -p "请输入选择 [1-2] (默认正式版): " choice
+                    read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
                     case $choice in
                         2) target_version="$latest_prerelease" ;;
                         *) target_version="$latest_stable" ;;
@@ -4715,14 +4715,14 @@ install_decky_framegen() {
                     echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
                 else
                     echo -e "${RED}错误: 无法找到任何版本。${NC}"
-                    read -p "按回车键返回主菜单..."
+                    read -p "按回车键返回主菜单..." < /dev/tty
                     return 1
                 fi
             fi
 
             if [ -z "$target_version" ]; then
                 echo "未选择任何版本，操作取消。"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 0
             fi
 
@@ -4731,21 +4731,21 @@ install_decky_framegen() {
             if [ ! -f "/etc/systemd/system/plugin_loader.service" ]; then
                 echo -e "${YELLOW}⚠ 警告: 未检测到 Decky Loader 插件商店。${NC}"
                 echo "Framegen 插件需要先安装 Decky Loader 才能正常工作。"
-                read -p "是否继续安装？(y/N): " -n 1 -r
+                read -p "是否继续安装？(y/N): " -n 1 -r < /dev/tty
                 echo ""
                 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                     echo "安装已取消。"
-                    read -p "按回车键返回主菜单..."
+                    read -p "按回车键返回主菜单..." < /dev/tty
                     return 1
                 fi
             fi
 
             echo -e "${CYAN}准备安装/更新 Framegen 插件...${NC}"
-            read -p "是否继续？(y/N): " -n 1 -r
+            read -p "是否继续？(y/N): " -n 1 -r < /dev/tty
             echo ""
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 echo "操作已取消。"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -4797,7 +4797,7 @@ install_decky_framegen() {
 
             if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
                 echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -4805,7 +4805,7 @@ install_decky_framegen() {
             if ! unzip -q "$zip_filename"; then
                 echo -e "${RED}解压失败，文件可能已损坏。${NC}"
                 rm -rf "$TEMP_DIR"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -4838,7 +4838,7 @@ install_decky_framegen() {
                 echo "解压后的文件列表："
                 ls -la "$TEMP_DIR"
                 rm -rf "$TEMP_DIR"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 1
             fi
 
@@ -4858,11 +4858,11 @@ install_decky_framegen() {
             echo -e "${CYAN}正在卸载 Framegen 插件...${NC}"
             echo "这将删除目录: ${TARGET_DIR}"
 
-            read -p "确定要卸载吗？(y/N): " -n 1 -r
+            read -p "确定要卸载吗？(y/N): " -n 1 -r < /dev/tty
             echo ""
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 echo "卸载已取消。"
-                read -p "按回车键返回主菜单..."
+                read -p "按回车键返回主菜单..." < /dev/tty
                 return 0
             fi
 
@@ -4883,7 +4883,7 @@ install_decky_framegen() {
             ;;
     esac
 
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 clover_install_or_reinstall() {
@@ -4904,7 +4904,7 @@ clover_install_or_reinstall() {
     echo "1) GitHub 官方（原始，可能较慢）"
     echo "2) ghproxy.net 镜像"
     echo "3) gh.ddlc.top 镜像"
-    read -p "请输入数字 [1-3] (默认 1): " choice
+    read -p "请输入数字 [1-3] (默认 1): " choice < /dev/tty
 
     case "$choice" in
         2) BASE_URL="https://ghproxy.net/https://github.com" ;;
@@ -4918,13 +4918,13 @@ clover_install_or_reinstall() {
 
     if [ -d "$TARGET_DIR" ]; then
         echo -e "${YELLOW}目录 $TARGET_DIR 已存在。${NC}"
-        read -p "是否删除旧文件夹并重新克隆？(y/N): " -n 1 -r
+        read -p "是否删除旧文件夹并重新克隆？(y/N): " -n 1 -r < /dev/tty
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             rm -rf "$TARGET_DIR"
         else
             echo "操作已取消。"
-            read -p "按回车键返回主菜单..."
+            read -p "按回车键返回主菜单..." < /dev/tty
             return 0
         fi
     fi
@@ -4932,7 +4932,7 @@ clover_install_or_reinstall() {
     echo -e "${CYAN}正在克隆仓库...${NC}"
     if ! git clone "$REPO_URL" "$TARGET_DIR"; then
         echo -e "${RED}克隆失败，请检查网络连接或更换镜像源。${NC}"
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return 1
     fi
 
@@ -5003,7 +5003,7 @@ else
 fi
 
 if [ "$(passwd --status $(whoami) | tr -s " " | cut -d " " -f 2)" == "P" ]; then
-    read -s -p "请输入当前 sudo 密码: " current_password ; echo
+    read -s -p "请输入当前 sudo 密码: " current_password ; echo < /dev/tty
     echo "正在验证 sudo 密码..."
     if ! echo -e "$current_password\n" | sudo -S ls &> /dev/null; then
         echo "sudo 密码错误！请重新运行脚本并输入正确密码。"
@@ -5198,7 +5198,7 @@ CLOVER_SCRIPT_EOF
 
     chmod +x install-Clover.sh || {
         echo -e "${RED}无法设置 install-Clover.sh 执行权限。${NC}"
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return 1
     }
 
@@ -5211,13 +5211,13 @@ CLOVER_SCRIPT_EOF
 
     if grep -q "Not enough space on the ESP partition!" "$LOG_FILE"; then
         echo -e "${RED}安装失败：ESP分区空间不足，请清理后重试。${NC}"
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return 1
     elif [ $INSTALL_EXIT -eq 0 ] && grep -q "Clover 安装完成" "$LOG_FILE"; then
         echo -e "${GREEN}Clover 安装/重装成功！${NC}"
     else
         echo -e "${RED}安装/重装失败，请检查上方输出。${NC}"
-        read -p "按回车键返回主菜单..."
+        read -p "按回车键返回主菜单..." < /dev/tty
         return 1
     fi
 
@@ -5546,7 +5546,7 @@ TOOLBOX_EOF
 
     echo -e "${YELLOW}建议重启 Steam Deck 以使引导生效。${NC}"
     echo ""
-    read -p "按回车键返回主菜单..."
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 main() {
