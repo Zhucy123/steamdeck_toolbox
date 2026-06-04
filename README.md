@@ -5,13 +5,6 @@
 > **版本：v1.2.9** | 更新日期：2026-06-04  
 > 制作人：薯条 & DeepSeek
 
- 🚀 一键安装
-
-在 Konsole 中执行以下命令即可安装：
-
-```bash
-curl -L https://shoturl.cn/n2eFhl | sh
-
 ## ✨ 特性亮点
 
 - **智能系统检测**：自动识别单 / 双系统，部分功能根据系统类型动态显示  
@@ -67,3 +60,10 @@ curl -L https://shoturl.cn/n2eFhl | sh
 - 更新已安装应用（单个或全部）  
 - 卸载已安装应用  
 - 工具箱自动更新（启动时检测）  
+
+## 🚀 一键安装
+
+在 Konsole 中执行以下命令即可安装：
+
+```bash
+curl -L https://shoturl.cn/n2eFhl | sh
