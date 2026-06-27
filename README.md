@@ -9,7 +9,6 @@
 
 在 Konsole 中执行以下命令即可安装：
 
-bash
 curl -L https://shoturl.cn/n2eFhl | sh
 
 ## 📝 更新日志
