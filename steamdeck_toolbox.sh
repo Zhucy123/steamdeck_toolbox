@@ -17,7 +17,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.2.9"
+VERSION="1.3.0"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -209,11 +209,12 @@ echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安
 echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装微信            28. 安装LSFG-VK插件${NC}"
 echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装QQ音乐          29. 安装Framegen插件${NC}"
 echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘        30. 安装/重装Clover引导${NC}"
+echo -e "${GREEN}31. 远程无法连接点我${NC}"
     echo ""
     echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
     echo ""
 
-    read -p "请输入选项 (输入1-30的数字): " choice < /dev/tty
+    read -p "请输入选项 (输入1-31的数字): " choice < /dev/tty
 
     if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
         echo -e "${RED}无效选择，请输入数字！${NC}"
@@ -221,8 +222,8 @@ echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘        30. �
         continue
     fi
 
-    if [ $choice -lt 1 ] || [ $choice -gt 30 ]; then
-        echo -e "${RED}无效选择，请选择1到30之间的数字！${NC}"
+    if [ $choice -lt 1 ] || [ $choice -gt 31 ]; then
+        echo -e "${RED}无效选择，请选择1到31之间的数字！${NC}"
         sleep 1
         continue
     fi
@@ -258,6 +259,7 @@ echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘        30. �
         28) install_decky_lsfg_vk ;;
         29) install_decky_framegen ;;
         30) clover_install_or_reinstall ;;
+        31) remote_connection_fix ;;
         *)
             echo -e "${RED}无效选择，请重新输入！${NC}"
             sleep 1
@@ -277,13 +279,13 @@ echo -e "${GREEN} 5. 清理hosts缓存         15. 安装QQ              25. 安
 echo -e "${GREEN} 6. 安装UU加速器插件      16. 安装微信            26. 安装LSFG-VK插件${NC}"
 echo -e "${GREEN} 7. 安装迅游加速器插件    17. 安装QQ音乐          27. 安装Framegen插件${NC}"
 echo -e "${GREEN} 8. 安装ToMoon            18. 安装百度网盘        28. 安装/重装Clover引导${NC}"
-echo -e "${GREEN} 9. 安装＆卸载插件商店    19. 安装Edge浏览器${NC}"
+echo -e "${GREEN} 9. 安装＆卸载插件商店    19. 安装Edge浏览器      29. 远程无法连接点我${NC}"
 echo -e "${GREEN}10. 校准摇杆              20. 安装Google浏览器${NC}"
     echo ""
     echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
     echo ""
 
-    read -p "请输入选项 (输入1-28的数字): " choice < /dev/tty
+    read -p "请输入选项 (输入1-29的数字): " choice < /dev/tty
 
     if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
         echo -e "${RED}无效选择，请输入数字！${NC}"
@@ -291,8 +293,8 @@ echo -e "${GREEN}10. 校准摇杆              20. 安装Google浏览器${NC}"
         continue
     fi
 
-    if [ $choice -lt 1 ] || [ $choice -gt 28 ]; then
-        echo -e "${RED}无效选择，请选择1到28之间的数字！${NC}"
+    if [ $choice -lt 1 ] || [ $choice -gt 29 ]; then
+        echo -e "${RED}无效选择，请选择1到29之间的数字！${NC}"
         sleep 1
         continue
     fi
@@ -326,6 +328,7 @@ echo -e "${GREEN}10. 校准摇杆              20. 安装Google浏览器${NC}"
         26) install_decky_lsfg_vk ;;
         27) install_decky_framegen ;;
         28) clover_install_or_reinstall ;;
+        29) remote_connection_fix ;;
         *)
             echo -e "${RED}无效选择，请重新输入！${NC}"
             sleep 1
@@ -1716,138 +1719,336 @@ set_admin_password() {
 }
 
 install_anydesk() {
-    show_header
-    echo -e "${YELLOW}════════════════ 安装AnyDesk ════════════════${NC}"
+    local ANYDESK_INSTALL_DIR="$HOME/.local/share/anydesk"
+    local ANYDESK_BIN_DIR="$HOME/.local/bin"
+    local ANYDESK_DESKTOP_DIR="$HOME/.local/share/applications"
+    local ANYDESK_EXECUTABLE="$ANYDESK_INSTALL_DIR/anydesk"
+    local ANYDESK_SYMLINK="$ANYDESK_BIN_DIR/anydesk"
+    local ANYDESK_DESKTOP_FILE="$ANYDESK_DESKTOP_DIR/anydesk.desktop"
+    local ANYDESK_DOWNLOAD_DIR="$HOME/Downloads"
+    local ANYDESK_FLATPAK_PKG="com.anydesk.Anydesk"
 
-    APP_NAME="AnyDesk"
-    DESKTOP_FILE="$DESKTOP_DIR/AnyDesk.desktop"
+    anydesk_show_header() {
+        clear
+        echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+        echo -e "${CYAN}           AnyDesk 管理脚本                        ${NC}"
+        echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+        echo ""
+    }
 
-    echo "正在检查是否已安装AnyDesk..."
+    anydesk_delete_desktop_shortcuts() {
+        # 直接删除桌面上常见的 AnyDesk 快捷方式（无论大小写）
+        for desktop_path in "$HOME/Desktop" "$HOME/桌面"; do
+            if [ -d "$desktop_path" ]; then
+                # 删除 anydesk.desktop 和 AnyDesk.desktop
+                for f in "$desktop_path/anydesk.desktop" "$desktop_path/AnyDesk.desktop"; do
+                    if [ -f "$f" ]; then
+                        rm -f "$f"
+                        echo -e "${GREEN}✓ 已删除桌面快捷方式: $f${NC}"
+                    fi
+                done
+                # 额外用通配符删除任何以 anydesk 或 AnyDesk 开头的 .desktop 文件（以防有空格或其他后缀）
+                find "$desktop_path" -maxdepth 1 -type f -iname "anydesk*.desktop" -exec rm -f {} \; -print | while read -r file; do
+                    echo -e "${GREEN}✓ 已删除桌面快捷方式: $file${NC}"
+                done
+            fi
+        done
+    }
 
-    INSTALLED_PACKAGE=""
-    for PACKAGE in com.anydesk.Anydesk; do
-        if flatpak list | grep -q "$PACKAGE"; then
-            INSTALLED_PACKAGE="$PACKAGE"
-            break
+    anydesk_get_latest_version_info() {
+        local page_content
+        page_content=$(wget -qO- --referer='' --user-agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" \
+            "https://anydesk.com.cn/zhs/downloads/linux" 2>/dev/null)
+
+        if [ -z "$page_content" ]; then
+            echo -e "${RED}✗ 无法访问官网，请检查网络连接${NC}"
+            return 1
         fi
-    done
 
-    if [ -n "$INSTALLED_PACKAGE" ]; then
-        echo -e "${GREEN}✓ 检测到已安装AnyDesk${NC}"
-        echo "已安装的包名: $INSTALLED_PACKAGE"
+        LATEST_VERSION=$(echo "$page_content" | grep -oP 'v?\d+\.\d+\.\d+' | head -1 | sed 's/^v//')
+        if [ -z "$LATEST_VERSION" ]; then
+            LATEST_VERSION=$(echo "$page_content" | grep -oP '\d+\.\d+\.\d+\s*\([\d.]+ MB\)' | head -1 | grep -oP '\d+\.\d+\.\d+')
+        fi
+
+        if [ -z "$LATEST_VERSION" ]; then
+            echo -e "${RED}✗ 无法解析版本号，请检查官网页面结构${NC}"
+            return 1
+        fi
+
+        DOWNLOAD_URL="https://download.anydesk.com/linux/anydesk-${LATEST_VERSION}-amd64.tar.gz"
+        if ! wget --spider -q --referer='' --user-agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" \
+            "$DOWNLOAD_URL" 2>/dev/null; then
+            echo -e "${YELLOW}⚠ 下载链接无效，尝试备用链接...${NC}"
+            DOWNLOAD_URL="https://anydesk.com/downloads/linux/anydesk-${LATEST_VERSION}-amd64.tar.gz"
+            if ! wget --spider -q --referer='' --user-agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" \
+                "$DOWNLOAD_URL" 2>/dev/null; then
+                echo -e "${RED}✗ 无法访问下载链接，请检查网络或稍后重试${NC}"
+                return 1
+            fi
+        fi
+
+        echo -e "${GREEN}✓ 最新版本: ${LATEST_VERSION}${NC}"
+        return 0
+    }
+
+    anydesk_get_installed_version() {
+        if [ -x "$ANYDESK_EXECUTABLE" ]; then
+            INSTALLED_VERSION=$("$ANYDESK_EXECUTABLE" --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1)
+            [ -z "$INSTALLED_VERSION" ] && INSTALLED_VERSION=$(echo "$ANYDESK_EXECUTABLE" | grep -oP '\d+\.\d+\.\d+' | head -1)
+            echo "$INSTALLED_VERSION"
+        else
+            echo ""
+        fi
+    }
+
+    anydesk_uninstall_flatpak() {
+        echo "正在卸载 Flatpak 版本 ($ANYDESK_FLATPAK_PKG)..."
+        if flatpak uninstall "$ANYDESK_FLATPAK_PKG" -y; then
+            echo -e "${GREEN}✓ Flatpak 版本卸载成功${NC}"
+            local OLD_DESKTOP="$ANYDESK_DESKTOP_DIR/com.anydesk.Anydesk.desktop"
+            if [ -f "$OLD_DESKTOP" ]; then
+                rm -f "$OLD_DESKTOP"
+                echo -e "${GREEN}✓ 已删除旧脚本创建的快捷方式: $OLD_DESKTOP${NC}"
+            fi
+            anydesk_delete_desktop_shortcuts
+            return 0
+        else
+            echo -e "${RED}✗ Flatpak 卸载失败${NC}"
+            return 1
+        fi
+    }
+
+    anydesk_uninstall_portable() {
         echo ""
+        echo -e "${YELLOW}即将卸载便携版 AnyDesk...${NC}"
+        echo "将删除："
+        echo "  - $ANYDESK_INSTALL_DIR"
+        echo "  - $ANYDESK_SYMLINK"
+        echo "  - $ANYDESK_DESKTOP_FILE"
+        echo "  - 桌面上的 AnyDesk 快捷方式（如果存在）"
+        read -p "确认卸载？[y/N] " confirm < /dev/tty
+        [[ ! "$confirm" =~ ^[Yy]$ ]] && echo "取消卸载" && return
 
-        echo "请选择要执行的操作："
-        echo "1. 创建桌面快捷方式"
-        echo "2. 卸载AnyDesk"
+        pkill -f "$ANYDESK_EXECUTABLE" 2>/dev/null
+        pkill -f "anydesk" 2>/dev/null
+
+        [ -d "$ANYDESK_INSTALL_DIR" ] && rm -rf "$ANYDESK_INSTALL_DIR" && echo -e "${GREEN}✓ 已删除安装目录${NC}"
+        [ -L "$ANYDESK_SYMLINK" ] && rm -f "$ANYDESK_SYMLINK" && echo -e "${GREEN}✓ 已删除软链接${NC}"
+        [ -f "$ANYDESK_DESKTOP_FILE" ] && rm -f "$ANYDESK_DESKTOP_FILE" && echo -e "${GREEN}✓ 已删除桌面快捷方式（应用目录）${NC}"
+        anydesk_delete_desktop_shortcuts
+        rm -f "$ANYDESK_DOWNLOAD_DIR"/anydesk-*.tar.gz 2>/dev/null
+
+        echo -e "${GREEN}✓ 便携版卸载完成${NC}"
+    }
+
+    anydesk_download_and_install() {
+        local version=$1
+        local url=$2
+        local tarball="anydesk-${version}-amd64.tar.gz"
+
         echo ""
+        echo "步骤1: 创建安装目录"
+        mkdir -p "$ANYDESK_INSTALL_DIR" "$ANYDESK_BIN_DIR" "$ANYDESK_DESKTOP_DIR"
 
-        read -p "请输入选择 [1-2] 输入其他键返回主菜单: " app_choice < /dev/tty
+        echo ""
+        echo "步骤2: 下载 AnyDesk ${version}"
+        echo "下载地址: $url"
+        echo "开始下载..."
+        cd "$ANYDESK_DOWNLOAD_DIR" || return 1
+        if ! wget --progress=bar:force -O "$tarball" \
+            --referer='' --user-agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" "$url"; then
+            echo -e "${RED}✗ 下载失败${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}✓ 下载完成${NC}"
 
-        case $app_choice in
-            1)
-                echo "正在创建桌面快捷方式..."
-                cat > "$DESKTOP_FILE" << EOF
+        echo ""
+        echo "步骤3: 解压"
+        if ! tar -xzf "$tarball" -C "$ANYDESK_INSTALL_DIR" --strip-components=1 2>/dev/null; then
+            echo -e "${RED}✗ 解压失败${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}✓ 解压完成${NC}"
+
+        echo ""
+        echo "步骤4: 设置权限"
+        chmod +x "$ANYDESK_EXECUTABLE" && echo -e "${GREEN}✓ 权限设置完成${NC}" || { echo -e "${RED}✗ 设置权限失败${NC}"; return 1; }
+
+        echo ""
+        echo "步骤5: 创建软链接"
+        ln -sf "$ANYDESK_EXECUTABLE" "$ANYDESK_SYMLINK" && echo -e "${GREEN}✓ 软链接创建完成: $ANYDESK_SYMLINK${NC}"
+
+        echo ""
+        echo "步骤6: 创建桌面快捷方式"
+        cat > "$ANYDESK_DESKTOP_FILE" << EOF
 [Desktop Entry]
 Name=AnyDesk
-Exec=flatpak run $INSTALLED_PACKAGE
-Icon=$INSTALLED_PACKAGE
+Exec=$ANYDESK_EXECUTABLE
+Icon=$ANYDESK_INSTALL_DIR/icons/hicolor/256x256/apps/anydesk.png
 Type=Application
 Categories=Network;RemoteAccess;
 Comment=AnyDesk远程控制软件
+Terminal=false
+StartupNotify=true
 EOF
+        chmod +x "$ANYDESK_DESKTOP_FILE"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建（在应用菜单中）${NC}"
 
-                chmod +x "$DESKTOP_FILE"
-                echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
+        echo ""
+        echo "步骤7: 清理下载文件"
+        rm -f "$ANYDESK_DOWNLOAD_DIR/$tarball"
+        echo -e "${GREEN}✓ 清理完成${NC}"
+
+        echo ""
+        echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}✓ AnyDesk ${version} 安装完成！${NC}"
+        echo -e "${GREEN}✓ 安装路径: $ANYDESK_INSTALL_DIR${NC}"
+        echo -e "${GREEN}✓ 可执行文件: $ANYDESK_EXECUTABLE${NC}"
+        echo -e "${GREEN}✓ 您可以在应用菜单中找到 AnyDesk${NC}"
+        echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
+        return 0
+    }
+
+    anydesk_install_update() {
+        anydesk_show_header
+        echo -e "${YELLOW}══════════════ 安装 / 更新 AnyDesk ══════════════${NC}"
+        echo ""
+
+        echo "正在获取最新版本信息..."
+        if ! anydesk_get_latest_version_info; then
+            read -p "按回车键返回主菜单..." < /dev/tty
+            return
+        fi
+
+        PORTABLE_VER=$(anydesk_get_installed_version)
+        if [ -n "$PORTABLE_VER" ]; then
+            echo -e "${GREEN}✓ 当前便携版版本: $PORTABLE_VER${NC}"
+            if [ "$PORTABLE_VER" = "$LATEST_VERSION" ]; then
+                echo -e "${GREEN}✓ 已是最新版本！${NC}"
+                echo ""
+                echo "请选择："
+                echo "1. 重新安装（覆盖）"
+                echo "2. 卸载便携版"
+                echo ""
+                read -p "请输入选择 [1-2] 输入其他键返回: " choice < /dev/tty
+                case $choice in
+                    1) echo "正在重新安装..." && anydesk_download_and_install "$LATEST_VERSION" "$DOWNLOAD_URL" ;;
+                    2) anydesk_uninstall_portable ;;
+                    *) echo "返回主菜单..." ;;
+                esac
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return
+            else
+                echo -e "${YELLOW}⚠ 发现新版本: $LATEST_VERSION (当前: $PORTABLE_VER)${NC}"
+                read -p "是否更新？[Y/n] " update_choice < /dev/tty
+                if [[ "$update_choice" =~ ^[Nn]$ ]]; then
+                    echo "取消更新"
+                    read -p "按回车键返回主菜单..." < /dev/tty
+                    return
+                fi
+                [ -d "$ANYDESK_INSTALL_DIR" ] && rm -rf "$ANYDESK_INSTALL_DIR"
+                [ -L "$ANYDESK_SYMLINK" ] && rm -f "$ANYDESK_SYMLINK"
+                [ -f "$ANYDESK_DESKTOP_FILE" ] && rm -f "$ANYDESK_DESKTOP_FILE"
+                echo "正在更新..."
+                anydesk_download_and_install "$LATEST_VERSION" "$DOWNLOAD_URL"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return
+            fi
+        fi
+
+        echo "未检测到便携版，检查 Flatpak 版本..."
+        if flatpak list 2>/dev/null | grep -q "$ANYDESK_FLATPAK_PKG"; then
+            echo -e "${YELLOW}检测到 Flatpak 版本 ($ANYDESK_FLATPAK_PKG)${NC}"
+            echo "将在安装便携版前自动卸载 Flatpak 版本。"
+            read -p "按回车继续，或按 Ctrl+C 取消..." < /dev/tty
+            anydesk_uninstall_flatpak
+            echo "继续安装便携版..."
+        else
+            echo -e "${GREEN}✓ 未检测到 Flatpak 版本${NC}"
+        fi
+
+        echo "开始安装最新便携版..."
+        anydesk_download_and_install "$LATEST_VERSION" "$DOWNLOAD_URL"
+        read -p "按回车键返回主菜单..." < /dev/tty
+    }
+
+    anydesk_uninstall_menu() {
+        anydesk_show_header
+        echo -e "${YELLOW}════════════════ 卸载 AnyDesk ══════════════════${NC}"
+        echo ""
+
+        PORTABLE_INSTALLED=false
+        FLATPAK_INSTALLED=false
+        [ -x "$ANYDESK_EXECUTABLE" ] && PORTABLE_INSTALLED=true
+        flatpak list 2>/dev/null | grep -q "$ANYDESK_FLATPAK_PKG" && FLATPAK_INSTALLED=true
+
+        if [ "$PORTABLE_INSTALLED" = false ] && [ "$FLATPAK_INSTALLED" = false ]; then
+            echo "未检测到任何已安装的 AnyDesk 版本。"
+            read -p "按回车键返回主菜单..." < /dev/tty
+            return
+        fi
+
+        echo "检测到以下已安装版本："
+        valid_choices=""
+        if [ "$PORTABLE_INSTALLED" = true ]; then
+            echo "  1) 便携版 (官网版本)  -> 卸载此版本"
+            valid_choices="1"
+        fi
+        if [ "$FLATPAK_INSTALLED" = true ]; then
+            [ -n "$valid_choices" ] && valid_choices="${valid_choices}/"
+            valid_choices="${valid_choices}2"
+            echo "  2) Flatpak 版本 (Discover) -> 卸载此版本"
+        fi
+        if [ "$PORTABLE_INSTALLED" = true ] && [ "$FLATPAK_INSTALLED" = true ]; then
+            valid_choices="${valid_choices}/3"
+            echo "  3) 同时卸载两者"
+        fi
+        echo ""
+        read -p "请选择要卸载的版本 [${valid_choices}] 或输入其他键返回: " choice < /dev/tty
+
+        case $choice in
+            1)
+                if [ "$PORTABLE_INSTALLED" = true ]; then
+                    anydesk_uninstall_portable
+                else
+                    echo "便携版未安装。"
+                fi
                 ;;
             2)
-                echo "正在卸载AnyDesk..."
-                if flatpak uninstall "$INSTALLED_PACKAGE" -y; then
-                    echo -e "${GREEN}✓ AnyDesk卸载完成${NC}"
-                    rm -f "$DESKTOP_FILE"
+                if [ "$FLATPAK_INSTALLED" = true ]; then
+                    anydesk_uninstall_flatpak
                 else
-                    echo -e "${RED}✗ AnyDesk卸载失败${NC}"
+                    echo "Flatpak 版本未安装。"
+                fi
+                ;;
+            3)
+                if [ "$PORTABLE_INSTALLED" = true ] && [ "$FLATPAK_INSTALLED" = true ]; then
+                    anydesk_uninstall_portable
+                    anydesk_uninstall_flatpak
+                else
+                    echo "两个版本未同时安装，无法执行此操作。"
                 fi
                 ;;
             *)
                 echo "返回主菜单..."
-                return
                 ;;
         esac
-
         read -p "按回车键返回主菜单..." < /dev/tty
-        return
-    fi
+    }
 
-    echo -e "${CYAN}未检测到AnyDesk，开始安装...${NC}"
-    echo ""
-
-    echo "步骤1: 添加Flathub仓库"
-    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null
-
-    if [ $? -eq 0 ] || flatpak remote-list | grep -q flathub; then
-        echo -e "${GREEN}✓ Flathub仓库已添加或已存在${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Flathub仓库添加失败，尝试继续安装${NC}"
-    fi
-
-    echo ""
-    echo "步骤2: 更新Flatpak仓库信息"
-    flatpak update --appstream 2>/dev/null
-
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ Flatpak仓库信息更新完成${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Flatpak仓库信息更新失败，尝试继续安装${NC}"
-    fi
-
-    echo ""
-    echo "步骤3: 安装AnyDesk"
-
-    INSTALL_SUCCESS=false
-    PACKAGE="com.anydesk.Anydesk"
-
-    echo "尝试安装包: $PACKAGE"
-    if flatpak install flathub "$PACKAGE" -y 2>/dev/null; then
-        echo -e "${GREEN}✓ 使用包名 '$PACKAGE' 安装成功${NC}"
-        INSTALL_SUCCESS=true
-        FINAL_PACKAGE="$PACKAGE"
-    fi
-
-    if [ "$INSTALL_SUCCESS" = false ]; then
-        echo -e "${RED}✗ 在Flathub仓库中未找到AnyDesk包${NC}"
+    while true; do
+        anydesk_show_header
+        echo "请选择操作："
+        echo "  1) 安装 / 更新 AnyDesk"
+        echo "  2) 卸载 AnyDesk"
         echo ""
-        echo -e "${YELLOW}无法通过Flatpak安装AnyDesk。${NC}"
-        echo "请尝试其他安装方法或检查网络连接。"
-
-        read -p "按回车键返回主菜单..." < /dev/tty
-        return
-    fi
-
-    echo ""
-    echo "步骤4: 创建桌面快捷方式"
-    cat > "$DESKTOP_FILE" << EOF
-[Desktop Entry]
-Name=AnyDesk
-Exec=flatpak run $FINAL_PACKAGE
-Icon=$FINAL_PACKAGE
-Type=Application
-Categories=Network;RemoteAccess;
-Comment=AnyDesk远程控制软件
-EOF
-
-    chmod +x "$DESKTOP_FILE"
-    echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
-
-    echo ""
-    echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}✓ AnyDesk 安装完成！${NC}"
-    echo -e "${GREEN}✓ 使用的包名: $FINAL_PACKAGE${NC}"
-    echo -e "${GREEN}✓ 您可以在桌面找到AnyDesk快捷方式${NC}"
-    echo -e "${GREEN}✓ 您也可以在应用菜单中找到AnyDesk${NC}"
-    echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
-
-    read -p "按回车键返回主菜单..." < /dev/tty
+        read -p "请输入选择 [1-2]（其他任意键返回主菜单）: " main_choice < /dev/tty
+        case $main_choice in
+            1) anydesk_install_update ;;
+            2) anydesk_uninstall_menu ;;
+            *) echo "返回主菜单..." ; break ;;
+        esac
+    done
 }
 
 install_todesk() {
@@ -3402,24 +3603,65 @@ exec_steamdeck_cache_manager() {
     read -p "按回车键返回主菜单..." < /dev/tty
 }
 
+# ==================== 修改后的更新全部应用 ====================
 update_installed_apps() {
     show_header
-    echo -e "${YELLOW}════════════════ 更新已安装应用 ════════════════${NC}"
+    echo -e "${YELLOW}════════════════ 更新全部应用 ════════════════${NC}"
+    echo ""
+    read -p "是否更新所有已安装的 Flatpak 应用？(y/N): " confirm < /dev/tty
+    if [[ $confirm =~ ^[Yy]$ ]]; then
+        echo -e "${CYAN}正在更新所有应用...${NC}"
+        flatpak update -y
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ 所有应用更新完成${NC}"
+        else
+            echo -e "${RED}✗ 更新过程中出现错误${NC}"
+        fi
+    else
+        echo "取消更新。"
+    fi
+    read -p "按回车键返回主菜单..." < /dev/tty
+}
+
+# ==================== 修改后的卸载已安装应用（移除 AnyDesk） ====================
+uninstall_apps() {
+    show_header
+    echo -e "${YELLOW}════════════════ 卸载已安装应用 ════════════════${NC}"
     echo ""
 
-    echo "请选择更新方式："
-    echo "1. 更新指定应用"
-    echo "2. 更新全部应用"
+    echo "请选择要卸载的应用："
+    echo "1. WPS Office"
+    echo "2. QQ"
+    echo "3. 微信"
+    echo "4. QQ音乐"
+    echo "5. 百度网盘"
+    echo "6. Edge浏览器"
+    echo "7. Google浏览器"
     echo ""
 
-    read -p "请输入选择 [1-2] (输入其他键返回主菜单): " update_choice < /dev/tty
+    read -p "请输入选择 [1-7] (输入其他键返回主菜单): " app_choice < /dev/tty
 
-    case $update_choice in
+    case $app_choice in
         1)
-            update_specific_app
+            uninstall_app_by_name "WPS Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps" "org.wps.Office" "$DESKTOP_DIR/WPS_Office.desktop"
             ;;
         2)
-            update_all_apps
+            uninstall_app_by_name "QQ" "com.qq.QQ" "com.tencent.qq" "io.github.msojocs.qq" "$DESKTOP_DIR/QQ.desktop"
+            ;;
+        3)
+            uninstall_app_by_name "微信" "com.tencent.WeChat" "com.qq.weixin" "com.tencent.wechat" "io.github.msojocs.wechat" "$DESKTOP_DIR/WeChat.desktop"
+            ;;
+        4)
+            uninstall_app_by_name "QQ音乐" "com.qq.QQmusic" "com.tencent.QQmusic" "$DESKTOP_DIR/com.qq.QQmusic.desktop"
+            ;;
+        5)
+            uninstall_app_by_name "百度网盘" "com.baidu.NetDisk" "com.baidu.pan" "$DESKTOP_DIR/com.baidu.NetDisk.desktop"
+            ;;
+        6)
+            uninstall_app_by_name "Edge浏览器" "com.microsoft.Edge" "org.mozilla.firefox" "com.google.Chrome" "$DESKTOP_DIR/Microsoft_Edge.desktop"
+            ;;
+        7)
+            uninstall_app_by_name "Google浏览器" "com.google.Chrome" "org.chromium.Chromium" "$DESKTOP_DIR/Google_Chrome.desktop"
             ;;
         *)
             echo "返回主菜单..."
@@ -3428,154 +3670,6 @@ update_installed_apps() {
     esac
 
     read -p "按回车键返回主菜单..." < /dev/tty
-}
-
-update_specific_app() {
-    show_header
-    echo -e "${YELLOW}════════════════ 更新指定应用 ════════════════${NC}"
-    echo ""
-
-    echo "请选择要更新的应用："
-    echo "1. AnyDesk"
-    echo "2. WPS Office"
-    echo "3. QQ"
-    echo "4. 微信"
-    echo "5. QQ音乐"
-    echo "6. 百度网盘"
-    echo "7. Edge浏览器"
-    echo "8. Google浏览器"
-    echo ""
-
-    read -p "请输入选择 [1-8] (输入其他键返回): " app_choice < /dev/tty
-
-    case $app_choice in
-        1)
-            update_app_by_name "AnyDesk" "com.anydesk.Anydesk"
-            ;;
-        2)
-            update_app_by_name "WPS Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps" "org.wps.Office"
-            ;;
-        3)
-            update_app_by_name "QQ" "com.qq.QQ" "com.tencent.qq" "io.github.msojocs.qq"
-            ;;
-        4)
-            update_app_by_name "微信" "com.tencent.WeChat" "com.qq.weixin" "com.tencent.wechat" "io.github.msojocs.wechat"
-            ;;
-        5)
-            update_app_by_name "QQ音乐" "com.qq.QQmusic" "com.tencent.QQmusic"
-            ;;
-        6)
-            update_app_by_name "百度网盘" "com.baidu.NetDisk" "com.baidu.pan"
-            ;;
-        7)
-            update_app_by_name "Edge浏览器" "com.microsoft.Edge" "org.mozilla.firefox" "com.google.Chrome"
-            ;;
-        8)
-            update_app_by_name "Google浏览器" "com.google.Chrome" "org.chromium.Chromium"
-            ;;
-        *)
-            echo "返回更新菜单..."
-            update_installed_apps
-            return
-            ;;
-    esac
-}
-
-update_app_by_name() {
-    local app_name="$1"
-    shift
-    local packages=("$@")
-
-    echo ""
-    echo -e "${CYAN}正在检查$app_name的更新...${NC}"
-
-    local installed_package=""
-    for package in "${packages[@]}"; do
-        if flatpak list | grep -q "$package"; then
-            installed_package="$package"
-            break
-        fi
-    done
-
-    if [ -n "$installed_package" ]; then
-        echo "找到已安装的包: $installed_package"
-        echo "正在更新$app_name..."
-
-        if flatpak update "$installed_package" -y 2>/dev/null; then
-            echo -e "${GREEN}✓ $app_name 更新完成${NC}"
-        else
-            echo -e "${YELLOW}⚠️  $app_name 更新过程中出现错误${NC}"
-        fi
-    else
-        echo -e "${YELLOW}⚠️  未检测到已安装的$app_name${NC}"
-        echo "请先安装$app_name后再尝试更新。"
-    fi
-}
-
-update_all_apps() {
-    show_header
-    echo -e "${YELLOW}════════════════ 更新全部应用 ════════════════${NC}"
-    echo ""
-
-    echo -e "${CYAN}正在更新所有已安装的应用...${NC}"
-
-    flatpak update -y 2>/dev/null
-
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ 所有应用更新完成${NC}"
-    else
-        echo -e "${YELLOW}⚠️  应用更新过程中出现错误${NC}"
-    fi
-}
-
-uninstall_apps() {
-    show_header
-    echo -e "${YELLOW}════════════════ 卸载已安装应用 ════════════════${NC}"
-    echo ""
-
-    echo "请选择要卸载的应用："
-    echo "1. AnyDesk"
-    echo "2. WPS Office"
-    echo "3. QQ"
-    echo "4. 微信"
-    echo "5. QQ音乐"
-    echo "6. 百度网盘"
-    echo "7. Edge浏览器"
-    echo "8. Google浏览器"
-    echo ""
-
-    read -p "请输入选择 [1-8] (输入其他键返回主菜单): " app_choice < /dev/tty
-
-    case $app_choice in
-        1)
-            uninstall_app_by_name "AnyDesk" "com.anydesk.Anydesk" "$DESKTOP_DIR/AnyDesk.desktop"
-            ;;
-        2)
-            uninstall_app_by_name "WPS Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps" "org.wps.Office" "$DESKTOP_DIR/WPS_Office.desktop"
-            ;;
-        3)
-            uninstall_app_by_name "QQ" "com.qq.QQ" "com.tencent.qq" "io.github.msojocs.qq" "$DESKTOP_DIR/QQ.desktop"
-            ;;
-        4)
-            uninstall_app_by_name "微信" "com.tencent.WeChat" "com.qq.weixin" "com.tencent.wechat" "io.github.msojocs.wechat" "$DESKTOP_DIR/WeChat.desktop"
-            ;;
-        5)
-            uninstall_app_by_name "QQ音乐" "com.qq.QQmusic" "com.tencent.QQmusic" "$DESKTOP_DIR/com.qq.QQmusic.desktop"
-            ;;
-        6)
-            uninstall_app_by_name "百度网盘" "com.baidu.NetDisk" "com.baidu.pan" "$DESKTOP_DIR/com.baidu.NetDisk.desktop"
-            ;;
-        7)
-            uninstall_app_by_name "Edge浏览器" "com.microsoft.Edge" "org.mozilla.firefox" "com.google.Chrome" "$DESKTOP_DIR/Microsoft_Edge.desktop"
-            ;;
-        8)
-            uninstall_app_by_name "Google浏览器" "com.google.Chrome" "org.chromium.Chromium" "$DESKTOP_DIR/Google_Chrome.desktop"
-            ;;
-        *)
-            echo "返回主菜单..."
-            return
-            ;;
-    esac
 }
 
 uninstall_app_by_name() {
@@ -5546,6 +5640,42 @@ TOOLBOX_EOF
 
     echo -e "${YELLOW}建议重启 Steam Deck 以使引导生效。${NC}"
     echo ""
+    read -p "按回车键返回主菜单..." < /dev/tty
+}
+
+remote_connection_fix() {
+    show_header
+    echo -e "${YELLOW}════════════════ 远程无法连接点我 ════════════════${NC}"
+    echo ""
+    echo "请选择要切换的显示服务器模式："
+    echo "1. 切换为 X11（无法连接远程时选择此项）"
+    echo "2. 切换为 Wayland"
+    echo ""
+    read -p "请输入选择 [1-2] (其他键返回): " choice < /dev/tty
+
+    case $choice in
+        1)
+            echo -e "${CYAN}正在切换至 X11 会话...${NC}"
+            steamos-session-select plasma-x11-persistent
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}✓ 已切换为 X11，请注销后重新登录生效。${NC}"
+            else
+                echo -e "${RED}✗ 切换失败，请检查系统是否支持该命令。${NC}"
+            fi
+            ;;
+        2)
+            echo -e "${CYAN}正在切换至 Wayland 会话...${NC}"
+            steamos-session-select plasma-wayland-persistent
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}✓ 已切换为 Wayland，请注销后重新登录生效。${NC}"
+            else
+                echo -e "${RED}✗ 切换失败，请检查系统是否支持该命令。${NC}"
+            fi
+            ;;
+        *)
+            echo "返回主菜单..."
+            ;;
+    esac
     read -p "按回车键返回主菜单..." < /dev/tty
 }
 
