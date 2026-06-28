@@ -17,7 +17,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.3.0"
+VERSION="1.3.1"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -394,35 +394,51 @@ adjust_swap() {
     echo -e "${CYAN} 当前系统状态${NC}"
     echo "--------------------------------------------"
 
+    # 直接获取内存和交换信息，避免管道子 shell
     if command -v free &> /dev/null; then
-        LANG=C free -h | while read line; do
-            if [[ $line =~ ^Mem: ]]; then
-                read -ra mem <<< "$line" < /dev/tty
-                echo -e "物理内存: ${GREEN}${mem[1]}${NC} | 已用: ${YELLOW}${mem[2]}${NC}"
-            elif [[ $line =~ ^Swap: ]]; then
-                read -ra sw <<< "$line" < /dev/tty
-                echo -e "交换空间: ${GREEN}${sw[1]}${NC} | 已用: ${YELLOW}${sw[2]}${NC}"
-            fi
-        done
+        # 获取物理内存行
+        mem_line=$(LANG=C free -h | grep '^Mem:')
+        swap_line=$(LANG=C free -h | grep '^Swap:')
+        if [ -n "$mem_line" ]; then
+            mem_total=$(echo "$mem_line" | awk '{print $2}')
+            mem_used=$(echo "$mem_line" | awk '{print $3}')
+            echo -e "物理内存: ${GREEN}${mem_total}${NC} | 已用: ${YELLOW}${mem_used}${NC}"
+        else
+            echo -e "${YELLOW}无法获取物理内存信息${NC}"
+        fi
+        if [ -n "$swap_line" ]; then
+            swap_total=$(echo "$swap_line" | awk '{print $2}')
+            swap_used=$(echo "$swap_line" | awk '{print $3}')
+            echo -e "交换空间: ${GREEN}${swap_total}${NC} | 已用: ${YELLOW}${swap_used}${NC}"
+        else
+            echo -e "${YELLOW}无法获取交换空间信息${NC}"
+        fi
     else
-        echo -e "${YELLOW}无法获取内存信息${NC}"
+        echo -e "${YELLOW}未找到 free 命令，无法获取内存信息${NC}"
     fi
 
     echo ""
 
     echo -e "${CYAN} 活动交换设备${NC}"
     echo "--------------------------------------------"
-    if command -v swapon &> /dev/null && swapon_output=$(swapon --show 2>/dev/null); then
-        echo "$swapon_output" | while read line; do
-            if [[ ! $line == NAME* ]]; then
-                read -ra parts <<< "$line" < /dev/tty
-                if [ "${#parts[@]}" -ge 4 ]; then
-                    echo -e "${GREEN}${parts[0]}${NC} (${CYAN}${parts[1]}${NC}): ${parts[2]} | 已用: ${YELLOW}${parts[3]}${NC}"
+    if command -v swapon &> /dev/null; then
+        swapon_output=$(swapon --show 2>/dev/null)
+        if [ -n "$swapon_output" ] && [ "$(echo "$swapon_output" | wc -l)" -gt 1 ]; then
+            echo "$swapon_output" | while read -r line; do
+                if [[ ! $line == NAME* ]]; then
+                    # 使用 awk 解析列（NAME, TYPE, SIZE, USED, PRIO）
+                    device=$(echo "$line" | awk '{print $1}')
+                    type=$(echo "$line" | awk '{print $2}')
+                    size=$(echo "$line" | awk '{print $3}')
+                    used=$(echo "$line" | awk '{print $4}')
+                    echo -e "${GREEN}${device}${NC} (${CYAN}${type}${NC}): ${size} | 已用: ${YELLOW}${used}${NC}"
                 fi
-            fi
-        done
+            done
+        else
+            echo "未找到活动交换空间"
+        fi
     else
-        echo "未找到活动交换空间"
+        echo "未找到 swapon 命令"
     fi
     echo ""
 
