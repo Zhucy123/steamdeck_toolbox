@@ -1,4 +1,5 @@
 #!/bin/bash
+trap 'echo -e "\n${YELLOW}用户取消操作，退出工具箱。${NC}"; exit 0' INT TERM
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
