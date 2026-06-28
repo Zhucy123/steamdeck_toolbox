@@ -5666,7 +5666,7 @@ remote_connection_fix() {
     echo ""
     echo "请选择要切换的显示服务器模式："
     echo "1. 切换为 X11（无法连接远程时选择此项）"
-    echo "2. 切换为 Wayland"
+    echo "2. 切换为默认模式"
     echo ""
     read -p "请输入选择 [1-2] (其他键返回): " choice < /dev/tty
 
@@ -5681,10 +5681,10 @@ remote_connection_fix() {
             fi
             ;;
         2)
-            echo -e "${CYAN}正在切换至 Wayland 会话...${NC}"
-            steamos-session-select plasma-wayland-persistent
+            echo -e "${CYAN}正在切换至默认模式...${NC}"
+            steamos-session-select
             if [ $? -eq 0 ]; then
-                echo -e "${GREEN}✓ 已切换为 Wayland，请注销后重新登录生效。${NC}"
+                echo -e "${GREEN}✓ 已切换为默认模式，请注销后重新登录生效。${NC}"
             else
                 echo -e "${RED}✗ 切换失败，请检查系统是否支持该命令。${NC}"
             fi
