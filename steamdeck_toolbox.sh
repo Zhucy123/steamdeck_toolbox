@@ -18,7 +18,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.3.1"
+VERSION="1.3.2"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
