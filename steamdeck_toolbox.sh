@@ -18,7 +18,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.3.1"
+VERSION="1.3.2"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -1753,24 +1753,14 @@ install_anydesk() {
         echo ""
     }
 
-    anydesk_delete_desktop_shortcuts() {
-        # 直接删除桌面上常见的 AnyDesk 快捷方式（无论大小写）
-        for desktop_path in "$HOME/Desktop" "$HOME/桌面"; do
-            if [ -d "$desktop_path" ]; then
-                # 删除 anydesk.desktop 和 AnyDesk.desktop
-                for f in "$desktop_path/anydesk.desktop" "$desktop_path/AnyDesk.desktop"; do
-                    if [ -f "$f" ]; then
-                        rm -f "$f"
-                        echo -e "${GREEN}✓ 已删除桌面快捷方式: $f${NC}"
-                    fi
-                done
-                # 额外用通配符删除任何以 anydesk 或 AnyDesk 开头的 .desktop 文件（以防有空格或其他后缀）
-                find "$desktop_path" -maxdepth 1 -type f -iname "anydesk*.desktop" -exec rm -f {} \; -print | while read -r file; do
-                    echo -e "${GREEN}✓ 已删除桌面快捷方式: $file${NC}"
-                done
-            fi
+anydesk_delete_desktop_shortcuts() {
+    for desktop_path in "$HOME/Desktop" "$HOME/桌面"; do
+        [ -d "$desktop_path" ] || continue
+        find "$desktop_path" -maxdepth 1 -type f -iname "*anydesk*.desktop" -exec rm -f {} \; -print | while read -r file; do
+            echo -e "${GREEN}✓ 已删除桌面快捷方式: $file${NC}"
         done
-    }
+    done
+}
 
     anydesk_get_latest_version_info() {
         local page_content
@@ -1910,6 +1900,9 @@ StartupNotify=true
 EOF
         chmod +x "$ANYDESK_DESKTOP_FILE"
         echo -e "${GREEN}✓ 桌面快捷方式已创建（在应用菜单中）${NC}"
+
+        cp "$ANYDESK_DESKTOP_FILE" "$DESKTOP_DIR/"
+        echo -e "${GREEN}✓ 桌面快捷方式已复制到桌面${NC}"
 
         echo ""
         echo "步骤7: 清理下载文件"
