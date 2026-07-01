@@ -18,7 +18,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.3.2"
+VERSION="1.3.3"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -1970,7 +1970,7 @@ EOF
         if flatpak list 2>/dev/null | grep -q "$ANYDESK_FLATPAK_PKG"; then
             echo -e "${YELLOW}检测到 Flatpak 版本 ($ANYDESK_FLATPAK_PKG)${NC}"
             echo "将在安装便携版前自动卸载 Flatpak 版本。"
-            read -p "按回车继续，或按 Ctrl+C 取消..." < /dev/tty
+            read -p "按回车继续" < /dev/tty
             anydesk_uninstall_flatpak
             echo "继续安装便携版..."
         else
