@@ -18,7 +18,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.3.3"
+VERSION="1.3.4"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -200,22 +200,21 @@ if [ "$SYSTEM_TYPE" == "dual" ]; then
     echo ""
     echo -e "${CYAN}请选择要执行的功能：${NC}"
     echo ""
-echo -e "${GREEN} 1. 关于支持与维护的说明    12. 校准摇杆              23. 清理Steam缓存${NC}"
-echo -e "${GREEN} 2. 安装国内源              13. 设置管理员密码        24. 更新已安装应用${NC}"
-echo -e "${GREEN} 3. 调整虚拟内存大小        14. 安装AnyDesk           25. 卸载已安装应用${NC}"
-echo -e "${GREEN} 4. 修复磁盘写入错误        15. 安装ToDesk            26. 安装小黄鸭软件${NC}"
-echo -e "${GREEN} 5. 修复引导                16. 安装WPS Office        27. 安装Steam社区302${NC}"
-echo -e "${GREEN} 6. 修复互通盘              17. 安装QQ                28. 安装LSFG-VK插件${NC}"
-echo -e "${GREEN} 7. 清理hosts缓存           18. 安装微信              29. 安装Framegen插件${NC}"
-echo -e "${GREEN} 8. 安装UU加速器插件        19. 安装QQ音乐            30. 安装/重装Clover引导${NC}"
-echo -e "${GREEN} 9. 安装迅游加速器插件      20. 安装百度网盘          31. 远程无法连接点我${NC}"
-echo -e "${GREEN}10. 安装ToMoon              21. 安装Edge浏览器${NC}"
-echo -e "${GREEN}11. 安装＆卸载插件商店      22. 安装Google浏览器${NC}"
+            echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装Edge浏览器${NC}"
+            echo -e "${GREEN} 2. 安装国内源            12. 校准摇杆            22. 安装Google浏览器${NC}"
+            echo -e "${GREEN} 3. 调整虚拟内存大小      13. 设置管理员密码      23. 清理Steam缓存${NC}"
+            echo -e "${GREEN} 4. 修复磁盘写入错误      14. 安装AnyDesk         24. 更新已安装应用${NC}"
+            echo -e "${GREEN} 5. 修复引导              15. 安装ToDesk          25. 卸载已安装应用${NC}"
+            echo -e "${GREEN} 6. 修复互通盘            16. 安装WPS Office      26. 安装小黄鸭软件${NC}"
+            echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安装Steam社区302${NC}"
+            echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装微信            28. 安装LSFG-VK插件${NC}"
+            echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装QQ音乐          29. 安装Framegen插件${NC}"
+            echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘        30. 安装/重装Clover引导${NC}"
     echo ""
     echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
     echo ""
 
-    read -p "请输入选项 (输入1-31的数字): " choice < /dev/tty
+    read -p "请输入选项 (输入1-30的数字): " choice < /dev/tty
 
     if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
         echo -e "${RED}无效选择，请输入数字！${NC}"
@@ -223,8 +222,8 @@ echo -e "${GREEN}11. 安装＆卸载插件商店      22. 安装Google浏览器$
         continue
     fi
 
-    if [ $choice -lt 1 ] || [ $choice -gt 31 ]; then
-        echo -e "${RED}无效选择，请选择1到31之间的数字！${NC}"
+    if [ $choice -lt 1 ] || [ $choice -gt 30 ]; then
+        echo -e "${RED}无效选择，请选择1到30之间的数字！${NC}"
         sleep 1
         continue
     fi
@@ -260,7 +259,6 @@ echo -e "${GREEN}11. 安装＆卸载插件商店      22. 安装Google浏览器$
         28) install_decky_lsfg_vk ;;
         29) install_decky_framegen ;;
         30) clover_install_or_reinstall ;;
-        31) remote_connection_fix ;;
         *)
             echo -e "${RED}无效选择，请重新输入！${NC}"
             sleep 1
@@ -280,13 +278,13 @@ echo -e "${GREEN} 5. 清理hosts缓存         15. 安装QQ              25. 安
 echo -e "${GREEN} 6. 安装UU加速器插件      16. 安装微信            26. 安装LSFG-VK插件${NC}"
 echo -e "${GREEN} 7. 安装迅游加速器插件    17. 安装QQ音乐          27. 安装Framegen插件${NC}"
 echo -e "${GREEN} 8. 安装ToMoon            18. 安装百度网盘        28. 安装/重装Clover引导${NC}"
-echo -e "${GREEN} 9. 安装＆卸载插件商店    19. 安装Edge浏览器      29. 远程无法连接点我${NC}"
+echo -e "${GREEN} 9. 安装＆卸载插件商店    19. 安装Edge浏览器${NC}"
 echo -e "${GREEN}10. 校准摇杆              20. 安装Google浏览器${NC}"
     echo ""
     echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
     echo ""
 
-    read -p "请输入选项 (输入1-29的数字): " choice < /dev/tty
+    read -p "请输入选项 (输入1-28的数字): " choice < /dev/tty
 
     if [[ ! "$choice" =~ ^[0-9]+$ ]]; then
         echo -e "${RED}无效选择，请输入数字！${NC}"
@@ -294,8 +292,8 @@ echo -e "${GREEN}10. 校准摇杆              20. 安装Google浏览器${NC}"
         continue
     fi
 
-    if [ $choice -lt 1 ] || [ $choice -gt 29 ]; then
-        echo -e "${RED}无效选择，请选择1到29之间的数字！${NC}"
+    if [ $choice -lt 1 ] || [ $choice -gt 28 ]; then
+        echo -e "${RED}无效选择，请选择1到28之间的数字！${NC}"
         sleep 1
         continue
     fi
@@ -329,7 +327,6 @@ echo -e "${GREEN}10. 校准摇杆              20. 安装Google浏览器${NC}"
         26) install_decky_lsfg_vk ;;
         27) install_decky_framegen ;;
         28) clover_install_or_reinstall ;;
-        29) remote_connection_fix ;;
         *)
             echo -e "${RED}无效选择，请重新输入！${NC}"
             sleep 1
@@ -5650,42 +5647,6 @@ TOOLBOX_EOF
 
     echo -e "${YELLOW}建议重启 Steam Deck 以使引导生效。${NC}"
     echo ""
-    read -p "按回车键返回主菜单..." < /dev/tty
-}
-
-remote_connection_fix() {
-    show_header
-    echo -e "${YELLOW}════════════════ 远程无法连接点我 ════════════════${NC}"
-    echo ""
-    echo "请选择要切换的显示服务器模式："
-    echo "1. 切换为 X11（无法连接远程时选择此项）"
-    echo "2. 切换为默认模式"
-    echo ""
-    read -p "请输入选择 [1-2] (其他键返回): " choice < /dev/tty
-
-    case $choice in
-        1)
-            echo -e "${CYAN}正在切换至 X11 会话...${NC}"
-            steamos-session-select plasma-x11-persistent
-            if [ $? -eq 0 ]; then
-                echo -e "${GREEN}✓ 已切换为 X11，请注销后重新登录生效。${NC}"
-            else
-                echo -e "${RED}✗ 切换失败，请检查系统是否支持该命令。${NC}"
-            fi
-            ;;
-        2)
-            echo -e "${CYAN}正在切换至默认模式...${NC}"
-            steamos-session-select
-            if [ $? -eq 0 ]; then
-                echo -e "${GREEN}✓ 已切换为默认模式，请注销后重新登录生效。${NC}"
-            else
-                echo -e "${RED}✗ 切换失败，请检查系统是否支持该命令。${NC}"
-            fi
-            ;;
-        *)
-            echo "返回主菜单..."
-            ;;
-    esac
     read -p "按回车键返回主菜单..." < /dev/tty
 }
 
