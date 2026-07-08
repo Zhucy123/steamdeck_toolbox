@@ -18,7 +18,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.3.4"
+VERSION="1.3.5"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -1236,8 +1236,8 @@ install_tomoon() {
     local TARGET_DIR="${PLUGIN_DIR}/tomoon"
     local TEMP_DIR="/tmp/tomoon_install"
     local MIRRORS=(
-        "https://ghproxy.net/"
         "https://gh.ddlc.top/"
+        "https://ghproxy.net/"
         "https://mirror.ghproxy.com/"
         "https://gh.api.99988866.xyz/"
         "https://download.fastgit.org/"
@@ -1484,8 +1484,8 @@ install_remove_plugin_store() {
             SERVICE_DEST="/etc/systemd/system/plugin_loader.service"
             CURRENT_USER=$(whoami)
             MIRRORS=(
-                "https://ghproxy.net/"
                 "https://gh.ddlc.top/"
+                "https://ghproxy.net/"
                 "https://mirror.ghproxy.com/"
                 "https://gh.api.99988866.xyz/"
                 "https://download.fastgit.org/"
@@ -4344,8 +4344,8 @@ install_decky_lsfg_vk() {
     local TARGET_DIR="${PLUGIN_DIR}/Decky-LSFG-VK"
     local TEMP_DIR="/tmp/decky_lsfg_vk_install"
     local MIRRORS=(
-        "https://ghproxy.net/"
         "https://gh.ddlc.top/"
+        "https://ghproxy.net/"
         "https://mirror.ghproxy.com/"
         "https://gh.api.99988866.xyz/"
         "https://download.fastgit.org/"
@@ -4671,8 +4671,8 @@ install_decky_framegen() {
     local TARGET_DIR="${PLUGIN_DIR}/Decky-Framegen"
     local TEMP_DIR="/tmp/decky_framegen_install"
     local MIRRORS=(
-        "https://ghproxy.net/"
         "https://gh.ddlc.top/"
+        "https://ghproxy.net/"
         "https://mirror.ghproxy.com/"
         "https://gh.api.99988866.xyz/"
         "https://download.fastgit.org/"
