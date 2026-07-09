@@ -18,7 +18,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.3.5"
+VERSION="1.3.6"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -1082,92 +1082,131 @@ EOF
 
 fix_shared_disk() {
     show_header
-    echo -e "${YELLOW}════════════════ 修复互通盘 ════════════════${NC}"
+    echo -e "${YELLOW}════════════════ 自动挂载所有非系统分区 ════════════════${NC}"
+    echo ""
 
-    echo -e "${CYAN}正在修复互通盘...${NC}"
+    # 步骤1: 禁用只读模式（SteamOS 特有）
+    echo "步骤1: 禁用 SteamOS 只读模式"
+    sudo steamos-readonly disable 2>/dev/null
+    echo -e "${GREEN}✓ 已处理${NC}"
+    echo ""
 
-    echo "步骤1: 禁用SteamOS只读模式"
-    sudo steamos-readonly disable
-    echo -e "${GREEN}✓ 已禁用只读模式${NC}"
-
-    echo "步骤2: 修改UDisks2权限文件"
+    # 步骤2: 修改 UDisks2 权限（使图形界面更友好）
+    echo "步骤2: 修改 UDisks2 权限文件"
     UDISKS2_FILE="/usr/share/polkit-1/actions/org.freedesktop.UDisks2.policy"
-
     if [ -f "$UDISKS2_FILE" ]; then
-        sudo cp "$UDISKS2_FILE" "$UDISKS2_FILE.backup.$(date +%Y%m%d)"
-
-        sudo sed -i '181s/<allow_active>[^<]*<\/allow_active>/<allow_active>yes<\/allow_active>/' "$UDISKS2_FILE"
-
-        if grep -q "<allow_active>yes</allow_active>" "$UDISKS2_FILE"; then
-            echo -e "${GREEN}✓ UDisks2权限文件修改成功${NC}"
-        else
-            echo -e "${YELLOW}⚠️  UDisks2权限文件可能未修改成功，请手动检查${NC}"
-        fi
+        sudo cp "$UDISKS2_FILE" "$UDISKS2_FILE.backup.$(date +%Y%m%d)" 2>/dev/null
+        sudo sed -i '181s/<allow_active>[^<]*<\/allow_active>/<allow_active>yes<\/allow_active>/' "$UDISKS2_FILE" 2>/dev/null
+        echo -e "${GREEN}✓ 已修改${NC}"
     else
-        echo -e "${RED}✗ 未找到UDisks2权限文件: $UDISKS2_FILE${NC}"
+        echo -e "${YELLOW}⚠️  未找到 UDisks2 文件，跳过${NC}"
+    fi
+    echo ""
+
+    # ---------- 自动扫描并挂载所有非系统分区 ----------
+    echo "步骤3: 扫描非系统分区..."
+
+    # 系统关键挂载点黑名单（完全匹配）
+    local sys_mounts=("/" "/home" "/var" "/efi" "/esp" "/boot" "/boot/efi")
+
+    # 使用 lsblk 获取所有分区信息（键值对格式）
+    local partitions=()
+    while IFS= read -r line; do
+        eval "$line"
+        # 只处理分区
+        [[ "$TYPE" != "part" ]] && continue
+        # 跳过无文件系统或swap
+        [[ -z "$FSTYPE" || "$FSTYPE" == "swap" ]] && continue
+        # 排除系统内部挂载点（/var/mnt/ 下的）
+        [[ "$MOUNTPOINT" == /var/mnt/* ]] && continue
+        # 排除系统关键挂载点
+        for sysmp in "${sys_mounts[@]}"; do
+            if [[ "$MOUNTPOINT" == "$sysmp" ]]; then
+                continue 2
+            fi
+        done
+        partitions+=("DEVICE=/dev/$NAME LABEL=$LABEL FSTYPE=$FSTYPE MOUNTPOINT=$MOUNTPOINT UUID=$UUID SIZE=$SIZE")
+    done < <(lsblk -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,SIZE -n -P)
+
+    if [ ${#partitions[@]} -eq 0 ]; then
+        echo -e "${YELLOW}⚠️  未检测到任何可挂载的非系统分区。${NC}"
+        echo "可能原因：所有分区都已挂载到系统目录，或没有额外的数据分区。"
+        read -p "按回车键返回主菜单..." < /dev/tty
+        return
     fi
 
-    echo "步骤3: 检查并添加fstab配置"
-    FSTAB_FILE="/etc/fstab"
-    FSTAB_ENTRY="LABEL=Game  /run/media/deck/Game  ntfs   defaults,nofail,uid=1000,gid=1000,umask=022   0 0"
+    echo -e "${CYAN}检测到以下分区：${NC}"
+    for i in "${!partitions[@]}"; do
+        eval "${partitions[$i]}"
+        echo "  $((i+1)). $DEVICE 标签:${LABEL:-无} 类型:$FSTYPE 大小:$SIZE 挂载点:${MOUNTPOINT:-未挂载}"
+    done
+    echo ""
 
-    if [ -f "$FSTAB_FILE" ]; then
-        if grep -q "LABEL=Game" "$FSTAB_FILE"; then
-            echo -e "${GREEN}✓ fstab中已存在Game盘配置${NC}"
+    echo "步骤4: 开始挂载并写入 fstab..."
+    for partinfo in "${partitions[@]}"; do
+        eval "$partinfo"
+        echo -e "\n${CYAN}处理分区 $DEVICE${NC}"
+
+        # ---------- 确定挂载点 ----------
+        if [ -n "$MOUNTPOINT" ]; then
+            # 已挂载，保留原挂载点
+            mount_point="$MOUNTPOINT"
+            echo "  当前已挂载到 $mount_point"
         else
-            sudo cp "$FSTAB_FILE" "$FSTAB_FILE.backup.$(date +%Y%m%d)"
-
-            echo "$FSTAB_ENTRY" | sudo tee -a "$FSTAB_FILE" > /dev/null
-            echo -e "${GREEN}✓ 已添加Game盘配置到fstab${NC}"
-        fi
-    else
-        echo -e "${RED}✗ 未找到fstab文件: $FSTAB_FILE${NC}"
-    fi
-
-    echo "步骤4: 创建目录并尝试挂载"
-    GAME_DIR="/run/media/deck/Game"
-
-    sudo mkdir -p "$GAME_DIR"
-    sudo chown deck:deck "$GAME_DIR"
-
-    if [ -d "$GAME_DIR" ]; then
-        echo -e "${GREEN}✓ 已创建Game目录: $GAME_DIR${NC}"
-
-        if mountpoint -q "$GAME_DIR"; then
-            echo "卸载已挂载的Game盘..."
-            sudo umount "$GAME_DIR"
+            # 未挂载，生成挂载点（放在 /run/media/deck/ 下以便侧边栏显示）
+            if [ -n "$LABEL" ]; then
+                clean_label=$(echo "$LABEL" | sed 's/ /_/g')
+                mount_point="/run/media/deck/$clean_label"
+            else
+                devname=$(basename "$DEVICE")
+                mount_point="/run/media/deck/$devname"
+            fi
+            # 避免目录冲突
+            if [ -d "$mount_point" ] && [ -n "$(ls -A "$mount_point" 2>/dev/null)" ]; then
+                suffix=1
+                while [ -d "${mount_point}_$suffix" ]; do
+                    ((suffix++))
+                done
+                mount_point="${mount_point}_$suffix"
+            fi
+            sudo mkdir -p "$mount_point"
+            sudo chown deck:deck "$mount_point"
+            echo "  创建挂载点: $mount_point"
         fi
 
-        echo "尝试挂载Game盘..."
-        if sudo mount -L "Game" "$GAME_DIR" 2>/dev/null; then
-            echo -e "${GREEN}✓ Game盘已成功挂载${NC}"
-            echo ""
-            echo -e "${CYAN}Game盘信息：${NC}"
-            echo "挂载点: $GAME_DIR"
-            echo "文件系统类型: $(lsblk -o NAME,FSTYPE,LABEL | grep -i game || echo '未知')"
-            echo ""
-            echo -e "${YELLOW}提示：${NC}"
-            echo "1. Game盘现在可以在文件管理器中访问"
-            echo "2. 路径: /run/media/deck/Game"
-            echo "3. 重启后会自动挂载"
+        # ---------- 检查并添加 fstab ----------
+        if grep -q "UUID=$UUID" /etc/fstab 2>/dev/null; then
+            echo "  fstab 中已存在该 UUID，跳过添加。"
         else
-            echo -e "${YELLOW}⚠️  Game盘挂载失败${NC}"
-            echo "可能的原因："
-            echo "1. Game盘不存在或标签不正确"
-            echo "2. 分区未格式化"
-            echo "3. 需要重启后生效"
-            echo ""
-            echo "您可以尝试重启后再次检查"
+            if [[ "$FSTYPE" == "ntfs" ]]; then
+                fstype_opt="ntfs-3g"
+                mount_opts="rw,exec,uid=1000,gid=1000,windows_names,nofail"
+            else
+                fstype_opt="$FSTYPE"
+                mount_opts="defaults,nofail"
+            fi
+            echo "UUID=$UUID $mount_point $fstype_opt $mount_opts 0 0" | sudo tee -a /etc/fstab > /dev/null
+            echo "  已添加 fstab 条目。"
         fi
-    else
-        echo -e "${YELLOW}⚠️  无法创建或访问Game目录${NC}"
-    fi
+
+        # ---------- 挂载 ----------
+        if mountpoint -q "$mount_point"; then
+            echo "  分区已挂载到 $mount_point"
+        else
+            if sudo mount -U "$UUID" "$mount_point" 2>/dev/null; then
+                echo -e "${GREEN}  ✓ 挂载成功到 $mount_point${NC}"
+            else
+                echo -e "${RED}  ✗ 挂载失败，请检查 dmesg 输出。${NC}"
+            fi
+        fi
+    done
 
     echo ""
-    echo -e "${GREEN}✓ 修复互通盘已完成${NC}"
+    echo -e "${GREEN}════════════════ 全部完成 ════════════════${NC}"
+    echo "所有非系统分区已处理。"
+    echo "挂载点位于 /run/media/deck/ 下，可在文件管理器侧边栏查看。"
+    echo "重启后也会自动挂载（已写入 fstab）。"
     echo ""
-    echo -e "${YELLOW}提示：如果没看到GAME盘，请去steam-设置-存储空间，添加一下GAME盘${NC}"
-
     read -p "按回车键返回主菜单..." < /dev/tty
 }
 
