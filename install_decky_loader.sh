@@ -1,9 +1,7 @@
 #!/bin/bash
-# 独立安装 Decky Loader 插件商店 (按回车强制关闭 Konsole 窗口)
 
 set -e
 
-# ---------- 颜色定义 ----------
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -11,14 +9,11 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# ---------- 强制关闭终端窗口的函数 ----------
 close_terminal() {
-    # 杀掉父进程（即当前 shell 的父进程，通常为 Konsole 的子进程）
     kill -9 $PPID 2>/dev/null
     exit $1
 }
 
-# ---------- 路径与变量 ----------
 HOME_DIR="/home/deck"
 HOMEBREW_DIR="${HOME_DIR}/homebrew"
 SERVICE_DIR="${HOMEBREW_DIR}/services"
@@ -28,7 +23,6 @@ SERVICE_FILE="${SERVICE_DIR}/plugin_loader.service"
 SERVICE_DEST="/etc/systemd/system/plugin_loader.service"
 CURRENT_USER=$(whoami)
 
-# 镜像源列表
 MIRRORS=(
     "https://gh.ddlc.top/"
     "https://ghproxy.net/"
@@ -42,7 +36,6 @@ MIRRORS=(
 DOWNLOAD_TIMEOUT=60
 MAX_RETRY_PER_MIRROR=1
 
-# ---------- 检查依赖 ----------
 for cmd in curl python3 systemctl sudo journalctl stat; do
     if ! command -v $cmd &> /dev/null; then
         echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
@@ -51,7 +44,6 @@ for cmd in curl python3 systemctl sudo journalctl stat; do
     fi
 done
 
-# ---------- 获取最新版本号 ----------
 echo -e "${CYAN}正在获取 Decky Loader 最新版本...${NC}"
 LATEST_VERSION=$(curl -s "https://api.github.com/repos/SteamDeckHomebrew/decky-loader/releases" | python3 -c "
 import sys, json
@@ -71,7 +63,6 @@ if [[ -z "$LATEST_VERSION" ]]; then
 fi
 echo -e "${GREEN}最新版本: ${LATEST_VERSION}${NC}"
 
-# ---------- 检测本地已安装版本 ----------
 INSTALLED_VERSION=""
 if [[ -f "$PLUGIN_LOADER" && -x "$PLUGIN_LOADER" ]]; then
     INSTALLED_VERSION=$(sudo journalctl -u plugin_loader --no-pager 2>/dev/null | grep -i "Starting Decky version" | tail -1 | grep -oP 'version v?\K[0-9.]+(-pre[0-9]+)?')
@@ -93,7 +84,6 @@ else
     echo -e "${YELLOW}未检测到现有安装，将进行全新安装。${NC}"
 fi
 
-# ---------- 创建目录 ----------
 echo -e "${CYAN}创建目录并修复权限...${NC}"
 if [[ ! -d "$HOMEBREW_DIR" ]]; then
     sudo mkdir -p "$HOMEBREW_DIR"
@@ -104,7 +94,6 @@ mkdir -p "$SERVICE_DIR" "$PLUGIN_DIR" 2>/dev/null || {
     sudo chown ${CURRENT_USER}:${CURRENT_USER} "$SERVICE_DIR" "$PLUGIN_DIR"
 }
 
-# ---------- 多镜像下载 PluginLoader ----------
 echo -e "${CYAN}开始下载 PluginLoader ...${NC}"
 DOWNLOAD_SUCCESS=false
 TMP_FILE="${PLUGIN_LOADER}.tmp"
@@ -163,14 +152,12 @@ if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
     close_terminal 1
 fi
 
-# ---------- 启用 Steam 远程调试 ----------
 echo -e "${CYAN}启用 Steam 远程调试...${NC}"
 touch "${HOME_DIR}/.steam/steam/.cef-enable-remote-debugging"
 if [[ -d "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/" ]]; then
     touch "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/.cef-enable-remote-debugging"
 fi
 
-# ---------- 配置 systemd 服务 ----------
 echo -e "${CYAN}配置 systemd 服务...${NC}"
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
@@ -195,7 +182,6 @@ sudo systemctl daemon-reload
 sudo systemctl enable plugin_loader
 sudo systemctl restart plugin_loader
 
-# ---------- 显示详细状态 ----------
 echo ""
 echo -e "${GREEN}✅ Decky Loader ${LATEST_VERSION} 安装完成！${NC}"
 echo "服务状态："
@@ -203,6 +189,5 @@ systemctl status plugin_loader --no-pager
 
 echo -e "${YELLOW}请切换回游戏模式，按 '...' 键打开侧边栏检查插件商店是否出现。${NC}"
 
-# ---------- 等待用户按键后关闭窗口 ----------
 read -p "按回车键退出..."
 close_terminal 0
