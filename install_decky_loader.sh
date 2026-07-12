@@ -9,11 +9,6 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-close_terminal() {
-    kill -9 $PPID 2>/dev/null
-    exit $1
-}
-
 HOME_DIR="/home/deck"
 HOMEBREW_DIR="${HOME_DIR}/homebrew"
 SERVICE_DIR="${HOMEBREW_DIR}/services"
@@ -40,7 +35,7 @@ for cmd in curl python3 systemctl sudo journalctl stat; do
     if ! command -v $cmd &> /dev/null; then
         echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
         read -p "按回车键退出..."
-        close_terminal 1
+        exit 1
     fi
 done
 
@@ -59,7 +54,7 @@ except:
 if [[ -z "$LATEST_VERSION" ]]; then
     echo -e "${RED}错误: 无法获取最新版本号，请检查网络。${NC}"
     read -p "按回车键退出..."
-    close_terminal 1
+    exit 1
 fi
 echo -e "${GREEN}最新版本: ${LATEST_VERSION}${NC}"
 
@@ -76,7 +71,7 @@ if [[ -n "$INSTALLED_VERSION" ]]; then
     if [[ "$INSTALLED_VERSION" == "$LATEST_VERSION" ]]; then
         echo -e "${GREEN}✅ 已是最新版本，无需安装。${NC}"
         read -p "按回车键退出..."
-        close_terminal 0
+        exit 0
     else
         echo -e "${YELLOW}发现新版本，将进行更新安装...${NC}"
     fi
@@ -149,7 +144,7 @@ done
 if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
     echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
     read -p "按回车键退出..."
-    close_terminal 1
+    exit 1
 fi
 
 echo -e "${CYAN}启用 Steam 远程调试...${NC}"
@@ -190,4 +185,4 @@ systemctl status plugin_loader --no-pager
 echo -e "${YELLOW}请切换回游戏模式，按 '...' 键打开侧边栏检查插件商店是否出现。${NC}"
 
 read -p "按回车键退出..."
-close_terminal 0
+exit 0
