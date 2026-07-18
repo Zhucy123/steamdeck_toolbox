@@ -15,7 +15,7 @@ curl -L https://shoturl.cn/n2eFhl | sh
 2026-07-18（v1.3.8包含 v1.3.7 的调整）
 替换steamcommunity 302功能为安装Watt Toolkit (Steam++)，增加实用性
 
-调整了安装插件商店以及安装LSFG-VK插件和Framegen插件功能的部分逻辑
+调整了安装插件商店以及安装LSFG-VK插件和Framegen插件功能的部分逻辑，将校准摇杆更改为校准设备，增加了校准扳机
 
 2026-07-09（v1.3.6）
 修改了修复互通盘功能的实现逻辑，更具有通用性
@@ -82,7 +82,7 @@ curl -L https://shoturl.cn/n2eFhl | sh
 - **双系统专属支持**：引导修复（Clover 启动顺序）、互通盘配置仅对双系统用户开放  
 - **一键软件管理**：涵盖办公、通讯、浏览器、云盘、音乐等常用应用  
 - **深度性能优化**：虚拟内存调整（CryoByte33 方案 / ZRAM / 传统 Swap）、Steam 缓存管理  
-- **游戏增强组件**：摇杆校准、LSFG‑VK / Framegen 插件、小黄鸭软件（Lossless Scaling）  
+- **游戏增强组件**：摇杆校准、扳机校准、LSFG‑VK / Framegen 插件、小黄鸭软件（Lossless Scaling）  
 - **持续更新**：内置自动更新，无缝获取最新功能  
 
 ## 📋 功能列表
@@ -103,7 +103,7 @@ curl -L https://shoturl.cn/n2eFhl | sh
 - ToMoon 插件（安装 / 卸载）  
 - AnyDesk 远程协助  
 - ToDesk 远程协助  
-- Steam 社区 302 访问工具  
+- Watt Toolkit (Steam++)  
 
 ### 常用软件安装
 - WPS Office  
