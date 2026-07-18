@@ -18,7 +18,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.3.6"
+VERSION="1.3.7"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -1428,7 +1428,6 @@ install_tomoon() {
                 sudo rm -rf "$TARGET_DIR"
             fi
 
-            # 智能查找解压后的插件目录
             local extracted_dir=""
             extracted_dir=$(find "$TEMP_DIR" -maxdepth 2 -type f \( -name "tomoon" -o -name "package.json" \) -exec dirname {} \; | head -1)
             if [ -z "$extracted_dir" ]; then
@@ -1512,7 +1511,164 @@ install_remove_plugin_store() {
 
     case $plugin_choice in
         1)
-            echo -e "${CYAN}正在从 GitHub 安装最新版 Decky Loader...${NC}"
+            echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+
+            local releases_json=$(curl -s "https://api.github.com/repos/SteamDeckHomebrew/decky-loader/releases")
+            if [ -z "$releases_json" ]; then
+                echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 1
+            fi
+
+            local versions_info=$(echo "$releases_json" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for rel in data:
+        tag = rel.get('tag_name', '')
+        prerelease = rel.get('prerelease', False)
+        if tag:
+            print(f'{tag}|{str(prerelease).lower()}')
+except:
+    pass
+")
+            if [ -z "$versions_info" ]; then
+                echo -e "${RED}错误: 无法解析版本信息。${NC}"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 1
+            fi
+
+            local stable_versions=()
+            local prerelease_versions=()
+            while IFS='|' read -r tag prerelease; do
+                [ -z "$tag" ] && continue
+                if [[ "$prerelease" == "true" ]]; then
+                    prerelease_versions+=("$tag")
+                else
+                    stable_versions+=("$tag")
+                fi
+            done <<< "$versions_info"
+
+            local latest_stable=""
+            local latest_prerelease=""
+            if [ ${#stable_versions[@]} -gt 0 ]; then
+                latest_stable=$(printf '%s\n' "${stable_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
+                latest_stable="v${latest_stable}"
+            fi
+            if [ ${#prerelease_versions[@]} -gt 0 ]; then
+                latest_prerelease=$(printf '%s\n' "${prerelease_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
+                latest_prerelease="v${latest_prerelease}"
+            fi
+
+            PLUGIN_LOADER="/home/deck/homebrew/services/PluginLoader"
+            local installed_version=""
+            if [[ -f "$PLUGIN_LOADER" && -x "$PLUGIN_LOADER" ]]; then
+                installed_version=$(sudo journalctl -u plugin_loader --no-pager 2>/dev/null | grep -i "Starting Decky version" | tail -1 | grep -oP 'version v?\K[0-9.]+(-pre[0-9]+)?')
+                if [[ -z "$installed_version" ]]; then
+                    installed_version=$("$PLUGIN_LOADER" --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+(-pre\d+)?')
+                fi
+                if [[ -n "$installed_version" ]]; then
+                    installed_version="v${installed_version}"
+                    echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
+                else
+                    echo -e "${YELLOW}已安装但无法获取版本。${NC}"
+                fi
+            else
+                echo "未检测到现有安装。"
+            fi
+
+            local target_version=""
+            if [ -n "$installed_version" ]; then
+                if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                    echo -e "${GREEN}已安装最新正式版 ${installed_version}${NC}"
+                    echo -e "${YELLOW}发现更高版本的预发布版: ${latest_prerelease}${NC}"
+                    read -p "是否升级到预发布版？(y/N): " upgrade < /dev/tty
+                    if [[ $upgrade =~ ^[Yy]$ ]]; then
+                        target_version="$latest_prerelease"
+                    else
+                        echo "保持当前版本。"
+                        read -p "按回车键返回主菜单..." < /dev/tty
+                        return 0
+                    fi
+                elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -n "$latest_stable" ]; then
+                    echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
+                    echo -e "${YELLOW}当前正式版为: ${latest_stable}${NC}"
+                    read -p "是否切换到正式版？(y/N): " switch < /dev/tty
+                    if [[ $switch =~ ^[Yy]$ ]]; then
+                        target_version="$latest_stable"
+                    else
+                        echo "保持当前版本。"
+                        read -p "按回车键返回主菜单..." < /dev/tty
+                        return 0
+                    fi
+                elif [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -z "$latest_prerelease" ]; then
+                    echo -e "${GREEN}已经是最新版本 (正式版 ${installed_version})，无需更新。${NC}"
+                    read -p "按回车键返回主菜单..." < /dev/tty
+                    return 0
+                elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -z "$latest_stable" ]; then
+                    echo -e "${GREEN}已经是最新版本 (预发布版 ${installed_version})，无需更新。${NC}"
+                    read -p "按回车键返回主菜单..." < /dev/tty
+                    return 0
+                else
+                    echo -e "${YELLOW}已安装版本 ${installed_version} 不是最新版本。${NC}"
+                    if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                        echo "请选择要安装的版本："
+                        echo "1. 正式版 ${latest_stable}"
+                        echo "2. 预发布版 ${latest_prerelease}"
+                        read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
+                        case $choice in
+                            2) target_version="$latest_prerelease" ;;
+                            *) target_version="$latest_stable" ;;
+                        esac
+                    elif [ -n "$latest_stable" ]; then
+                        target_version="$latest_stable"
+                        echo "将安装正式版 ${target_version}"
+                    elif [ -n "$latest_prerelease" ]; then
+                        target_version="$latest_prerelease"
+                        echo "将安装预发布版 ${target_version}"
+                    else
+                        echo -e "${RED}错误: 无法找到任何版本。${NC}"
+                        read -p "按回车键返回主菜单..." < /dev/tty
+                        return 1
+                    fi
+                fi
+            else
+                if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                    echo "请选择要安装的版本："
+                    echo "1. 正式版 ${latest_stable}"
+                    echo "2. 预发布版 ${latest_prerelease}"
+                    read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
+                    case $choice in
+                        2) target_version="$latest_prerelease" ;;
+                        *) target_version="$latest_stable" ;;
+                    esac
+                elif [ -n "$latest_stable" ]; then
+                    target_version="$latest_stable"
+                    echo "将安装正式版 ${target_version}"
+                elif [ -n "$latest_prerelease" ]; then
+                    target_version="$latest_prerelease"
+                    echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
+                else
+                    echo -e "${RED}错误: 无法获取任何版本。${NC}"
+                    read -p "按回车键返回主菜单..." < /dev/tty
+                    return 1
+                fi
+            fi
+
+            if [ -z "$target_version" ]; then
+                echo "未选择版本，操作取消。"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 0
+            fi
+
+            echo -e "${GREEN}将安装版本: ${target_version}${NC}"
+            read -p "是否继续？(y/N): " -n 1 -r < /dev/tty
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "操作已取消。"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 0
+            fi
 
             HOME_DIR="/home/deck"
             HOMEBREW_DIR="${HOME_DIR}/homebrew"
@@ -1543,48 +1699,6 @@ install_remove_plugin_store() {
                 fi
             done
 
-            echo "正在获取最新版本信息..."
-            LATEST_VERSION=$(curl -s "https://api.github.com/repos/SteamDeckHomebrew/decky-loader/releases" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    tag = data[0]['tag_name']
-    if tag.startswith('v'):
-        tag = tag[1:]
-    print(tag)
-except:
-    print('')
-")
-            if [[ -z "$LATEST_VERSION" ]]; then
-                echo -e "${RED}错误: 无法获取最新版本号，请检查网络。${NC}"
-                read -p "按回车键返回主菜单..." < /dev/tty
-                return 1
-            fi
-            echo -e "${GREEN}最新版本: ${LATEST_VERSION}${NC}"
-
-            INSTALLED_VERSION=""
-            if [[ -f "$PLUGIN_LOADER" && -x "$PLUGIN_LOADER" ]]; then
-                INSTALLED_VERSION=$(sudo journalctl -u plugin_loader --no-pager 2>/dev/null | grep -i "Starting Decky version" | tail -1 | grep -oP 'version v?\K[0-9.]+(-pre[0-9]+)?')
-                if [[ -z "$INSTALLED_VERSION" ]]; then
-                    INSTALLED_VERSION=$("$PLUGIN_LOADER" --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+(-pre\d+)?')
-                fi
-                if [[ -n "$INSTALLED_VERSION" ]]; then
-                    echo -e "${CYAN}当前已安装版本: ${INSTALLED_VERSION}${NC}"
-                    if [[ "$INSTALLED_VERSION" == "$LATEST_VERSION" ]]; then
-                        echo -e "${GREEN}已经是最新版本，无需安装。${NC}"
-                        read -p "按回车键返回主菜单..." < /dev/tty
-                        return 0
-                    else
-                        echo -e "${YELLOW}发现新版本，将进行更新。${NC}"
-                    fi
-                else
-                    echo -e "${YELLOW}已安装但无法获取版本，将覆盖安装。${NC}"
-                fi
-            else
-                echo "未检测到现有安装，将进行全新安装。"
-            fi
-
-            echo "创建目录并修复权限..."
             if [[ ! -d "$HOMEBREW_DIR" ]]; then
                 sudo mkdir -p "$HOMEBREW_DIR"
             fi
@@ -1596,7 +1710,7 @@ except:
 
             DOWNLOAD_SUCCESS=false
             TMP_FILE="${PLUGIN_LOADER}.tmp"
-            DOWNLOAD_PATH="https://github.com/SteamDeckHomebrew/decky-loader/releases/download/v${LATEST_VERSION}/PluginLoader"
+            DOWNLOAD_PATH="https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${target_version}/PluginLoader"
 
             for mirror in "${MIRRORS[@]}"; do
                 FULL_URL="${mirror}${DOWNLOAD_PATH}"
@@ -1651,13 +1765,11 @@ except:
                 return 1
             fi
 
-            echo "启用 Steam 远程调试..."
             touch "${HOME_DIR}/.steam/steam/.cef-enable-remote-debugging"
             if [[ -d "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/" ]]; then
                 touch "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/.cef-enable-remote-debugging"
             fi
 
-            echo "配置 systemd 服务..."
             cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=SteamDeck Plugin Loader
@@ -1685,7 +1797,7 @@ EOF
             systemctl status plugin_loader --no-pager
 
             echo ""
-            echo -e "${GREEN}✓ Decky Loader ${LATEST_VERSION} 安装/更新完成${NC}"
+            echo -e "${GREEN}✓ Decky Loader ${target_version} 安装/更新完成${NC}"
             echo "请切换回游戏模式，按 '...' 键打开侧边栏检查。"
             ;;
 
@@ -1694,7 +1806,6 @@ EOF
             echo "卸载命令: sudo rm -rf /home/deck/homebrew"
             echo "警告：这将删除整个 /home/deck/homebrew 目录，包括所有插件和插件商店。"
             echo ""
-
             read -p "确定要卸载插件商店吗？(y/N): " -n 1 -r < /dev/tty
             echo ""
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -1702,13 +1813,10 @@ EOF
                 read -p "按回车键返回主菜单..." < /dev/tty
                 return
             fi
-
             echo "正在执行卸载..."
             if sudo rm -rf /home/deck/homebrew; then
-                echo ""
                 echo -e "${GREEN}✓ 插件商店卸载完成${NC}"
             else
-                echo ""
                 echo -e "${RED}✗ 插件商店卸载失败${NC}"
             fi
             ;;
@@ -4414,7 +4522,30 @@ install_decky_lsfg_vk() {
         1)
             echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
             local releases_json=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases")
-            local versions_info=$(echo "$releases_json" | grep -E '("tag_name":|"prerelease":)' | paste -d ' ' - - | sed 's/.*"tag_name": "\([^"]*\)".*"prerelease": \([^,]*\).*/\1|\2/')
+            if [ -z "$releases_json" ]; then
+                echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 1
+            fi
+
+            local versions_info=$(echo "$releases_json" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for rel in data:
+        tag = rel.get('tag_name', '')
+        prerelease = rel.get('prerelease', False)
+        if tag:
+            print(f'{tag}|{str(prerelease).lower()}')
+except:
+    pass
+")
+            if [ -z "$versions_info" ]; then
+                echo -e "${RED}错误: 无法解析版本信息。${NC}"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 1
+            fi
+
             local stable_versions=()
             local prerelease_versions=()
             while IFS='|' read -r tag prerelease; do
@@ -4437,22 +4568,15 @@ install_decky_lsfg_vk() {
                 latest_prerelease="v${latest_prerelease}"
             fi
 
-            # 比较预发布版本是否高于正式版，若不是则忽略预发布
-            if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
-                local stable_num=$(echo "$latest_stable" | sed 's/^v//')
-                local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
-                if [[ "$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)" != "$prerelease_num" ]]; then
-                    latest_prerelease=""
-                fi
-            fi
-
             local installed_version=""
             if [ -d "$TARGET_DIR" ] && [ -f "$TARGET_DIR/package.json" ]; then
                 installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
                 if [ -n "$installed_version" ]; then
                     installed_version="v${installed_version}"
-                    echo -e "${CYAN}已安装版本: ${installed_version}${NC}"
+                    echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
                 fi
+            else
+                echo "未检测到已安装版本。"
             fi
 
             local target_version=""
@@ -4460,7 +4584,7 @@ install_decky_lsfg_vk() {
                 if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
                     echo -e "${GREEN}已安装最新正式版 ${installed_version}${NC}"
                     echo -e "${YELLOW}发现更高版本的预发布版: ${latest_prerelease}${NC}"
-                    read -p "是否升级到预发布版？(y/N): " upgrade < /dev/tty
+                    read -p "输入 y 升级到预发布版，按其他键保持当前版本: " upgrade < /dev/tty
                     if [[ $upgrade =~ ^[Yy]$ ]]; then
                         target_version="$latest_prerelease"
                     else
@@ -4471,7 +4595,7 @@ install_decky_lsfg_vk() {
                 elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -n "$latest_stable" ]; then
                     echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
                     echo -e "${YELLOW}当前正式版为: ${latest_stable}${NC}"
-                    read -p "是否切换到正式版？(y/N): " switch < /dev/tty
+                    read -p "输入 y 切换到正式版，按其他键保持当前版本: " switch < /dev/tty
                     if [[ $switch =~ ^[Yy]$ ]]; then
                         target_version="$latest_stable"
                     else
@@ -4511,7 +4635,6 @@ install_decky_lsfg_vk() {
                     fi
                 fi
             else
-                echo "未检测到已安装版本。"
                 if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
                     echo "请选择要安装的版本："
                     echo "1. 正式版 ${latest_stable}"
@@ -4528,19 +4651,26 @@ install_decky_lsfg_vk() {
                     target_version="$latest_prerelease"
                     echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
                 else
-                    echo -e "${RED}错误: 无法找到任何版本。${NC}"
+                    echo -e "${RED}错误: 无法获取任何版本。${NC}"
                     read -p "按回车键返回主菜单..." < /dev/tty
                     return 1
                 fi
             fi
 
             if [ -z "$target_version" ]; then
-                echo "未选择任何版本，操作取消。"
+                echo "未选择版本，操作取消。"
                 read -p "按回车键返回主菜单..." < /dev/tty
                 return 0
             fi
 
             echo -e "${GREEN}将安装版本: ${target_version}${NC}"
+            read -p "是否继续？(y/N): " -n 1 -r < /dev/tty
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "操作已取消。"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 0
+            fi
 
             if [ ! -f "/etc/systemd/system/plugin_loader.service" ]; then
                 echo -e "${YELLOW}⚠ 警告: 未检测到 Decky Loader 插件商店。${NC}"
@@ -4552,15 +4682,6 @@ install_decky_lsfg_vk() {
                     read -p "按回车键返回主菜单..." < /dev/tty
                     return 1
                 fi
-            fi
-
-            echo -e "${CYAN}准备安装/更新 LSFG-VK 插件...${NC}"
-            read -p "是否继续？(y/N): " -n 1 -r < /dev/tty
-            echo ""
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                echo "操作已取消。"
-                read -p "按回车键返回主菜单..." < /dev/tty
-                return 1
             fi
 
             rm -rf "$TEMP_DIR"
@@ -4624,7 +4745,6 @@ install_decky_lsfg_vk() {
             fi
 
             sudo mkdir -p "$PLUGIN_DIR"
-
             if [ -d "$TARGET_DIR" ]; then
                 echo "检测到旧版本目录，正在删除..."
                 sudo rm -rf "$TARGET_DIR"
@@ -4658,9 +4778,7 @@ install_decky_lsfg_vk() {
 
             echo -e "${CYAN}正在安装插件到 ${TARGET_DIR}...${NC}"
             sudo mv "$extracted_dir" "$TARGET_DIR"
-
             sudo chown -R deck:deck "$TARGET_DIR"
-
             rm -rf "$TEMP_DIR"
 
             echo ""
@@ -4671,7 +4789,6 @@ install_decky_lsfg_vk() {
         2)
             echo -e "${CYAN}正在卸载 LSFG-VK 插件...${NC}"
             echo "这将删除目录: ${TARGET_DIR}"
-
             read -p "确定要卸载吗？(y/N): " -n 1 -r < /dev/tty
             echo ""
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -4679,7 +4796,6 @@ install_decky_lsfg_vk() {
                 read -p "按回车键返回主菜单..." < /dev/tty
                 return 0
             fi
-
             if [ -d "$TARGET_DIR" ]; then
                 if sudo rm -rf "$TARGET_DIR"; then
                     echo -e "${GREEN}✅ LSFG-VK 插件已卸载。${NC}"
@@ -4741,7 +4857,30 @@ install_decky_framegen() {
         1)
             echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
             local releases_json=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases")
-            local versions_info=$(echo "$releases_json" | grep -E '("tag_name":|"prerelease":)' | paste -d ' ' - - | sed 's/.*"tag_name": "\([^"]*\)".*"prerelease": \([^,]*\).*/\1|\2/')
+            if [ -z "$releases_json" ]; then
+                echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 1
+            fi
+
+            local versions_info=$(echo "$releases_json" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for rel in data:
+        tag = rel.get('tag_name', '')
+        prerelease = rel.get('prerelease', False)
+        if tag:
+            print(f'{tag}|{str(prerelease).lower()}')
+except:
+    pass
+")
+            if [ -z "$versions_info" ]; then
+                echo -e "${RED}错误: 无法解析版本信息。${NC}"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 1
+            fi
+
             local stable_versions=()
             local prerelease_versions=()
             while IFS='|' read -r tag prerelease; do
@@ -4764,21 +4903,15 @@ install_decky_framegen() {
                 latest_prerelease="v${latest_prerelease}"
             fi
 
-            if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
-                local stable_num=$(echo "$latest_stable" | sed 's/^v//')
-                local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
-                if [[ "$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)" != "$prerelease_num" ]]; then
-                    latest_prerelease=""
-                fi
-            fi
-
             local installed_version=""
             if [ -d "$TARGET_DIR" ] && [ -f "$TARGET_DIR/package.json" ]; then
                 installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
                 if [ -n "$installed_version" ]; then
                     installed_version="v${installed_version}"
-                    echo -e "${CYAN}已安装版本: ${installed_version}${NC}"
+                    echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
                 fi
+            else
+                echo "未检测到已安装版本。"
             fi
 
             local target_version=""
@@ -4786,7 +4919,7 @@ install_decky_framegen() {
                 if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
                     echo -e "${GREEN}已安装最新正式版 ${installed_version}${NC}"
                     echo -e "${YELLOW}发现更高版本的预发布版: ${latest_prerelease}${NC}"
-                    read -p "是否升级到预发布版？(y/N): " upgrade < /dev/tty
+                    read -p "输入 y 升级到预发布版，按其他键保持当前版本: " upgrade < /dev/tty
                     if [[ $upgrade =~ ^[Yy]$ ]]; then
                         target_version="$latest_prerelease"
                     else
@@ -4797,7 +4930,7 @@ install_decky_framegen() {
                 elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -n "$latest_stable" ]; then
                     echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
                     echo -e "${YELLOW}当前正式版为: ${latest_stable}${NC}"
-                    read -p "是否切换到正式版？(y/N): " switch < /dev/tty
+                    read -p "输入 y 切换到正式版，按其他键保持当前版本: " switch < /dev/tty
                     if [[ $switch =~ ^[Yy]$ ]]; then
                         target_version="$latest_stable"
                     else
@@ -4837,7 +4970,6 @@ install_decky_framegen() {
                     fi
                 fi
             else
-                echo "未检测到已安装版本。"
                 if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
                     echo "请选择要安装的版本："
                     echo "1. 正式版 ${latest_stable}"
@@ -4854,19 +4986,26 @@ install_decky_framegen() {
                     target_version="$latest_prerelease"
                     echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
                 else
-                    echo -e "${RED}错误: 无法找到任何版本。${NC}"
+                    echo -e "${RED}错误: 无法获取任何版本。${NC}"
                     read -p "按回车键返回主菜单..." < /dev/tty
                     return 1
                 fi
             fi
 
             if [ -z "$target_version" ]; then
-                echo "未选择任何版本，操作取消。"
+                echo "未选择版本，操作取消。"
                 read -p "按回车键返回主菜单..." < /dev/tty
                 return 0
             fi
 
             echo -e "${GREEN}将安装版本: ${target_version}${NC}"
+            read -p "是否继续？(y/N): " -n 1 -r < /dev/tty
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "操作已取消。"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 0
+            fi
 
             if [ ! -f "/etc/systemd/system/plugin_loader.service" ]; then
                 echo -e "${YELLOW}⚠ 警告: 未检测到 Decky Loader 插件商店。${NC}"
@@ -4878,15 +5017,6 @@ install_decky_framegen() {
                     read -p "按回车键返回主菜单..." < /dev/tty
                     return 1
                 fi
-            fi
-
-            echo -e "${CYAN}准备安装/更新 Framegen 插件...${NC}"
-            read -p "是否继续？(y/N): " -n 1 -r < /dev/tty
-            echo ""
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                echo "操作已取消。"
-                read -p "按回车键返回主菜单..." < /dev/tty
-                return 1
             fi
 
             rm -rf "$TEMP_DIR"
@@ -4950,7 +5080,6 @@ install_decky_framegen() {
             fi
 
             sudo mkdir -p "$PLUGIN_DIR"
-
             if [ -d "$TARGET_DIR" ]; then
                 echo "检测到旧版本目录，正在删除..."
                 sudo rm -rf "$TARGET_DIR"
@@ -4984,9 +5113,7 @@ install_decky_framegen() {
 
             echo -e "${CYAN}正在安装插件到 ${TARGET_DIR}...${NC}"
             sudo mv "$extracted_dir" "$TARGET_DIR"
-
             sudo chown -R deck:deck "$TARGET_DIR"
-
             rm -rf "$TEMP_DIR"
 
             echo ""
@@ -4997,7 +5124,6 @@ install_decky_framegen() {
         2)
             echo -e "${CYAN}正在卸载 Framegen 插件...${NC}"
             echo "这将删除目录: ${TARGET_DIR}"
-
             read -p "确定要卸载吗？(y/N): " -n 1 -r < /dev/tty
             echo ""
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -5005,7 +5131,6 @@ install_decky_framegen() {
                 read -p "按回车键返回主菜单..." < /dev/tty
                 return 0
             fi
-
             if [ -d "$TARGET_DIR" ]; then
                 if sudo rm -rf "$TARGET_DIR"; then
                     echo -e "${GREEN}✅ Framegen 插件已卸载。${NC}"
