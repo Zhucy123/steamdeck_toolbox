@@ -18,7 +18,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.3.7"
+VERSION="1.3.8"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -201,12 +201,12 @@ if [ "$SYSTEM_TYPE" == "dual" ]; then
     echo -e "${CYAN}请选择要执行的功能：${NC}"
     echo ""
             echo -e "${GREEN} 1. 关于支持与维护的说明  11. 安装＆卸载插件商店  21. 安装Edge浏览器${NC}"
-            echo -e "${GREEN} 2. 安装国内源            12. 校准摇杆            22. 安装Google浏览器${NC}"
+            echo -e "${GREEN} 2. 安装国内源            12. 校准设备            22. 安装Google浏览器${NC}"
             echo -e "${GREEN} 3. 调整虚拟内存大小      13. 设置管理员密码      23. 清理Steam缓存${NC}"
             echo -e "${GREEN} 4. 修复磁盘写入错误      14. 安装AnyDesk         24. 更新已安装应用${NC}"
             echo -e "${GREEN} 5. 修复引导              15. 安装ToDesk          25. 卸载已安装应用${NC}"
             echo -e "${GREEN} 6. 修复互通盘            16. 安装WPS Office      26. 安装小黄鸭软件${NC}"
-            echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安装Steam社区302${NC}"
+            echo -e "${GREEN} 7. 清理hosts缓存         17. 安装QQ              27. 安装Watt Toolkit (Steam++)${NC}"
             echo -e "${GREEN} 8. 安装UU加速器插件      18. 安装微信            28. 安装LSFG-VK插件${NC}"
             echo -e "${GREEN} 9. 安装迅游加速器插件    19. 安装QQ音乐          29. 安装Framegen插件${NC}"
             echo -e "${GREEN}10. 安装ToMoon            20. 安装百度网盘        30. 安装/重装Clover引导${NC}"
@@ -255,7 +255,7 @@ if [ "$SYSTEM_TYPE" == "dual" ]; then
         24) update_installed_apps ;;
         25) uninstall_apps ;;
         26) install_yellow_duck_software ;;
-        27) install_steamcommunity_302 ;;
+        27) install_watt_toolkit ;;
         28) install_decky_lsfg_vk ;;
         29) install_decky_framegen ;;
         30) clover_install_or_reinstall ;;
@@ -274,12 +274,12 @@ echo -e "${GREEN} 1. 关于支持与维护的说明  11. 设置管理员密码  
 echo -e "${GREEN} 2. 安装国内源            12. 安装AnyDesk         22. 更新已安装应用${NC}"
 echo -e "${GREEN} 3. 调整虚拟内存大小      13. 安装ToDesk          23. 卸载已安装应用${NC}"
 echo -e "${GREEN} 4. 修复磁盘写入错误      14. 安装WPS Office      24. 安装小黄鸭软件${NC}"
-echo -e "${GREEN} 5. 清理hosts缓存         15. 安装QQ              25. 安装Steam社区302${NC}"
+echo -e "${GREEN} 5. 清理hosts缓存         15. 安装QQ              25. 安装Watt Toolkit (Steam++)${NC}"
 echo -e "${GREEN} 6. 安装UU加速器插件      16. 安装微信            26. 安装LSFG-VK插件${NC}"
 echo -e "${GREEN} 7. 安装迅游加速器插件    17. 安装QQ音乐          27. 安装Framegen插件${NC}"
 echo -e "${GREEN} 8. 安装ToMoon            18. 安装百度网盘        28. 安装/重装Clover引导${NC}"
 echo -e "${GREEN} 9. 安装＆卸载插件商店    19. 安装Edge浏览器${NC}"
-echo -e "${GREEN}10. 校准摇杆              20. 安装Google浏览器${NC}"
+echo -e "${GREEN}10. 校准设备              20. 安装Google浏览器${NC}"
     echo ""
     echo -e "${CYAN}════════════════════════════════════════════════════════════════════════════════════════${NC}"
     echo ""
@@ -323,7 +323,7 @@ echo -e "${GREEN}10. 校准摇杆              20. 安装Google浏览器${NC}"
         22) update_installed_apps ;;
         23) uninstall_apps ;;
         24) install_yellow_duck_software ;;
-        25) install_steamcommunity_302 ;;
+        25) install_watt_toolkit ;;
         26) install_decky_lsfg_vk ;;
         27) install_decky_framegen ;;
         28) clover_install_or_reinstall ;;
@@ -1831,18 +1831,41 @@ EOF
 
 calibrate_joystick() {
     show_header
-    echo -e "${YELLOW}════════════════ 校准摇杆 ════════════════${NC}"
+    echo -e "${YELLOW}════════════════ 校准设备 ════════════════${NC}"
+    echo ""
+    echo "请选择要校准的设备："
+    echo "1. 校准摇杆"
+    echo "2. 校准扳机"
+    echo ""
+    read -p "请输入选择 [1-2]: " choice < /dev/tty
 
-    echo -e "${CYAN}正在校准摇杆...${NC}"
-
-    if thumbstick_cal; then
-        echo ""
-        echo -e "${GREEN}✓ 摇杆校准完成${NC}"
-    else
-        echo ""
-        echo -e "${RED}✗ 摇杆校准失败${NC}"
-        echo "请确保系统中已安装摇杆校准工具"
-    fi
+    case $choice in
+        1)
+            echo -e "${CYAN}正在校准摇杆...${NC}"
+            if thumbstick_cal; then
+                echo ""
+                echo -e "${GREEN}✓ 摇杆校准完成${NC}"
+            else
+                echo ""
+                echo -e "${RED}✗ 摇杆校准失败${NC}"
+                echo "请确保系统中已安装摇杆校准工具 (thumbstick_cal)"
+            fi
+            ;;
+        2)
+            echo -e "${CYAN}正在校准扳机...${NC}"
+            if trigger_cal; then
+                echo ""
+                echo -e "${GREEN}✓ 扳机校准完成${NC}"
+            else
+                echo ""
+                echo -e "${RED}✗ 扳机校准失败${NC}"
+                echo "请确保系统中已安装扳机校准工具 (trigger_cal)"
+            fi
+            ;;
+        *)
+            echo -e "${RED}无效选择${NC}"
+            ;;
+    esac
 
     read -p "按回车键返回主菜单..." < /dev/tty
 }
@@ -4246,237 +4269,426 @@ EOF
     read -p "按回车键返回主菜单..." < /dev/tty
 }
 
-install_steamcommunity_302() {
+install_watt_toolkit() {
     show_header
-    echo -e "${YELLOW}════════════════ 安装Steam社区302 ════════════════${NC}"
+    echo -e "${YELLOW}════════════════ 安装/卸载 Watt Toolkit (Steam++) ════════════════${NC}"
     echo ""
 
-    echo -e "${CYAN}正在准备安装Steam社区302工具...${NC}"
-    echo "该工具用于解决Steam社区访问问题。"
-    echo ""
+    local GITHUB_REPO="BeyondDimension/SteamTools"
+    local INSTALL_DIR="/home/deck/Watt Toolkit"
+    local DESKTOP_DIR="/home/deck/Desktop"
+    local TEMP_DIR="/tmp/watt_toolkit_install"
+    local MIRRORS=(
+        "https://gh.ddlc.top/"
+        "https://ghproxy.net/"
+        "https://mirror.ghproxy.com/"
+        "https://gh.api.99988866.xyz/"
+        "https://download.fastgit.org/"
+        "https://hub.gitmirror.com/"
+        "https://git.xfj0.xyz/"
+        "https://github.com/"
+    )
+    local DOWNLOAD_TIMEOUT=120
+    local MAX_RETRY_PER_MIRROR=1
 
-    local install_dir="$HOME/SteamCommunity302"
-    local install_dir2="$HOME/Steamcommunity_302"
-    local desktop_file="$DESKTOP_DIR/Steamcommunity-302.desktop"
-
-    local installed=false
-    if [ -d "$install_dir" ] || [ -d "$install_dir2" ] || [ -f "$desktop_file" ]; then
-        installed=true
-    fi
-
-    if [ "$installed" = true ]; then
-        echo -e "${GREEN}检测到可能已安装Steam社区302${NC}"
-        echo ""
-        echo "请选择要执行的操作："
-        echo "1. 重新安装Steam社区302"
-        echo "2. 卸载Steam社区302"
-        echo "3. 返回主菜单"
-        echo ""
-
-        read -p "请输入选择 [1-3]: " choice < /dev/tty
-
-        case $choice in
-            1)
-                echo "开始重新安装Steam社区302..."
-                echo "正在清理旧版本..."
-                if [ -d "$install_dir" ]; then
-                    rm -rf "$install_dir"
-                    echo -e "${GREEN}✓ 已删除安装目录: $install_dir${NC}"
-                fi
-                if [ -d "$install_dir2" ]; then
-                    rm -rf "$install_dir2"
-                    echo -e "${GREEN}✓ 已删除安装目录: $install_dir2${NC}"
-                fi
-                if [ -f "$desktop_file" ]; then
-                    rm -f "$desktop_file"
-                    echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
-                fi
-                echo -e "${GREEN}✓ 旧版本清理完成，开始新安装${NC}"
-                echo ""
-                ;;
-            2)
-                echo "正在卸载Steam社区302..."
-                if [ -d "$install_dir" ]; then
-                    rm -rf "$install_dir"
-                    echo -e "${GREEN}✓ 已删除安装目录: $install_dir${NC}"
-                fi
-                if [ -d "$install_dir2" ]; then
-                    rm -rf "$install_dir2"
-                    echo -e "${GREEN}✓ 已删除安装目录: $install_dir2${NC}"
-                fi
-                if [ -f "$desktop_file" ]; then
-                    rm -f "$desktop_file"
-                    echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
-                fi
-                echo -e "${GREEN}✓ Steam社区302已卸载完成${NC}"
-                read -p "按回车键返回主菜单..." < /dev/tty
-                return
-                ;;
-            3)
-                echo "返回主菜单..."
-                return
-                ;;
-            *)
-                echo "无效选择，返回主菜单..."
-                return
-                ;;
-        esac
-    fi
-
-    echo "即将下载并安装Steam社区302工具..."
-    echo "该工具需要从dogfight360.com下载。"
-    echo ""
-
-    read -p "是否继续安装？(y/N): " -n 1 -r < /dev/tty
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "安装已取消。"
-        read -p "按回车键返回主菜单..." < /dev/tty
-        return
-    fi
-
-    echo ""
-    echo -e "${CYAN}开始安装Steam社区302...${NC}"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-    mkdir -p "$install_dir"
-    cd "$install_dir"
-
-    echo "步骤1: 下载Steam社区302工具..."
-    echo "下载地址: https://www.dogfight360.com/blog/wp-content/uploads/2025/12/steamcommunity_302_Linux_AMD64_V14.0.01.tar.gz"
-    echo ""
-
-    if ! command -v wget &> /dev/null; then
-        echo -e "${YELLOW}未找到wget，正在尝试安装...${NC}"
-        sudo pacman -S --noconfirm wget 2>/dev/null || {
-            echo -e "${RED}无法安装wget，请手动安装后再试。${NC}"
-            echo "安装命令: sudo pacman -S wget"
+    for cmd in curl sudo unzip tar python3; do
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
             read -p "按回车键返回主菜单..." < /dev/tty
-            return
-        }
-    fi
-
-    local download_url="https://www.dogfight360.com/blog/wp-content/uploads/2025/12/steamcommunity_302_Linux_AMD64_V14.0.01.tar.gz"
-    local filename="steamcommunity_302_Linux_AMD64_V14.0.01.tar.gz"
-
-    echo "正在下载文件..."
-    wget --show-progress "$download_url"
-
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}✗ 下载失败，请检查网络连接${NC}"
-        echo "可以尝试手动下载后放置到 $install_dir 目录"
-        read -p "按回车键返回主菜单..." < /dev/tty
-        return
-    fi
-
-    echo -e "${GREEN}✓ 下载完成${NC}"
-    echo ""
-
-    echo "步骤2: 解压文件..."
-    tar -xzf "$filename"
-
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}✗ 解压失败${NC}"
-        read -p "按回车键返回主菜单..." < /dev/tty
-        return
-    fi
-
-    echo -e "${GREEN}✓ 解压完成${NC}"
-    echo ""
-
-    rm -f "$filename"
-    echo "步骤3: 清理压缩包..."
-    echo -e "${GREEN}✓ 已清理压缩包${NC}"
-    echo ""
-
-    local extracted_dir=""
-    for dir in *steamcommunity* *Steamcommunity*; do
-        if [ -d "$dir" ]; then
-            extracted_dir="$dir"
-            break
+            return 1
         fi
     done
 
-    if [ -z "$extracted_dir" ]; then
-        if [ -f "Steamcommunity_302" ] || [ -f "steamcommunity_302" ]; then
-            extracted_dir="."
-        else
-            echo -e "${RED}✗ 找不到解压后的文件${NC}"
-            read -p "按回车键返回主菜单..." < /dev/tty
-            return
-        fi
-    fi
-
-    cd "$extracted_dir"
-    local extracted_path="$(pwd)"
-    echo "步骤4: 文件位置: $extracted_path"
-    echo -e "${GREEN}✓ 文件准备就绪${NC}"
+    echo "请选择要执行的操作："
+    echo "1. 安装/更新 Watt Toolkit"
+    echo "2. 卸载 Watt Toolkit"
     echo ""
 
-    echo "步骤5: 设置执行权限..."
-    [ -f "Steamcommunity_302" ] && chmod +x "Steamcommunity_302"
-    [ -f "steamcommunity_302" ] && chmod +x "steamcommunity_302"
-    [ -f "steamcommunity_302.cli" ] && chmod +x "steamcommunity_302.cli"
-    [ -f "steamcommunity_302.caddy" ] && chmod +x "steamcommunity_302.caddy"
-    echo -e "${GREEN}✓ 已设置执行权限${NC}"
-    echo ""
+    read -p "请输入选择 [1-2] (输入其他键返回): " action_choice < /dev/tty
 
-    echo "步骤6: 创建运行脚本..."
-    local run_script="run运行.sh"
-    cat > "$run_script" << 'EOF'
-#!/bin/bash
-clear
-echo ""
-[ -f "Steamcommunity_302" ] && sudo ./Steamcommunity_302
-[ -f "steamcommunity_302" ] && sudo ./steamcommunity_302
-EOF
+    case $action_choice in
+        1)
+            echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+            local releases_json=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases")
+            if [ -z "$releases_json" ]; then
+                echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 1
+            fi
 
-    chmod +x "$run_script"
-    echo -e "${GREEN}✓ 运行脚本已创建: $run_script${NC}"
-    echo ""
+            local versions_info=$(echo "$releases_json" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for rel in data:
+        tag = rel.get('tag_name', '')
+        prerelease = rel.get('prerelease', False)
+        if tag:
+            print(f'{tag}|{str(prerelease).lower()}')
+except:
+    pass
+")
+            if [ -z "$versions_info" ]; then
+                echo -e "${RED}错误: 无法解析版本信息。${NC}"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 1
+            fi
 
-    echo "步骤7: 创建桌面快捷方式..."
+            local stable_versions=()
+            local prerelease_versions=()
+            while IFS='|' read -r tag prerelease; do
+                [ -z "$tag" ] && continue
+                if [[ "$prerelease" == "true" ]]; then
+                    prerelease_versions+=("$tag")
+                else
+                    stable_versions+=("$tag")
+                fi
+            done <<< "$versions_info"
 
-    local steam_icon="applications-internet"
-    if [ -f "/usr/share/icons/hicolor/48x48/apps/steam.png" ]; then
-        steam_icon="steam"
-    fi
+            local latest_stable=""
+            local latest_prerelease=""
+            if [ ${#stable_versions[@]} -gt 0 ]; then
+                latest_stable=$(printf '%s\n' "${stable_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
+                latest_stable="v${latest_stable}"
+            fi
+            if [ ${#prerelease_versions[@]} -gt 0 ]; then
+                latest_prerelease=$(printf '%s\n' "${prerelease_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
+                latest_prerelease="v${latest_prerelease}"
+            fi
 
-    cat > "$desktop_file" << EOF
+            local installed_version=""
+            if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/.version" ]; then
+                installed_version=$(cat "$INSTALL_DIR/.version")
+                echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
+            else
+                echo "未检测到已安装版本。"
+            fi
+
+            local target_version=""
+            if [ -n "$installed_version" ]; then
+                if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                    local stable_num=$(echo "$latest_stable" | sed 's/^v//')
+                    local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+                    local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
+                    if [ "$higher" = "$prerelease_num" ]; then
+                        echo -e "${GREEN}已安装最新正式版 ${installed_version}${NC}"
+                        echo -e "${YELLOW}发现更高版本的预发布版: ${latest_prerelease}${NC}"
+                        read -p "输入 y 升级到预发布版，按其他键保持当前版本: " upgrade < /dev/tty
+                        if [[ $upgrade =~ ^[Yy]$ ]]; then
+                            target_version="$latest_prerelease"
+                        else
+                            echo "保持当前版本。"
+                            read -p "按回车键返回主菜单..." < /dev/tty
+                            return 0
+                        fi
+                    else
+                        echo -e "${GREEN}已经是最新版本 (正式版 ${installed_version})${NC}"
+                        read -p "按回车键返回主菜单..." < /dev/tty
+                        return 0
+                    fi
+                elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -n "$latest_stable" ]; then
+                    local stable_num=$(echo "$latest_stable" | sed 's/^v//')
+                    local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+                    local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
+                    if [ "$higher" = "$prerelease_num" ]; then
+                        echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
+                        echo -e "${YELLOW}当前正式版为: ${latest_stable}${NC}"
+                        read -p "输入 y 切换到正式版，按其他键保持当前版本: " switch < /dev/tty
+                        if [[ $switch =~ ^[Yy]$ ]]; then
+                            target_version="$latest_stable"
+                        else
+                            echo "保持当前版本。"
+                            read -p "按回车键返回主菜单..." < /dev/tty
+                            return 0
+                        fi
+                    else
+                        echo -e "${YELLOW}当前预发布版 ${installed_version} 低于正式版 ${latest_stable}，将升级到正式版。${NC}"
+                        target_version="$latest_stable"
+                    fi
+                elif [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -z "$latest_prerelease" ]; then
+                    echo -e "${GREEN}已经是最新版本 (正式版 ${installed_version})，无需更新。${NC}"
+                    read -p "按回车键返回主菜单..." < /dev/tty
+                    return 0
+                elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -z "$latest_stable" ]; then
+                    echo -e "${GREEN}已经是最新版本 (预发布版 ${installed_version})，无需更新。${NC}"
+                    read -p "按回车键返回主菜单..." < /dev/tty
+                    return 0
+                else
+                    echo -e "${YELLOW}已安装版本 ${installed_version} 不是最新版本。${NC}"
+                    if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                        echo "请选择要安装的版本："
+                        echo "1. 正式版 ${latest_stable}"
+                        echo "2. 预发布版 ${latest_prerelease}"
+                        read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
+                        case $choice in
+                            2) target_version="$latest_prerelease" ;;
+                            *) target_version="$latest_stable" ;;
+                        esac
+                    elif [ -n "$latest_stable" ]; then
+                        target_version="$latest_stable"
+                        echo "将安装正式版 ${target_version}"
+                    elif [ -n "$latest_prerelease" ]; then
+                        target_version="$latest_prerelease"
+                        echo "将安装预发布版 ${target_version}"
+                    else
+                        echo -e "${RED}错误: 无法找到任何版本。${NC}"
+                        read -p "按回车键返回主菜单..." < /dev/tty
+                        return 1
+                    fi
+                fi
+            else
+                if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                    local stable_num=$(echo "$latest_stable" | sed 's/^v//')
+                    local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+                    local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
+                    if [ "$higher" = "$prerelease_num" ]; then
+                        echo "请选择要安装的版本："
+                        echo "1. 正式版 ${latest_stable}"
+                        echo "2. 预发布版 ${latest_prerelease}"
+                        read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
+                        case $choice in
+                            2) target_version="$latest_prerelease" ;;
+                            *) target_version="$latest_stable" ;;
+                        esac
+                    else
+                        target_version="$latest_stable"
+                    fi
+                elif [ -n "$latest_stable" ]; then
+                    target_version="$latest_stable"
+                    echo "将安装正式版 ${target_version}"
+                elif [ -n "$latest_prerelease" ]; then
+                    target_version="$latest_prerelease"
+                    echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
+                else
+                    echo -e "${RED}错误: 无法获取任何版本。${NC}"
+                    read -p "按回车键返回主菜单..." < /dev/tty
+                    return 1
+                fi
+            fi
+
+            if [ -z "$target_version" ]; then
+                echo "未选择版本，操作取消。"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 0
+            fi
+
+            echo -e "${GREEN}将安装版本: ${target_version}${NC}"
+
+            local download_url=""
+            local asset_info=$(echo "$releases_json" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    target_tag = '$target_version'
+    found = False
+    for rel in data:
+        if rel.get('tag_name') == target_tag:
+            for asset in rel.get('assets', []):
+                name = asset.get('name', '')
+                if name.endswith('_linux_x64.tgz') and '_linux_x64.tgz' in name:
+                    print(asset.get('browser_download_url', ''))
+                    found = True
+                    break
+            break
+    if not found:
+        for rel in data:
+            for asset in rel.get('assets', []):
+                name = asset.get('name', '')
+                if 'linux_x64.tgz' in name and 'source' not in name.lower():
+                    print(asset.get('browser_download_url', ''))
+                    found = True
+                    break
+            if found:
+                break
+except Exception as e:
+    pass
+")
+            if [ -z "$asset_info" ]; then
+                echo -e "${RED}错误: 无法获取 ${target_version} 的下载链接。${NC}"
+                echo "请检查 GitHub 上该版本是否包含 linux_x64.tgz 文件。"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 1
+            fi
+            download_url="$asset_info"
+
+            rm -rf "$TEMP_DIR"
+            mkdir -p "$TEMP_DIR"
+            cd "$TEMP_DIR"
+
+            local filename="Steam++_${target_version}_linux_x64.tgz"
+            local DOWNLOAD_SUCCESS=false
+
+            for mirror in "${MIRRORS[@]}"; do
+                local full_url="${mirror}${download_url}"
+                echo -e "尝试从 ${mirror} 下载..."
+
+                local retry_count=0
+                while [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; do
+                    if [[ $retry_count -gt 0 ]]; then
+                        echo -e "${YELLOW}重试下载 (第 ${retry_count} 次重试)...${NC}"
+                    fi
+
+                    curl -L --progress-bar --max-time "$DOWNLOAD_TIMEOUT" -o "$filename" "$full_url"
+                    local curl_exit=$?
+
+                    if [[ $curl_exit -eq 0 ]] && [[ -f "$filename" ]]; then
+                        local file_size=$(stat -c%s "$filename" 2>/dev/null || stat -f%z "$filename" 2>/dev/null)
+                        if [[ -n "$file_size" ]] && [[ "$file_size" -gt 1000000 ]]; then
+                            echo -e "\n${GREEN}下载成功 (大小: $((file_size/1024/1024)) MB)${NC}"
+                            DOWNLOAD_SUCCESS=true
+                            break 2
+                        else
+                            echo -e "\n${RED}下载文件无效 (${file_size} 字节)，尝试下一个镜像...${NC}"
+                            rm -f "$filename"
+                            break
+                        fi
+                    else
+                        echo -e "\n${RED}下载失败 (退出码: $curl_exit)${NC}"
+                        rm -f "$filename"
+                        ((retry_count++))
+                        if [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; then
+                            echo "将进行重试..."
+                            sleep 2
+                        else
+                            echo "该镜像重试次数用完，切换到下一个镜像。"
+                        fi
+                    fi
+                done
+            done
+
+            if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
+                echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 1
+            fi
+
+            echo -e "${CYAN}正在解压到临时目录...${NC}"
+            local temp_extract="$TEMP_DIR/extracted"
+            mkdir -p "$temp_extract"
+            if ! tar -xzf "$filename" -C "$temp_extract"; then
+                echo -e "${RED}解压失败。${NC}"
+                rm -rf "$TEMP_DIR"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 1
+            fi
+
+            local content_count=$(ls -1 "$temp_extract" | wc -l)
+            local first_item=$(ls -1 "$temp_extract" | head -1)
+
+            if [ -d "$INSTALL_DIR" ]; then
+                echo "检测到旧安装目录，正在删除..."
+                rm -rf "$INSTALL_DIR"
+            fi
+            mkdir -p "$INSTALL_DIR"
+
+            if [ $content_count -eq 1 ] && [ -d "$temp_extract/$first_item" ]; then
+                echo -e "${CYAN}检测到顶层目录，移动内容到 $INSTALL_DIR ...${NC}"
+                shopt -s dotglob
+                mv "$temp_extract/$first_item"/* "$INSTALL_DIR/"
+                shopt -u dotglob
+                find "$temp_extract/$first_item" -maxdepth 1 -name ".*" ! -name "." ! -name ".." -exec mv {} "$INSTALL_DIR/" \;
+                rm -rf "$temp_extract/$first_item"
+            else
+                echo -e "${CYAN}移动所有内容到 $INSTALL_DIR ...${NC}"
+                shopt -s dotglob
+                mv "$temp_extract"/* "$INSTALL_DIR/"
+                shopt -u dotglob
+                find "$temp_extract" -maxdepth 1 -name ".*" ! -name "." ! -name ".." -exec mv {} "$INSTALL_DIR/" \;
+            fi
+
+            rm -rf "$TEMP_DIR"
+
+            echo "$target_version" > "$INSTALL_DIR/.version"
+
+            local desktop_file="$DESKTOP_DIR/Watt_Toolkit.desktop"
+            local dotnet_root="$INSTALL_DIR/dotnet"
+            local dll_path="$INSTALL_DIR/assemblies/Steam++.dll"
+            local icon_path="$INSTALL_DIR/Icons/Watt-Toolkit.png"
+
+            if [ ! -f "$dll_path" ] || [ ! -f "$dotnet_root/dotnet" ]; then
+                echo -e "${RED}错误: 关键文件缺失，安装可能不完整。${NC}"
+                echo "请检查 $INSTALL_DIR 目录内容。"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 1
+            fi
+
+            cat > "$desktop_file" << EOF
 [Desktop Entry]
-Name=Steamcommunity 302
-Comment=Steam社区302访问工具
-Exec=$extracted_path/$run_script
-Terminal=true
+Categories=Network;Game;
+Comment[zh_CN]=Steam 工具箱
+Comment=Steam 工具箱
+Exec=env 'DOTNET_ROOT=${dotnet_root}' '${dotnet_root}/dotnet' '${dll_path}'
+GenericName[zh_CN]=
+GenericName=
+Icon=${icon_path}
+MimeType=
+Name[zh_CN]=Watt Toolkit (Steam++)
+Name=Watt Toolkit (Steam++)
+Path=
+StartupNotify=true
+Terminal=false
+TerminalOptions=
 Type=Application
-Categories=Network;Utility;
-Icon=$steam_icon
-Path=$extracted_path
+X-KDE-SubstituteUID=false
+X-KDE-Username=
 EOF
+            chmod +x "$desktop_file"
+            echo -e "${GREEN}✓ 桌面快捷方式已创建: ${desktop_file}${NC}"
 
-    chmod +x "$desktop_file"
-    echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
-    echo ""
+            echo ""
+            echo -e "${GREEN}✅ Watt Toolkit ${target_version} 安装完成！${NC}"
+            echo -e "${GREEN}安装目录: ${INSTALL_DIR}${NC}"
+            echo ""
+            echo -e "${YELLOW}使用提示：${NC}"
+            echo "如果加速报错，请按照下面步骤操作："
+            echo "  网络加速 → 加速设置 → 安装证书"
+            echo ""
+            echo "请在桌面启动 Watt Toolkit。"
+            ;;
 
-    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}✅ Steam社区302 安装完成！${NC}"
-    echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
-    echo ""
-    echo -e "${YELLOW}使用说明：${NC}"
-    echo "1. 双击桌面上的 'Steamcommunity 302' 图标启动程序"
-    echo "2. 首次使用时，请进入设置保存设置后再启动服务"
-    echo "3. 运行程序需要管理员权限，首次运行时需要输入密码"
-    echo ""
-    echo -e "${YELLOW}文件位置：${NC}"
-    echo "安装目录: $install_dir"
-    echo "运行脚本: $extracted_path/$run_script"
-    echo "桌面快捷方式: $desktop_file"
-    echo ""
-    echo -e "${YELLOW}注意：${NC}"
-    echo "1. 本工具安装在 $install_dir 目录"
-    echo "2. 如需卸载，请重新运行此功能并选择卸载选项"
-    echo "3. 卸载时会同时清理桌面快捷方式和安装文件"
-    echo ""
+        2)
+            echo -e "${CYAN}正在卸载 Watt Toolkit...${NC}"
+            echo ""
+
+            if [ ! -d "$INSTALL_DIR" ]; then
+                echo -e "${YELLOW}未检测到已安装的 Watt Toolkit。${NC}"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 0
+            fi
+
+            echo "将删除以下目录: ${INSTALL_DIR}"
+            echo "将删除桌面快捷方式: ${DESKTOP_DIR}/Watt_Toolkit.desktop"
+            echo ""
+
+            read -p "确定要卸载吗？(y/N): " -n 1 -r < /dev/tty
+            echo ""
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo "卸载已取消。"
+                read -p "按回车键返回主菜单..." < /dev/tty
+                return 0
+            fi
+
+            if rm -rf "$INSTALL_DIR"; then
+                echo -e "${GREEN}✓ 已删除安装目录${NC}"
+            else
+                echo -e "${RED}✗ 删除安装目录失败${NC}"
+            fi
+
+            if rm -f "${DESKTOP_DIR}/Watt_Toolkit.desktop"; then
+                echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
+            else
+                echo -e "${RED}✗ 删除桌面快捷方式失败${NC}"
+            fi
+
+            echo ""
+            echo -e "${GREEN}✅ Watt Toolkit 已卸载完成。${NC}"
+            ;;
+
+        *)
+            echo "返回主菜单..."
+            return
+            ;;
+    esac
 
     read -p "按回车键返回主菜单..." < /dev/tty
 }
