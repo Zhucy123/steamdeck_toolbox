@@ -16,6 +16,7 @@ import os
 import sys
 import re
 import tempfile
+import shutil
 
 # ============================================================================
 # 内嵌完整的 Bash 脚本（包含所有功能，无省略）
@@ -806,11 +807,12 @@ install_watt_toolkit_install() {
         "https://gh.ddlc.top/"
         "https://ghproxy.net/"
         "https://mirror.ghproxy.com/"
+        "https://github.com/"
+        "https://gitclone.com/"
         "https://gh.api.99988866.xyz/"
         "https://download.fastgit.org/"
         "https://hub.gitmirror.com/"
         "https://git.xfj0.xyz/"
-        "https://github.com/"
     )
     local DOWNLOAD_TIMEOUT=120
     local MAX_RETRY_PER_MIRROR=1
@@ -1021,6 +1023,7 @@ except Exception as e:
     local filename="Steam++_${target_version}_linux_x64.tgz"
     local DOWNLOAD_SUCCESS=false
 
+    # ========== 下载逻辑（与原脚本完全一致） ==========
     for mirror in "${MIRRORS[@]}"; do
         local full_url="${mirror}${download_url}"
         echo -e "尝试从 ${mirror} 下载..."
@@ -2491,69 +2494,102 @@ steamdeck工具箱 v1.3.8
         self.destroy()
 
 # ============================================================================
-# 启动时检测 VTE（仅 VTE）
+# 启动后处理：桌面快捷方式创建、VTE检测与安装
 # ============================================================================
 
-def check_and_install_vte():
+def ensure_desktop_shortcut():
+    """检查并创建桌面快捷方式"""
+    script_path = os.path.abspath(sys.argv[0])
+    desktop_dir = os.path.expanduser("~/Desktop")
+    desktop_file = os.path.join(desktop_dir, "Deck工具箱.desktop")
+    if os.path.exists(desktop_file):
+        return
+    content = f"""[Desktop Entry]
+Type=Application
+Name=Deck工具箱
+Exec=python3 {script_path}
+Icon=input-gamepad-symbolic
+Terminal=false
+StartupNotify=true
+Categories=Utility;
+"""
+    try:
+        with open(desktop_file, 'w') as f:
+            f.write(content)
+        os.chmod(desktop_file, 0o755)
+    except Exception as e:
+        print(f"创建桌面快捷方式失败: {e}")
+
+def restart_program():
+    """重启当前程序"""
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+def on_vte_install_finished(pid, status, user_data):
+    """VTE安装进程结束回调，重启程序"""
+    GLib.idle_add(restart_program)
+
+def ensure_vte_installed():
+    """检测VTE，若未安装则弹窗询问安装"""
     if VTE_AVAILABLE:
-        return True
+        return
 
     dialog = Gtk.MessageDialog(
         None,
         Gtk.DialogFlags.MODAL,
-        Gtk.MessageType.WARNING,
+        Gtk.MessageType.INFO,
         Gtk.ButtonsType.YES_NO,
         "VTE 终端组件未安装"
     )
     dialog.format_secondary_text(
         "本工具需要 VTE 组件以实现内嵌终端交互。\n"
-        "是否现在安装 vte3？(需要 sudo 权限)\n"
-        "如果选择“否”，将使用回退模式（仅文本显示，不支持交互）。"
+        "点击“是”将打开终端窗口执行安装（需要 sudo 密码）。\n"
+        "安装完成后,请重启本程序。"
     )
     response = dialog.run()
     dialog.destroy()
 
-    if response == Gtk.ResponseType.YES:
-        try:
-            subprocess.run(["sudo", "pacman", "-S", "--noconfirm", "vte3"], check=True)
-        except subprocess.CalledProcessError:
-            error_dialog = Gtk.MessageDialog(
-                None,
-                Gtk.DialogFlags.MODAL,
-                Gtk.MessageType.ERROR,
-                Gtk.ButtonsType.OK,
-                "VTE 安装失败，请手动执行：sudo pacman -S vte3"
-            )
-            error_dialog.run()
-            error_dialog.destroy()
-            return False
+    if response != Gtk.ResponseType.YES:
+        return
 
-        restart_dialog = Gtk.MessageDialog(
+    # 查找终端模拟器
+    terminal = shutil.which("konsole") or shutil.which("xterm")
+    if not terminal:
+        error_dialog = Gtk.MessageDialog(
             None,
             Gtk.DialogFlags.MODAL,
-            Gtk.MessageType.INFO,
+            Gtk.MessageType.ERROR,
             Gtk.ButtonsType.OK,
-            "VTE 安装完成，程序将重启以生效。"
+            "未找到终端模拟器，请手动执行：sudo pacman -S vte3"
         )
-        restart_dialog.run()
-        restart_dialog.destroy()
+        error_dialog.run()
+        error_dialog.destroy()
+        return
 
-        os.execv(sys.executable, [sys.executable] + sys.argv)
-        return True
+    # 构建命令
+    if terminal.endswith("konsole"):
+        cmd = [terminal, "-e", "sudo", "pacman", "-S", "--noconfirm", "vte3"]
     else:
-        return False
+        cmd = [terminal, "-hold", "-e", "sudo", "pacman", "-S", "--noconfirm", "vte3"]
+
+    # 启动终端进程
+    proc = subprocess.Popen(cmd)
+    # 监控进程退出
+    GLib.child_watch_add(proc.pid, on_vte_install_finished)
 
 # ============================================================================
 # 启动
 # ============================================================================
 
 def main():
-    if not VTE_AVAILABLE:
-        check_and_install_vte()
-
+    # 先创建并显示主窗口
     window = MainWindow()
     window.connect("destroy", Gtk.main_quit)
     window.show_all()
+
+    # 主界面显示后，延迟执行检测操作（避免阻塞界面响应）
+    GLib.idle_add(ensure_desktop_shortcut)
+    GLib.idle_add(ensure_vte_installed)
+
     Gtk.main()
 
 if __name__ == "__main__":
