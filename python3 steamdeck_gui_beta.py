@@ -18,7 +18,7 @@ import re
 import tempfile
 
 # ============================================================================
-# 内嵌完整的 Bash 脚本（所有函数末尾的“按回车返回主菜单”已移除）
+# 内嵌完整的 Bash 脚本（包含所有功能，无省略）
 # ============================================================================
 BASH_SCRIPT = r'''#!/bin/bash
 trap 'echo -e "\n${YELLOW}用户取消操作，退出工具箱。${NC}"; exit 0' INT TERM
@@ -45,7 +45,12 @@ REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
 
-# ---------- 所有功能函数 ----------
+# ---------- 通用辅助 ----------
+mk_temp_dir() {
+    mkdir -p "$TEMP_DIR"
+}
+
+# ---------- 关于 ----------
 show_about() {
     clear
     echo -e "${YELLOW}════════════════ 关于 steamdeck工具箱 ════════════════${NC}"
@@ -69,7 +74,9 @@ show_about() {
     echo ""
 }
 
+# ========== 系统优化 ==========
 install_chinese_source() {
+    mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 安装国内源 ════════════════${NC}"
     echo "正在配置国内源..."
@@ -86,6 +93,7 @@ install_chinese_source() {
 }
 
 adjust_swap() {
+    mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 调整虚拟内存大小 ════════════════${NC}"
     echo ""
@@ -125,6 +133,7 @@ adjust_swap() {
 }
 
 apply_cryo_recommendation() {
+    mk_temp_dir
     echo ""
     echo -e "${YELLOW}═══════════════ 应用CryoByte33推荐方案 ═══════════════${NC}"
     echo ""
@@ -163,6 +172,7 @@ EOF
 }
 
 adjust_swapfile() {
+    mk_temp_dir
     echo ""
     echo -e "${YELLOW}调整传统Swap文件大小${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -209,6 +219,7 @@ adjust_swapfile() {
 }
 
 configure_zram() {
+    mk_temp_dir
     echo ""
     echo -e "${YELLOW}配置ZRAM (内存压缩交换)${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -237,6 +248,7 @@ EOF
 }
 
 cleanup_swap() {
+    mk_temp_dir
     echo ""
     echo -e "${YELLOW}清理所有Swap配置${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -254,6 +266,7 @@ cleanup_swap() {
 }
 
 fix_disk_write_error() {
+    mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 修复磁盘写入错误 ════════════════${NC}"
     echo -e "${CYAN}正在修复磁盘写入错误...${NC}"
@@ -335,7 +348,203 @@ fix_disk_write_error() {
     echo -e "${GREEN}✓ 磁盘写入错误修复流程已完成${NC}"
 }
 
+clear_hosts_cache() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 清理hosts缓存 ════════════════${NC}"
+    echo -e "${CYAN}正在清理hosts缓存...${NC}"
+    sudo cp /etc/hosts /etc/hosts.backup.$(date +%Y%m%d_%H%M%S)
+    sudo sh -c 'echo "" > /etc/hosts'
+    echo -e "${GREEN}✓ hosts缓存已清理完成${NC}"
+}
+
+set_admin_password() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 设置管理员密码 ════════════════${NC}"
+    echo -e "${CYAN}正在检查是否已设置管理员密码...${NC}"
+    if sudo -n true 2>/dev/null; then
+        echo -e "${GREEN}✓ 管理员密码已经设置${NC}"
+    else
+        echo -e "${YELLOW}检测到未设置管理员密码或密码已过期${NC}"
+        echo ""
+        echo "现在开始设置管理员密码..."
+        sudo passwd
+        if [ $? -eq 0 ]; then echo -e "${GREEN}✓ 管理员密码设置完成${NC}"; else echo -e "${RED}✗ 设置失败${NC}"; fi
+    fi
+}
+
+calibrate_joystick_stick() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 校准摇杆 ════════════════${NC}"
+    echo -e "${CYAN}正在校准摇杆...${NC}"
+    if thumbstick_cal; then
+        echo -e "${GREEN}✓ 摇杆校准完成${NC}"
+    else
+        echo -e "${RED}✗ 摇杆校准失败${NC}"
+        echo "请确保系统中已安装摇杆校准工具 (thumbstick_cal)"
+    fi
+}
+
+calibrate_joystick_trigger() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 校准扳机 ════════════════${NC}"
+    echo -e "${CYAN}正在校准扳机...${NC}"
+    if trigger_cal; then
+        echo -e "${GREEN}✓ 扳机校准完成${NC}"
+    else
+        echo -e "${RED}✗ 扳机校准失败${NC}"
+        echo "请确保系统中已安装扳机校准工具 (trigger_cal)"
+    fi
+}
+
+# ========== Steam 缓存管理器（纯终端交互） ==========
+steamdeck_cache_manager() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Steam Deck 缓存管理器 ════════════════${NC}"
+    echo ""
+    echo "此工具用于管理和清理 Steam 着色器缓存与兼容数据。"
+    echo "所有操作均在终端中进行，请按提示操作。"
+    echo ""
+
+    local steamapps_dir="/home/deck/.local/share/Steam/steamapps"
+    if [ ! -d "$steamapps_dir" ]; then
+        echo -e "${RED}错误：未找到 Steam 目录。${NC}"
+        return
+    fi
+
+    get_game_name() {
+        local app_id="$1"
+        local manifest="$steamapps_dir/appmanifest_${app_id}.acf"
+        if [ -f "$manifest" ]; then
+            grep '"name"' "$manifest" | cut -d'"' -f4
+        else
+            echo "Unknown"
+        fi
+    }
+
+    local live=1
+
+    while true; do
+        echo ""
+        echo "========================================"
+        echo "  Steam Deck 缓存管理器"
+        echo "========================================"
+        echo "1) 删除着色器缓存"
+        echo "2) 删除兼容数据 (Proton 前缀)"
+        echo "3) 切换模式 (当前: $([ "$live" = "1" ] && echo "实际执行" || echo "模拟运行") )"
+        echo "4) 退出"
+        echo ""
+        read -p "请选择 [1-4]: " choice
+        case $choice in
+            1|2)
+                local cache_type=""
+                if [ "$choice" = "1" ]; then
+                    cache_type="shadercache"
+                    title="着色器缓存"
+                else
+                    cache_type="compatdata"
+                    title="兼容数据"
+                fi
+                local cache_dir="$steamapps_dir/$cache_type"
+                if [ ! -d "$cache_dir" ]; then
+                    echo -e "${YELLOW}未找到 $title 目录。${NC}"
+                    continue
+                fi
+                local apps=()
+                local sizes=()
+                for dir in "$cache_dir"/*; do
+                    if [ -d "$dir" ]; then
+                        local app_id=$(basename "$dir")
+                        if [[ "$app_id" =~ ^[0-9]+$ ]]; then
+                            local size=$(du -sm "$dir" 2>/dev/null | cut -f1)
+                            if [ -n "$size" ] && [ "$size" -gt 0 ]; then
+                                local game_name=$(get_game_name "$app_id")
+                                apps+=("$app_id|$game_name|$size|$dir")
+                            fi
+                        fi
+                    fi
+                done
+                if [ ${#apps[@]} -eq 0 ]; then
+                    echo -e "${YELLOW}没有找到可清理的 $title。${NC}"
+                    continue
+                fi
+                echo ""
+                echo "可清理的 $title:"
+                local i=1
+                for entry in "${apps[@]}"; do
+                    IFS='|' read -r app_id game_name size dir <<< "$entry"
+                    echo "$i) $game_name (ID: $app_id, 大小: ${size}MB)"
+                    ((i++))
+                done
+                echo ""
+                read -p "请输入要删除的编号（多个用空格分隔，全部删除输入 'all'）: " selections
+                if [ "$selections" = "all" ]; then
+                    selected_dirs=()
+                    for entry in "${apps[@]}"; do
+                        IFS='|' read -r app_id game_name size dir <<< "$entry"
+                        selected_dirs+=("$dir")
+                    done
+                else
+                    selected_dirs=()
+                    for num in $selections; do
+                        if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le ${#apps[@]} ]; then
+                            IFS='|' read -r app_id game_name size dir <<< "${apps[$((num-1))]}"
+                            selected_dirs+=("$dir")
+                        else
+                            echo -e "${RED}无效编号: $num${NC}"
+                        fi
+                    done
+                fi
+                if [ ${#selected_dirs[@]} -eq 0 ]; then
+                    echo "未选择任何项目。"
+                    continue
+                fi
+                echo ""
+                echo "将删除以下 $title："
+                for d in "${selected_dirs[@]}"; do
+                    echo "  $d"
+                done
+                read -p "确认删除？(y/N): " confirm
+                if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+                    echo "取消操作。"
+                    continue
+                fi
+                for d in "${selected_dirs[@]}"; do
+                    if [ "$live" = "1" ]; then
+                        rm -rf "$d" && echo -e "${GREEN}已删除: $d${NC}" || echo -e "${RED}删除失败: $d${NC}"
+                    else
+                        echo -e "${YELLOW}[模拟] 将删除: $d${NC}"
+                    fi
+                done
+                echo -e "${GREEN}操作完成。${NC}"
+                ;;
+            3)
+                if [ "$live" = "1" ]; then
+                    live=0
+                    echo -e "${YELLOW}已切换到模拟运行模式（不会实际删除文件）${NC}"
+                else
+                    live=1
+                    echo -e "${GREEN}已切换到实际执行模式${NC}"
+                fi
+                ;;
+            4)
+                echo "退出缓存管理器。"
+                break
+                ;;
+            *)
+                echo -e "${RED}无效选择。${NC}"
+                ;;
+        esac
+    done
+}
+
+# ========== 引导相关 ==========
 fix_boot() {
+    mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 修复引导 ════════════════${NC}"
     echo -e "${CYAN}正在运行引导修复脚本...${NC}"
@@ -471,6 +680,7 @@ EOF
 }
 
 fix_shared_disk() {
+    mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 自动挂载所有非系统分区 ════════════════${NC}"
     echo ""
@@ -562,104 +772,64 @@ fix_shared_disk() {
     echo -e "${GREEN}════════════════ 全部完成 ════════════════${NC}"
 }
 
-clear_hosts_cache() {
-    clear
-    echo -e "${YELLOW}════════════════ 清理hosts缓存 ════════════════${NC}"
-    echo -e "${CYAN}正在清理hosts缓存...${NC}"
-    sudo cp /etc/hosts /etc/hosts.backup.$(date +%Y%m%d_%H%M%S)
-    sudo sh -c 'echo "" > /etc/hosts'
-    echo -e "${GREEN}✓ hosts缓存已清理完成${NC}"
-}
-
+# ========== 网络工具 ==========
 install_uu_accelerator() {
+    mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 安装UU加速器插件 ════════════════${NC}"
     echo -e "${CYAN}正在安装UU加速器插件...${NC}"
     curl -s uudeck.com | sudo sh
+    echo -e "${GREEN}UU加速器插件安装完成。${NC}"
 }
 
 install_xunyou_accelerator() {
+    mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 安装迅游加速器插件 ════════════════${NC}"
     echo -e "${CYAN}正在安装迅游加速器插件...${NC}"
     curl -s sd.xunyou.com | sudo sh
+    echo -e "${GREEN}迅游加速器插件安装完成。${NC}"
 }
 
-install_tomoon() {
+# ---------- Steam++ 安装（完全参考原脚本逻辑） ----------
+install_watt_toolkit_install() {
+    mk_temp_dir
     clear
-    echo -e "${YELLOW}════════════════ 安装/卸载 ToMoon 插件 ════════════════${NC}"
+    echo -e "${YELLOW}════════════════ 安装/更新 Watt Toolkit (Steam++) ════════════════${NC}"
     echo ""
-    echo "请选择要执行的操作："
-    echo "1. 安装/更新 ToMoon 插件"
-    echo "2. 卸载 ToMoon 插件"
-    read -p "请输入选择 [1-2]: " action_choice < /dev/tty
-    case $action_choice in
-        1)
-            echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
-            local latest_version=$(curl -s "https://api.github.com/repos/YukiCoco/ToMoon/releases/latest" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//; s/".*//')
-            if [ -z "$latest_version" ]; then echo -e "${RED}错误: 无法获取版本${NC}"; return; fi
-            echo -e "${GREEN}最新版本: ${latest_version}${NC}"
-            local TARGET_DIR="/home/deck/homebrew/plugins/tomoon"
-            if [ -d "$TARGET_DIR" ]; then
-                echo "检测到旧版本，将覆盖安装。"
-            fi
-            local TEMP_DIR="/tmp/tomoon_install"
-            rm -rf "$TEMP_DIR"
-            mkdir -p "$TEMP_DIR"
-            cd "$TEMP_DIR" || return
-            local zip_filename="tomoon-${latest_version}.zip"
-            local download_path="https://github.com/YukiCoco/ToMoon/releases/download/${latest_version}/${zip_filename}"
-            for mirror in "https://gh.ddlc.top/" "https://ghproxy.net/" "https://mirror.ghproxy.com/" "https://github.com/"; do
-                full_url="${mirror}${download_path}"
-                echo -e "尝试从 ${mirror} 下载..."
-                curl -L --progress-bar --max-time 60 -o "$zip_filename" "$full_url"
-                if [ -f "$zip_filename" ] && [ "$(stat -c%s "$zip_filename" 2>/dev/null || stat -f%z "$zip_filename" 2>/dev/null)" -gt 10000 ]; then
-                    echo -e "${GREEN}下载成功${NC}"
-                    break
-                fi
-                rm -f "$zip_filename"
-            done
-            if [ ! -f "$zip_filename" ]; then echo -e "${RED}下载失败${NC}"; return; fi
-            unzip -q "$zip_filename"
-            local extracted_dir
-            extracted_dir="$(find "$TEMP_DIR" -maxdepth 2 -type f -name "tomoon" -exec dirname {} \; | head -1)"
-            if [ -z "$extracted_dir" ]; then
-                extracted_dir="$(find "$TEMP_DIR" -maxdepth 1 -type d -name "tomoon*" | head -1)"
-            fi
-            if [ -z "$extracted_dir" ]; then
-                extracted_dir="$TEMP_DIR"
-            fi
-            sudo mkdir -p /home/deck/homebrew/plugins
-            sudo rm -rf "$TARGET_DIR"
-            sudo mv "$extracted_dir" "$TARGET_DIR"
-            sudo chown -R deck:deck "$TARGET_DIR"
-            echo -e "${GREEN}✅ ToMoon 插件安装完成！${NC}"
-            ;;
-        2)
-            echo "卸载 ToMoon..."
-            sudo rm -rf /home/deck/homebrew/plugins/tomoon
-            echo -e "${GREEN}卸载完成${NC}"
-            ;;
-        *) echo "取消";;
-    esac
-}
 
-install_remove_plugin_store() {
-    clear
-    echo -e "${YELLOW}════════════════ 安装＆卸载插件商店 ════════════════${NC}"
-    echo "请选择操作："
-    echo "1. 安装插件商店"
-    echo "2. 卸载插件商店"
-    read -p "请输入选择 [1-2]: " plugin_choice < /dev/tty
-    case $plugin_choice in
-        1)
-            echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
-            local releases_json=$(curl -s "https://api.github.com/repos/SteamDeckHomebrew/decky-loader/releases")
-            if [ -z "$releases_json" ]; then
-                echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
-                return 1
-            fi
-            local versions_info=$(echo "$releases_json" | python3 -c "
+    local GITHUB_REPO="BeyondDimension/SteamTools"
+    local INSTALL_DIR="/home/deck/Watt Toolkit"
+    local DESKTOP_DIR="/home/deck/Desktop"
+    local TEMP_DIR="/tmp/watt_toolkit_install"
+    local MIRRORS=(
+        "https://gh.ddlc.top/"
+        "https://ghproxy.net/"
+        "https://mirror.ghproxy.com/"
+        "https://gh.api.99988866.xyz/"
+        "https://download.fastgit.org/"
+        "https://hub.gitmirror.com/"
+        "https://git.xfj0.xyz/"
+        "https://github.com/"
+    )
+    local DOWNLOAD_TIMEOUT=120
+    local MAX_RETRY_PER_MIRROR=1
+
+    for cmd in curl sudo unzip tar python3; do
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
+            return 1
+        fi
+    done
+
+    echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+    local releases_json=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases")
+    if [ -z "$releases_json" ]; then
+        echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
+        return 1
+    fi
+
+    local versions_info=$(echo "$releases_json" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
@@ -671,216 +841,604 @@ try:
 except:
     pass
 ")
-            if [ -z "$versions_info" ]; then
-                echo -e "${RED}错误: 无法解析版本信息。${NC}"
+    if [ -z "$versions_info" ]; then
+        echo -e "${RED}错误: 无法解析版本信息。${NC}"
+        return 1
+    fi
+
+    local stable_versions=()
+    local prerelease_versions=()
+    while IFS='|' read -r tag prerelease; do
+        [ -z "$tag" ] && continue
+        if [[ "$prerelease" == "true" ]]; then
+            prerelease_versions+=("$tag")
+        else
+            stable_versions+=("$tag")
+        fi
+    done <<< "$versions_info"
+
+    local latest_stable=""
+    local latest_prerelease=""
+    if [ ${#stable_versions[@]} -gt 0 ]; then
+        latest_stable=$(printf '%s\n' "${stable_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
+        latest_stable="v${latest_stable}"
+    fi
+    if [ ${#prerelease_versions[@]} -gt 0 ]; then
+        latest_prerelease=$(printf '%s\n' "${prerelease_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
+        latest_prerelease="v${latest_prerelease}"
+    fi
+
+    local installed_version=""
+    if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/.version" ]; then
+        installed_version=$(cat "$INSTALL_DIR/.version")
+        echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
+    else
+        echo "未检测到已安装版本。"
+    fi
+
+    local target_version=""
+    if [ -n "$installed_version" ]; then
+        if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+            local stable_num=$(echo "$latest_stable" | sed 's/^v//')
+            local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+            local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
+            if [ "$higher" = "$prerelease_num" ]; then
+                echo -e "${GREEN}已安装最新正式版 ${installed_version}${NC}"
+                echo -e "${YELLOW}发现更高版本的预发布版: ${latest_prerelease}${NC}"
+                read -p "输入 y 升级到预发布版，按其他键保持当前版本: " upgrade < /dev/tty
+                if [[ $upgrade =~ ^[Yy]$ ]]; then
+                    target_version="$latest_prerelease"
+                else
+                    echo "保持当前版本。"
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}已经是最新版本 (正式版 ${installed_version})${NC}"
+                return 0
+            fi
+        elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -n "$latest_stable" ]; then
+            local stable_num=$(echo "$latest_stable" | sed 's/^v//')
+            local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+            local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
+            if [ "$higher" = "$prerelease_num" ]; then
+                echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
+                echo -e "${YELLOW}当前正式版为: ${latest_stable}${NC}"
+                read -p "输入 y 切换到正式版，按其他键保持当前版本: " switch < /dev/tty
+                if [[ $switch =~ ^[Yy]$ ]]; then
+                    target_version="$latest_stable"
+                else
+                    echo "保持当前版本。"
+                    return 0
+                fi
+            else
+                echo -e "${YELLOW}当前预发布版 ${installed_version} 低于正式版 ${latest_stable}，将升级到正式版。${NC}"
+                target_version="$latest_stable"
+            fi
+        elif [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -z "$latest_prerelease" ]; then
+            echo -e "${GREEN}已经是最新版本 (正式版 ${installed_version})，无需更新。${NC}"
+            return 0
+        elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -z "$latest_stable" ]; then
+            echo -e "${GREEN}已经是最新版本 (预发布版 ${installed_version})，无需更新。${NC}"
+            return 0
+        else
+            echo -e "${YELLOW}已安装版本 ${installed_version} 不是最新版本。${NC}"
+            if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                echo "请选择要安装的版本："
+                echo "1. 正式版 ${latest_stable}"
+                echo "2. 预发布版 ${latest_prerelease}"
+                read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
+                case $choice in
+                    2) target_version="$latest_prerelease" ;;
+                    *) target_version="$latest_stable" ;;
+                esac
+            elif [ -n "$latest_stable" ]; then
+                target_version="$latest_stable"
+                echo "将安装正式版 ${target_version}"
+            elif [ -n "$latest_prerelease" ]; then
+                target_version="$latest_prerelease"
+                echo "将安装预发布版 ${target_version}"
+            else
+                echo -e "${RED}错误: 无法找到任何版本。${NC}"
                 return 1
             fi
-            local stable_versions=()
-            local prerelease_versions=()
-            while IFS='|' read -r tag prerelease; do
-                [ -z "$tag" ] && continue
-                if [[ "$prerelease" == "true" ]]; then
-                    prerelease_versions+=("$tag")
-                else
-                    stable_versions+=("$tag")
-                fi
-            done <<< "$versions_info"
-            local latest_stable=""
-            local latest_prerelease=""
-            if [ ${#stable_versions[@]} -gt 0 ]; then
-                latest_stable=$(printf '%s\n' "${stable_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
-                latest_stable="v${latest_stable}"
-            fi
-            if [ ${#prerelease_versions[@]} -gt 0 ]; then
-                latest_prerelease=$(printf '%s\n' "${prerelease_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
-                latest_prerelease="v${latest_prerelease}"
-            fi
-            local PLUGIN_LOADER="/home/deck/homebrew/services/PluginLoader"
-            local installed_version=""
-            if [[ -f "$PLUGIN_LOADER" && -x "$PLUGIN_LOADER" ]]; then
-                installed_version=$(sudo journalctl -u plugin_loader --no-pager 2>/dev/null | grep -i "Starting Decky version" | tail -1 | grep -oP 'version v?\K[0-9.]+(-pre[0-9]+)?')
-                if [[ -z "$installed_version" ]]; then
-                    installed_version=$("$PLUGIN_LOADER" --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+(-pre\d+)?')
-                fi
-                if [[ -n "$installed_version" ]]; then
-                    installed_version="v${installed_version}"
-                    echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
-                else
-                    echo -e "${YELLOW}已安装但无法获取版本。${NC}"
-                fi
+        fi
+    else
+        if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+            local stable_num=$(echo "$latest_stable" | sed 's/^v//')
+            local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+            local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
+            if [ "$higher" = "$prerelease_num" ]; then
+                echo "请选择要安装的版本："
+                echo "1. 正式版 ${latest_stable}"
+                echo "2. 预发布版 ${latest_prerelease}"
+                read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
+                case $choice in
+                    2) target_version="$latest_prerelease" ;;
+                    *) target_version="$latest_stable" ;;
+                esac
             else
-                echo "未检测到现有安装。"
+                target_version="$latest_stable"
             fi
-            local target_version=""
-            if [ -n "$installed_version" ]; then
-                if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
-                    echo -e "${GREEN}已安装最新正式版 ${installed_version}${NC}"
-                    echo -e "${YELLOW}发现更高版本的预发布版: ${latest_prerelease}${NC}"
-                    read -p "是否升级到预发布版？(y/N): " upgrade < /dev/tty
-                    if [[ $upgrade =~ ^[Yy]$ ]]; then
-                        target_version="$latest_prerelease"
-                    else
-                        echo "保持当前版本。"
-                        return 0
-                    fi
-                elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -n "$latest_stable" ]; then
-                    echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
-                    echo -e "${YELLOW}当前正式版为: ${latest_stable}${NC}"
-                    read -p "是否切换到正式版？(y/N): " switch < /dev/tty
-                    if [[ $switch =~ ^[Yy]$ ]]; then
-                        target_version="$latest_stable"
-                    else
-                        echo "保持当前版本。"
-                        return 0
-                    fi
-                elif [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -z "$latest_prerelease" ]; then
-                    echo -e "${GREEN}已经是最新版本 (正式版 ${installed_version})，无需更新。${NC}"
-                    return 0
-                elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -z "$latest_stable" ]; then
-                    echo -e "${GREEN}已经是最新版本 (预发布版 ${installed_version})，无需更新。${NC}"
-                    return 0
+        elif [ -n "$latest_stable" ]; then
+            target_version="$latest_stable"
+            echo "将安装正式版 ${target_version}"
+        elif [ -n "$latest_prerelease" ]; then
+            target_version="$latest_prerelease"
+            echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
+        else
+            echo -e "${RED}错误: 无法获取任何版本。${NC}"
+            return 1
+        fi
+    fi
+
+    if [ -z "$target_version" ]; then
+        echo "未选择版本，操作取消。"
+        return 0
+    fi
+
+    echo -e "${GREEN}将安装版本: ${target_version}${NC}"
+
+    local download_url=""
+    local asset_info=$(echo "$releases_json" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    target_tag = '$target_version'
+    found = False
+    for rel in data:
+        if rel.get('tag_name') == target_tag:
+            for asset in rel.get('assets', []):
+                name = asset.get('name', '')
+                if name.endswith('_linux_x64.tgz') and '_linux_x64.tgz' in name:
+                    print(asset.get('browser_download_url', ''))
+                    found = True
+                    break
+            break
+    if not found:
+        for rel in data:
+            for asset in rel.get('assets', []):
+                name = asset.get('name', '')
+                if 'linux_x64.tgz' in name and 'source' not in name.lower():
+                    print(asset.get('browser_download_url', ''))
+                    found = True
+                    break
+            if found:
+                break
+except Exception as e:
+    pass
+")
+    if [ -z "$asset_info" ]; then
+        echo -e "${RED}错误: 无法获取 ${target_version} 的下载链接。${NC}"
+        echo "请检查 GitHub 上该版本是否包含 linux_x64.tgz 文件。"
+        return 1
+    fi
+    download_url="$asset_info"
+
+    rm -rf "$TEMP_DIR"
+    mkdir -p "$TEMP_DIR"
+    cd "$TEMP_DIR"
+
+    local filename="Steam++_${target_version}_linux_x64.tgz"
+    local DOWNLOAD_SUCCESS=false
+
+    for mirror in "${MIRRORS[@]}"; do
+        local full_url="${mirror}${download_url}"
+        echo -e "尝试从 ${mirror} 下载..."
+
+        local retry_count=0
+        while [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; do
+            if [[ $retry_count -gt 0 ]]; then
+                echo -e "${YELLOW}重试下载 (第 ${retry_count} 次重试)...${NC}"
+            fi
+
+            curl -L --progress-bar --max-time "$DOWNLOAD_TIMEOUT" -o "$filename" "$full_url"
+            local curl_exit=$?
+
+            if [[ $curl_exit -eq 0 ]] && [[ -f "$filename" ]]; then
+                local file_size=$(stat -c%s "$filename" 2>/dev/null || stat -f%z "$filename" 2>/dev/null)
+                if [[ -n "$file_size" ]] && [[ "$file_size" -gt 1000000 ]]; then
+                    echo -e "\n${GREEN}下载成功 (大小: $((file_size/1024/1024)) MB)${NC}"
+                    DOWNLOAD_SUCCESS=true
+                    break 2
                 else
-                    echo -e "${YELLOW}已安装版本 ${installed_version} 不是最新版本。${NC}"
-                    if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
-                        echo "请选择要安装的版本："
-                        echo "1. 正式版 ${latest_stable}"
-                        echo "2. 预发布版 ${latest_prerelease}"
-                        read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
-                        case $choice in
-                            2) target_version="$latest_prerelease" ;;
-                            *) target_version="$latest_stable" ;;
-                        esac
-                    elif [ -n "$latest_stable" ]; then
-                        target_version="$latest_stable"
-                        echo "将安装正式版 ${target_version}"
-                    elif [ -n "$latest_prerelease" ]; then
-                        target_version="$latest_prerelease"
-                        echo "将安装预发布版 ${target_version}"
-                    else
-                        echo -e "${RED}错误: 无法找到任何版本。${NC}"
-                        return 1
-                    fi
-                fi
-            else
-                if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
-                    echo "请选择要安装的版本："
-                    echo "1. 正式版 ${latest_stable}"
-                    echo "2. 预发布版 ${latest_prerelease}"
-                    read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
-                    case $choice in
-                        2) target_version="$latest_prerelease" ;;
-                        *) target_version="$latest_stable" ;;
-                    esac
-                elif [ -n "$latest_stable" ]; then
-                    target_version="$latest_stable"
-                    echo "将安装正式版 ${target_version}"
-                elif [ -n "$latest_prerelease" ]; then
-                    target_version="$latest_prerelease"
-                    echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
-                else
-                    echo -e "${RED}错误: 无法获取任何版本。${NC}"
-                    return 1
-                fi
-            fi
-            if [ -z "$target_version" ]; then
-                echo "未选择版本，操作取消。"
-                return 0
-            fi
-            echo -e "${GREEN}将安装版本: ${target_version}${NC}"
-            read -p "是否继续？(y/N): " -n 1 -r < /dev/tty
-            echo ""
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                echo "操作已取消。"
-                return 0
-            fi
-            HOME_DIR="/home/deck"
-            HOMEBREW_DIR="${HOME_DIR}/homebrew"
-            SERVICE_DIR="${HOMEBREW_DIR}/services"
-            PLUGIN_DIR="${HOMEBREW_DIR}/plugins"
-            PLUGIN_LOADER="${SERVICE_DIR}/PluginLoader"
-            SERVICE_FILE="${SERVICE_DIR}/plugin_loader.service"
-            SERVICE_DEST="/etc/systemd/system/plugin_loader.service"
-            CURRENT_USER=$(whoami)
-            MIRRORS=(
-                "https://gh.ddlc.top/"
-                "https://ghproxy.net/"
-                "https://mirror.ghproxy.com/"
-                "https://gh.api.99988866.xyz/"
-                "https://download.fastgit.org/"
-                "https://hub.gitmirror.com/"
-                "https://git.xfj0.xyz/"
-                "https://github.com/"
-            )
-            DOWNLOAD_TIMEOUT=60
-            MAX_RETRY_PER_MIRROR=1
-            for cmd in curl python3 systemctl sudo journalctl stat; do
-                if ! command -v $cmd &> /dev/null; then
-                    echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
-                    return 1
-                fi
-            done
-            if [[ ! -d "$HOMEBREW_DIR" ]]; then
-                sudo mkdir -p "$HOMEBREW_DIR"
-            fi
-            sudo chown -R ${CURRENT_USER}:${CURRENT_USER} "$HOMEBREW_DIR" 2>/dev/null || true
-            mkdir -p "$SERVICE_DIR" "$PLUGIN_DIR" 2>/dev/null || {
-                sudo mkdir -p "$SERVICE_DIR" "$PLUGIN_DIR"
-                sudo chown ${CURRENT_USER}:${CURRENT_USER} "$SERVICE_DIR" "$PLUGIN_DIR"
-            }
-            DOWNLOAD_SUCCESS=false
-            TMP_FILE="${PLUGIN_LOADER}.tmp"
-            DOWNLOAD_PATH="https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${target_version}/PluginLoader"
-            for mirror in "${MIRRORS[@]}"; do
-                FULL_URL="${mirror}${DOWNLOAD_PATH}"
-                echo -e "尝试从 ${mirror} 下载..."
-                retry_count=0
-                while [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; do
-                    if [[ $retry_count -gt 0 ]]; then
-                        echo -e "${YELLOW}重试下载 (第 ${retry_count} 次重试)...${NC}"
-                    fi
-                    curl -L --progress-bar --max-time "$DOWNLOAD_TIMEOUT" -o "$TMP_FILE" "$FULL_URL"
-                    curl_exit=$?
-                    if [[ $curl_exit -eq 0 ]] && [[ -f "$TMP_FILE" ]]; then
-                        FILE_SIZE=$(stat -c%s "$TMP_FILE" 2>/dev/null || stat -f%z "$TMP_FILE" 2>/dev/null)
-                        if [[ -n "$FILE_SIZE" ]] && [[ "$FILE_SIZE" -gt 1000000 ]]; then
-                            echo -e "\n${GREEN}下载成功 (大小: $((FILE_SIZE/1024/1024)) MB)${NC}"
-                            if [[ -f "$PLUGIN_LOADER" ]]; then
-                                sudo rm -f "$PLUGIN_LOADER"
-                            fi
-                            mv "$TMP_FILE" "$PLUGIN_LOADER"
-                            chmod +x "$PLUGIN_LOADER"
-                            DOWNLOAD_SUCCESS=true
-                            break 2
-                        else
-                            echo -e "\n${RED}下载文件无效 (${FILE_SIZE} 字节)，尝试下一个镜像...${NC}"
-                            rm -f "$TMP_FILE"
-                            break
-                        fi
-                    else
-                        echo -e "\n${RED}下载失败 (退出码: $curl_exit)${NC}"
-                        rm -f "$TMP_FILE"
-                        ((retry_count++))
-                        if [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; then
-                            echo "将进行重试..."
-                            sleep 2
-                        else
-                            echo "该镜像重试次数用完，切换到下一个镜像。"
-                        fi
-                    fi
-                done
-                if [[ "$DOWNLOAD_SUCCESS" == "true" ]]; then
+                    echo -e "\n${RED}下载文件无效 (${file_size} 字节)，尝试下一个镜像...${NC}"
+                    rm -f "$filename"
                     break
                 fi
-            done
-            if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
-                echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
+            else
+                echo -e "\n${RED}下载失败 (退出码: $curl_exit)${NC}"
+                rm -f "$filename"
+                ((retry_count++))
+                if [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; then
+                    echo "将进行重试..."
+                    sleep 2
+                else
+                    echo "该镜像重试次数用完，切换到下一个镜像。"
+                fi
+            fi
+        done
+    done
+
+    if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
+        echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}正在解压到临时目录...${NC}"
+    local temp_extract="$TEMP_DIR/extracted"
+    mkdir -p "$temp_extract"
+    if ! tar -xzf "$filename" -C "$temp_extract"; then
+        echo -e "${RED}解压失败。${NC}"
+        rm -rf "$TEMP_DIR"
+        return 1
+    fi
+
+    local content_count=$(ls -1 "$temp_extract" | wc -l)
+    local first_item=$(ls -1 "$temp_extract" | head -1)
+
+    if [ -d "$INSTALL_DIR" ]; then
+        echo "检测到旧安装目录，正在删除..."
+        rm -rf "$INSTALL_DIR"
+    fi
+    mkdir -p "$INSTALL_DIR"
+
+    if [ $content_count -eq 1 ] && [ -d "$temp_extract/$first_item" ]; then
+        echo -e "${CYAN}检测到顶层目录，移动内容到 $INSTALL_DIR ...${NC}"
+        shopt -s dotglob
+        mv "$temp_extract/$first_item"/* "$INSTALL_DIR/"
+        shopt -u dotglob
+        find "$temp_extract/$first_item" -maxdepth 1 -name ".*" ! -name "." ! -name ".." -exec mv {} "$INSTALL_DIR/" \;
+        rm -rf "$temp_extract/$first_item"
+    else
+        echo -e "${CYAN}移动所有内容到 $INSTALL_DIR ...${NC}"
+        shopt -s dotglob
+        mv "$temp_extract"/* "$INSTALL_DIR/"
+        shopt -u dotglob
+        find "$temp_extract" -maxdepth 1 -name ".*" ! -name "." ! -name ".." -exec mv {} "$INSTALL_DIR/" \;
+    fi
+
+    rm -rf "$TEMP_DIR"
+
+    echo "$target_version" > "$INSTALL_DIR/.version"
+
+    local desktop_file="$DESKTOP_DIR/Watt_Toolkit.desktop"
+    local dotnet_root="$INSTALL_DIR/dotnet"
+    local dll_path="$INSTALL_DIR/assemblies/Steam++.dll"
+    local icon_path="$INSTALL_DIR/Icons/Watt-Toolkit.png"
+
+    if [ ! -f "$dll_path" ] || [ ! -f "$dotnet_root/dotnet" ]; then
+        echo -e "${RED}错误: 关键文件缺失，安装可能不完整。${NC}"
+        echo "请检查 $INSTALL_DIR 目录内容。"
+        return 1
+    fi
+
+    cat > "$desktop_file" << EOF
+[Desktop Entry]
+Categories=Network;Game;
+Comment[zh_CN]=Steam 工具箱
+Comment=Steam 工具箱
+Exec=env 'DOTNET_ROOT=${dotnet_root}' '${dotnet_root}/dotnet' '${dll_path}'
+GenericName[zh_CN]=
+GenericName=
+Icon=${icon_path}
+MimeType=
+Name[zh_CN]=Watt Toolkit (Steam++)
+Name=Watt Toolkit (Steam++)
+Path=
+StartupNotify=true
+Terminal=false
+TerminalOptions=
+Type=Application
+X-KDE-SubstituteUID=false
+X-KDE-Username=
+EOF
+    chmod +x "$desktop_file"
+    echo -e "${GREEN}✓ 桌面快捷方式已创建: ${desktop_file}${NC}"
+
+    echo ""
+    echo -e "${GREEN}✅ Watt Toolkit ${target_version} 安装完成！${NC}"
+    echo -e "${GREEN}安装目录: ${INSTALL_DIR}${NC}"
+    echo ""
+    echo -e "${YELLOW}使用提示：${NC}"
+    echo "如果加速报错，请按照下面步骤操作："
+    echo "  网络加速 → 加速设置 → 安装证书"
+    echo ""
+    echo "请在桌面启动 Watt Toolkit。"
+}
+
+install_watt_toolkit_uninstall() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 Watt Toolkit ════════════════${NC}"
+    local INSTALL_DIR="/home/deck/Watt Toolkit"
+    local DESKTOP_DIR="/home/deck/Desktop"
+
+    echo -e "${CYAN}正在卸载 Watt Toolkit...${NC}"
+    echo ""
+
+    if [ ! -d "$INSTALL_DIR" ]; then
+        echo -e "${YELLOW}未检测到已安装的 Watt Toolkit。${NC}"
+        return 0
+    fi
+
+    echo "将删除以下目录: ${INSTALL_DIR}"
+    echo "将删除桌面快捷方式: ${DESKTOP_DIR}/Watt_Toolkit.desktop"
+    echo ""
+
+    read -p "确定要卸载吗？(y/N): " -n 1 -r < /dev/tty
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "卸载已取消。"
+        return 0
+    fi
+
+    if rm -rf "$INSTALL_DIR"; then
+        echo -e "${GREEN}✓ 已删除安装目录${NC}"
+    else
+        echo -e "${RED}✗ 删除安装目录失败${NC}"
+    fi
+
+    if rm -f "${DESKTOP_DIR}/Watt_Toolkit.desktop"; then
+        echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
+    else
+        echo -e "${RED}✗ 删除桌面快捷方式失败${NC}"
+    fi
+
+    echo ""
+    echo -e "${GREEN}✅ Watt Toolkit 已卸载完成。${NC}"
+}
+
+# ========== 插件相关 ==========
+install_plugin_store() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装插件商店 ════════════════${NC}"
+    echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+
+    local releases_json=$(curl -s "https://api.github.com/repos/SteamDeckHomebrew/decky-loader/releases")
+    if [ -z "$releases_json" ]; then
+        echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
+        return 1
+    fi
+
+    local versions_info=$(echo "$releases_json" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for rel in data:
+        tag = rel.get('tag_name', '')
+        prerelease = rel.get('prerelease', False)
+        if tag:
+            print(f'{tag}|{str(prerelease).lower()}')
+except:
+    pass
+")
+    if [ -z "$versions_info" ]; then
+        echo -e "${RED}错误: 无法解析版本信息。${NC}"
+        return 1
+    fi
+
+    local stable_versions=()
+    local prerelease_versions=()
+    while IFS='|' read -r tag prerelease; do
+        [ -z "$tag" ] && continue
+        if [[ "$prerelease" == "true" ]]; then
+            prerelease_versions+=("$tag")
+        else
+            stable_versions+=("$tag")
+        fi
+    done <<< "$versions_info"
+
+    local latest_stable=""
+    local latest_prerelease=""
+    if [ ${#stable_versions[@]} -gt 0 ]; then
+        latest_stable=$(printf '%s\n' "${stable_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
+        latest_stable="v${latest_stable}"
+    fi
+    if [ ${#prerelease_versions[@]} -gt 0 ]; then
+        latest_prerelease=$(printf '%s\n' "${prerelease_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
+        latest_prerelease="v${latest_prerelease}"
+    fi
+
+    local PLUGIN_LOADER="/home/deck/homebrew/services/PluginLoader"
+    local installed_version=""
+    if [[ -f "$PLUGIN_LOADER" && -x "$PLUGIN_LOADER" ]]; then
+        installed_version=$(sudo journalctl -u plugin_loader --no-pager 2>/dev/null | grep -i "Starting Decky version" | tail -1 | grep -oP 'version v?\K[0-9.]+(-pre[0-9]+)?')
+        if [[ -z "$installed_version" ]]; then
+            installed_version=$("$PLUGIN_LOADER" --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+(-pre\d+)?')
+        fi
+        if [[ -n "$installed_version" ]]; then
+            installed_version="v${installed_version}"
+            echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
+        else
+            echo -e "${YELLOW}已安装但无法获取版本。${NC}"
+        fi
+    else
+        echo "未检测到现有安装。"
+    fi
+
+    local target_version=""
+    if [ -n "$installed_version" ]; then
+        if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ]; then
+            echo -e "${GREEN}已经是最新稳定版 ${installed_version}，无需更新。${NC}"
+            if [ -n "$latest_prerelease" ]; then
+                echo -e "${YELLOW}发现预发布版: ${latest_prerelease}${NC}"
+                read -p "是否升级到预发布版？(y/N): " upgrade < /dev/tty
+                if [[ $upgrade =~ ^[Yy]$ ]]; then
+                    target_version="$latest_prerelease"
+                else
+                    echo "保持当前版本。"
+                    return 0
+                fi
+            else
+                return 0
+            fi
+        elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ]; then
+            echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
+            if [ -n "$latest_stable" ]; then
+                echo -e "${YELLOW}发现正式版: ${latest_stable}${NC}"
+                read -p "是否切换到正式版？(y/N): " switch < /dev/tty
+                if [[ $switch =~ ^[Yy]$ ]]; then
+                    target_version="$latest_stable"
+                else
+                    echo "保持当前版本。"
+                    return 0
+                fi
+            else
+                return 0
+            fi
+        else
+            echo -e "${YELLOW}已安装版本 ${installed_version} 不是最新版本。${NC}"
+            if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+                echo "请选择要安装的版本："
+                echo "1. 正式版 ${latest_stable}"
+                echo "2. 预发布版 ${latest_prerelease}"
+                read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
+                case $choice in
+                    2) target_version="$latest_prerelease" ;;
+                    *) target_version="$latest_stable" ;;
+                esac
+            elif [ -n "$latest_stable" ]; then
+                target_version="$latest_stable"
+                echo "将安装正式版 ${target_version}"
+            elif [ -n "$latest_prerelease" ]; then
+                target_version="$latest_prerelease"
+                echo "将安装预发布版 ${target_version}"
+            else
+                echo -e "${RED}错误: 无法找到任何版本。${NC}"
                 return 1
             fi
-            touch "${HOME_DIR}/.steam/steam/.cef-enable-remote-debugging"
-            if [[ -d "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/" ]]; then
-                touch "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/.cef-enable-remote-debugging"
+        fi
+    else
+        if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
+            echo "请选择要安装的版本："
+            echo "1. 正式版 ${latest_stable}"
+            echo "2. 预发布版 ${latest_prerelease}"
+            read -p "请输入选择 [1-2] (默认正式版): " choice < /dev/tty
+            case $choice in
+                2) target_version="$latest_prerelease" ;;
+                *) target_version="$latest_stable" ;;
+            esac
+        elif [ -n "$latest_stable" ]; then
+            target_version="$latest_stable"
+            echo "将安装正式版 ${target_version}"
+        elif [ -n "$latest_prerelease" ]; then
+            target_version="$latest_prerelease"
+            echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
+        else
+            echo -e "${RED}错误: 无法获取任何版本。${NC}"
+            return 1
+        fi
+    fi
+
+    if [ -z "$target_version" ]; then
+        echo "未选择版本，操作取消。"
+        return 0
+    fi
+
+    echo -e "${GREEN}将安装版本: ${target_version}${NC}"
+    read -p "是否继续？(y/N): " -n 1 -r < /dev/tty
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "操作已取消。"
+        return 0
+    fi
+
+    HOME_DIR="/home/deck"
+    HOMEBREW_DIR="${HOME_DIR}/homebrew"
+    SERVICE_DIR="${HOMEBREW_DIR}/services"
+    PLUGIN_DIR="${HOMEBREW_DIR}/plugins"
+    PLUGIN_LOADER="${SERVICE_DIR}/PluginLoader"
+    SERVICE_FILE="${SERVICE_DIR}/plugin_loader.service"
+    SERVICE_DEST="/etc/systemd/system/plugin_loader.service"
+    CURRENT_USER=$(whoami)
+    MIRRORS=(
+        "https://gh.ddlc.top/"
+        "https://ghproxy.net/"
+        "https://mirror.ghproxy.com/"
+        "https://gh.api.99988866.xyz/"
+        "https://download.fastgit.org/"
+        "https://hub.gitmirror.com/"
+        "https://git.xfj0.xyz/"
+        "https://github.com/"
+    )
+    DOWNLOAD_TIMEOUT=60
+    MAX_RETRY_PER_MIRROR=1
+
+    for cmd in curl python3 systemctl sudo journalctl stat; do
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
+            return 1
+        fi
+    done
+
+    if [[ ! -d "$HOMEBREW_DIR" ]]; then
+        sudo mkdir -p "$HOMEBREW_DIR"
+    fi
+    sudo chown -R ${CURRENT_USER}:${CURRENT_USER} "$HOMEBREW_DIR" 2>/dev/null || true
+    mkdir -p "$SERVICE_DIR" "$PLUGIN_DIR" 2>/dev/null || {
+        sudo mkdir -p "$SERVICE_DIR" "$PLUGIN_DIR"
+        sudo chown ${CURRENT_USER}:${CURRENT_USER} "$SERVICE_DIR" "$PLUGIN_DIR"
+    }
+
+    DOWNLOAD_SUCCESS=false
+    TMP_FILE="${PLUGIN_LOADER}.tmp"
+    DOWNLOAD_PATH="https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${target_version}/PluginLoader"
+
+    for mirror in "${MIRRORS[@]}"; do
+        FULL_URL="${mirror}${DOWNLOAD_PATH}"
+        echo -e "尝试从 ${mirror} 下载..."
+        retry_count=0
+        while [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; do
+            if [[ $retry_count -gt 0 ]]; then
+                echo -e "${YELLOW}重试下载 (第 ${retry_count} 次重试)...${NC}"
             fi
-            cat > "$SERVICE_FILE" <<EOF
+            curl -L --progress-bar --max-time "$DOWNLOAD_TIMEOUT" -o "$TMP_FILE" "$FULL_URL"
+            curl_exit=$?
+            if [[ $curl_exit -eq 0 ]] && [[ -f "$TMP_FILE" ]]; then
+                FILE_SIZE=$(stat -c%s "$TMP_FILE" 2>/dev/null || stat -f%z "$TMP_FILE" 2>/dev/null)
+                if [[ -n "$FILE_SIZE" ]] && [[ "$FILE_SIZE" -gt 1000000 ]]; then
+                    echo -e "\n${GREEN}下载成功 (大小: $((FILE_SIZE/1024/1024)) MB)${NC}"
+                    if [[ -f "$PLUGIN_LOADER" ]]; then
+                        sudo rm -f "$PLUGIN_LOADER"
+                    fi
+                    mv "$TMP_FILE" "$PLUGIN_LOADER"
+                    chmod +x "$PLUGIN_LOADER"
+                    DOWNLOAD_SUCCESS=true
+                    break 2
+                else
+                    echo -e "\n${RED}下载文件无效 (${FILE_SIZE} 字节)，尝试下一个镜像...${NC}"
+                    rm -f "$TMP_FILE"
+                    break
+                fi
+            else
+                echo -e "\n${RED}下载失败 (退出码: $curl_exit)${NC}"
+                rm -f "$TMP_FILE"
+                ((retry_count++))
+                if [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; then
+                    echo "将进行重试..."
+                    sleep 2
+                else
+                    echo "该镜像重试次数用完，切换到下一个镜像。"
+                fi
+            fi
+        done
+        if [[ "$DOWNLOAD_SUCCESS" == "true" ]]; then
+            break
+        fi
+    done
+
+    if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
+        echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
+        return 1
+    fi
+
+    touch "${HOME_DIR}/.steam/steam/.cef-enable-remote-debugging"
+    if [[ -d "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/" ]]; then
+        touch "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/.cef-enable-remote-debugging"
+    fi
+
+    cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=SteamDeck Plugin Loader
 After=network-online.target
@@ -897,390 +1455,216 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 EOF
-            sudo cp "$SERVICE_FILE" "$SERVICE_DEST"
-            sudo systemctl daemon-reload
-            sudo systemctl enable plugin_loader
-            sudo systemctl restart plugin_loader
-            echo "服务状态："
-            systemctl status plugin_loader --no-pager
-            echo ""
-            echo -e "${GREEN}✓ Decky Loader ${target_version} 安装/更新完成${NC}"
-            echo "请切换回游戏模式，按 '...' 键打开侧边栏检查。"
-            ;;
-        2)
-            echo -e "${CYAN}正在卸载插件商店...${NC}"
-            echo "卸载命令: sudo rm -rf /home/deck/homebrew"
-            echo "警告：这将删除整个 /home/deck/homebrew 目录，包括所有插件和插件商店。"
-            echo ""
-            read -p "确定要卸载插件商店吗？(y/N): " -n 1 -r < /dev/tty
-            echo ""
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                echo "卸载已取消。"
-                return
-            fi
-            echo "正在执行卸载..."
-            if sudo rm -rf /home/deck/homebrew; then
-                echo -e "${GREEN}✓ 插件商店卸载完成${NC}"
-            else
-                echo -e "${RED}✗ 插件商店卸载失败${NC}"
-            fi
-            ;;
-        *)
-            echo -e "${RED}无效选择${NC}"
-            ;;
-    esac
-}
 
-calibrate_joystick() {
-    clear
-    echo -e "${YELLOW}════════════════ 校准设备 ════════════════${NC}"
+    sudo cp "$SERVICE_FILE" "$SERVICE_DEST"
+    sudo systemctl daemon-reload
+    sudo systemctl enable plugin_loader
+    sudo systemctl restart plugin_loader
+
     echo ""
-    echo "请选择要校准的设备："
-    echo "1. 校准摇杆"
-    echo "2. 校准扳机"
-    read -p "请输入选择 [1-2]: " choice < /dev/tty
-    case $choice in
-        1) echo -e "${CYAN}正在校准摇杆...${NC}"; thumbstick_cal && echo -e "${GREEN}✓ 摇杆校准完成${NC}" || echo -e "${RED}✗ 摇杆校准失败${NC}";;
-        2) echo -e "${CYAN}正在校准扳机...${NC}"; trigger_cal && echo -e "${GREEN}✓ 扳机校准完成${NC}" || echo -e "${RED}✗ 扳机校准失败${NC}";;
-        *) echo -e "${RED}无效选择${NC}";;
-    esac
+    echo -e "${GREEN}✅ Decky Loader ${target_version} 安装/更新完成！${NC}"
+    echo "请切换回游戏模式，按 '...' 键打开侧边栏检查。"
 }
 
-set_admin_password() {
+uninstall_plugin_store() {
+    mk_temp_dir
     clear
-    echo -e "${YELLOW}════════════════ 设置管理员密码 ════════════════${NC}"
-    echo -e "${CYAN}正在检查是否已设置管理员密码...${NC}"
-    if sudo -n true 2>/dev/null; then
-        echo -e "${GREEN}✓ 管理员密码已经设置${NC}"
-    else
-        echo -e "${YELLOW}检测到未设置管理员密码或密码已过期${NC}"
-        echo ""
-        echo "现在开始设置管理员密码..."
-        sudo passwd
-        if [ $? -eq 0 ]; then echo -e "${GREEN}✓ 管理员密码设置完成${NC}"; else echo -e "${RED}✗ 设置失败${NC}"; fi
-    fi
-}
-
-install_anydesk() {
-    clear
-    echo -e "${YELLOW}════════════════ 安装 AnyDesk ════════════════${NC}"
-    echo "正在安装 AnyDesk（便携版）..."
-    local ANYDESK_INSTALL_DIR="$HOME/.local/share/anydesk"
-    mkdir -p "$ANYDESK_INSTALL_DIR"
-    cd /tmp || return
-    echo "获取最新版本..."
-    local VERSION=$(curl -s https://anydesk.com.cn/zhs/downloads/linux | grep -oP 'v?\\d+\\.\\d+\\.\\d+' | head -1 | sed 's/^v//')
-    if [ -z "$VERSION" ]; then echo "版本获取失败"; return; fi
-    echo "版本: $VERSION"
-    local URL="https://download.anydesk.com/linux/anydesk-${VERSION}-amd64.tar.gz"
-    echo "下载中..."
-    wget -q --show-progress "$URL" -O anydesk.tar.gz
-    tar -xzf anydesk.tar.gz -C "$ANYDESK_INSTALL_DIR" --strip-components=1
-    chmod +x "$ANYDESK_INSTALL_DIR/anydesk"
-    mkdir -p "$HOME/.local/bin"
-    ln -sf "$ANYDESK_INSTALL_DIR/anydesk" "$HOME/.local/bin/anydesk"
-    cat > "$HOME/Desktop/AnyDesk.desktop" << EOF
-[Desktop Entry]
-Name=AnyDesk
-Exec=$ANYDESK_INSTALL_DIR/anydesk
-Icon=$ANYDESK_INSTALL_DIR/icons/hicolor/256x256/apps/anydesk.png
-Type=Application
-Categories=Network;RemoteAccess;
-EOF
-    chmod +x "$HOME/Desktop/AnyDesk.desktop"
-    rm -f anydesk.tar.gz
-    echo -e "${GREEN}✓ AnyDesk 安装完成！桌面快捷方式已创建。${NC}"
-}
-
-install_todesk() {
-    clear
-    echo -e "${YELLOW}════════════════ 安装ToDesk ════════════════${NC}"
-    echo -e "${CYAN}正在安装ToDesk...${NC}"
-    sudo steamos-readonly disable
-    curl -L todesk.lanbai.top | sh
-    echo -e "${GREEN}✓ ToDesk安装脚本已执行${NC}"
-    echo -e "${YELLOW}请在桌面上运行'todesk安装'或'todesk重新安装'的文件来完成安装${NC}"
-}
-
-install_wps_office() {
-    clear
-    echo -e "${YELLOW}════════════════ 安装WPS Office ════════════════${NC}"
-    echo "正在通过 Flatpak 安装 WPS Office..."
-    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.wps.Office -y || flatpak install flathub cn.wps.wps-office -y || flatpak install flathub com.kingsoft.wps -y
-    echo -e "${GREEN}WPS Office 安装完成${NC}"
-}
-
-install_qq() {
-    clear
-    echo -e "${YELLOW}════════════════ 安装QQ ════════════════${NC}"
-    echo "正在通过 Flatpak 安装 QQ..."
-    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.qq.QQ -y || flatpak install flathub com.tencent.qq -y
-    echo -e "${GREEN}QQ 安装完成${NC}"
-}
-
-install_wechat() {
-    clear
-    echo -e "${YELLOW}════════════════ 安装微信 ════════════════${NC}"
-    echo "正在通过 Flatpak 安装微信..."
-    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.tencent.WeChat -y || flatpak install flathub com.qq.weixin -y
-    echo -e "${GREEN}微信 安装完成${NC}"
-}
-
-install_qqmusic() {
-    clear
-    echo -e "${YELLOW}════════════════ 安装QQ音乐 ════════════════${NC}"
-    echo "正在通过 Flatpak 安装 QQ音乐..."
-    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.qq.QQmusic -y || flatpak install flathub com.tencent.QQmusic -y
-    echo -e "${GREEN}QQ音乐 安装完成${NC}"
-}
-
-install_baidunetdisk() {
-    clear
-    echo -e "${YELLOW}════════════════ 安装百度网盘 ════════════════${NC}"
-    echo "正在通过 Flatpak 安装百度网盘..."
-    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.baidu.NetDisk -y || flatpak install flathub com.baidu.pan -y
-    echo -e "${GREEN}百度网盘 安装完成${NC}"
-}
-
-install_edge() {
-    clear
-    echo -e "${YELLOW}════════════════ 安装Edge浏览器 ════════════════${NC}"
-    echo "正在通过 Flatpak 安装 Edge..."
-    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.microsoft.Edge -y
-    echo -e "${GREEN}Edge 安装完成${NC}"
-}
-
-install_chrome() {
-    clear
-    echo -e "${YELLOW}════════════════ 安装Google浏览器 ════════════════${NC}"
-    echo "正在通过 Flatpak 安装 Chrome..."
-    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.google.Chrome -y
-    echo -e "${GREEN}Chrome 安装完成${NC}"
-}
-
-steamdeck_cache_manager() {
-    clear
-    echo -e "${YELLOW}════════════════ Steam Deck 缓存管理器 ════════════════${NC}"
+    echo -e "${YELLOW}════════════════ 卸载插件商店 ════════════════${NC}"
+    echo -e "${CYAN}正在卸载插件商店...${NC}"
+    echo "警告：这将删除整个 /home/deck/homebrew 目录，包括所有插件。"
     echo ""
-    echo "正在启动 Steam Deck 缓存管理器..."
-    echo "该功能需要图形界面支持，请确保您在桌面模式下运行。"
+    read -p "确定要卸载插件商店吗？(y/N): " -n 1 -r < /dev/tty
     echo ""
-    if [ -z "$DISPLAY" ]; then
-        echo -e "${RED}错误：未检测到图形界面环境。${NC}"
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "卸载已取消。"
         return
     fi
-    if ! command -v zenity &> /dev/null; then
-        echo -e "${YELLOW}未找到zenity工具，正在尝试安装...${NC}"
-        sudo pacman -Sy --noconfirm zenity 2>/dev/null || sudo apt install -y zenity 2>/dev/null
-        if ! command -v zenity &> /dev/null; then
-            echo -e "${RED}✗ Zenity安装失败！${NC}"
-            return
-        fi
-    fi
-    echo -e "${GREEN}✓ 环境检查完成，启动缓存管理器...${NC}"
-    echo "缓存管理器已启动（演示），实际功能请使用原脚本。"
-}
-
-update_installed_apps() {
-    clear
-    echo -e "${YELLOW}════════════════ 更新全部应用 ════════════════${NC}"
-    echo ""
-    read -p "是否更新所有已安装的 Flatpak 应用？(y/N): " confirm < /dev/tty
-    if [[ $confirm =~ ^[Yy]$ ]]; then
-        echo -e "${CYAN}正在更新所有应用...${NC}"
-        flatpak update -y
-        echo -e "${GREEN}✓ 所有应用更新完成${NC}"
+    echo "正在执行卸载..."
+    if sudo rm -rf /home/deck/homebrew; then
+        echo -e "${GREEN}✓ 插件商店卸载完成${NC}"
+        echo "如需重新安装，请使用 '安装插件商店' 功能。"
     else
-        echo "取消更新。"
+        echo -e "${RED}✗ 插件商店卸载失败${NC}"
     fi
 }
 
-uninstall_apps() {
+install_tomoon_install() {
+    mk_temp_dir
     clear
-    echo -e "${YELLOW}════════════════ 卸载已安装应用 ════════════════${NC}"
+    echo -e "${YELLOW}════════════════ 安装/更新 ToMoon 插件 ════════════════${NC}"
+    echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+    local latest_version=$(curl -s "https://api.github.com/repos/YukiCoco/ToMoon/releases/latest" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//; s/".*//')
+    if [ -z "$latest_version" ]; then
+        echo -e "${RED}错误: 无法获取版本信息。${NC}"
+        return
+    fi
+    echo -e "${GREEN}最新版本: ${latest_version}${NC}"
+    local TARGET_DIR="/home/deck/homebrew/plugins/tomoon"
+    local installed_version=""
+    if [ -d "$TARGET_DIR" ] && [ -f "$TARGET_DIR/package.json" ]; then
+        installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
+        if [ -n "$installed_version" ]; then
+            installed_version="v${installed_version}"
+            echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
+            if [ "$installed_version" = "$latest_version" ]; then
+                echo -e "${GREEN}已经是最新版本。${NC}"
+                return
+            else
+                echo -e "${YELLOW}发现新版本，将覆盖安装。${NC}"
+            fi
+        else
+            echo -e "${YELLOW}已安装但无法获取版本，将覆盖安装。${NC}"
+        fi
+    else
+        echo "未检测到已安装版本。"
+    fi
+    read -p "是否继续安装/更新？(y/N): " -n 1 -r
     echo ""
-    echo "请选择要卸载的应用："
-    echo "1. WPS Office"
-    echo "2. QQ"
-    echo "3. 微信"
-    echo "4. QQ音乐"
-    echo "5. 百度网盘"
-    echo "6. Edge浏览器"
-    echo "7. Google浏览器"
-    read -p "请输入选择 [1-7]: " app_choice < /dev/tty
-    case $app_choice in
-        1) uninstall_flatpak "WPS Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps";;
-        2) uninstall_flatpak "QQ" "com.qq.QQ" "com.tencent.qq";;
-        3) uninstall_flatpak "微信" "com.tencent.WeChat" "com.qq.weixin";;
-        4) uninstall_flatpak "QQ音乐" "com.qq.QQmusic" "com.tencent.QQmusic";;
-        5) uninstall_flatpak "百度网盘" "com.baidu.NetDisk" "com.baidu.pan";;
-        6) uninstall_flatpak "Edge浏览器" "com.microsoft.Edge";;
-        7) uninstall_flatpak "Google浏览器" "com.google.Chrome";;
-        *) echo "返回";;
-    esac
-}
-
-uninstall_flatpak() {
-    local app_name="$1"
-    shift
-    local packages=("$@")
-    echo ""
-    echo -e "${CYAN}正在检查是否已安装$app_name...${NC}"
-    local installed_package=""
-    for package in "${packages[@]}"; do
-        if flatpak list | grep -q "$package"; then
-            installed_package="$package"
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then echo "取消。"; return; fi
+    local TEMP_DIR="/tmp/tomoon_install"
+    rm -rf "$TEMP_DIR"
+    mkdir -p "$TEMP_DIR"
+    cd "$TEMP_DIR" || return
+    local zip_filename="tomoon-${latest_version}.zip"
+    local download_path="https://github.com/YukiCoco/ToMoon/releases/download/${latest_version}/${zip_filename}"
+    for mirror in "https://gh.ddlc.top/" "https://ghproxy.net/" "https://mirror.ghproxy.com/" "https://github.com/"; do
+        full_url="${mirror}${download_path}"
+        echo -e "尝试从 ${mirror} 下载..."
+        curl -L --progress-bar --max-time 60 -o "$zip_filename" "$full_url"
+        if [ -f "$zip_filename" ] && [ "$(stat -c%s "$zip_filename" 2>/dev/null || stat -f%z "$zip_filename" 2>/dev/null)" -gt 10000 ]; then
+            echo -e "${GREEN}下载成功${NC}"
             break
         fi
+        rm -f "$zip_filename"
     done
-    if [ -n "$installed_package" ]; then
-        echo "找到已安装的包: $installed_package"
-        read -p "是否卸载 $app_name？(y/N): " -n 1 -r < /dev/tty
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            flatpak uninstall "$installed_package" -y && echo -e "${GREEN}✓ $app_name 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
-        else
-            echo "取消卸载"
+    if [ ! -f "$zip_filename" ]; then echo -e "${RED}下载失败${NC}"; return; fi
+    unzip -q "$zip_filename"
+    local extracted_dir
+    extracted_dir="$(find "$TEMP_DIR" -maxdepth 2 -type f -name "tomoon" -exec dirname {} \; | head -1)"
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir="$(find "$TEMP_DIR" -maxdepth 1 -type d -name "tomoon*" | head -1)"
+    fi
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir="$TEMP_DIR"
+    fi
+    sudo mkdir -p /home/deck/homebrew/plugins
+    sudo rm -rf "$TARGET_DIR"
+    sudo mv "$extracted_dir" "$TARGET_DIR"
+    sudo chown -R deck:deck "$TARGET_DIR"
+    echo -e "${GREEN}✅ ToMoon 插件 ${latest_version} 安装完成！${NC}"
+}
+
+install_tomoon_uninstall() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 ToMoon 插件 ════════════════${NC}"
+    sudo rm -rf /home/deck/homebrew/plugins/tomoon
+    echo -e "${GREEN}卸载完成${NC}"
+}
+
+install_decky_lsfg_vk_install() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装/更新 LSFG-VK 插件 ════════════════${NC}"
+    echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+    local VERSION=$(curl -s "https://api.github.com/repos/xXJSONDeruloXx/decky-lsfg-vk/releases/latest" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//; s/".*//')
+    if [ -z "$VERSION" ]; then echo -e "${RED}版本获取失败${NC}"; return; fi
+    echo -e "${GREEN}最新版本: ${VERSION}${NC}"
+    local TARGET_DIR="/home/deck/homebrew/plugins/Decky-LSFG-VK"
+    local installed_version=""
+    if [ -d "$TARGET_DIR" ] && [ -f "$TARGET_DIR/package.json" ]; then
+        installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
+        if [ -n "$installed_version" ]; then
+            installed_version="v${installed_version}"
+            echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
+            if [ "$installed_version" = "$VERSION" ]; then
+                echo -e "${GREEN}已经是最新版本。${NC}"
+                return
+            fi
         fi
     else
-        echo -e "${YELLOW}⚠️  未检测到已安装的$app_name${NC}"
+        echo "未检测到已安装版本。"
     fi
+    read -p "是否继续安装/更新？(y/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then echo "取消。"; return; fi
+    local TEMP_DIR="/tmp/lsfg_vk"
+    rm -rf "$TEMP_DIR"
+    mkdir -p "$TEMP_DIR"
+    cd "$TEMP_DIR" || return
+    local URL="https://github.com/xXJSONDeruloXx/decky-lsfg-vk/releases/download/${VERSION}/Decky.LSFG-VK.zip"
+    curl -L --progress-bar "$URL" -o plugin.zip
+    unzip -q plugin.zip
+    sudo mkdir -p /home/deck/homebrew/plugins
+    sudo rm -rf "$TARGET_DIR"
+    local extracted_dir="$(find . -maxdepth 1 -type d -name "*LSFG*" | head -1)"
+    if [ -z "$extracted_dir" ]; then extracted_dir="."; fi
+    sudo mv "$extracted_dir" "$TARGET_DIR"
+    sudo chown -R deck:deck "$TARGET_DIR"
+    echo -e "${GREEN}✅ LSFG-VK 插件 ${VERSION} 安装完成！${NC}"
 }
 
-install_yellow_duck_software() {
+install_decky_lsfg_vk_uninstall() {
+    mk_temp_dir
     clear
-    echo -e "${YELLOW}════════════════ 安装小黄鸭软件 ════════════════${NC}"
-    echo "正在从 Gitee 克隆并安装..."
-    local CLONE_DIR="$HOME/lossless-scaling-repo"
-    rm -rf "$CLONE_DIR"
-    git clone --depth=1 https://gitee.com/Zhucy2100/lossless-scaling.git "$CLONE_DIR"
-    if [ $? -ne 0 ]; then echo "克隆失败"; return; fi
-    cd "$CLONE_DIR" || return
-    cat "Lossless Scaling.zip".* > Lossless-Scaling-Combined.zip
-    unzip -o Lossless-Scaling-Combined.zip -d "/home/deck/.local/share/Steam/steamapps/common/"
-    sudo chown -R deck:deck "/home/deck/.local/share/Steam/steamapps/common/Lossless Scaling"
-    rm -rf "$CLONE_DIR"
-    echo -e "${GREEN}小黄鸭软件安装完成！${NC}"
+    echo -e "${YELLOW}════════════════ 卸载 LSFG-VK 插件 ════════════════${NC}"
+    sudo rm -rf /home/deck/homebrew/plugins/Decky-LSFG-VK
+    echo -e "${GREEN}已卸载${NC}"
 }
 
-install_watt_toolkit() {
+install_decky_framegen_install() {
+    mk_temp_dir
     clear
-    echo -e "${YELLOW}════════════════ 安装 Watt Toolkit (Steam++) ════════════════${NC}"
-    echo "请选择：1.安装/更新  2.卸载"
-    read -p "输入选择: " choice < /dev/tty
-    case $choice in
-        1)
-            local INSTALL_DIR="/home/deck/Watt Toolkit"
-            mkdir -p "$INSTALL_DIR"
-            local TEMP_DIR="/tmp/watt_toolkit"
-            rm -rf "$TEMP_DIR"
-            mkdir -p "$TEMP_DIR"
-            cd "$TEMP_DIR" || return
-            local VERSION=$(curl -s https://api.github.com/repos/BeyondDimension/SteamTools/releases | grep -o '"tag_name": *"v[^"]*"' | head -1 | sed 's/.*"v//;s/".*//')
-            if [ -z "$VERSION" ]; then echo "版本获取失败"; return; fi
-            local URL="https://github.com/BeyondDimension/SteamTools/releases/download/v${VERSION}/Steam++_v${VERSION}_linux_x64.tgz"
-            echo "下载 $URL"
-            curl -L --progress-bar "$URL" -o steam++.tgz
-            tar -xzf steam++.tgz -C "$INSTALL_DIR" --strip-components=1
-            echo "$VERSION" > "$INSTALL_DIR/.version"
-            local dotnet_root="$INSTALL_DIR/dotnet"
-            local dll_path="$INSTALL_DIR/assemblies/Steam++.dll"
-            cat > "$HOME/Desktop/Watt_Toolkit.desktop" << EOF
-[Desktop Entry]
-Name=Watt Toolkit (Steam++)
-Exec=env 'DOTNET_ROOT=${dotnet_root}' '${dotnet_root}/dotnet' '${dll_path}'
-Icon=$INSTALL_DIR/Icons/Watt-Toolkit.png
-Type=Application
-Categories=Network;Game;
-EOF
-            chmod +x "$HOME/Desktop/Watt_Toolkit.desktop"
-            echo -e "${GREEN}Watt Toolkit 安装完成${NC}"
-            ;;
-        2)
-            rm -rf "/home/deck/Watt Toolkit"
-            rm -f "$HOME/Desktop/Watt_Toolkit.desktop"
-            echo -e "${GREEN}已卸载${NC}"
-            ;;
-        *) echo "取消";;
-    esac
-}
-
-install_decky_lsfg_vk() {
-    clear
-    echo -e "${YELLOW}════════════════ 安装/卸载 LSFG-VK 插件 ════════════════${NC}"
-    echo "请选择：1.安装/更新  2.卸载"
-    read -p "输入选择: " choice < /dev/tty
-    case $choice in
-        1)
-            local TEMP_DIR="/tmp/lsfg_vk"
-            rm -rf "$TEMP_DIR"
-            mkdir -p "$TEMP_DIR"
-            cd "$TEMP_DIR" || return
-            local VERSION=$(curl -s https://api.github.com/repos/xXJSONDeruloXx/decky-lsfg-vk/releases | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//;s/".*//')
-            if [ -z "$VERSION" ]; then echo "版本获取失败"; return; fi
-            local URL="https://github.com/xXJSONDeruloXx/decky-lsfg-vk/releases/download/${VERSION}/Decky.LSFG-VK.zip"
-            curl -L --progress-bar "$URL" -o plugin.zip
-            unzip -q plugin.zip
-            sudo mkdir -p /home/deck/homebrew/plugins
-            sudo rm -rf /home/deck/homebrew/plugins/Decky-LSFG-VK
-            local extracted_dir="$(find . -maxdepth 1 -type d -name "*LSFG*" | head -1)"
-            if [ -z "$extracted_dir" ]; then
-                extracted_dir="."
+    echo -e "${YELLOW}════════════════ 安装/更新 Framegen 插件 ════════════════${NC}"
+    echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+    local VERSION=$(curl -s "https://api.github.com/repos/xXJSONDeruloXx/Decky-Framegen/releases/latest" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//; s/".*//')
+    if [ -z "$VERSION" ]; then echo -e "${RED}版本获取失败${NC}"; return; fi
+    echo -e "${GREEN}最新版本: ${VERSION}${NC}"
+    local TARGET_DIR="/home/deck/homebrew/plugins/Decky-Framegen"
+    local installed_version=""
+    if [ -d "$TARGET_DIR" ] && [ -f "$TARGET_DIR/package.json" ]; then
+        installed_version=$(grep -o '"version": *"[^"]*"' "$TARGET_DIR/package.json" | head -1 | sed 's/.*"version": *"//; s/".*//')
+        if [ -n "$installed_version" ]; then
+            installed_version="v${installed_version}"
+            echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
+            if [ "$installed_version" = "$VERSION" ]; then
+                echo -e "${GREEN}已经是最新版本。${NC}"
+                return
             fi
-            sudo mv "$extracted_dir" /home/deck/homebrew/plugins/Decky-LSFG-VK
-            sudo chown -R deck:deck /home/deck/homebrew/plugins/Decky-LSFG-VK
-            echo -e "${GREEN}LSFG-VK 插件安装完成${NC}"
-            ;;
-        2)
-            sudo rm -rf /home/deck/homebrew/plugins/Decky-LSFG-VK
-            echo -e "${GREEN}已卸载${NC}"
-            ;;
-        *) echo "取消";;
-    esac
+        fi
+    else
+        echo "未检测到已安装版本。"
+    fi
+    read -p "是否继续安装/更新？(y/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then echo "取消。"; return; fi
+    local TEMP_DIR="/tmp/framegen"
+    rm -rf "$TEMP_DIR"
+    mkdir -p "$TEMP_DIR"
+    cd "$TEMP_DIR" || return
+    local URL="https://github.com/xXJSONDeruloXx/Decky-Framegen/releases/download/${VERSION}/Decky-Framegen.zip"
+    curl -L --progress-bar "$URL" -o plugin.zip
+    unzip -q plugin.zip
+    sudo mkdir -p /home/deck/homebrew/plugins
+    sudo rm -rf "$TARGET_DIR"
+    local extracted_dir="$(find . -maxdepth 1 -type d -name "*Framegen*" | head -1)"
+    if [ -z "$extracted_dir" ]; then extracted_dir="."; fi
+    sudo mv "$extracted_dir" "$TARGET_DIR"
+    sudo chown -R deck:deck "$TARGET_DIR"
+    echo -e "${GREEN}✅ Framegen 插件 ${VERSION} 安装完成！${NC}"
 }
 
-install_decky_framegen() {
+install_decky_framegen_uninstall() {
+    mk_temp_dir
     clear
-    echo -e "${YELLOW}════════════════ 安装/卸载 Framegen 插件 ════════════════${NC}"
-    echo "请选择：1.安装/更新  2.卸载"
-    read -p "输入选择: " choice < /dev/tty
-    case $choice in
-        1)
-            local TEMP_DIR="/tmp/framegen"
-            rm -rf "$TEMP_DIR"
-            mkdir -p "$TEMP_DIR"
-            cd "$TEMP_DIR" || return
-            local VERSION=$(curl -s https://api.github.com/repos/xXJSONDeruloXx/Decky-Framegen/releases | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//;s/".*//')
-            if [ -z "$VERSION" ]; then echo "版本获取失败"; return; fi
-            local URL="https://github.com/xXJSONDeruloXx/Decky-Framegen/releases/download/${VERSION}/Decky-Framegen.zip"
-            curl -L --progress-bar "$URL" -o plugin.zip
-            unzip -q plugin.zip
-            sudo mkdir -p /home/deck/homebrew/plugins
-            sudo rm -rf /home/deck/homebrew/plugins/Decky-Framegen
-            local extracted_dir="$(find . -maxdepth 1 -type d -name "*Framegen*" | head -1)"
-            if [ -z "$extracted_dir" ]; then
-                extracted_dir="."
-            fi
-            sudo mv "$extracted_dir" /home/deck/homebrew/plugins/Decky-Framegen
-            sudo chown -R deck:deck /home/deck/homebrew/plugins/Decky-Framegen
-            echo -e "${GREEN}Framegen 插件安装完成${NC}"
-            ;;
-        2)
-            sudo rm -rf /home/deck/homebrew/plugins/Decky-Framegen
-            echo -e "${GREEN}已卸载${NC}"
-            ;;
-        *) echo "取消";;
-    esac
+    echo -e "${YELLOW}════════════════ 卸载 Framegen 插件 ════════════════${NC}"
+    sudo rm -rf /home/deck/homebrew/plugins/Decky-Framegen
+    echo -e "${GREEN}已卸载${NC}"
 }
 
+# ========== 引导管理 ==========
 clover_install_or_reinstall() {
+    mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 安装/重装 Clover 引导 ════════════════${NC}"
     echo ""
@@ -1320,6 +1704,356 @@ clover_install_or_reinstall() {
     echo -e "${GREEN}Clover 安装/重装完成${NC}"
 }
 
+# ========== 软件安装 ==========
+install_anydesk() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装 AnyDesk ════════════════${NC}"
+    echo "正在安装 AnyDesk（便携版）..."
+    local ANYDESK_INSTALL_DIR="$HOME/.local/share/anydesk"
+    mkdir -p "$ANYDESK_INSTALL_DIR"
+    cd /tmp || return
+    echo "获取最新版本..."
+    local VERSION=$(curl -s https://anydesk.com.cn/zhs/downloads/linux | grep -oP 'v?\\d+\\.\\d+\\.\\d+' | head -1 | sed 's/^v//')
+    if [ -z "$VERSION" ]; then echo "版本获取失败"; return; fi
+    echo "版本: $VERSION"
+    local URL="https://download.anydesk.com/linux/anydesk-${VERSION}-amd64.tar.gz"
+    echo "下载中..."
+    wget -q --show-progress "$URL" -O anydesk.tar.gz
+    tar -xzf anydesk.tar.gz -C "$ANYDESK_INSTALL_DIR" --strip-components=1
+    chmod +x "$ANYDESK_INSTALL_DIR/anydesk"
+    mkdir -p "$HOME/.local/bin"
+    ln -sf "$ANYDESK_INSTALL_DIR/anydesk" "$HOME/.local/bin/anydesk"
+    cat > "$HOME/Desktop/AnyDesk.desktop" << EOF
+[Desktop Entry]
+Name=AnyDesk
+Exec=$ANYDESK_INSTALL_DIR/anydesk
+Icon=$ANYDESK_INSTALL_DIR/icons/hicolor/256x256/apps/anydesk.png
+Type=Application
+Categories=Network;RemoteAccess;
+EOF
+    chmod +x "$HOME/Desktop/AnyDesk.desktop"
+    rm -f anydesk.tar.gz
+    echo -e "${GREEN}✓ AnyDesk 安装完成！桌面快捷方式已创建。${NC}"
+}
+
+install_todesk() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装ToDesk ════════════════${NC}"
+    echo -e "${CYAN}正在安装ToDesk...${NC}"
+    sudo steamos-readonly disable
+    curl -L todesk.lanbai.top | sh
+    echo -e "${GREEN}✓ ToDesk安装脚本已执行${NC}"
+    echo -e "${YELLOW}请在桌面上运行'todesk安装'或'todesk重新安装'的文件来完成安装${NC}"
+}
+
+install_wps_office() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装WPS Office ════════════════${NC}"
+    echo "正在通过 Flatpak 安装 WPS Office..."
+    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+    flatpak install flathub com.wps.Office -y || flatpak install flathub cn.wps.wps-office -y || flatpak install flathub com.kingsoft.wps -y
+    echo -e "${GREEN}WPS Office 安装完成${NC}"
+}
+
+install_qq() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装QQ ════════════════${NC}"
+    echo "正在通过 Flatpak 安装 QQ..."
+    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+    flatpak install flathub com.qq.QQ -y || flatpak install flathub com.tencent.qq -y
+    echo -e "${GREEN}QQ 安装完成${NC}"
+}
+
+install_wechat() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装微信 ════════════════${NC}"
+    echo "正在通过 Flatpak 安装微信..."
+    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+    flatpak install flathub com.tencent.WeChat -y || flatpak install flathub com.qq.weixin -y
+    echo -e "${GREEN}微信 安装完成${NC}"
+}
+
+install_qqmusic() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装QQ音乐 ════════════════${NC}"
+    echo "正在通过 Flatpak 安装 QQ音乐..."
+    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+    flatpak install flathub com.qq.QQmusic -y || flatpak install flathub com.tencent.QQmusic -y
+    echo -e "${GREEN}QQ音乐 安装完成${NC}"
+}
+
+install_baidunetdisk() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装百度网盘 ════════════════${NC}"
+    echo "正在通过 Flatpak 安装百度网盘..."
+    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+    flatpak install flathub com.baidu.NetDisk -y || flatpak install flathub com.baidu.pan -y
+    echo -e "${GREEN}百度网盘 安装完成${NC}"
+}
+
+install_edge() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装Edge浏览器 ════════════════${NC}"
+    echo "正在通过 Flatpak 安装 Edge..."
+    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+    flatpak install flathub com.microsoft.Edge -y
+    echo -e "${GREEN}Edge 安装完成${NC}"
+}
+
+install_chrome() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装Google浏览器 ════════════════${NC}"
+    echo "正在通过 Flatpak 安装 Chrome..."
+    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+    flatpak install flathub com.google.Chrome -y
+    echo -e "${GREEN}Chrome 安装完成${NC}"
+}
+
+# ========== 更新软件 ==========
+update_installed_apps() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 更新全部应用 ════════════════${NC}"
+    echo ""
+    echo -e "${CYAN}正在更新所有应用...${NC}"
+    flatpak update -y
+    echo -e "${GREEN}✓ 所有应用更新完成${NC}"
+}
+
+# ---------- 卸载子函数 ----------
+uninstall_wps_office() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 WPS Office ════════════════${NC}"
+    local installed=""
+    for pkg in "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"; do
+        if flatpak list | grep -q "$pkg"; then
+            installed="$pkg"
+            break
+        fi
+    done
+    if [ -n "$installed" ]; then
+        read -p "确定要卸载 WPS Office？(y/N): " -n 1 -r < /dev/tty
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ WPS Office 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+        else
+            echo "取消卸载。"
+        fi
+    else
+        echo -e "${YELLOW}未检测到已安装的 WPS Office。${NC}"
+    fi
+}
+
+uninstall_qq() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 QQ ════════════════${NC}"
+    local installed=""
+    for pkg in "com.qq.QQ" "com.tencent.qq"; do
+        if flatpak list | grep -q "$pkg"; then
+            installed="$pkg"
+            break
+        fi
+    done
+    if [ -n "$installed" ]; then
+        read -p "确定要卸载 QQ？(y/N): " -n 1 -r < /dev/tty
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ QQ 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+        else
+            echo "取消卸载。"
+        fi
+    else
+        echo -e "${YELLOW}未检测到已安装的 QQ。${NC}"
+    fi
+}
+
+uninstall_wechat() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载微信 ════════════════${NC}"
+    local installed=""
+    for pkg in "com.tencent.WeChat" "com.qq.weixin"; do
+        if flatpak list | grep -q "$pkg"; then
+            installed="$pkg"
+            break
+        fi
+    done
+    if [ -n "$installed" ]; then
+        read -p "确定要卸载微信？(y/N): " -n 1 -r < /dev/tty
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ 微信 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+        else
+            echo "取消卸载。"
+        fi
+    else
+        echo -e "${YELLOW}未检测到已安装的微信。${NC}"
+    fi
+}
+
+uninstall_qqmusic() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 QQ音乐 ════════════════${NC}"
+    local installed=""
+    for pkg in "com.qq.QQmusic" "com.tencent.QQmusic"; do
+        if flatpak list | grep -q "$pkg"; then
+            installed="$pkg"
+            break
+        fi
+    done
+    if [ -n "$installed" ]; then
+        read -p "确定要卸载 QQ音乐？(y/N): " -n 1 -r < /dev/tty
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ QQ音乐 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+        else
+            echo "取消卸载。"
+        fi
+    else
+        echo -e "${YELLOW}未检测到已安装的 QQ音乐。${NC}"
+    fi
+}
+
+uninstall_baidunetdisk() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载百度网盘 ════════════════${NC}"
+    local installed=""
+    for pkg in "com.baidu.NetDisk" "com.baidu.pan"; do
+        if flatpak list | grep -q "$pkg"; then
+            installed="$pkg"
+            break
+        fi
+    done
+    if [ -n "$installed" ]; then
+        read -p "确定要卸载百度网盘？(y/N): " -n 1 -r < /dev/tty
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ 百度网盘 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+        else
+            echo "取消卸载。"
+        fi
+    else
+        echo -e "${YELLOW}未检测到已安装的百度网盘。${NC}"
+    fi
+}
+
+uninstall_edge() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 Edge浏览器 ════════════════${NC}"
+    local installed=""
+    for pkg in "com.microsoft.Edge"; do
+        if flatpak list | grep -q "$pkg"; then
+            installed="$pkg"
+            break
+        fi
+    done
+    if [ -n "$installed" ]; then
+        read -p "确定要卸载 Edge浏览器？(y/N): " -n 1 -r < /dev/tty
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ Edge浏览器 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+        else
+            echo "取消卸载。"
+        fi
+    else
+        echo -e "${YELLOW}未检测到已安装的 Edge浏览器。${NC}"
+    fi
+}
+
+uninstall_chrome() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 Google浏览器 ════════════════${NC}"
+    local installed=""
+    for pkg in "com.google.Chrome" "org.chromium.Chromium"; do
+        if flatpak list | grep -q "$pkg"; then
+            installed="$pkg"
+            break
+        fi
+    done
+    if [ -n "$installed" ]; then
+        read -p "确定要卸载 Google浏览器？(y/N): " -n 1 -r < /dev/tty
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ Google浏览器 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+        else
+            echo "取消卸载。"
+        fi
+    else
+        echo -e "${YELLOW}未检测到已安装的 Google浏览器。${NC}"
+    fi
+}
+
+# ========== 其他 ==========
+install_yellow_duck_software() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装小黄鸭软件 ════════════════${NC}"
+    echo ""
+
+    local LOSS_DIR="/home/deck/.local/share/Steam/steamapps/common/Lossless Scaling"
+
+    # 检测是否已安装
+    if [[ -d "$LOSS_DIR" ]]; then
+        echo -e "${CYAN}检测到已安装小黄鸭软件。${NC}"
+        echo "   安装目录: $LOSS_DIR"
+        echo ""
+        read -p "是否要卸载已安装的小黄鸭软件？(y/N): " -n 1 -r < /dev/tty
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "开始卸载小黄鸭软件..."
+            if sudo rm -rf "$LOSS_DIR"; then
+                echo -e "${GREEN}✅ 小黄鸭软件已成功卸载。${NC}"
+                echo "如需重新安装，请再次运行此功能。"
+            else
+                echo -e "${RED}❌ 卸载失败，请检查权限。${NC}"
+            fi
+            return
+        else
+            echo "取消操作。"
+            return
+        fi
+    fi
+
+    # 未安装，执行安装
+    echo -e "${CYAN}未检测到小黄鸭软件，开始从 Gitee 克隆并安装...${NC}"
+    local CLONE_DIR="$HOME/lossless-scaling-repo"
+    rm -rf "$CLONE_DIR"
+    git clone --depth=1 https://gitee.com/Zhucy2100/lossless-scaling.git "$CLONE_DIR"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}克隆失败，请检查网络。${NC}"
+        return
+    fi
+    cd "$CLONE_DIR" || return
+
+    echo "合并分卷文件并解压..."
+    cat "Lossless Scaling.zip".* > Lossless-Scaling-Combined.zip
+    unzip -o Lossless-Scaling-Combined.zip -d "/home/deck/.local/share/Steam/steamapps/common/"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}解压失败。${NC}"
+        cd
+        rm -rf "$CLONE_DIR"
+        return
+    fi
+    sudo chown -R deck:deck "/home/deck/.local/share/Steam/steamapps/common/Lossless Scaling"
+    rm -rf "$CLONE_DIR"
+    echo -e "${GREEN}✅ 小黄鸭软件安装完成！${NC}"
+}
+
 # ---------- 主函数 ----------
 main() {
     echo "此脚本为内嵌库，请通过参数调用具体功能。"
@@ -1337,22 +2071,18 @@ fi
 # ============================================================================
 
 class TaskWindow(Gtk.Window):
-    """独立任务窗口，包含 VTE 终端和按钮"""
     def __init__(self, parent, func_key, display_name):
         super().__init__(title=f"执行任务: {display_name}")
         self.set_default_size(700, 500)
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
         self.set_transient_for(parent)
         self.set_modal(True)
-
         self.terminal = None
         self.process = None
         self.completed = False
         self.temp_script = None
-
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(vbox)
-
         if VTE_AVAILABLE:
             self.terminal = Vte.Terminal()
             self.terminal.set_vexpand(True)
@@ -1367,30 +2097,22 @@ class TaskWindow(Gtk.Window):
             self.textview.set_wrap_mode(Gtk.WrapMode.WORD)
             scrolled.add(self.textview)
             vbox.pack_start(scrolled, True, True, 0)
-
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         button_box.set_margin_top(5)
         button_box.set_margin_bottom(5)
         button_box.set_margin_start(10)
         button_box.set_margin_end(10)
-
         button_box.pack_start(Gtk.Label(), True, True, 0)
-
         self.action_btn = Gtk.Button(label="取消")
         self.action_btn.connect("clicked", self.on_action_button_clicked)
         button_box.pack_start(self.action_btn, False, False, 0)
-
         vbox.pack_start(button_box, False, False, 0)
-
         with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, encoding='utf-8') as f:
             f.write(BASH_SCRIPT)
             self.temp_script = f.name
         os.chmod(self.temp_script, 0o755)
-
         self.connect("destroy", self.on_window_destroy)
-
         self.start_command(func_key)
-
         self.show_all()
 
     def start_command(self, func_key):
@@ -1407,8 +2129,7 @@ class TaskWindow(Gtk.Window):
                 None,
                 None
             )
-            # 执行命令，完成后自动退出 shell（无需用户按回车）
-            cmd = f"bash {self.temp_script} {func_key}; exit\n"
+            cmd = f"bash {self.temp_script} {func_key}; exit 2>/dev/null\n"
             self.terminal.feed_child(cmd.encode('utf-8'))
             self.terminal.connect("child-exited", self.on_child_exited)
         else:
@@ -1488,14 +2209,14 @@ class MainWindow(Gtk.Window):
         # 左侧分类
         self.list_store = Gtk.ListStore(str)
         categories = [
-            "📌 支持和维护",
-            "🛠 系统优化",
-            "📦 软件安装",
-            "🌐 网络工具",
-            "🎮 插件相关",
-            "🔄 引导管理",
-            "📥 更新软件",
-            "🗑 其他"
+            "支持和维护",
+            "系统优化",
+            "软件安装",
+            "网络工具",
+            "插件相关",
+            "引导管理",
+            "更新软件",
+            "其他"
         ]
         for cat in categories:
             self.list_store.append([cat])
@@ -1524,11 +2245,9 @@ class MainWindow(Gtk.Window):
         about_box.set_margin_bottom(20)
         about_box.set_margin_start(20)
         about_box.set_margin_end(20)
-
         about_title = Gtk.Label()
         about_title.set_markup("<big><b>关于本工具</b></big>")
         about_box.pack_start(about_title, False, False, 0)
-
         about_textview = Gtk.TextView()
         about_textview.set_editable(False)
         about_textview.set_wrap_mode(Gtk.WrapMode.WORD)
@@ -1560,26 +2279,23 @@ steamdeck工具箱 v1.3.8
         func_page.set_margin_bottom(20)
         func_page.set_margin_start(20)
         func_page.set_margin_end(20)
-
         self.category_title = Gtk.Label()
         self.category_title.set_markup("<big><b>系统优化</b></big>")
         self.category_title.set_visible(False)
         func_page.pack_start(self.category_title, False, False, 0)
-
-        self.func_store = Gtk.ListStore(str)
+        self.func_store = Gtk.TreeStore(str)
         self.func_view = Gtk.TreeView(model=self.func_store)
         renderer_func = Gtk.CellRendererText()
         column_func = Gtk.TreeViewColumn("功能", renderer_func, text=0)
         self.func_view.append_column(column_func)
         self.func_view.set_activate_on_single_click(True)
         self.func_view.connect("row-activated", self.on_func_row_activated)
-
+        self.func_view.set_expander_column(column_func)
         scrolled_func = Gtk.ScrolledWindow()
         scrolled_func.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled_func.set_vexpand(True)
         scrolled_func.add(self.func_view)
         func_page.pack_start(scrolled_func, True, True, 0)
-
         self.stack.add_named(func_page, "func")
 
         selection = self.cat_view.get_selection()
@@ -1592,26 +2308,24 @@ steamdeck工具箱 v1.3.8
         bottom_bar.set_margin_bottom(5)
         bottom_bar.set_margin_start(10)
         bottom_bar.set_margin_end(10)
-
         help_btn = Gtk.Button(label="帮助")
         help_btn.connect("clicked", self.on_help_clicked)
         bottom_bar.pack_start(help_btn, False, False, 0)
-
         bottom_bar.pack_start(Gtk.Label(), True, True, 0)
-
         quit_btn = Gtk.Button(label="退出")
         quit_btn.connect("clicked", self.on_quit_clicked)
         bottom_bar.pack_start(quit_btn, False, False, 0)
-
         main_vbox.pack_start(bottom_bar, False, False, 0)
 
+        # 功能映射
         self.func_map = {
             "安装国内源": "install_chinese_source",
             "调整虚拟内存": "adjust_swap",
             "修复磁盘写入错误": "fix_disk_write_error",
             "清理hosts缓存": "clear_hosts_cache",
             "设置管理员密码": "set_admin_password",
-            "校准设备": "calibrate_joystick",
+            "校准摇杆": "calibrate_joystick_stick",
+            "校准扳机": "calibrate_joystick_trigger",
             "Steam缓存管理": "steamdeck_cache_manager",
             "修复引导": "fix_boot",
             "修复互通盘": "fix_shared_disk",
@@ -1626,44 +2340,70 @@ steamdeck工具箱 v1.3.8
             "Google浏览器": "install_chrome",
             "UU加速器插件": "install_uu_accelerator",
             "迅游加速器插件": "install_xunyou_accelerator",
-            "Watt Toolkit (Steam++)": "install_watt_toolkit",
-            "安装/卸载插件商店": "install_remove_plugin_store",
-            "ToMoon 插件": "install_tomoon",
-            "LSFG-VK插件": "install_decky_lsfg_vk",
-            "Framegen插件": "install_decky_framegen",
-            "安装/重装 Clover 引导": "clover_install_or_reinstall",
-            "小黄鸭软件": "install_yellow_duck_software",
+            "安装/更新": "install_watt_toolkit_install",
+            "卸载": "install_watt_toolkit_uninstall",
+            "安装插件商店": "install_plugin_store",
+            "卸载插件商店": "uninstall_plugin_store",
+            "安装/更新 ToMoon": "install_tomoon_install",
+            "卸载 ToMoon": "install_tomoon_uninstall",
+            "安装/更新 LSFG-VK": "install_decky_lsfg_vk_install",
+            "卸载 LSFG-VK": "install_decky_lsfg_vk_uninstall",
+            "安装/更新 Framegen": "install_decky_framegen_install",
+            "卸载 Framegen": "install_decky_framegen_uninstall",
+            "安装/重装 Clover": "clover_install_or_reinstall",
             "更新已安装应用": "update_installed_apps",
-            "卸载已安装应用": "uninstall_apps"
+            "卸载 WPS Office": "uninstall_wps_office",
+            "卸载 QQ": "uninstall_qq",
+            "卸载微信": "uninstall_wechat",
+            "卸载 QQ音乐": "uninstall_qqmusic",
+            "卸载百度网盘": "uninstall_baidunetdisk",
+            "卸载 Edge浏览器": "uninstall_edge",
+            "卸载 Google浏览器": "uninstall_chrome",
+            "小黄鸭软件": "install_yellow_duck_software"
         }
 
-        self.base_category_functions = {
-            "📌 支持和维护": [],
-            "🛠 系统优化": [
-                "安装国内源", "调整虚拟内存", "修复磁盘写入错误",
-                "清理hosts缓存", "设置管理员密码", "校准设备",
+        # 分类树
+        self.category_tree = {
+            "支持和维护": [],
+            "系统优化": [
+                "安装国内源",
+                "调整虚拟内存",
+                "修复磁盘写入错误",
+                "清理hosts缓存",
+                "设置管理员密码",
+                ("校准设备", ["校准摇杆", "校准扳机"]),
                 "Steam缓存管理"
             ],
-            "📦 软件安装": [
-                "AnyDesk", "ToDesk", "WPS Office", "QQ",
-                "微信", "QQ音乐", "百度网盘",
-                "Edge浏览器", "Google浏览器"
+            "软件安装": [
+                "AnyDesk",
+                "ToDesk",
+                "WPS Office",
+                "QQ",
+                "微信",
+                "QQ音乐",
+                "百度网盘",
+                "Edge浏览器",
+                "Google浏览器"
             ],
-            "🌐 网络工具": [
-                "UU加速器插件", "迅游加速器插件",
-                "Watt Toolkit (Steam++)"
+            "网络工具": [
+                "UU加速器插件",
+                "迅游加速器插件",
+                ("Watt Toolkit (Steam++)", ["安装/更新", "卸载"])
             ],
-            "🎮 插件相关": [
-                "安装/卸载插件商店", "ToMoon 插件",
-                "LSFG-VK插件", "Framegen插件"
+            "插件相关": [
+                ("安装/卸载插件商店", ["安装插件商店", "卸载插件商店"]),
+                ("ToMoon 插件", ["安装/更新 ToMoon", "卸载 ToMoon"]),
+                ("LSFG-VK插件", ["安装/更新 LSFG-VK", "卸载 LSFG-VK"]),
+                ("Framegen插件", ["安装/更新 Framegen", "卸载 Framegen"])
             ],
-            "🔄 引导管理": [
-                "安装/重装 Clover 引导"
+            "引导管理": [
+                "安装/重装 Clover"
             ],
-            "📥 更新软件": [
-                "更新已安装应用", "卸载已安装应用"
+            "更新软件": [
+                "更新已安装应用",
+                ("卸载已安装应用", ["卸载 WPS Office", "卸载 QQ", "卸载微信", "卸载 QQ音乐", "卸载百度网盘", "卸载 Edge浏览器", "卸载 Google浏览器"])
             ],
-            "🗑 其他": [
+            "其他": [
                 "小黄鸭软件"
             ]
         }
@@ -1687,43 +2427,46 @@ steamdeck工具箱 v1.3.8
         model = treeview.get_model()
         iter_ = model.get_iter(path)
         category = model.get_value(iter_, 0)
-
-        if category == "📌 支持和维护":
+        if category == "支持和维护":
             self.stack.set_visible_child_name("about")
             self.category_title.set_visible(False)
             return
-
         self.stack.set_visible_child_name("func")
-        if category == "🛠 系统优化":
+        if category == "系统优化":
             title_text = f"<big><b>{category} [{self.system_type}]</b></big>"
         else:
             title_text = f"<big><b>{category}</b></big>"
         self.category_title.set_markup(title_text)
         self.category_title.set_visible(True)
-
         self.func_store.clear()
-
-        funcs = self.base_category_functions.get(category, [])
-        if category == "🛠 系统优化" and self.system_type == "双系统":
-            funcs = funcs + ["修复引导", "修复互通盘"]
-
-        for func_name in funcs:
-            self.func_store.append([func_name])
-
+        items = self.category_tree.get(category, [])
+        if category == "系统优化" and self.system_type == "双系统":
+            items = items + ["修复引导", "修复互通盘"]
+        for item in items:
+            if isinstance(item, tuple):
+                parent_name, children = item
+                parent_iter = self.func_store.append(None, [parent_name])
+                for child in children:
+                    self.func_store.append(parent_iter, [child])
+            else:
+                self.func_store.append(None, [item])
         self.func_view.show_all()
 
     def on_func_row_activated(self, treeview, path, column):
         model = treeview.get_model()
         iter_ = model.get_iter(path)
         func_name = model.get_value(iter_, 0)
-
         if not func_name:
             return
-
+        if model.iter_has_child(iter_):
+            if treeview.row_expanded(path):
+                treeview.collapse_row(path)
+            else:
+                treeview.expand_row(path, False)
+            return
         func_key = self.func_map.get(func_name)
         if not func_key:
             return
-
         if self.task_window:
             self.task_window.destroy()
         self.task_window = TaskWindow(self, func_key, func_name)
@@ -1748,21 +2491,65 @@ steamdeck工具箱 v1.3.8
         self.destroy()
 
 # ============================================================================
+# 启动时检测 VTE（仅 VTE）
+# ============================================================================
+
+def check_and_install_vte():
+    if VTE_AVAILABLE:
+        return True
+
+    dialog = Gtk.MessageDialog(
+        None,
+        Gtk.DialogFlags.MODAL,
+        Gtk.MessageType.WARNING,
+        Gtk.ButtonsType.YES_NO,
+        "VTE 终端组件未安装"
+    )
+    dialog.format_secondary_text(
+        "本工具需要 VTE 组件以实现内嵌终端交互。\n"
+        "是否现在安装 vte3？(需要 sudo 权限)\n"
+        "如果选择“否”，将使用回退模式（仅文本显示，不支持交互）。"
+    )
+    response = dialog.run()
+    dialog.destroy()
+
+    if response == Gtk.ResponseType.YES:
+        try:
+            subprocess.run(["sudo", "pacman", "-S", "--noconfirm", "vte3"], check=True)
+        except subprocess.CalledProcessError:
+            error_dialog = Gtk.MessageDialog(
+                None,
+                Gtk.DialogFlags.MODAL,
+                Gtk.MessageType.ERROR,
+                Gtk.ButtonsType.OK,
+                "VTE 安装失败，请手动执行：sudo pacman -S vte3"
+            )
+            error_dialog.run()
+            error_dialog.destroy()
+            return False
+
+        restart_dialog = Gtk.MessageDialog(
+            None,
+            Gtk.DialogFlags.MODAL,
+            Gtk.MessageType.INFO,
+            Gtk.ButtonsType.OK,
+            "VTE 安装完成，程序将重启以生效。"
+        )
+        restart_dialog.run()
+        restart_dialog.destroy()
+
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+        return True
+    else:
+        return False
+
+# ============================================================================
 # 启动
 # ============================================================================
 
 def main():
     if not VTE_AVAILABLE:
-        warn_dialog = Gtk.MessageDialog(
-            None,
-            Gtk.DialogFlags.MODAL,
-            Gtk.MessageType.WARNING,
-            Gtk.ButtonsType.OK,
-            "VTE 终端组件未安装，将使用文本输出模式（不支持交互输入）。\n"
-            "建议安装 vte3 以享受完整终端交互体验。"
-        )
-        warn_dialog.run()
-        warn_dialog.destroy()
+        check_and_install_vte()
 
     window = MainWindow()
     window.connect("destroy", Gtk.main_quit)
