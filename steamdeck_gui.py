@@ -2261,8 +2261,9 @@ class MainWindow(Gtk.Window):
         about_textview = Gtk.TextView()
         about_textview.set_editable(False)
         about_textview.set_wrap_mode(Gtk.WrapMode.WORD)
-        about_textview.get_buffer().set_text("""
-steamdeck工具箱 v1.3.8
+        # 动态版本号
+        about_text = f"""
+steamdeck工具箱 v{VERSION}
 制作人：薯条 & DeepSeek
 发布日期：2026年1月1日
 
@@ -2275,7 +2276,8 @@ steamdeck工具箱 v1.3.8
 1. 点击左侧分类，右侧显示功能列表
 2. 点击功能将弹出独立任务窗口
 3. 所有交互在终端内进行
-""")
+"""
+        about_textview.get_buffer().set_text(about_text)
         scrolled_about = Gtk.ScrolledWindow()
         scrolled_about.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scrolled_about.set_vexpand(True)
@@ -2612,7 +2614,7 @@ def ensure_vte_installed():
     GLib.child_watch_add(proc.pid, on_vte_install_finished)
 
 # ============================================================================
-# 自动更新检查（改进：延迟执行，更新后仅提示手动重启）
+# 自动更新检查（改进：启动时同步执行，更新完成后退出）
 # ============================================================================
 
 def get_remote_version():
@@ -2641,14 +2643,13 @@ def get_remote_version():
         print(f"检查更新失败: {e}")
         return None
 
-def check_and_prompt_update():
-    """检查更新，如果有新版本则提示用户，并执行更新（不自动重启）"""
+def check_and_handle_update():
+    """检查更新，若有新版本则询问并执行更新。返回 True 表示继续显示主窗口，False 表示已处理并退出。"""
     remote_version = get_remote_version()
     if remote_version is None:
-        return
-
+        return True          # 获取失败，继续启动
     if remote_version == VERSION:
-        return
+        return True
 
     dialog = Gtk.MessageDialog(
         None,
@@ -2660,17 +2661,19 @@ def check_and_prompt_update():
     dialog.format_secondary_text(
         f"当前版本: v{VERSION}\n"
         f"最新版本: v{remote_version}\n\n"
-        "是否立即更新？\n"
-        "（更新将下载新版本，完成后请手动重启程序）"
+        "是否立即更新？\n（更新将下载新版本，完成后请手动重启程序）"
     )
     response = dialog.run()
     dialog.destroy()
 
     if response == Gtk.ResponseType.YES:
-        perform_update()
+        perform_update(remote_version)
+        return False
+    else:
+        return True
 
-def perform_update():
-    """执行更新：下载新脚本并覆盖，完成后提示手动重启（不自动退出）"""
+def perform_update(remote_version):
+    """执行更新：下载新脚本并覆盖，完成后提示手动重启，点击确定后退出程序"""
     import urllib.request
 
     try:
@@ -2705,16 +2708,17 @@ def perform_update():
             f.write(new_content)
         os.chmod(current_path, 0o755)
 
-        # 更新完成，提示手动重启
+        # 显示完成对话框，点击确定后退出程序
         restart_dialog = Gtk.MessageDialog(
             None,
             Gtk.DialogFlags.MODAL,
             Gtk.MessageType.INFO,
             Gtk.ButtonsType.OK,
-            f"✅ 更新完成！\n\n新版本 v{get_remote_version()} 已下载。\n请手动关闭本程序并重新启动以应用更新。"
+            f"✅ 更新完成！\n\n新版本 v{remote_version} 已下载。\n请手动关闭本程序并重新启动以应用更新。"
         )
+        # 点击确定时退出主循环并退出进程
+        restart_dialog.connect("response", lambda dialog, resp: Gtk.main_quit() or sys.exit(0))
         restart_dialog.run()
-        restart_dialog.destroy()
 
     except Exception as e:
         error_dialog = Gtk.MessageDialog(
@@ -2728,20 +2732,26 @@ def perform_update():
         )
         error_dialog.run()
         error_dialog.destroy()
+        # 更新失败后继续显示主窗口？此处维持退出，避免状态异常
+        sys.exit(1)
 
 # ============================================================================
 # 启动
 # ============================================================================
 
 def main():
+    # 启动前先检查更新（同步，带超时）
+    if not check_and_handle_update():
+        return   # 更新流程已处理并退出
+
+    # 无更新或用户取消，正常显示主窗口
     window = MainWindow()
     window.connect("destroy", Gtk.main_quit)
     window.show_all()
 
+    # 桌面快捷方式、VTE检测等后台任务（不影响启动）
     GLib.idle_add(ensure_desktop_shortcut)
     GLib.idle_add(ensure_vte_installed)
-    # 延迟2秒执行更新检查，确保窗口完全显示
-    GLib.timeout_add_seconds(2, check_and_prompt_update)
 
     Gtk.main()
 
