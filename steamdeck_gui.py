@@ -48,7 +48,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.3.9"
+VERSION="1.3.8"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -2612,7 +2612,7 @@ def ensure_vte_installed():
     GLib.child_watch_add(proc.pid, on_vte_install_finished)
 
 # ============================================================================
-# 自动更新检查
+# 自动更新检查（改进：延迟执行，更新后仅提示手动重启）
 # ============================================================================
 
 def get_remote_version():
@@ -2642,7 +2642,7 @@ def get_remote_version():
         return None
 
 def check_and_prompt_update():
-    """检查更新，如果有新版本则提示用户"""
+    """检查更新，如果有新版本则提示用户，并执行更新（不自动重启）"""
     remote_version = get_remote_version()
     if remote_version is None:
         return
@@ -2661,7 +2661,7 @@ def check_and_prompt_update():
         f"当前版本: v{VERSION}\n"
         f"最新版本: v{remote_version}\n\n"
         "是否立即更新？\n"
-        "（更新将下载新版本并自动重启）"
+        "（更新将下载新版本，完成后请手动重启程序）"
     )
     response = dialog.run()
     dialog.destroy()
@@ -2670,7 +2670,7 @@ def check_and_prompt_update():
         perform_update()
 
 def perform_update():
-    """执行更新：下载新脚本并重启"""
+    """执行更新：下载新脚本并覆盖，完成后提示手动重启（不自动退出）"""
     import urllib.request
 
     try:
@@ -2705,19 +2705,16 @@ def perform_update():
             f.write(new_content)
         os.chmod(current_path, 0o755)
 
+        # 更新完成，提示手动重启
         restart_dialog = Gtk.MessageDialog(
             None,
             Gtk.DialogFlags.MODAL,
             Gtk.MessageType.INFO,
             Gtk.ButtonsType.OK,
-            "✅ 更新完成！\n\n程序将自动重启以应用更新。"
+            f"✅ 更新完成！\n\n新版本 v{get_remote_version()} 已下载。\n请手动关闭本程序并重新启动以应用更新。"
         )
         restart_dialog.run()
         restart_dialog.destroy()
-
-        import subprocess
-        subprocess.Popen([sys.executable, current_path])
-        sys.exit(0)
 
     except Exception as e:
         error_dialog = Gtk.MessageDialog(
@@ -2743,7 +2740,8 @@ def main():
 
     GLib.idle_add(ensure_desktop_shortcut)
     GLib.idle_add(ensure_vte_installed)
-    GLib.idle_add(check_and_prompt_update)
+    # 延迟2秒执行更新检查，确保窗口完全显示
+    GLib.timeout_add_seconds(2, check_and_prompt_update)
 
     Gtk.main()
 
