@@ -2758,21 +2758,22 @@ class UpdateCheckWindow(Gtk.Window):
     def on_check_done(self, remote_version):
         """检查完成回调"""
         if remote_version is None:
-            # 网络失败，显示错误并允许进入主界面
+            # 网络失败，显示错误并显示“进入主界面”按钮
             self.label.set_text("检查更新失败，请检查网络连接。")
             self.button.set_visible(True)
             self.button.set_label("进入主界面")
             return
 
         if remote_version == VERSION:
-            # 无更新，显示消息并自动关闭进入主界面
+            # 无更新：显示消息，1.5秒后自动进入主界面（无按钮）
             self.label.set_text(f"当前已是最新版本 (v{VERSION})")
-            # 延迟1.5秒后自动进入主界面
+            self.button.set_visible(False)   # 明确隐藏按钮
             GLib.timeout_add(1500, self.auto_enter_main)
             return
 
-        # 发现新版本，显示询问
+        # 发现新版本：隐藏按钮，仅显示提示文本，然后弹出询问对话框
         self.label.set_text(f"发现新版本 v{remote_version}\n当前版本: v{VERSION}")
+        self.button.set_visible(False)   # 不显示任何按钮
         self.show_update_prompt(remote_version)
 
     def auto_enter_main(self):
