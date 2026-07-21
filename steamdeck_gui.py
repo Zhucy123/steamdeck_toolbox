@@ -2765,10 +2765,10 @@ class UpdateCheckWindow(Gtk.Window):
             return
 
         if remote_version == VERSION:
-            # 无更新：显示消息，1.5秒后自动进入主界面（无按钮）
+            # 无更新：显示消息，0.5秒后自动进入主界面（无按钮）
             self.label.set_text(f"当前已是最新版本 (v{VERSION})")
             self.button.set_visible(False)   # 明确隐藏按钮
-            GLib.timeout_add(1500, self.auto_enter_main)
+            GLib.timeout_add(500, self.auto_enter_main)
             return
 
         # 发现新版本：隐藏按钮，仅显示提示文本，然后弹出询问对话框
@@ -2783,12 +2783,12 @@ class UpdateCheckWindow(Gtk.Window):
         return False  # 只执行一次
 
     def show_update_prompt(self, remote_version):
-        """弹出更新确认对话框"""
+        """弹出更新确认对话框，确保“是”在左，“否”在右"""
         dialog = Gtk.MessageDialog(
             parent=self,
             flags=Gtk.DialogFlags.MODAL,
             type=Gtk.MessageType.QUESTION,
-            buttons=Gtk.ButtonsType.YES_NO,
+            buttons=Gtk.ButtonsType.NONE,
             text=f"发现新版本 v{remote_version}"
         )
         dialog.format_secondary_text(
@@ -2796,21 +2796,27 @@ class UpdateCheckWindow(Gtk.Window):
             f"最新版本: v{remote_version}\n\n"
             "是否立即更新？\n（更新将下载新版本，完成后请手动重启程序）"
         )
-        # 强制按钮顺序：是(左) 否(右)
+
+        # 按顺序添加按钮：先“是”后“否”，确保“是”在左
+        dialog.add_button("是", Gtk.ResponseType.YES)
+        dialog.add_button("否", Gtk.ResponseType.NO)
+
+        # 强制设置按钮顺序（部分 GTK 版本默认顺序可能不一致）
         try:
             dialog.set_alternative_button_order_from_array([Gtk.ResponseType.YES, Gtk.ResponseType.NO])
         except AttributeError:
-            pass
+            try:
+                # 旧版 GTK 兼容
+                dialog.set_alternative_button_order(Gtk.ResponseType.YES, Gtk.ResponseType.NO)
+            except AttributeError:
+                pass
 
         response = dialog.run()
         dialog.destroy()
 
         if response == Gtk.ResponseType.YES:
-            # 执行更新
             perform_update(remote_version, self)
-            # perform_update 会处理完成并退出
         else:
-            # 用户取消更新，关闭当前窗口，打开主窗口
             self.destroy()
             show_main_window()
 
