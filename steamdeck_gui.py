@@ -2206,6 +2206,7 @@ class TaskWindow(Gtk.Window):
 class MainWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title="Steam Deck 工具箱")
+        self.set_icon_name("input-gamepad-symbolic")   # 新增
         self.set_default_size(950, 600)
         self.set_position(Gtk.WindowPosition.CENTER)
 
@@ -2722,6 +2723,7 @@ class UpdateCheckWindow(Gtk.Window):
     """启动时检测更新的窗口，显示检测状态，完成后根据结果决定是否显示主窗口"""
     def __init__(self):
         super().__init__(title="检查更新")
+        self.set_icon_name("input-gamepad-symbolic")   # 新增
         self.set_default_size(400, 150)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_deletable(False)  # 禁止用户关闭，避免状态混乱
@@ -2767,11 +2769,11 @@ class UpdateCheckWindow(Gtk.Window):
             return
 
         if remote_version == VERSION:
-            # 无更新：显示消息，1.5秒后自动进入主界面（无按钮）
+            # 无更新：显示消息，0.3秒后自动进入主界面（无按钮）
             self.label.set_text(f"当前已是最新版本 (v{VERSION})")
             if self.button is not None:
                 self.button.hide()
-            GLib.timeout_add(1500, self.auto_enter_main)
+            GLib.timeout_add(300, self.auto_enter_main)
             return
 
         # 发现新版本：隐藏任何按钮，仅显示提示，然后弹出询问对话框
