@@ -19,6 +19,13 @@ import tempfile
 import shutil
 
 # ============================================================================
+# 版本定义
+# ============================================================================
+VERSION = "1.3.8"
+REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
+VERSION_CHECK_TIMEOUT = 10  # 超时时间（秒）
+
+# ============================================================================
 # 内嵌完整的 Bash 脚本（包含所有功能，无省略）
 # ============================================================================
 BASH_SCRIPT = r'''#!/bin/bash
@@ -41,7 +48,7 @@ SCRIPT_PATH="$(realpath "$0")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.3.8"
+VERSION="1.3.9"
 REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
 
 SYSTEM_TYPE=""
@@ -2520,13 +2527,17 @@ Categories=Utility;
     except Exception as e:
         print(f"创建桌面快捷方式失败: {e}")
 
-def restart_program():
-    """重启当前程序"""
-    os.execv(sys.executable, [sys.executable] + sys.argv)
-
 def on_vte_install_finished(pid, status, user_data):
-    """VTE安装进程结束回调，重启程序"""
-    GLib.idle_add(restart_program)
+    """VTE安装进程结束回调，提示用户手动重启"""
+    dialog = Gtk.MessageDialog(
+        None,
+        Gtk.DialogFlags.MODAL,
+        Gtk.MessageType.INFO,
+        Gtk.ButtonsType.OK,
+        "VTE 安装已完成。\n\n请手动关闭并重新打开本程序以生效。"
+    )
+    dialog.run()
+    dialog.destroy()
 
 def ensure_vte_installed():
     """检测VTE，若未安装则弹窗询问安装"""
@@ -2542,8 +2553,8 @@ def ensure_vte_installed():
     )
     dialog.format_secondary_text(
         "本工具需要 VTE 组件以实现内嵌终端交互。\n"
-        "点击“是”将打开终端窗口执行安装（需要 sudo 密码）。\n"
-        "安装完成后,请重启本程序。"
+        "点击“是”将自动解除只读模式并安装（需要 sudo 密码）。\n"
+        "安装完成后请手动重启本程序。"
     )
     response = dialog.run()
     dialog.destroy()
@@ -2551,7 +2562,32 @@ def ensure_vte_installed():
     if response != Gtk.ResponseType.YES:
         return
 
-    # 查找终端模拟器
+    # 检查并解除只读模式（仅在需要时）
+    try:
+        result = subprocess.run(["steamos-readonly", "status"], capture_output=True, text=True)
+        if "enabled" in result.stdout.lower():
+            subprocess.run(["sudo", "steamos-readonly", "disable"], check=True)
+    except FileNotFoundError:
+        pass
+    except subprocess.CalledProcessError as e:
+        try:
+            result = subprocess.run(["steamos-readonly", "status"], capture_output=True, text=True)
+            if "enabled" in result.stdout.lower():
+                error_dialog = Gtk.MessageDialog(
+                    None,
+                    Gtk.DialogFlags.MODAL,
+                    Gtk.MessageType.ERROR,
+                    Gtk.ButtonsType.OK,
+                    f"解除只读模式失败：{e}\n"
+                    "请手动执行以下命令后重试：\n"
+                    "sudo steamos-readonly disable"
+                )
+                error_dialog.run()
+                error_dialog.destroy()
+                return
+        except:
+            pass
+
     terminal = shutil.which("konsole") or shutil.which("xterm")
     if not terminal:
         error_dialog = Gtk.MessageDialog(
@@ -2559,36 +2595,155 @@ def ensure_vte_installed():
             Gtk.DialogFlags.MODAL,
             Gtk.MessageType.ERROR,
             Gtk.ButtonsType.OK,
-            "未找到终端模拟器，请手动执行：sudo pacman -S vte3"
+            "未找到终端模拟器，请手动执行：\n"
+            "sudo steamos-readonly disable\n"
+            "sudo pacman -S vte3"
         )
         error_dialog.run()
         error_dialog.destroy()
         return
 
-    # 构建命令
     if terminal.endswith("konsole"):
         cmd = [terminal, "-e", "sudo", "pacman", "-S", "--noconfirm", "vte3"]
     else:
         cmd = [terminal, "-hold", "-e", "sudo", "pacman", "-S", "--noconfirm", "vte3"]
 
-    # 启动终端进程
     proc = subprocess.Popen(cmd)
-    # 监控进程退出
     GLib.child_watch_add(proc.pid, on_vte_install_finished)
+
+# ============================================================================
+# 自动更新检查
+# ============================================================================
+
+def get_remote_version():
+    """从 Gitee 获取远程脚本的版本号"""
+    try:
+        import urllib.request
+        import re
+
+        req = urllib.request.Request(
+            REPO_RAW_URL,
+            headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'}
+        )
+
+        with urllib.request.urlopen(req, timeout=VERSION_CHECK_TIMEOUT) as response:
+            content = response.read().decode('utf-8')
+            # 查找 VERSION = "x.x.x" 或 VERSION='x.x.x'
+            match = re.search(r'^VERSION\s*=\s*["\']([0-9.]+)["\']', content, re.MULTILINE)
+            if match:
+                return match.group(1)
+            # 备选：查找 VERSION="x.x.x" (带注释或空格的变体)
+            match = re.search(r'VERSION\s*=\s*["\']([0-9.]+)["\']', content)
+            if match:
+                return match.group(1)
+            return None
+    except Exception as e:
+        print(f"检查更新失败: {e}")
+        return None
+
+def check_and_prompt_update():
+    """检查更新，如果有新版本则提示用户"""
+    remote_version = get_remote_version()
+    if remote_version is None:
+        return
+
+    if remote_version == VERSION:
+        return
+
+    dialog = Gtk.MessageDialog(
+        None,
+        Gtk.DialogFlags.MODAL,
+        Gtk.MessageType.INFO,
+        Gtk.ButtonsType.YES_NO,
+        f"发现新版本 v{remote_version}"
+    )
+    dialog.format_secondary_text(
+        f"当前版本: v{VERSION}\n"
+        f"最新版本: v{remote_version}\n\n"
+        "是否立即更新？\n"
+        "（更新将下载新版本并自动重启）"
+    )
+    response = dialog.run()
+    dialog.destroy()
+
+    if response == Gtk.ResponseType.YES:
+        perform_update()
+
+def perform_update():
+    """执行更新：下载新脚本并重启"""
+    import urllib.request
+
+    try:
+        progress_dialog = Gtk.MessageDialog(
+            None,
+            Gtk.DialogFlags.MODAL,
+            Gtk.MessageType.INFO,
+            Gtk.ButtonsType.NONE,
+            "正在下载更新..."
+        )
+        progress_dialog.set_default_size(300, 100)
+        progress_dialog.show_all()
+        Gtk.main_iteration()
+
+        req = urllib.request.Request(
+            REPO_RAW_URL,
+            headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'}
+        )
+        with urllib.request.urlopen(req, timeout=30) as response:
+            new_content = response.read().decode('utf-8')
+
+        progress_dialog.destroy()
+
+        current_path = os.path.abspath(sys.argv[0])
+        backup_path = current_path + ".bak"
+        try:
+            shutil.copy2(current_path, backup_path)
+        except:
+            pass
+
+        with open(current_path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        os.chmod(current_path, 0o755)
+
+        restart_dialog = Gtk.MessageDialog(
+            None,
+            Gtk.DialogFlags.MODAL,
+            Gtk.MessageType.INFO,
+            Gtk.ButtonsType.OK,
+            "✅ 更新完成！\n\n程序将自动重启以应用更新。"
+        )
+        restart_dialog.run()
+        restart_dialog.destroy()
+
+        import subprocess
+        subprocess.Popen([sys.executable, current_path])
+        sys.exit(0)
+
+    except Exception as e:
+        error_dialog = Gtk.MessageDialog(
+            None,
+            Gtk.DialogFlags.MODAL,
+            Gtk.MessageType.ERROR,
+            Gtk.ButtonsType.OK,
+            f"更新失败：{e}\n\n"
+            "请手动从以下地址下载最新版本：\n"
+            f"{REPO_RAW_URL}"
+        )
+        error_dialog.run()
+        error_dialog.destroy()
 
 # ============================================================================
 # 启动
 # ============================================================================
 
 def main():
-    # 先创建并显示主窗口
     window = MainWindow()
     window.connect("destroy", Gtk.main_quit)
     window.show_all()
 
-    # 主界面显示后，延迟执行检测操作（避免阻塞界面响应）
     GLib.idle_add(ensure_desktop_shortcut)
     GLib.idle_add(ensure_vte_installed)
+    GLib.idle_add(check_and_prompt_update)
 
     Gtk.main()
 
