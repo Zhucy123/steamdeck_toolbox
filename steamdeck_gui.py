@@ -2737,10 +2737,9 @@ class UpdateCheckWindow(Gtk.Window):
         self.label.set_justify(Gtk.Justification.CENTER)
         vbox.pack_start(self.label, True, True, 0)
 
-        self.button = Gtk.Button(label="确定")  # 初始不可见
-        self.button.connect("clicked", self.on_button_clicked)
-        self.button.set_visible(False)
-        vbox.pack_start(self.button, False, False, 0)
+        # 不预先创建按钮，只在网络失败时动态添加
+        self.button = None
+        self.vbox = vbox
 
         self.show_all()
 
@@ -2758,29 +2757,34 @@ class UpdateCheckWindow(Gtk.Window):
     def on_check_done(self, remote_version):
         """检查完成回调"""
         if remote_version is None:
-            # 网络失败，显示错误并显示“进入主界面”按钮
+            # 网络失败：显示错误并创建“进入主界面”按钮
             self.label.set_text("检查更新失败，请检查网络连接。")
-            self.button.set_visible(True)
-            self.button.set_label("进入主界面")
+            if self.button is None:
+                self.button = Gtk.Button(label="进入主界面")
+                self.button.connect("clicked", self.on_button_clicked)
+                self.vbox.pack_start(self.button, False, False, 0)
+            self.button.show()
             return
 
         if remote_version == VERSION:
-            # 无更新：显示消息，0.5秒后自动进入主界面（无按钮）
+            # 无更新：显示消息，1.5秒后自动进入主界面（无按钮）
             self.label.set_text(f"当前已是最新版本 (v{VERSION})")
-            self.button.set_visible(False)   # 明确隐藏按钮
-            GLib.timeout_add(500, self.auto_enter_main)
+            if self.button is not None:
+                self.button.hide()
+            GLib.timeout_add(1500, self.auto_enter_main)
             return
 
-        # 发现新版本：隐藏按钮，仅显示提示文本，然后弹出询问对话框
+        # 发现新版本：隐藏任何按钮，仅显示提示，然后弹出询问对话框
         self.label.set_text(f"发现新版本 v{remote_version}\n当前版本: v{VERSION}")
-        self.button.set_visible(False)   # 不显示任何按钮
+        if self.button is not None:
+            self.button.hide()
         self.show_update_prompt(remote_version)
 
     def auto_enter_main(self):
         """自动关闭窗口并进入主界面"""
         self.destroy()
         show_main_window()
-        return False  # 只执行一次
+        return False
 
     def show_update_prompt(self, remote_version):
         """弹出更新确认对话框，确保“是”在左，“否”在右"""
@@ -2801,12 +2805,11 @@ class UpdateCheckWindow(Gtk.Window):
         dialog.add_button("是", Gtk.ResponseType.YES)
         dialog.add_button("否", Gtk.ResponseType.NO)
 
-        # 强制设置按钮顺序（部分 GTK 版本默认顺序可能不一致）
+        # 强制设置按钮顺序（部分 GTK 版本可能不支持，但无副作用）
         try:
             dialog.set_alternative_button_order_from_array([Gtk.ResponseType.YES, Gtk.ResponseType.NO])
         except AttributeError:
             try:
-                # 旧版 GTK 兼容
                 dialog.set_alternative_button_order(Gtk.ResponseType.YES, Gtk.ResponseType.NO)
             except AttributeError:
                 pass
@@ -2821,7 +2824,7 @@ class UpdateCheckWindow(Gtk.Window):
             show_main_window()
 
     def on_button_clicked(self, button):
-        """如果用户点击“进入主界面”按钮，则关闭窗口并打开主窗口"""
+        """用户点击“进入主界面”按钮，关闭窗口并打开主窗口"""
         self.destroy()
         show_main_window()
 
