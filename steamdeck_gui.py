@@ -17,6 +17,8 @@ import sys
 import re
 import tempfile
 import shutil
+import threading
+import urllib.request
 
 # ============================================================================
 # 版本定义
@@ -2614,27 +2616,21 @@ def ensure_vte_installed():
     GLib.child_watch_add(proc.pid, on_vte_install_finished)
 
 # ============================================================================
-# 自动更新检查（改进：启动时同步执行，更新完成后退出）
+# 更新相关函数
 # ============================================================================
 
 def get_remote_version():
     """从 Gitee 获取远程脚本的版本号"""
     try:
-        import urllib.request
-        import re
-
         req = urllib.request.Request(
             REPO_RAW_URL,
             headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'}
         )
-
         with urllib.request.urlopen(req, timeout=VERSION_CHECK_TIMEOUT) as response:
             content = response.read().decode('utf-8')
-            # 查找 VERSION = "x.x.x" 或 VERSION='x.x.x'
             match = re.search(r'^VERSION\s*=\s*["\']([0-9.]+)["\']', content, re.MULTILINE)
             if match:
                 return match.group(1)
-            # 备选：查找 VERSION="x.x.x" (带注释或空格的变体)
             match = re.search(r'VERSION\s*=\s*["\']([0-9.]+)["\']', content)
             if match:
                 return match.group(1)
@@ -2643,50 +2639,20 @@ def get_remote_version():
         print(f"检查更新失败: {e}")
         return None
 
-def check_and_handle_update():
-    """检查更新，若有新版本则询问并执行更新。返回 True 表示继续显示主窗口，False 表示已处理并退出。"""
-    remote_version = get_remote_version()
-    if remote_version is None:
-        return True          # 获取失败，继续启动
-    if remote_version == VERSION:
-        return True
-
-    dialog = Gtk.MessageDialog(
-        None,
-        Gtk.DialogFlags.MODAL,
-        Gtk.MessageType.INFO,
-        Gtk.ButtonsType.YES_NO,
-        f"发现新版本 v{remote_version}"
-    )
-    dialog.format_secondary_text(
-        f"当前版本: v{VERSION}\n"
-        f"最新版本: v{remote_version}\n\n"
-        "是否立即更新？\n（更新将下载新版本，完成后请手动重启程序）"
-    )
-    response = dialog.run()
-    dialog.destroy()
-
-    if response == Gtk.ResponseType.YES:
-        perform_update(remote_version)
-        return False
-    else:
-        return True
-
-def perform_update(remote_version):
+def perform_update(remote_version, parent_window=None):
     """执行更新：下载新脚本并覆盖，完成后提示手动重启，点击确定后退出程序"""
-    import urllib.request
-
     try:
         progress_dialog = Gtk.MessageDialog(
-            None,
-            Gtk.DialogFlags.MODAL,
-            Gtk.MessageType.INFO,
-            Gtk.ButtonsType.NONE,
-            "正在下载更新..."
+            parent=parent_window,
+            flags=Gtk.DialogFlags.MODAL,
+            type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.NONE,
+            text="正在下载更新..."
         )
         progress_dialog.set_default_size(300, 100)
         progress_dialog.show_all()
-        Gtk.main_iteration()
+        while Gtk.events_pending():
+            Gtk.main_iteration()
 
         req = urllib.request.Request(
             REPO_RAW_URL,
@@ -2708,51 +2674,157 @@ def perform_update(remote_version):
             f.write(new_content)
         os.chmod(current_path, 0o755)
 
-        # 显示完成对话框，点击确定后退出程序
+        # 显示完成对话框，文字已修改
         restart_dialog = Gtk.MessageDialog(
-            None,
-            Gtk.DialogFlags.MODAL,
-            Gtk.MessageType.INFO,
-            Gtk.ButtonsType.OK,
-            f"✅ 更新完成！\n\n新版本 v{remote_version} 已下载。\n请手动关闭本程序并重新启动以应用更新。"
+            parent=parent_window,
+            flags=Gtk.DialogFlags.MODAL,
+            type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.OK,
+            text="✅ 更新完成！"
         )
-        # 点击确定时退出主循环并退出进程
+        restart_dialog.format_secondary_text(
+            f"新版本 v{remote_version} 已下载。\n点击下方按钮关闭并重新打开Deck工具箱。"
+        )
         restart_dialog.connect("response", lambda dialog, resp: Gtk.main_quit() or sys.exit(0))
         restart_dialog.run()
 
     except Exception as e:
         error_dialog = Gtk.MessageDialog(
-            None,
-            Gtk.DialogFlags.MODAL,
-            Gtk.MessageType.ERROR,
-            Gtk.ButtonsType.OK,
-            f"更新失败：{e}\n\n"
+            parent=parent_window,
+            flags=Gtk.DialogFlags.MODAL,
+            type=Gtk.MessageType.ERROR,
+            buttons=Gtk.ButtonsType.OK,
+            text=f"更新失败：{e}"
+        )
+        error_dialog.format_secondary_text(
             "请手动从以下地址下载最新版本：\n"
             f"{REPO_RAW_URL}"
         )
         error_dialog.run()
         error_dialog.destroy()
-        # 更新失败后继续显示主窗口？此处维持退出，避免状态异常
-        sys.exit(1)
+        if parent_window:
+            parent_window.destroy()
+        show_main_window()
+
+def show_main_window():
+    """创建并显示主窗口"""
+    window = MainWindow()
+    window.connect("destroy", Gtk.main_quit)
+    window.show_all()
+    GLib.idle_add(ensure_desktop_shortcut)
+    GLib.idle_add(ensure_vte_installed)
+
+# ============================================================================
+# 更新检查窗口类
+# ============================================================================
+
+class UpdateCheckWindow(Gtk.Window):
+    """启动时检测更新的窗口，显示检测状态，完成后根据结果决定是否显示主窗口"""
+    def __init__(self):
+        super().__init__(title="检查更新")
+        self.set_default_size(400, 150)
+        self.set_position(Gtk.WindowPosition.CENTER)
+        self.set_deletable(False)  # 禁止用户关闭，避免状态混乱
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        vbox.set_margin_top(20)
+        vbox.set_margin_bottom(20)
+        vbox.set_margin_start(20)
+        vbox.set_margin_end(20)
+        self.add(vbox)
+
+        self.label = Gtk.Label(label="正在检查更新...")
+        self.label.set_justify(Gtk.Justification.CENTER)
+        vbox.pack_start(self.label, True, True, 0)
+
+        self.button = Gtk.Button(label="确定")  # 初始不可见
+        self.button.connect("clicked", self.on_button_clicked)
+        self.button.set_visible(False)
+        vbox.pack_start(self.button, False, False, 0)
+
+        self.show_all()
+
+        # 延迟启动检查，避免界面未完全渲染
+        GLib.timeout_add(200, self.perform_check)
+
+    def perform_check(self):
+        """执行异步检查更新"""
+        def check_thread():
+            remote_version = get_remote_version()
+            GLib.idle_add(self.on_check_done, remote_version)
+        threading.Thread(target=check_thread, daemon=True).start()
+        return False  # 只执行一次
+
+    def on_check_done(self, remote_version):
+        """检查完成回调"""
+        if remote_version is None:
+            # 网络失败，显示错误并允许进入主界面
+            self.label.set_text("检查更新失败，请检查网络连接。")
+            self.button.set_visible(True)
+            self.button.set_label("进入主界面")
+            return
+
+        if remote_version == VERSION:
+            # 无更新，显示消息并自动关闭进入主界面
+            self.label.set_text(f"当前已是最新版本 (v{VERSION})")
+            # 延迟1.5秒后自动进入主界面
+            GLib.timeout_add(1500, self.auto_enter_main)
+            return
+
+        # 发现新版本，显示询问
+        self.label.set_text(f"发现新版本 v{remote_version}\n当前版本: v{VERSION}")
+        self.show_update_prompt(remote_version)
+
+    def auto_enter_main(self):
+        """自动关闭窗口并进入主界面"""
+        self.destroy()
+        show_main_window()
+        return False  # 只执行一次
+
+    def show_update_prompt(self, remote_version):
+        """弹出更新确认对话框"""
+        dialog = Gtk.MessageDialog(
+            parent=self,
+            flags=Gtk.DialogFlags.MODAL,
+            type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text=f"发现新版本 v{remote_version}"
+        )
+        dialog.format_secondary_text(
+            f"当前版本: v{VERSION}\n"
+            f"最新版本: v{remote_version}\n\n"
+            "是否立即更新？\n（更新将下载新版本，完成后请手动重启程序）"
+        )
+        # 强制按钮顺序：是(左) 否(右)
+        try:
+            dialog.set_alternative_button_order_from_array([Gtk.ResponseType.YES, Gtk.ResponseType.NO])
+        except AttributeError:
+            pass
+
+        response = dialog.run()
+        dialog.destroy()
+
+        if response == Gtk.ResponseType.YES:
+            # 执行更新
+            perform_update(remote_version, self)
+            # perform_update 会处理完成并退出
+        else:
+            # 用户取消更新，关闭当前窗口，打开主窗口
+            self.destroy()
+            show_main_window()
+
+    def on_button_clicked(self, button):
+        """如果用户点击“进入主界面”按钮，则关闭窗口并打开主窗口"""
+        self.destroy()
+        show_main_window()
 
 # ============================================================================
 # 启动
 # ============================================================================
 
 def main():
-    # 启动前先检查更新（同步，带超时）
-    if not check_and_handle_update():
-        return   # 更新流程已处理并退出
-
-    # 无更新或用户取消，正常显示主窗口
-    window = MainWindow()
-    window.connect("destroy", Gtk.main_quit)
-    window.show_all()
-
-    # 桌面快捷方式、VTE检测等后台任务（不影响启动）
-    GLib.idle_add(ensure_desktop_shortcut)
-    GLib.idle_add(ensure_vte_installed)
-
+    # 先显示更新检测窗口（异步检测），不直接进入主界面
+    update_win = UpdateCheckWindow()
     Gtk.main()
 
 if __name__ == "__main__":
