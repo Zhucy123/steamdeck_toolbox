@@ -31,7 +31,7 @@ VERSION_CHECK_TIMEOUT = 10  # 超时时间（秒）
 # 内嵌完整的 Bash 脚本（包含所有功能，无省略）
 # ============================================================================
 BASH_SCRIPT = r'''#!/bin/bash
-trap 'echo -e "\n${YELLOW}用户取消操作，退出工具箱。${NC}"; exit 0' INT TERM
+trap 'echo -e "\n${YELLOW}用户取消操作，关闭窗口。${NC}"; exit 0' INT TERM
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
