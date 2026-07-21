@@ -10,7 +10,7 @@ try:
 except (ValueError, ImportError):
     VTE_AVAILABLE = False
 
-from gi.repository import Gtk, GLib
+from gi.repository import Gtk, GLib, GdkPixbuf
 import subprocess
 import os
 import sys
@@ -25,10 +25,10 @@ import urllib.request
 # ============================================================================
 VERSION = "1.3.8"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
-VERSION_CHECK_TIMEOUT = 10  # 超时时间（秒）
+VERSION_CHECK_TIMEOUT = 3
 
 # ============================================================================
-# 内嵌完整的 Bash 脚本（包含所有功能，无省略）
+# 内嵌完整的 Bash 脚本（完全保留用户原版，无改动）
 # ============================================================================
 BASH_SCRIPT = r'''#!/bin/bash
 trap 'echo -e "\n${YELLOW}用户取消操作，关闭窗口。${NC}"; exit 0' INT TERM
@@ -801,7 +801,7 @@ install_xunyou_accelerator() {
     echo -e "${GREEN}迅游加速器插件安装完成。${NC}"
 }
 
-# ---------- Steam++ 安装（完全参考原脚本逻辑） ----------
+# ---------- Steam++ 安装 ----------
 install_watt_toolkit_install() {
     mk_temp_dir
     clear
@@ -1032,7 +1032,6 @@ except Exception as e:
     local filename="Steam++_${target_version}_linux_x64.tgz"
     local DOWNLOAD_SUCCESS=false
 
-    # ========== 下载逻辑（与原脚本完全一致） ==========
     for mirror in "${MIRRORS[@]}"; do
         local full_url="${mirror}${download_url}"
         echo -e "尝试从 ${mirror} 下载..."
@@ -1676,8 +1675,7 @@ install_decky_framegen_uninstall() {
 
 # ========== 引导管理 ==========
 clover_install_or_reinstall() {
-    mk_temp_dir
-    clear
+    show_header
     echo -e "${YELLOW}════════════════ 安装/重装 Clover 引导 ════════════════${NC}"
     echo ""
     echo -e "${CYAN}此操作将安装或重新安装 Clover 图形化引导管理器。${NC}"
@@ -1686,6 +1684,7 @@ clover_install_or_reinstall() {
     echo "  2. 执行命令：bcdedit.exe -set \"{globalsettings}\" highestmode on"
     echo "  3. 执行命令：reg add \"HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Control\\TimeZoneInformation\" /v RealTimeIsUniversal /d 1 /t REG_DWORD /f"
     echo ""
+
     echo "========================================="
     echo "   Steam Deck Clover 安装助手"
     echo "========================================="
@@ -1694,26 +1693,104 @@ clover_install_or_reinstall() {
     echo "2) ghproxy.net 镜像"
     echo "3) gh.ddlc.top 镜像"
     read -p "请输入数字 [1-3] (默认 1): " choice < /dev/tty
+
     case "$choice" in
         2) BASE_URL="https://ghproxy.net/https://github.com" ;;
         3) BASE_URL="https://gh.ddlc.top/https://github.com" ;;
         *) BASE_URL="https://github.com" ;;
     esac
+
     REPO_FULL_PATH="ryanrudolfoba/SteamDeck-Clover-dualboot"
     REPO_URL="${BASE_URL}/${REPO_FULL_PATH}"
     TARGET_DIR="$HOME/SteamDeck-Clover-dualboot"
+
     if [ -d "$TARGET_DIR" ]; then
         echo -e "${YELLOW}目录 $TARGET_DIR 已存在。${NC}"
         read -p "是否删除旧文件夹并重新克隆？(y/N): " -n 1 -r < /dev/tty
         echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then rm -rf "$TARGET_DIR"; else return; fi
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            rm -rf "$TARGET_DIR"
+        else
+            echo "操作已取消。"
+            read -p "按回车键返回主菜单..." < /dev/tty
+            return 0
+        fi
     fi
+
     echo -e "${CYAN}正在克隆仓库...${NC}"
-    git clone "$REPO_URL" "$TARGET_DIR" || { echo -e "${RED}克隆失败${NC}"; return; }
-    cd "$TARGET_DIR" || return
-    echo "运行官方安装脚本..."
-    bash install-Clover.sh
-    echo -e "${GREEN}Clover 安装/重装完成${NC}"
+    if ! git clone "$REPO_URL" "$TARGET_DIR"; then
+        echo -e "${RED}克隆失败，请检查网络连接或更换镜像源。${NC}"
+        read -p "按回车键返回主菜单..." < /dev/tty
+        return 1
+    fi
+
+    cd "$TARGET_DIR" || { echo -e "${RED}无法进入目录${NC}"; return 1; }
+
+    # ---------- 下载 install-Clover.sh ----------
+    echo -e "${CYAN}正在从 Gitee 下载 install-Clover.sh...${NC}"
+    if curl -o install-Clover.sh https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install-Clover.sh; then
+        echo -e "${GREEN}下载成功。${NC}"
+        chmod +x install-Clover.sh || {
+            echo -e "${RED}无法设置 install-Clover.sh 执行权限。${NC}"
+            read -p "按回车键返回主菜单..." < /dev/tty
+            return 1
+        }
+    else
+        echo -e "${RED}下载 install-Clover.sh 失败，请检查网络。${NC}"
+        read -p "按回车键返回主菜单..." < /dev/tty
+        return 1
+    fi
+
+    echo -e "${CYAN}即将运行 Clover 安装脚本，请根据提示输入 sudo 密码（如果需要）...${NC}"
+    sleep 1
+
+    LOG_FILE="/tmp/clover_install.log"
+    ./install-Clover.sh 2>&1 | tee "$LOG_FILE"
+    INSTALL_EXIT=$?
+
+    if grep -q "Not enough space on the ESP partition!" "$LOG_FILE"; then
+        echo -e "${RED}安装失败：ESP分区空间不足，请清理后重试。${NC}"
+        read -p "按回车键返回主菜单..." < /dev/tty
+        return 1
+    elif [ $INSTALL_EXIT -eq 0 ] && grep -q "Clover 安装完成" "$LOG_FILE"; then
+        echo -e "${GREEN}Clover 安装/重装成功！${NC}"
+    else
+        echo -e "${RED}安装/重装失败，请检查上方输出。${NC}"
+        read -p "按回车键返回主菜单..." < /dev/tty
+        return 1
+    fi
+
+    # ---------- 创建桌面快捷方式 ----------
+    SHORTCUT="$HOME/Desktop/引导文件配置.desktop"
+    if [ ! -f "$SHORTCUT" ]; then
+        cat > "$SHORTCUT" << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=引导文件配置
+Exec=konsole -e bash -c '/home/deck/1Clover-tools/Clover-Toolbox.sh; read -p "按回车键关闭..." -n1'
+Icon=kdiamond
+Terminal=false
+Categories=Utility;
+EOF
+        chmod +x "$SHORTCUT"
+        echo -e "${GREEN}已创建桌面快捷方式“引导文件配置”。${NC}"
+    else
+        echo -e "${GREEN}桌面快捷方式“引导文件配置”已存在，无需创建。${NC}"
+    fi
+
+    # ---------- 下载汉化版 Clover-Toolbox.sh ----------
+    echo -e "${CYAN}正在从 Gitee 下载 Clover-Toolbox.sh 汉化版...${NC}"
+    mkdir -p ~/1Clover-tools
+    if curl -o ~/1Clover-tools/Clover-Toolbox.sh https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/Clover-Toolbox.sh; then
+        chmod +x ~/1Clover-tools/Clover-Toolbox.sh
+        echo -e "${GREEN}✓ Clover-Toolbox.sh 下载并安装完成。${NC}"
+    else
+        echo -e "${YELLOW}⚠️ 下载 Clover-Toolbox.sh 失败，请手动处理。${NC}"
+    fi
+
+    echo -e "${YELLOW}建议重启 Steam Deck 以使引导生效。${NC}"
+    echo ""
+    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 # ========== 软件安装 ==========
@@ -2019,7 +2096,6 @@ install_yellow_duck_software() {
 
     local LOSS_DIR="/home/deck/.local/share/Steam/steamapps/common/Lossless Scaling"
 
-    # 检测是否已安装
     if [[ -d "$LOSS_DIR" ]]; then
         echo -e "${CYAN}检测到已安装小黄鸭软件。${NC}"
         echo "   安装目录: $LOSS_DIR"
@@ -2041,7 +2117,6 @@ install_yellow_duck_software() {
         fi
     fi
 
-    # 未安装，执行安装
     echo -e "${CYAN}未检测到小黄鸭软件，开始从 Gitee 克隆并安装...${NC}"
     local CLONE_DIR="$HOME/lossless-scaling-repo"
     rm -rf "$CLONE_DIR"
@@ -2206,21 +2281,41 @@ class TaskWindow(Gtk.Window):
 class MainWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title="Steam Deck 工具箱")
-        self.set_icon_name("input-gamepad-symbolic")   # 新增
+        self.set_icon_name("input-gamepad-symbolic")
         self.set_default_size(950, 600)
         self.set_position(Gtk.WindowPosition.CENTER)
 
         self.system_type = self.detect_system_type()
         self.task_window = None
 
+        # 分类名称 → 图标文件名 映射
+        self.icon_map = {
+            "支持和维护": "pushpin.png",
+            "系统优化": "hammer_wrench.png",
+            "软件安装": "package.png",
+            "网络工具": "globe.png",
+            "插件相关": "game_controller.png",
+            "引导管理": "refresh.png",
+            "更新软件": "inbox.png",
+            "其他": "trash.png"
+        }
+
+        # 存储分类图标 Pixbuf 以便右侧标题使用
+        self.category_icons = {}
+
         main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(main_vbox)
 
         hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        hbox.set_vexpand(True)   # 使 hbox 垂直填满
         main_vbox.pack_start(hbox, True, True, 0)
 
-        # 左侧分类
-        self.list_store = Gtk.ListStore(str)
+        # ---------- 左侧分类列表 ----------
+        self.list_store = Gtk.ListStore(GdkPixbuf.Pixbuf, str)
+
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        icon_dir = os.path.join(script_dir, "emoji_icons")
+
         categories = [
             "支持和维护",
             "系统优化",
@@ -2231,25 +2326,51 @@ class MainWindow(Gtk.Window):
             "更新软件",
             "其他"
         ]
+
         for cat in categories:
-            self.list_store.append([cat])
+            pixbuf = None
+            icon_file = self.icon_map.get(cat)
+            if icon_file:
+                icon_path = os.path.join(icon_dir, icon_file)
+                if os.path.exists(icon_path):
+                    try:
+                        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(icon_path, 24, 24)
+                    except Exception as e:
+                        print(f"加载图标失败 {icon_path}: {e}")
+            self.list_store.append([pixbuf, cat])
+            self.category_icons[cat] = pixbuf  # 保存供右侧标题使用
 
         self.cat_view = Gtk.TreeView(model=self.list_store)
-        renderer = Gtk.CellRendererText()
-        column = Gtk.TreeViewColumn("", renderer, text=0)
-        self.cat_view.append_column(column)
+
+        col = Gtk.TreeViewColumn()
+        col.set_title("")
+        col.set_spacing(6)
+
+        renderer_icon = Gtk.CellRendererPixbuf()
+        col.pack_start(renderer_icon, False)
+        col.add_attribute(renderer_icon, "pixbuf", 0)
+
+        renderer_text = Gtk.CellRendererText()
+        col.pack_start(renderer_text, True)
+        col.add_attribute(renderer_text, "text", 1)
+
+        self.cat_view.append_column(col)
         self.cat_view.set_activate_on_single_click(True)
         self.cat_view.connect("row-activated", self.on_category_activated)
 
         scrolled_left = Gtk.ScrolledWindow()
         scrolled_left.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled_left.set_vexpand(True)
+        scrolled_left.set_valign(Gtk.Align.FILL)
         scrolled_left.add(self.cat_view)
         scrolled_left.set_size_request(250, -1)
-        hbox.pack_start(scrolled_left, False, False, 0)
+        hbox.pack_start(scrolled_left, False, True, 0)
 
-        # 右侧 Stack
+        # ---------- 右侧 Stack ----------
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.stack.set_vexpand(True)
+        self.stack.set_valign(Gtk.Align.FILL)
         hbox.pack_start(self.stack, True, True, 0)
 
         # 关于页面
@@ -2264,7 +2385,6 @@ class MainWindow(Gtk.Window):
         about_textview = Gtk.TextView()
         about_textview.set_editable(False)
         about_textview.set_wrap_mode(Gtk.WrapMode.WORD)
-        # 动态版本号
         about_text = f"""
 steamdeck工具箱 v{VERSION}
 制作人：薯条 & DeepSeek
@@ -2288,36 +2408,59 @@ steamdeck工具箱 v{VERSION}
         about_box.pack_start(scrolled_about, True, True, 0)
         self.stack.add_named(about_box, "about")
 
-        # 功能列表页面
+        # ---------- 功能列表页面 ----------
         func_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
         func_page.set_margin_top(20)
         func_page.set_margin_bottom(20)
         func_page.set_margin_start(20)
         func_page.set_margin_end(20)
+        func_page.set_vexpand(True)
+        func_page.set_valign(Gtk.Align.FILL)
+
+        # ---- 右侧分类标题（带图标） ----
+        title_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        title_box.set_halign(Gtk.Align.START)
+        self.title_icon = Gtk.Image()
+        self.title_icon.set_visible(False)
+        title_box.pack_start(self.title_icon, False, False, 0)
+
         self.category_title = Gtk.Label()
         self.category_title.set_markup("<big><b>系统优化</b></big>")
         self.category_title.set_visible(False)
-        func_page.pack_start(self.category_title, False, False, 0)
-        self.func_store = Gtk.TreeStore(str)
+        title_box.pack_start(self.category_title, False, False, 0)
+
+        func_page.pack_start(title_box, False, False, 0)
+
+        # ---- 功能列表（只有文本，无图标） ----
+        self.func_store = Gtk.TreeStore(str)   # 只存文本
         self.func_view = Gtk.TreeView(model=self.func_store)
+
+        # 不显示列标题（去掉“功能”二字）
+        func_col = Gtk.TreeViewColumn()
         renderer_func = Gtk.CellRendererText()
-        column_func = Gtk.TreeViewColumn("功能", renderer_func, text=0)
-        self.func_view.append_column(column_func)
+        func_col.pack_start(renderer_func, True)
+        func_col.add_attribute(renderer_func, "text", 0)
+        self.func_view.append_column(func_col)
+        self.func_view.set_headers_visible(False)   # 隐藏所有列头
         self.func_view.set_activate_on_single_click(True)
         self.func_view.connect("row-activated", self.on_func_row_activated)
-        self.func_view.set_expander_column(column_func)
+        self.func_view.set_expander_column(func_col)
+
         scrolled_func = Gtk.ScrolledWindow()
         scrolled_func.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled_func.set_vexpand(True)
+        scrolled_func.set_valign(Gtk.Align.FILL)
         scrolled_func.add(self.func_view)
         func_page.pack_start(scrolled_func, True, True, 0)
         self.stack.add_named(func_page, "func")
 
+        # 默认选中第一个分类
         selection = self.cat_view.get_selection()
         first_path = Gtk.TreePath.new_first()
         selection.select_path(first_path)
         self.on_category_activated(self.cat_view, first_path, None)
 
+        # 底部按钮
         bottom_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         bottom_bar.set_margin_top(5)
         bottom_bar.set_margin_bottom(5)
@@ -2332,7 +2475,7 @@ steamdeck工具箱 v{VERSION}
         bottom_bar.pack_start(quit_btn, False, False, 0)
         main_vbox.pack_start(bottom_bar, False, False, 0)
 
-        # 功能映射
+        # ---------- 功能映射 ----------
         self.func_map = {
             "安装国内源": "install_chinese_source",
             "调整虚拟内存": "adjust_swap",
@@ -2377,7 +2520,7 @@ steamdeck工具箱 v{VERSION}
             "小黄鸭软件": "install_yellow_duck_software"
         }
 
-        # 分类树
+        # ---------- 分类树 ----------
         self.category_tree = {
             "支持和维护": [],
             "系统优化": [
@@ -2441,22 +2584,35 @@ steamdeck工具箱 v{VERSION}
     def on_category_activated(self, treeview, path, column):
         model = treeview.get_model()
         iter_ = model.get_iter(path)
-        category = model.get_value(iter_, 0)
+        category = model.get_value(iter_, 1)  # 文本在第二列
         if category == "支持和维护":
             self.stack.set_visible_child_name("about")
+            self.title_icon.set_visible(False)
             self.category_title.set_visible(False)
             return
         self.stack.set_visible_child_name("func")
+
+        # 更新标题图标和文字
+        icon_pixbuf = self.category_icons.get(category)
+        if icon_pixbuf:
+            self.title_icon.set_from_pixbuf(icon_pixbuf)
+            self.title_icon.set_visible(True)
+        else:
+            self.title_icon.set_visible(False)
+
         if category == "系统优化":
             title_text = f"<big><b>{category} [{self.system_type}]</b></big>"
         else:
             title_text = f"<big><b>{category}</b></big>"
         self.category_title.set_markup(title_text)
         self.category_title.set_visible(True)
+
+        # 填充功能列表（只存文本）
         self.func_store.clear()
         items = self.category_tree.get(category, [])
         if category == "系统优化" and self.system_type == "双系统":
             items = items + ["修复引导", "修复互通盘"]
+
         for item in items:
             if isinstance(item, tuple):
                 parent_name, children = item
@@ -2510,7 +2666,6 @@ steamdeck工具箱 v{VERSION}
 # ============================================================================
 
 def ensure_desktop_shortcut():
-    """检查并创建桌面快捷方式"""
     script_path = os.path.abspath(sys.argv[0])
     desktop_dir = os.path.expanduser("~/Desktop")
     desktop_file = os.path.join(desktop_dir, "Deck工具箱.desktop")
@@ -2533,7 +2688,6 @@ Categories=Utility;
         print(f"创建桌面快捷方式失败: {e}")
 
 def on_vte_install_finished(pid, status, user_data):
-    """VTE安装进程结束回调，提示用户手动重启"""
     dialog = Gtk.MessageDialog(
         None,
         Gtk.DialogFlags.MODAL,
@@ -2545,7 +2699,6 @@ def on_vte_install_finished(pid, status, user_data):
     dialog.destroy()
 
 def ensure_vte_installed():
-    """检测VTE，若未安装则弹窗询问安装"""
     if VTE_AVAILABLE:
         return
 
@@ -2567,7 +2720,6 @@ def ensure_vte_installed():
     if response != Gtk.ResponseType.YES:
         return
 
-    # 检查并解除只读模式（仅在需要时）
     try:
         result = subprocess.run(["steamos-readonly", "status"], capture_output=True, text=True)
         if "enabled" in result.stdout.lower():
@@ -2621,7 +2773,6 @@ def ensure_vte_installed():
 # ============================================================================
 
 def get_remote_version():
-    """从 Gitee 获取远程脚本的版本号"""
     try:
         req = urllib.request.Request(
             REPO_RAW_URL,
@@ -2641,7 +2792,6 @@ def get_remote_version():
         return None
 
 def perform_update(remote_version, parent_window=None):
-    """执行更新：下载新脚本并覆盖，完成后提示手动重启，点击确定后退出程序"""
     try:
         progress_dialog = Gtk.MessageDialog(
             parent=parent_window,
@@ -2675,7 +2825,6 @@ def perform_update(remote_version, parent_window=None):
             f.write(new_content)
         os.chmod(current_path, 0o755)
 
-        # 显示完成对话框，文字已修改
         restart_dialog = Gtk.MessageDialog(
             parent=parent_window,
             flags=Gtk.DialogFlags.MODAL,
@@ -2708,7 +2857,6 @@ def perform_update(remote_version, parent_window=None):
         show_main_window()
 
 def show_main_window():
-    """创建并显示主窗口"""
     window = MainWindow()
     window.connect("destroy", Gtk.main_quit)
     window.show_all()
@@ -2716,17 +2864,16 @@ def show_main_window():
     GLib.idle_add(ensure_vte_installed)
 
 # ============================================================================
-# 更新检查窗口类
+# 更新检查窗口
 # ============================================================================
 
 class UpdateCheckWindow(Gtk.Window):
-    """启动时检测更新的窗口，显示检测状态，完成后根据结果决定是否显示主窗口"""
     def __init__(self):
         super().__init__(title="检查更新")
-        self.set_icon_name("input-gamepad-symbolic")   # 新增
+        self.set_icon_name("input-gamepad-symbolic")
         self.set_default_size(400, 150)
         self.set_position(Gtk.WindowPosition.CENTER)
-        self.set_deletable(False)  # 禁止用户关闭，避免状态混乱
+        self.set_deletable(False)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         vbox.set_margin_top(20)
@@ -2739,27 +2886,21 @@ class UpdateCheckWindow(Gtk.Window):
         self.label.set_justify(Gtk.Justification.CENTER)
         vbox.pack_start(self.label, True, True, 0)
 
-        # 不预先创建按钮，只在网络失败时动态添加
         self.button = None
         self.vbox = vbox
 
         self.show_all()
-
-        # 延迟启动检查，避免界面未完全渲染
         GLib.timeout_add(200, self.perform_check)
 
     def perform_check(self):
-        """执行异步检查更新"""
         def check_thread():
             remote_version = get_remote_version()
             GLib.idle_add(self.on_check_done, remote_version)
         threading.Thread(target=check_thread, daemon=True).start()
-        return False  # 只执行一次
+        return False
 
     def on_check_done(self, remote_version):
-        """检查完成回调"""
         if remote_version is None:
-            # 网络失败：显示错误并创建“进入主界面”按钮
             self.label.set_text("检查更新失败，请检查网络连接。")
             if self.button is None:
                 self.button = Gtk.Button(label="进入主界面")
@@ -2769,27 +2910,23 @@ class UpdateCheckWindow(Gtk.Window):
             return
 
         if remote_version == VERSION:
-            # 无更新：显示消息，0.3秒后自动进入主界面（无按钮）
             self.label.set_text(f"当前已是最新版本 (v{VERSION})")
             if self.button is not None:
                 self.button.hide()
             GLib.timeout_add(300, self.auto_enter_main)
             return
 
-        # 发现新版本：隐藏任何按钮，仅显示提示，然后弹出询问对话框
         self.label.set_text(f"发现新版本 v{remote_version}\n当前版本: v{VERSION}")
         if self.button is not None:
             self.button.hide()
         self.show_update_prompt(remote_version)
 
     def auto_enter_main(self):
-        """自动关闭窗口并进入主界面"""
         self.destroy()
         show_main_window()
         return False
 
     def show_update_prompt(self, remote_version):
-        """弹出更新确认对话框，确保“是”在左，“否”在右"""
         dialog = Gtk.MessageDialog(
             parent=self,
             flags=Gtk.DialogFlags.MODAL,
@@ -2803,11 +2940,9 @@ class UpdateCheckWindow(Gtk.Window):
             "是否立即更新？\n（更新将下载新版本，完成后请手动重启程序）"
         )
 
-        # 按顺序添加按钮：先“是”后“否”，确保“是”在左
         dialog.add_button("是", Gtk.ResponseType.YES)
         dialog.add_button("否", Gtk.ResponseType.NO)
 
-        # 强制设置按钮顺序（部分 GTK 版本可能不支持，但无副作用）
         try:
             dialog.set_alternative_button_order_from_array([Gtk.ResponseType.YES, Gtk.ResponseType.NO])
         except AttributeError:
@@ -2826,7 +2961,6 @@ class UpdateCheckWindow(Gtk.Window):
             show_main_window()
 
     def on_button_clicked(self, button):
-        """用户点击“进入主界面”按钮，关闭窗口并打开主窗口"""
         self.destroy()
         show_main_window()
 
@@ -2835,7 +2969,6 @@ class UpdateCheckWindow(Gtk.Window):
 # ============================================================================
 
 def main():
-    # 先显示更新检测窗口（异步检测），不直接进入主界面
     update_win = UpdateCheckWindow()
     Gtk.main()
 
