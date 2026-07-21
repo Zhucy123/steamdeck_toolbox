@@ -25,7 +25,7 @@ import urllib.request
 # ============================================================================
 VERSION = "1.3.8"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
-VERSION_CHECK_TIMEOUT = 3
+VERSION_CHECK_TIMEOUT = 10
 
 # ============================================================================
 # 内嵌完整的 Bash 脚本（完全保留用户原版，无改动）
