@@ -23,7 +23,7 @@ import urllib.request
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.3.9"
+VERSION = "1.4.0"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 VERSION_CHECK_TIMEOUT = 10
 
@@ -58,30 +58,6 @@ SYSTEM_TYPE=""
 # ---------- 通用辅助 ----------
 mk_temp_dir() {
     mkdir -p "$TEMP_DIR"
-}
-
-# ---------- 关于 ----------
-show_about() {
-    clear
-    echo -e "${YELLOW}════════════════ 关于 steamdeck工具箱 ════════════════${NC}"
-    echo ""
-    echo -e "${GREEN}steamdeck工具箱 v$VERSION${NC}"
-    echo "制作人：薯条＆DeepSeek"
-    echo "发布日期：2026年1月1日"
-    echo ""
-    echo -e "${CYAN}工具箱介绍：${NC}"
-    echo "这是一个专为 Steam Deck 设计的工具箱，集成了系统优化、软件安装、"
-    echo "网络工具等多种功能，方便用户快速配置和优化设备。"
-    echo "感谢DeepSeek提供的大量技术支持"
-    echo -e "${YELLOW}使用说明：${NC}"
-    echo "1. 使用数字或字母选择功能"
-    echo "2. 部分功能需要管理员权限"
-    echo "3. 建议在执行重要操作前备份数据"
-    echo "4. 网络工具请遵守当地法律法规"
-    echo ""
-    echo -e "${PURPLE}支持与反馈：${NC}"
-    echo "如有问题或建议，请联系店铺售后客服反馈"
-    echo ""
 }
 
 # ========== 系统优化 ==========
@@ -2386,7 +2362,7 @@ steamdeck工具箱 v{VERSION}
 使用说明：
 1. 点击左侧分类，右侧显示功能列表
 2. 点击功能将弹出独立任务窗口
-3. 所有交互在终端内进行
+3. gitee网址 https://gitee.com/Zhucy2100/steamdeck_toolbox
 """
         about_textview.get_buffer().set_text(about_text)
         scrolled_about = Gtk.ScrolledWindow()
@@ -2645,7 +2621,7 @@ steamdeck工具箱 v{VERSION}
         help_dialog.format_secondary_text(
             "本工具集成了系统优化、软件安装、网络工具等功能。\n"
             "点击左侧分类，右侧显示功能列表。\n"
-            "点击功能将打开独立任务窗口执行。"
+            "小破站关注up主 AlanWake2100  可以来催更哦~"
         )
         help_dialog.run()
         help_dialog.destroy()
