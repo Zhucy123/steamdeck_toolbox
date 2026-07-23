@@ -23,7 +23,7 @@ import urllib.request
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 VERSION_CHECK_TIMEOUT = 10
 
@@ -2605,16 +2605,28 @@ steamdeck工具箱 v{VERSION}
         func_name = model.get_value(iter_, 0)
         if not func_name:
             return
+
+        # 如果是父节点，展开/折叠并返回
         if model.iter_has_child(iter_):
             if treeview.row_expanded(path):
                 treeview.collapse_row(path)
             else:
                 treeview.expand_row(path, False)
             return
-                # ---- 新增：Steam缓存管理使用 zenity 图形界面 ----
+
+        # 处理“UU加速器插件”：在独立 konsole 中运行
+        if func_name == "UU加速器插件":
+            func_key = self.func_map.get(func_name)
+            if func_key:
+                self.run_external_terminal(func_key)
+            return
+
+        # 处理“Steam缓存管理”：使用 zenity 图形界面
         if func_name == "Steam缓存管理":
             self.run_cache_manager_gui()
             return
+
+        # 通用功能：在内嵌终端中运行
         func_key = self.func_map.get(func_name)
         if not func_key:
             return
@@ -2658,6 +2670,29 @@ steamdeck工具箱 v{VERSION}
 
     def on_quit_clicked(self, button):
         self.destroy()
+
+    def run_external_terminal(self, func_key):
+        """在独立的 konsole 终端中运行指定的 Bash 函数"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, encoding='utf-8') as f:
+            f.write(BASH_SCRIPT + f"\n\n{func_key}\n")
+            tmp_path = f.name
+        os.chmod(tmp_path, 0o755)
+
+        cmd = [
+            "konsole",
+            "-e",
+            "bash",
+            "-c",
+            f"bash {tmp_path}; read -p '按回车键关闭...' -n1"
+        ]
+
+        subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True
+        )
 
 # ============================================================================
 # 启动后处理：桌面快捷方式创建、VTE检测与安装
