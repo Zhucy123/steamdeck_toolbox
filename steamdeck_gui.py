@@ -68,12 +68,24 @@ install_chinese_source() {
     echo "正在配置国内源..."
     echo ""
     echo -e "${CYAN}步骤1: 禁用SteamOS只读模式${NC}"
-    sudo steamos-readonly disable 2>/dev/null || true
-    echo -e "${GREEN}✓ 已禁用只读模式${NC}"
+    if sudo steamos-readonly disable 2>/dev/null; then
+        echo -e "${GREEN}✓ 已禁用只读模式${NC}"
+    else
+        local exit_code=$?
+        echo -e "${RED}✗ 禁用只读模式失败 (退出码: ${exit_code})${NC}"
+        echo -e "${YELLOW}可能原因：密码错误、用户取消操作或无需此操作。${NC}"
+        echo -e "${YELLOW}已跳过国内源配置。${NC}"
+        return 1
+    fi
     echo ""
     echo -e "${CYAN}步骤2: 配置Flatpak国内源${NC}"
-    flatpak remote-modify flathub --url=https://mirror.sjtu.edu.cn/flathub 2>/dev/null || true
-    echo -e "${GREEN}✓ Flatpak国内源配置完成${NC}"
+    if flatpak remote-modify flathub --url=https://mirror.sjtu.edu.cn/flathub 2>/dev/null; then
+        echo -e "${GREEN}✓ Flatpak国内源配置完成${NC}"
+    else
+        echo -e "${RED}✗ Flatpak国内源配置失败${NC}"
+        echo -e "${YELLOW}可能原因：密码错误、用户取消操作或 flatpak 未正常运行。${NC}"
+        return 1
+    fi
     echo ""
     echo -e "${YELLOW}重启后生效${NC}"
 }
