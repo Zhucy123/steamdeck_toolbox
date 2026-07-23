@@ -23,6 +23,8 @@ else
         sudo pacman-key --init
         sudo pacman-key --populate archlinux
     fi
+    echo "正在信任 SteamOS 打包者密钥..."
+    sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF
     if sudo pacman -S --noconfirm vte3; then
         echo "✅ vte3 安装成功！"
     else
