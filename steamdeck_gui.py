@@ -410,145 +410,131 @@ calibrate_joystick_trigger() {
     fi
 }
 
-# ========== Steam 缓存管理器（纯终端交互） ==========
+# ========== Steam 缓存管理器（Zenity 图形界面，循环选择） ==========
 steamdeck_cache_manager() {
-    mk_temp_dir
-    clear
-    echo -e "${YELLOW}════════════════ Steam Deck 缓存管理器 ════════════════${NC}"
-    echo ""
-    echo "此工具用于管理和清理 Steam 着色器缓存与兼容数据。"
-    echo "所有操作均在终端中进行，请按提示操作。"
-    echo ""
+    if ! command -v zenity &>/dev/null; then
+        zenity --error --text="未找到 zenity，请安装。"
+        return 1
+    fi
 
     local steamapps_dir="/home/deck/.local/share/Steam/steamapps"
     if [ ! -d "$steamapps_dir" ]; then
-        echo -e "${RED}错误：未找到 Steam 目录。${NC}"
-        return
+        zenity --error --text="未找到 Steam 目录。"
+        return 1
     fi
 
-    get_game_name() {
-        local app_id="$1"
-        local manifest="$steamapps_dir/appmanifest_${app_id}.acf"
-        if [ -f "$manifest" ]; then
-            grep '"name"' "$manifest" | cut -d'"' -f4
-        else
-            echo "Unknown"
-        fi
-    }
-
-    local live=1
-
     while true; do
-        echo ""
-        echo "========================================"
-        echo "  Steam Deck 缓存管理器"
-        echo "========================================"
-        echo "1) 删除着色器缓存"
-        echo "2) 删除兼容数据 (Proton 前缀)"
-        echo "3) 切换模式 (当前: $([ "$live" = "1" ] && echo "实际执行" || echo "模拟运行") )"
-        echo "4) 退出"
-        echo ""
-        read -p "请选择 [1-4]: " choice
-        case $choice in
-            1|2)
-                local cache_type=""
-                if [ "$choice" = "1" ]; then
-                    cache_type="shadercache"
-                    title="着色器缓存"
-                else
-                    cache_type="compatdata"
-                    title="兼容数据"
-                fi
-                local cache_dir="$steamapps_dir/$cache_type"
-                if [ ! -d "$cache_dir" ]; then
-                    echo -e "${YELLOW}未找到 $title 目录。${NC}"
-                    continue
-                fi
-                local apps=()
-                local sizes=()
-                for dir in "$cache_dir"/*; do
-                    if [ -d "$dir" ]; then
-                        local app_id=$(basename "$dir")
-                        if [[ "$app_id" =~ ^[0-9]+$ ]]; then
-                            local size=$(du -sm "$dir" 2>/dev/null | cut -f1)
-                            if [ -n "$size" ] && [ "$size" -gt 0 ]; then
-                                local game_name=$(get_game_name "$app_id")
-                                apps+=("$app_id|$game_name|$size|$dir")
-                            fi
-                        fi
-                    fi
-                done
-                if [ ${#apps[@]} -eq 0 ]; then
-                    echo -e "${YELLOW}没有找到可清理的 $title。${NC}"
-                    continue
-                fi
-                echo ""
-                echo "可清理的 $title:"
-                local i=1
-                for entry in "${apps[@]}"; do
-                    IFS='|' read -r app_id game_name size dir <<< "$entry"
-                    echo "$i) $game_name (ID: $app_id, 大小: ${size}MB)"
-                    ((i++))
-                done
-                echo ""
-                read -p "请输入要删除的编号（多个用空格分隔，全部删除输入 'all'）: " selections
-                if [ "$selections" = "all" ]; then
-                    selected_dirs=()
-                    for entry in "${apps[@]}"; do
-                        IFS='|' read -r app_id game_name size dir <<< "$entry"
-                        selected_dirs+=("$dir")
-                    done
-                else
-                    selected_dirs=()
-                    for num in $selections; do
-                        if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le ${#apps[@]} ]; then
-                            IFS='|' read -r app_id game_name size dir <<< "${apps[$((num-1))]}"
-                            selected_dirs+=("$dir")
+        # 选择缓存类型
+        local choice=$(zenity --list --radiolist \
+            --title="Steam 缓存管理器" \
+            --text="请选择要清理的缓存类型" \
+            --column="选择" --column="类型" \
+            FALSE "着色器缓存" \
+            FALSE "兼容数据 (Proton前缀)" \
+            --width=400 --height=200)
+
+        if [ -z "$choice" ]; then
+            break  # 用户取消，退出循环
+        fi
+
+        if [ "$choice" = "着色器缓存" ]; then
+            cache_type="shadercache"
+            title="着色器缓存"
+        else
+            cache_type="compatdata"
+            title="兼容数据"
+        fi
+
+        local cache_dir="$steamapps_dir/$cache_type"
+        if [ ! -d "$cache_dir" ]; then
+            zenity --info --text="未找到 $title 目录。"
+            continue
+        fi
+
+        # 收集所有非空缓存目录
+        local apps=()
+        for dir in "$cache_dir"/*; do
+            if [ -d "$dir" ]; then
+                local app_id=$(basename "$dir")
+                if [[ "$app_id" =~ ^[0-9]+$ ]]; then
+                    local size=$(du -sm "$dir" 2>/dev/null | cut -f1)
+                    if [ -n "$size" ] && [ "$size" -gt 0 ]; then
+                        local manifest="$steamapps_dir/appmanifest_${app_id}.acf"
+                        if [ -f "$manifest" ]; then
+                            game_name=$(grep '"name"' "$manifest" | cut -d'"' -f4)
                         else
-                            echo -e "${RED}无效编号: $num${NC}"
+                            game_name="Unknown"
                         fi
-                    done
-                fi
-                if [ ${#selected_dirs[@]} -eq 0 ]; then
-                    echo "未选择任何项目。"
-                    continue
-                fi
-                echo ""
-                echo "将删除以下 $title："
-                for d in "${selected_dirs[@]}"; do
-                    echo "  $d"
-                done
-                read -p "确认删除？(y/N): " confirm
-                if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-                    echo "取消操作。"
-                    continue
-                fi
-                for d in "${selected_dirs[@]}"; do
-                    if [ "$live" = "1" ]; then
-                        rm -rf "$d" && echo -e "${GREEN}已删除: $d${NC}" || echo -e "${RED}删除失败: $d${NC}"
-                    else
-                        echo -e "${YELLOW}[模拟] 将删除: $d${NC}"
+                        apps+=("$app_id|$game_name|$size|$dir")
                     fi
-                done
-                echo -e "${GREEN}操作完成。${NC}"
-                ;;
-            3)
-                if [ "$live" = "1" ]; then
-                    live=0
-                    echo -e "${YELLOW}已切换到模拟运行模式（不会实际删除文件）${NC}"
-                else
-                    live=1
-                    echo -e "${GREEN}已切换到实际执行模式${NC}"
                 fi
-                ;;
-            4)
-                echo "退出缓存管理器。"
-                break
-                ;;
-            *)
-                echo -e "${RED}无效选择。${NC}"
-                ;;
-        esac
+            fi
+        done
+
+        if [ ${#apps[@]} -eq 0 ]; then
+            zenity --info --text="没有找到可清理的 $title。"
+            continue
+        fi
+
+        # 构建 checklist 数据
+        local list_data=()
+        for entry in "${apps[@]}"; do
+            IFS='|' read -r app_id game_name size dir <<< "$entry"
+            list_data+=("FALSE" "$game_name (ID: $app_id)" "${size}MB")
+        done
+
+        # 显示多选列表
+        local selections=$(zenity --list --checklist \
+            --title="选择要删除的 $title" \
+            --text="请勾选要删除的缓存项" \
+            --column="选择" --column="游戏名" --column="大小" \
+            "${list_data[@]}" \
+            --width=600 --height=400 \
+            --multiple)
+
+        if [ -z "$selections" ]; then
+            continue  # 用户取消选择，回到类型选择
+        fi
+
+        # 解析选中的游戏名
+        IFS='|' read -r -a selected_names <<< "$selections"
+        local selected_dirs=()
+        for selected in "${selected_names[@]}"; do
+            for entry in "${apps[@]}"; do
+                IFS='|' read -r app_id game_name size dir <<< "$entry"
+                local display_name="$game_name (ID: $app_id)"
+                if [ "$display_name" = "$selected" ]; then
+                    selected_dirs+=("$dir")
+                    break
+                fi
+            done
+        done
+
+        if [ ${#selected_dirs[@]} -eq 0 ]; then
+            zenity --info --text="未选择任何有效项目。"
+            continue
+        fi
+
+        # 确认删除
+        zenity --question \
+            --text="确定要删除选中的 $title 吗？\n共 ${#selected_dirs[@]} 项。" \
+            --ok-label="删除" --cancel-label="取消"
+        if [ $? -ne 0 ]; then
+            continue
+        fi
+
+        # 执行删除
+        local deleted=0 failed=0
+        for d in "${selected_dirs[@]}"; do
+            if rm -rf "$d"; then
+                ((deleted++))
+            else
+                ((failed++))
+            fi
+        done
+
+        zenity --info --text="删除完成！\n成功: $deleted 项\n失败: $failed 项"
+        # 完成后自动回到类型选择
     done
 }
 
@@ -1675,11 +1661,12 @@ install_decky_framegen_uninstall() {
 
 # ========== 引导管理 ==========
 clover_install_or_reinstall() {
-    show_header
+    clear
     echo -e "${YELLOW}════════════════ 安装/重装 Clover 引导 ════════════════${NC}"
     echo ""
     echo -e "${CYAN}此操作将安装或重新安装 Clover 图形化引导管理器。${NC}"
-    echo -e "${YELLOW}重要：请先在 Windows 中进行以下配置（如已有 Windows且初次安装引导）（如果是重装引导则忽略此步骤）：${NC}"
+    echo -e "${YELLOW}请先在 Windows 中进行以下配置（如已有Windows且初次安装引导）${NC}"
+    echo -e "${YELLOW}（如果是重装引导则忽略此步骤）：${NC}"
     echo "  1. 以管理员身份打开命令提示符或 PowerShell"
     echo "  2. 执行命令：bcdedit.exe -set \"{globalsettings}\" highestmode on"
     echo "  3. 执行命令：reg add \"HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Control\\TimeZoneInformation\" /v RealTimeIsUniversal /d 1 /t REG_DWORD /f"
@@ -2635,6 +2622,10 @@ steamdeck工具箱 v{VERSION}
             else:
                 treeview.expand_row(path, False)
             return
+                # ---- 新增：Steam缓存管理使用 zenity 图形界面 ----
+        if func_name == "Steam缓存管理":
+            self.run_cache_manager_gui()
+            return
         func_key = self.func_map.get(func_name)
         if not func_key:
             return
@@ -2657,6 +2648,24 @@ steamdeck工具箱 v{VERSION}
         )
         help_dialog.run()
         help_dialog.destroy()
+
+    def run_cache_manager_gui(self):
+        """直接运行 zenity 图形化缓存管理器，不显示终端窗口"""
+        # 提取 BASH_SCRIPT 中该函数的定义，并直接调用
+        func_name = "steamdeck_cache_manager"
+        script_content = BASH_SCRIPT + f"\n\n{func_name}\n"
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, encoding='utf-8') as f:
+            f.write(script_content)
+            tmp_path = f.name
+        os.chmod(tmp_path, 0o755)
+        # 后台启动，完全不显示任何窗口（stdout/stderr 丢弃）
+        subprocess.Popen(
+            [tmp_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True
+        )
 
     def on_quit_clicked(self, button):
         self.destroy()
