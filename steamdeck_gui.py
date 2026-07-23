@@ -23,7 +23,7 @@ import urllib.request
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.4.1"
+VERSION = "1.4.2"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 VERSION_CHECK_TIMEOUT = 10
 
@@ -1653,8 +1653,7 @@ clover_install_or_reinstall() {
     echo -e "${YELLOW}════════════════ 安装/重装 Clover 引导 ════════════════${NC}"
     echo ""
     echo -e "${CYAN}此操作将安装或重新安装 Clover 图形化引导管理器。${NC}"
-    echo -e "${YELLOW}请先在 Windows 中进行以下配置（如已有Windows且初次安装引导）${NC}"
-    echo -e "${YELLOW}（如果是重装引导则忽略此步骤）：${NC}"
+    echo -e "${YELLOW}重要：请先在 Windows 中进行以下配置（如已有 Windows且初次安装引导）（如果是重装引导则忽略此步骤）：${NC}"
     echo "  1. 以管理员身份打开命令提示符或 PowerShell"
     echo "  2. 执行命令：bcdedit.exe -set \"{globalsettings}\" highestmode on"
     echo "  3. 执行命令：reg add \"HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Control\\TimeZoneInformation\" /v RealTimeIsUniversal /d 1 /t REG_DWORD /f"
@@ -1693,28 +1692,283 @@ clover_install_or_reinstall() {
     fi
 
     echo -e "${CYAN}正在克隆仓库...${NC}"
-    if ! git clone "$REPO_URL" "$TARGET_DIR"; then
-        echo -e "${RED}克隆失败，请检查网络连接或更换镜像源。${NC}"
+    if [ -d "$TARGET_DIR" ]; then
+        echo -e "${YELLOW}目录 $TARGET_DIR 已存在，删除后重新克隆。${NC}"
+        rm -rf "$TARGET_DIR"
+    fi
+
+    if ! script -q -c "git clone --progress --depth=1 '$REPO_URL' '$TARGET_DIR'" /dev/null; then
+        echo -e "${RED}克隆失败，请检查网络或更换镜像源。${NC}"
+        rm -rf "$TARGET_DIR"
         read -p "按回车键返回主菜单..." < /dev/tty
         return 1
     fi
 
+    echo -e "${GREEN}克隆完成。${NC}"
     cd "$TARGET_DIR" || { echo -e "${RED}无法进入目录${NC}"; return 1; }
 
-    # ---------- 下载 install-Clover.sh ----------
-    echo -e "${CYAN}正在从 Gitee 下载 install-Clover.sh...${NC}"
-    if curl -o install-Clover.sh https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install-Clover.sh; then
-        echo -e "${GREEN}下载成功。${NC}"
-        chmod +x install-Clover.sh || {
-            echo -e "${RED}无法设置 install-Clover.sh 执行权限。${NC}"
-            read -p "按回车键返回主菜单..." < /dev/tty
-            return 1
-        }
+    echo -e "${CYAN}正在生成优化版 install-Clover.sh...${NC}"
+    cat > install-Clover.sh << 'CLOVER_SCRIPT_EOF'
+#!/bin/bash
+
+clear
+
+echo "Clover 双系统启动安装脚本 - Steam Deck 专用"
+echo "项目地址: https://github.com/ryanrudolfoba/SteamDeck-Clover-dualboot"
+echo "作者 YT: 10MinuteSteamDeckGamer"
+echo "正在进行初步检查..."
+
+CLOVER=$(efibootmgr | grep -i Clover | colrm 9 | colrm 1 4)
+REFIND=$(efibootmgr | grep -i rEFInd | colrm 9 | colrm 1 4)
+ESP=$(df /dev/nvme0n1p1 --output=avail | tail -n1)
+CLOVER_VERSION=5172
+CLOVER_EFI=\\EFI\\clover\\cloverx64.efi
+BOARD_NAME=$(cat /sys/class/dmi/id/board_name)
+PRODUCT_NAME=$(cat /sys/class/dmi/id/product_name)
+
+if [ "$BOARD_NAME" = "Jupiter" ] || [ "$BOARD_NAME" = "Galileo" ]; then
+    echo "检测到支持的设备 - Steam Deck $BOARD_NAME，无需修改 config.plist。"
+elif [ "$PRODUCT_NAME" = "83L3" ] || [ "$PRODUCT_NAME" = "83Q2" ] || [ "$PRODUCT_NAME" = "83Q3" ]; then
+    echo "检测到 Legion Go S，正在应用专用配置。"
+    sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1200<\/string>' custom/config.plist
+elif [ "$PRODUCT_NAME" = "83N6" ]; then
+    echo "不支持的设备 - Legion Go S 83N6，退出。"
+    exit
+elif [ "$PRODUCT_NAME" = "83E1" ]; then
+    echo "检测到 Legion Go，正在应用专用配置。"
+    sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>2560x1600<\/string>' custom/config.plist
+elif [ "$BOARD_NAME" = "RC71L" ]; then
+    echo "检测到 ROG Ally，正在应用专用配置。"
+    sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1080<\/string>' custom/config.plist
+elif [ "$BOARD_NAME" = "RC72LA" ]; then
+    echo "检测到 ROG Ally X，正在应用专用配置。"
+    sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1080<\/string>' custom/config.plist
+elif [ "$PRODUCT_NAME" = "ONEXPLAYER 2 PRO ARP23P" ]; then
+    echo "检测到 Onexplayer 2 Pro，正在应用专用配置。"
+    sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>2560x1600<\/string>' custom/config.plist
+else
+    echo "⚠️ 警告：设备不在官方支持列表，强制继续安装（风险自负）！"
+    # exit   # 已跳过退出
+fi
+
+if grep -qi bazzite /etc/os-release; then
+    OS=bazzite
+    EFI_PATH=/boot/efi/EFI
+    BOOTX64=$EFI_PATH/BOOT/BOOTX64.EFI
+    echo "检测到操作系统: Bazzite"
+else
+    grep -qi SteamOS /etc/os-release || { echo "既不是 SteamOS 也不是 Bazzite！退出。"; exit; }
+    OS=SteamOS
+    EFI_PATH=/esp/efi
+    BOOTX64=$EFI_PATH/boot/bootx64.efi
+    echo "检测到操作系统: SteamOS"
+fi
+
+if blkid /dev/nvme0n1p1 | grep -qi microsoft; then
+    echo "检测到不支持的双系统配置（Windows 安装在 SteamOS 之前）。请确保 SteamOS 安装在 Windows 之前！"
+    exit
+else
+    echo "双系统配置检查通过。"
+fi
+
+if [ "$(passwd --status $(whoami) | tr -s " " | cut -d " " -f 2)" == "P" ]; then
+    read -s -p "请输入当前 sudo 密码: " current_password ; echo < /dev/tty
+    echo "正在验证 sudo 密码..."
+    if ! echo -e "$current_password\n" | sudo -S ls &> /dev/null; then
+        echo "sudo 密码错误！请重新运行脚本并输入正确密码。"
+        exit
+    fi
+    echo "sudo 密码正确。"
+else
+    echo "未设置 sudo 密码！请先设置密码再运行脚本。"
+    passwd
+    exit
+fi
+
+mkdir -p ~/temp-ESP
+if ! echo -e "$current_password\n" | sudo -S mount /dev/nvme0n1p1 ~/temp-ESP; then
+    echo "挂载 ESP 分区失败！"
+    rmdir ~/temp-ESP
+    exit
+fi
+echo "ESP 分区已挂载。"
+if [ $ESP -ge 15000 ]; then
+    echo "ESP 分区剩余空间: $ESP KB，空间充足。"
+    echo -e "$current_password\n" | sudo -S umount ~/temp-ESP
+    rmdir ~/temp-ESP
+else
+    echo "ESP 分区剩余空间: $ESP KB，空间不足！请清理后重试。"
+    echo -e "$current_password\n" | sudo -S du -hd2 /esp
+    echo -e "$current_password\n" | sudo -S umount ~/temp-ESP
+    rmdir ~/temp-ESP
+    exit
+fi
+
+if efibootmgr | grep -qi refind; then
+    echo "检测到 rEFInd，正在尽力卸载..."
+    for rEFInd_boot in $REFIND; do
+        echo -e "$current_password\n" | sudo -S efibootmgr -b $rEFInd_boot -B &> /dev/null
+    done
+    echo -e "$current_password\n" | sudo -S systemctl disable bootnext-refind.service &> /dev/null
+    echo -e "$current_password\n" | sudo -S systemctl disable rEFInd_bg_randomizer.service
+    echo -e "$current_password\n" | sudo -S rm -rf $EFI_PATH/refind &> /dev/null
+    echo -e "$current_password\n" | sudo -S steamos-readonly disable
+    echo -e "$current_password\n" | sudo -S rm /etc/systemd/system/bootnext-refind.service &> /dev/null
+    echo -e "$current_password\n" | sudo -S rm -f /etc/systemd/system/rEFInd_bg_randomizer.service
+    echo -e "$current_password\n" | sudo -S pacman-key --init
+    echo -e "$current_password\n" | sudo -S pacman-key --populate archlinux
+    echo -e "$current_password\n" | sudo -S pacman -R --noconfirm SteamDeck_rEFInd
+    echo -e "$current_password\n" | sudo -S steamos-readonly enable
+    rm -rf ~/.local/SteamDeck_rEFInd ~/.SteamDeck_rEFInd ~/Desktop/SteamDeck_rEFInd.desktop
+    if efibootmgr | grep -qi refind; then
+        echo "rEFInd 卸载失败，请手动卸载后重试。"
+        exit
+    fi
+    echo "rEFInd 已成功卸载。"
+else
+    echo "未检测到 rEFInd，继续安装 Clover。"
+fi
+
+echo "正在使用多镜像源下载 Clover ISO（支持重试）..."
+MIRRORS=(
+    "https://gh.ddlc.top/https://github.com"
+    "https://ghproxy.net/https://github.com"
+    "https://github.com"
+)
+CLOVER_FILE="Clover-${CLOVER_VERSION}-X64.iso.7z"
+DOWNLOAD_SUCCESS=0
+
+for mirror in "${MIRRORS[@]}"; do
+    CLOVER_URL="${mirror}/CloverHackyColor/CloverBootloader/releases/download/${CLOVER_VERSION}/${CLOVER_FILE}"
+    for attempt in 1 2; do
+        echo "尝试从 ${mirror} 下载 (尝试 ${attempt}/2)..."
+        if curl -# -L --fail --connect-timeout 10 --max-time 60 -o "${CLOVER_FILE}" "${CLOVER_URL}"; then
+            echo "✅ 下载成功！"
+            DOWNLOAD_SUCCESS=1
+            break 2
+        else
+            echo "⚠️ 下载失败 (尝试 ${attempt}/2)"
+            rm -f "${CLOVER_FILE}"
+            [ $attempt -eq 1 ] && echo "将进行第2次重试..." && sleep 2
+        fi
+    done
+done
+
+if [ ${DOWNLOAD_SUCCESS} -eq 0 ]; then
+    echo "❌ 下载 Clover 失败！所有镜像源均不可用，请检查网络后重试。"
+    exit 1
+fi
+
+CLOVER_BASE=$(basename -s .7z "${CLOVER_FILE}")
+
+if ! 7z x "${CLOVER_FILE}" -aoa "${CLOVER_BASE}" &> /dev/null; then
+    echo "解压 Clover ISO 失败！"
+    exit
+fi
+echo "Clover ISO 解压成功。"
+
+mkdir -p ~/temp-clover
+if ! echo -e "$current_password\n" | sudo -S mount "${CLOVER_BASE}" ~/temp-clover &> /dev/null; then
+    echo "挂载 Clover ISO 失败！"
+    echo -e "$current_password\n" | sudo -S umount ~/temp-clover
+    rmdir ~/temp-clover
+    exit
+fi
+echo "Clover ISO 已挂载。"
+
+echo -e "$current_password\n" | sudo -S cp -Rf ~/temp-clover/efi/clover $EFI_PATH
+echo -e "$current_password\n" | sudo -S cp custom/config.plist $EFI_PATH/clover/config.plist
+echo -e "$current_password\n" | sudo -S cp -Rf custom/themes/* $EFI_PATH/clover/themes
+echo -e "$current_password\n" | sudo -S rm -rf $EFI_PATH/clover/themes/{bgm,cesium,christmas,glass,purple_swirl,theme-sample.plist}
+
+if [ "$PRODUCT_NAME" = "83N6" ] || [ "$PRODUCT_NAME" = "83L3" ] || [ "$PRODUCT_NAME" = "83Q2" ] || [ "$PRODUCT_NAME" = "83Q3" ] || [ "$PRODUCT_NAME" = "83E1" ] || [ "$BOARD_NAME" = "RC71L" ] || [ "$BOARD_NAME" = "RC72LA" ] || [ "$PRODUCT_NAME" = "ONEXPLAYER 2 PRO ARP23P" ]; then
+    echo "非 Steam Deck 设备，正在安装 Xbox 360 UEFI 驱动..."
+    if echo -e "$current_password\n" | sudo -S cp custom/UsbXbox360Dxe.efi $EFI_PATH/clover/drivers/uefi; then
+        echo "Xbox 360 驱动安装成功。"
     else
-        echo -e "${RED}下载 install-Clover.sh 失败，请检查网络。${NC}"
+        echo "Xbox 360 驱动安装失败！"
+        exit
+    fi
+else
+    echo "Steam Deck 无需安装 Xbox 360 驱动。"
+fi
+
+echo -e "$current_password\n" | sudo -S umount ~/temp-clover
+rmdir ~/temp-clover
+rm -f "Clover-${CLOVER_VERSION}-X64.iso"*
+
+for entry in $CLOVER; do
+    echo -e "$current_password\n" | sudo -S efibootmgr -b $entry -B &> /dev/null
+done
+
+echo -e "$current_password\n" | sudo -S efibootmgr -c -d /dev/nvme0n1 -p 1 -L "Clover - GUI Boot Manager" -l "$CLOVER_EFI" &> /dev/null
+
+if [ -e "$BOOTX64.orig" ]; then
+    echo "$BOOTX64.orig 已存在，无需备份。"
+else
+    echo "备份 $BOOTX64 为 $BOOTX64.orig"
+    echo -e "$current_password\n" | sudo -S cp "$BOOTX64" "$BOOTX64.orig"
+    echo -e "$current_password\n" | sudo -S cp "$EFI_PATH/clover/cloverx64.efi" "$BOOTX64"
+    echo "已替换 bootx64.efi 为 Clover EFI。"
+fi
+
+if [ -e "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig" ]; then
+    if [ -e "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" ]; then
+        echo -e "$current_password\n" | sudo -S mv "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" "$EFI_PATH/Microsoft/bootmgfw.efi"
+        echo "已禁用 Windows EFI 直接启动。"
+    else
+        echo "Windows EFI 已禁用。"
+    fi
+else
+    echo -e "$current_password\n" | sudo -S cp "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig"
+    echo -e "$current_password\n" | sudo -S mv "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" "$EFI_PATH/Microsoft/bootmgfw.efi"
+    echo "已禁用 Windows EFI 直接启动。"
+fi
+
+echo -e "$current_password\n" | sudo -S efibootmgr -n $CLOVER &> /dev/null
+echo -e "$current_password\n" | sudo -S efibootmgr -o $CLOVER &> /dev/null
+
+if efibootmgr | grep -q "Clover - GUI"; then
+    echo "Clover 已成功安装到 EFI 系统分区！"
+else
+    echo "哎呀，出错了，Clover 未安装成功。"
+    exit
+fi
+
+mkdir -p ~/1Clover-tools
+rm -f ~/1Clover-tools/*
+cp custom/Clover-Toolbox.sh ~/1Clover-tools
+echo -e "$current_password\n" | sudo -S cp custom/clover-bootmanager.service custom/clover-bootmanager.sh /etc/systemd/system
+cp -R custom/logos ~/1Clover-tools
+cp -R custom/efi ~/1Clover-tools
+
+chmod +x ~/1Clover-tools/Clover-Toolbox.sh
+echo -e "$current_password\n" | sudo -S chmod +x /etc/systemd/system/clover-bootmanager.sh
+
+echo -e "$current_password\n" | sudo -S systemctl daemon-reload
+echo -e "$current_password\n" | sudo -S systemctl enable --now clover-bootmanager.service
+echo -e "$current_password\n" | sudo -S /etc/systemd/system/clover-bootmanager.sh
+
+if [ "$OS" = "SteamOS" ]; then
+    mkdir -p ~/.local/share/kservices5/ServiceMenus
+    cp custom/open_as_root.desktop ~/.local/share/kservices5/ServiceMenus
+    echo -e "$current_password\n" | sudo -S cp custom/clover-whitelist.conf /etc/atomic-update.conf.d
+else
+    if ! blkid /dev/nvme0n1p1 | grep -qi esp; then
+        echo -e "$current_password\n" | sudo -S fatlabel /dev/nvme0n1p1 esp
+        echo "ESP 分区标签已设置。"
+    fi
+    echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\efi\\fedora\\shimx64\.efi<\/string>' $EFI_PATH/clover/config.plist
+fi
+
+echo "Clover 安装完成于 $OS！"
+CLOVER_SCRIPT_EOF
+
+    chmod +x install-Clover.sh || {
+        echo -e "${RED}无法设置 install-Clover.sh 执行权限。${NC}"
         read -p "按回车键返回主菜单..." < /dev/tty
         return 1
-    fi
+    }
 
     echo -e "${CYAN}即将运行 Clover 安装脚本，请根据提示输入 sudo 密码（如果需要）...${NC}"
     sleep 1
@@ -1735,9 +1989,11 @@ clover_install_or_reinstall() {
         return 1
     fi
 
-    # ---------- 创建桌面快捷方式 ----------
+    # 处理桌面快捷方式
     SHORTCUT="$HOME/Desktop/引导文件配置.desktop"
-    if [ ! -f "$SHORTCUT" ]; then
+    if [ -f "$SHORTCUT" ]; then
+        echo -e "${GREEN}桌面快捷方式“引导文件配置”已存在，无需创建。${NC}"
+    else
         cat > "$SHORTCUT" << 'EOF'
 [Desktop Entry]
 Type=Application
@@ -1749,19 +2005,312 @@ Categories=Utility;
 EOF
         chmod +x "$SHORTCUT"
         echo -e "${GREEN}已创建桌面快捷方式“引导文件配置”。${NC}"
-    else
-        echo -e "${GREEN}桌面快捷方式“引导文件配置”已存在，无需创建。${NC}"
     fi
 
-    # ---------- 下载汉化版 Clover-Toolbox.sh ----------
-    echo -e "${CYAN}正在从 Gitee 下载 Clover-Toolbox.sh 汉化版...${NC}"
-    mkdir -p ~/1Clover-tools
-    if curl -o ~/1Clover-tools/Clover-Toolbox.sh https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/Clover-Toolbox.sh; then
-        chmod +x ~/1Clover-tools/Clover-Toolbox.sh
-        echo -e "${GREEN}✓ Clover-Toolbox.sh 下载并安装完成。${NC}"
-    else
-        echo -e "${YELLOW}⚠️ 下载 Clover-Toolbox.sh 失败，请手动处理。${NC}"
-    fi
+    # 覆盖 Clover-Toolbox.sh 为汉化版（带完整中文菜单和卸载清理）
+    cat > ~/1Clover-tools/Clover-Toolbox.sh << 'TOOLBOX_EOF'
+#!/bin/bash
+
+# 检查 Bazzite 或 SteamOS
+grep -i bazzite /etc/os-release &> /dev/null
+if [ $? -eq 0 ]
+then
+	OS=bazzite
+	EFI_PATH=/boot/efi/EFI
+	BOOTX64=$EFI_PATH/BOOT/BOOTX64.EFI
+else
+	grep -i SteamOS /etc/os-release &> /dev/null
+	if [ $? -eq 0 ]
+	then
+		OS=SteamOS
+		EFI_PATH=/esp/efi
+		BOOTX64=$EFI_PATH/boot/bootx64.efi
+	else
+		exit
+	fi
+fi
+
+current_password=$(zenity --password --title "sudo 密码验证")
+echo -e "$current_password\n" | sudo -S ls &> /dev/null
+if [ $? -ne 0 ]
+then
+	echo "sudo 密码错误！" | \
+		zenity --text-info --title "Clover 工具箱" --width 400 --height 200
+	exit
+fi
+
+while true
+do
+Choice=$(zenity --width 750 --height 450 --list --radiolist --multiple \
+	--title "Clover 工具箱 - https://github.com/ryanrudolfoba/SteamDeck-clover-dualboot" \
+	--column "选择" \
+	--column "选项" \
+	--column "说明 - 请仔细阅读" \
+	FALSE 状态 "提交错误报告时请选用此项" \
+	FALSE Batocera "选择 Batocera v39 (及更新) 或 v38 (及更旧) 的配置" \
+	FALSE 主题 "选择固定主题或随机主题" \
+	FALSE 超时 "设置默认超时时间 (1/5/10/15 秒) 后自动启动默认系统" \
+	FALSE 服务 "禁用/启用 Clover EFI 条目和 systemd 服务" \
+	FALSE 默认启动 "设置默认启动的操作系统" \
+	FALSE 新Logo "替换 BGRT 启动标志" \
+	FALSE 恢复Logo "恢复默认的 BGRT 启动标志" \
+	FALSE 分辨率 "设置屏幕分辨率 (DeckHD 或 DeckSight 屏幕改装)" \
+	FALSE 自定义 "替换 Clover EFI 为隐藏 OPTIONS 按钮的自定义版本" \
+	FALSE 卸载 "卸载 Clover 并恢复所有更改" \
+	TRUE 退出 "***** 退出 Clover 工具箱 *****")
+
+if [ $? -eq 1 ] || [ "$Choice" == "退出" ]
+then
+	echo "用户按下了取消/退出。"
+	exit
+
+elif [ "$Choice" == "状态" ]
+then
+	zenity --warning --title "Clover 工具箱" --text "$(fold -w 120 -s ~/1Clover-tools/status.txt)" --width 1000 --height 400
+
+elif [ "$Choice" == "Batocera" ]
+then
+Batocera_Choice=$(zenity --width 550 --height 220 --list --radiolist --multiple --title "Clover 工具箱" --column "选择" \
+	--column "选项" --column "说明 - 请仔细阅读" \
+	FALSE v39 "为 Batocera v39 及更新版本设置 Clover 配置" \
+	FALSE v38 "为 Batocera v38 及更旧版本设置 Clover 配置" \
+	TRUE 退出 "***** 退出 Clover 工具箱 *****")
+
+	if [ $? -eq 1 ] || [ "$Batocera_Choice" == "退出" ]
+	then
+		echo "用户按了取消。返回主菜单。"
+
+	elif [ "$Batocera_Choice" == "v39" ]
+	then
+		# 为 Batocera v39 及更新版本更新 config.plist
+		echo -e "$current_password\n" | sudo -S sed -i '/<string>os_batocera<\/string>/!b;n;n;c\\t\t\t\t\t<string>\\efi\\batocera\\grubx64\.efi<\/string>' $EFI_PATH/clover/config.plist
+
+		zenity --warning --title "Clover 工具箱" --text "已为 Batocera v39 及更新版本更新 Clover 配置！" --width 450 --height 75
+
+	elif [ "$Batocera_Choice" == "v38" ]
+	then
+		# 为 Batocera v38 及更旧版本更新 config.plist
+		echo -e "$current_password\n" | sudo -S sed -i '/<string>os_batocera<\/string>/!b;n;n;c\\t\t\t\t\t<string>\\efi\\boot\\bootx64\.efi<\/string>' $EFI_PATH/clover/config.plist
+
+		zenity --warning --title "Clover 工具箱" --text "已为 Batocera v38 及更旧版本更新 Clover 配置！" --width 450 --height 75
+
+	fi
+
+elif [ "$Choice" == "主题" ]
+then
+Theme_Choice=$(zenity --title "Clover 工具箱"	--width 200 --height 325 --list \
+	--column "主题名称" $(echo -e "$current_password\n" | sudo -S ls $EFI_PATH/clover/themes) )
+
+	if [ $? -eq 1 ]
+	then
+		echo "用户按了取消。返回主菜单。"
+	else
+		echo -e "$current_password\n" | sudo -S sed -i '/<key>Theme<\/key>/!b;n;c\\t\t<string>'$Theme_Choice'<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover 工具箱" --text "主题已更改为 $Theme_Choice！" --width 400 --height 75
+	fi
+
+elif [ "$Choice" == "超时" ]
+then
+Timeout_Choice=$(zenity --width 500 --height 300 --list --radiolist --multiple \
+	--title "Clover 工具箱" --column "选择" --column "选项" --column "说明 - 请仔细阅读" \
+	FALSE 1 "设置默认超时时间为 1 秒" \
+	FALSE 5 "设置默认超时时间为 5 秒" \
+	FALSE 10 "设置默认超时时间为 10 秒" \
+	FALSE 15 "设置默认超时时间为 15 秒" \
+ 	FALSE 60 "设置默认超时时间为 60 秒" \
+	TRUE 退出 "***** 退出 Clover 工具箱 *****")
+
+	if [ $? -eq 1 ] || [ "$Timeout_Choice" == "退出" ]
+	then
+		echo "用户按了取消。返回主菜单。"
+	else
+		# 修改 config.plist 中的 Default Timeout
+		echo -e "$current_password\n" | sudo -S sed -i '/<key>Timeout<\/key>/!b;n;c\\t\t<integer>'$Timeout_Choice'<\/integer>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover 工具箱" --text "默认超时时间已设置为 $Timeout_Choice 秒！" --width 400 --height 75
+	fi
+
+elif [ "$Choice" == "服务" ]
+then
+Service_Choice=$(zenity --width 650 --height 250 --list --radiolist --multiple --title "Clover 工具箱" \
+	--column "选择" --column "选项" --column "说明 - 请仔细阅读" \
+	FALSE 禁用 "禁用 Clover EFI 条目和 systemd 服务" \
+	FALSE 启用 "启用 Clover EFI 条目和 systemd 服务" \
+	TRUE 退出 "***** 退出 Clover 工具箱 *****")
+
+	if [ $? -eq 1 ] || [ "$Service_Choice" == "退出" ]
+	then
+		echo "用户按了取消。返回主菜单。"
+
+	elif [ "$Service_Choice" == "禁用" ]
+	then
+		# 从备份恢复 Windows EFI 条目
+		echo -e "$current_password\n" | sudo -S cp $EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig $EFI_PATH/Microsoft/Boot/bootmgfw.efi
+
+		# 将 Windows 设为下一次启动项
+		Windows=$(efibootmgr | grep -i Windows | colrm 9 | colrm 1 4)
+		echo -e "$current_password\n" | sudo -S efibootmgr -n $Windows &> /dev/null
+
+		# 禁用 Clover systemd 服务
+		echo -e "$current_password\n" | sudo -S systemctl disable --now clover-bootmanager
+		zenity --warning --title "Clover 工具箱" --text "Clover systemd 服务已禁用。Windows 现已激活！" --width 500 --height 75
+
+	elif [ "$Service_Choice" == "启用" ]
+	then
+		# 启用 Clover systemd 服务
+		sudo systemctl enable --now clover-bootmanager
+		echo -e "$current_password\n" | sudo -S /etc/systemd/system/clover-bootmanager.sh
+		zenity --warning --title "Clover 工具箱" --text "Clover systemd 服务已启用。Windows 已禁用！" --width 500 --height 75
+	fi
+
+elif [ "$Choice" == "默认启动" ]
+then
+Boot_Choice=$(zenity --width 550 --height 300 --list --radiolist --multiple --title "Clover 工具箱" --column "选择" \
+	--column "选项" --column "说明 - 请仔细阅读" \
+	FALSE Windows "将 Windows 设为默认启动系统" \
+	FALSE SteamOS "将 SteamOS 设为默认启动系统" \
+	FALSE Bazzite "将 Bazzite 设为默认启动系统" \
+	FALSE 上次系统 "将上一次启动的系统设为默认" \
+	TRUE 退出 "***** 退出 Clover 工具箱 *****")
+
+	if [ $? -eq 1 ] || [ "$Boot_Choice" == "退出" ]
+	then
+		echo "用户按了取消。返回主菜单。"
+
+	elif [ "$Boot_Choice" == "Windows" ]
+	then
+		# 修改 config.plist 中的 Default Loader 为 Windows
+		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\efi\\microsoft\\bootmgfw\.efi<\/string>' $EFI_PATH/clover/config.plist
+		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>esp<\/string>' $EFI_PATH/clover/config.plist
+
+		zenity --warning --title "Clover 工具箱" --text "Windows 现在是 Clover 中的默认启动项！" --width 400 --height 75
+
+	elif [ "$Boot_Choice" == "SteamOS" ]
+	then
+		# 修改 config.plist 中的 Default Loader
+		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\efi\\steamos\\steamcl\.efi<\/string>' $EFI_PATH/clover/config.plist
+		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>esp<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover 工具箱" --text "SteamOS 现在是 Clover 中的默认启动项！" --width 400 --height 75
+
+	elif [ "$Boot_Choice" == "Bazzite" ]
+	then
+		# 修改 config.plist 中的 Default Loader
+		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\EFI\\FEDORA\\shimx64\.efi<\/string>' $EFI_PATH/clover/config.plist
+		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>esp<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover 工具箱" --text "Bazzite 现在是 Clover 中的默认启动项！" --width 400 --height 75
+
+	elif [ "$Boot_Choice" == "上次系统" ]
+	then
+		# 修改 config.plist 中的 Default Volume
+		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>LastBootedVolume<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover 工具箱" --text "上一次使用的系统现在是 Clover 中的默认启动项！" --width 425 --height 75
+	fi
+
+elif [ "$Choice" == "新Logo" ]
+then
+Logo_Choice=$(zenity --title "Clover 工具箱" --width 200 --height 350 --list \
+	--column "Logo 名称" $(ls -l ~/1Clover-tools/logos/*.png | sed s/^.*\\/\//) )
+	if [ $? -eq 1 ]
+	then
+		echo "用户按了取消。返回主菜单。"
+	else
+		echo -e "$current_password\n" | sudo -S cp ~/1Clover-tools/logos/$Logo_Choice $EFI_PATH/steamos/steamos.png
+		zenity --warning --title "Clover 工具箱" --text "BGRT 标志已更改为 $Logo_Choice！" --width 400 --height 75
+	fi
+
+elif [ "$Choice" == "恢复Logo" ]
+then
+	echo -e "$current_password\n" | sudo -S rm $EFI_PATH/steamos/steamos.png &> /dev/null
+	zenity --warning --title "Clover 工具箱" --text "BGRT 标志已恢复为默认！" --width 400 --height 75
+
+elif [ "$Choice" == "分辨率" ]
+then
+Resolution_Choice=$(zenity --width 550 --height 250 --list --radiolist --multiple --title "Clover 工具箱" \
+	--column "选择" --column "选项" --column "说明 - 请仔细阅读" \
+	FALSE 默认 "使用默认屏幕分辨率 1280x800" \
+	FALSE DeckHD "使用 DeckHD 屏幕分辨率 1920x1200" \
+	FALSE DeckSight "使用 DeckSight 屏幕分辨率 1920x1080" \
+	TRUE 退出 "***** 退出 Clover 工具箱 *****")
+
+	if [ $? -eq 1 ] || [ "$Resolution_Choice" == "退出" ]
+	then
+		echo "用户按了取消。返回主菜单。"
+
+	elif [ "$Resolution_Choice" == "默认" ]
+	then
+		# 修改 config.plist 中的屏幕分辨率为 1280x800
+		echo -e "$current_password\n" | sudo -S sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1280x800<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover 工具箱" --text "屏幕分辨率已设置为 1280x800。" --width 400 --height 75
+
+	elif [ "$Resolution_Choice" == "DeckHD" ]
+	then
+		# 修改 config.plist 中的屏幕分辨率为 1920x1200
+		echo -e "$current_password\n" | sudo -S sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1200<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover 工具箱" --text "屏幕分辨率已设置为 1920x1200。" --width 400 --height 75
+
+	elif [ "$Resolution_Choice" == "DeckSight" ]
+	then
+		# 修改 config.plist 中的屏幕分辨率为 1920x1080
+		echo -e "$current_password\n" | sudo -S sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1080<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover 工具箱" --text "屏幕分辨率已设置为 1920x1080。" --width 400 --height 75
+
+	fi
+
+elif [ "$Choice" == "自定义" ]
+then
+	echo -e "$current_password\n" | sudo -S cp ~/1Clover-tools/efi/custom_clover_5157.efi $EFI_PATH/clover/cloverx64.efi
+	zenity --warning --title "Clover 工具箱" --text "自定义 Clover EFI 已安装！" --width 400 --height 75
+
+elif [ "$Choice" == "卸载" ]
+then
+	# 从备份恢复 Windows EFI 条目
+	echo -e "$current_password\n" | sudo -S mv $EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig $EFI_PATH/Microsoft/Boot/bootmgfw.efi
+	if [ $? -eq 0 ]
+	then
+		echo -e "$current_password\n" | sudo -S rm $EFI_PATH/Microsoft/bootmgfw.efi
+	else
+		echo -e "$current_password\n" | sudo -S mv $EFI_PATH/Microsoft/bootmgfw.efi $EFI_PATH/Microsoft/Boot/bootmgfw.efi
+	fi
+	echo -e "$current_password\n" | sudo -S mv $BOOTX64.orig $BOOTX64
+
+	# 从 EFI 系统分区移除 Clover
+	echo -e "$current_password\n" | sudo -S rm -rf $EFI_PATH/clover
+
+	for entry in $(efibootmgr | grep "Clover - GUI" | colrm 9 | colrm 1 4)
+	do
+		echo -e "$current_password\n" | sudo -S efibootmgr -b $entry -B &> /dev/null
+	done
+
+	# 移除自定义 BGRT 标志
+	echo -e "$current_password\n" | sudo -S rm $EFI_PATH/steamos/steamos.png &> /dev/null
+
+	echo -e "$current_password\n" | sudo -S steamos-readonly disable
+
+	# 删除 systemd 服务
+	echo -e "$current_password\n" | sudo -S systemctl stop clover-bootmanager.service
+	echo -e "$current_password\n" | sudo -S rm /etc/systemd/system/clover-bootmanager*
+	echo -e "$current_password\n" | sudo -S systemctl daemon-reload
+
+	echo -e "$current_password\n" | sudo -S rm -f /etc/atomic-update.conf.d/clover-whitelist.conf
+
+	echo -e "$current_password\n" | sudo -S steamos-readonly enable
+
+	# 删除 dolphin 右键扩展
+	rm ~/.local/share/kservices5/ServiceMenus/open_as_root.desktop
+
+	rm -rf ~/SteamDeck-Clover-dualboot
+	rm -rf ~/1Clover-tools/
+
+	# 删除桌面上的“引导文件配置”快捷方式（如果存在）
+	rm -f ~/Desktop/引导文件配置.desktop
+
+	zenity --warning --title "Clover 工具箱" --text "Clover 已卸载，Windows EFI 条目已激活！" --width 600 --height 75
+	exit
+fi
+done
+TOOLBOX_EOF
+
+    chmod +x ~/1Clover-tools/Clover-Toolbox.sh
+    echo -e "${GREEN}✓ 已更新 Clover-Toolbox.sh 为汉化版。${NC}"
 
     echo -e "${YELLOW}建议重启 Steam Deck 以使引导生效。${NC}"
     echo ""
@@ -1817,9 +2366,39 @@ install_wps_office() {
     clear
     echo -e "${YELLOW}════════════════ 安装WPS Office ════════════════${NC}"
     echo "正在通过 Flatpak 安装 WPS Office..."
+
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.wps.Office -y || flatpak install flathub cn.wps.wps-office -y || flatpak install flathub com.kingsoft.wps -y
-    echo -e "${GREEN}WPS Office 安装完成${NC}"
+
+    local app_id=""
+    local success=0
+
+    if flatpak install flathub com.wps.Office -y 2>/dev/null; then
+        app_id="com.wps.Office"
+        success=1
+    elif flatpak install flathub cn.wps.wps-office -y 2>/dev/null; then
+        app_id="cn.wps.wps-office"
+        success=1
+    elif flatpak install flathub com.kingsoft.wps -y 2>/dev/null; then
+        app_id="com.kingsoft.wps"
+        success=1
+    fi
+
+    if [ $success -eq 1 ]; then
+        echo -e "${GREEN}✓ WPS Office 安装成功${NC}"
+        cat > "$HOME/Desktop/WPS Office.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=WPS Office
+Exec=flatpak run ${app_id}
+Icon=${app_id}
+Terminal=false
+Categories=Office;
+EOF
+        chmod +x "$HOME/Desktop/WPS Office.desktop"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
+    else
+        echo -e "${RED}✗ WPS Office 安装失败，请检查网络或手动安装。${NC}"
+    fi
 }
 
 install_qq() {
@@ -1827,9 +2406,36 @@ install_qq() {
     clear
     echo -e "${YELLOW}════════════════ 安装QQ ════════════════${NC}"
     echo "正在通过 Flatpak 安装 QQ..."
+
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.qq.QQ -y || flatpak install flathub com.tencent.qq -y
-    echo -e "${GREEN}QQ 安装完成${NC}"
+
+    local app_id=""
+    local success=0
+
+    if flatpak install flathub com.qq.QQ -y 2>/dev/null; then
+        app_id="com.qq.QQ"
+        success=1
+    elif flatpak install flathub com.tencent.qq -y 2>/dev/null; then
+        app_id="com.tencent.qq"
+        success=1
+    fi
+
+    if [ $success -eq 1 ]; then
+        echo -e "${GREEN}✓ QQ 安装成功${NC}"
+        cat > "$HOME/Desktop/QQ.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=QQ
+Exec=flatpak run ${app_id}
+Icon=${app_id}
+Terminal=false
+Categories=Network;Chat;
+EOF
+        chmod +x "$HOME/Desktop/QQ.desktop"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
+    else
+        echo -e "${RED}✗ QQ 安装失败，请检查网络或手动安装。${NC}"
+    fi
 }
 
 install_wechat() {
@@ -1837,9 +2443,64 @@ install_wechat() {
     clear
     echo -e "${YELLOW}════════════════ 安装微信 ════════════════${NC}"
     echo "正在通过 Flatpak 安装微信..."
+
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.tencent.WeChat -y || flatpak install flathub com.qq.weixin -y
-    echo -e "${GREEN}微信 安装完成${NC}"
+
+    local app_id=""
+    local success=0
+    local error_msg=""
+
+    # 尝试安装 com.tencent.WeChat
+    echo "尝试安装 com.tencent.WeChat..."
+    if flatpak install flathub com.tencent.WeChat -y 2>/tmp/wechat_error.log; then
+        app_id="com.tencent.WeChat"
+        success=1
+    else
+        error_msg=$(cat /tmp/wechat_error.log 2>/dev/null)
+        if echo "$error_msg" | grep -q "Transferred a partial file"; then
+            echo -e "${YELLOW}下载中断，尝试使用 com.qq.weixin...${NC}"
+        elif echo "$error_msg" | grep -q "No remote refs found"; then
+            echo -e "${YELLOW}com.tencent.WeChat 不存在，尝试使用 com.qq.weixin...${NC}"
+        else
+            echo -e "${YELLOW}com.tencent.WeChat 安装失败，尝试使用 com.qq.weixin...${NC}"
+        fi
+        rm -f /tmp/wechat_error.log
+    fi
+
+    if [ $success -eq 0 ]; then
+        echo "尝试安装 com.qq.weixin..."
+        if flatpak install flathub com.qq.weixin -y 2>/tmp/wechat_error2.log; then
+            app_id="com.qq.weixin"
+            success=1
+        else
+            error_msg=$(cat /tmp/wechat_error2.log 2>/dev/null)
+            if echo "$error_msg" | grep -q "No remote refs found"; then
+                echo -e "${YELLOW}com.qq.weixin 在 flathub 中不存在${NC}"
+            else
+                echo -e "${YELLOW}com.qq.weixin 安装失败${NC}"
+            fi
+            rm -f /tmp/wechat_error2.log
+        fi
+    fi
+
+    if [ $success -eq 1 ]; then
+        echo -e "${GREEN}✓ 微信 安装成功${NC}"
+        cat > "$HOME/Desktop/微信.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=微信
+Exec=flatpak run ${app_id}
+Icon=${app_id}
+Terminal=false
+Categories=Network;Chat;
+EOF
+        chmod +x "$HOME/Desktop/微信.desktop"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
+    else
+        echo -e "${RED}✗ 微信 安装失败，请检查网络或手动安装。${NC}"
+        echo -e "${YELLOW}提示：Flathub 上的微信可能已改名或下架。${NC}"
+        echo -e "${YELLOW}建议尝试：从 https://flatpak.org 搜索 wechat 获取最新 ID。${NC}"
+    fi
 }
 
 install_qqmusic() {
@@ -1847,9 +2508,36 @@ install_qqmusic() {
     clear
     echo -e "${YELLOW}════════════════ 安装QQ音乐 ════════════════${NC}"
     echo "正在通过 Flatpak 安装 QQ音乐..."
+
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.qq.QQmusic -y || flatpak install flathub com.tencent.QQmusic -y
-    echo -e "${GREEN}QQ音乐 安装完成${NC}"
+
+    local app_id=""
+    local success=0
+
+    if flatpak install flathub com.qq.QQmusic -y 2>/dev/null; then
+        app_id="com.qq.QQmusic"
+        success=1
+    elif flatpak install flathub com.tencent.QQmusic -y 2>/dev/null; then
+        app_id="com.tencent.QQmusic"
+        success=1
+    fi
+
+    if [ $success -eq 1 ]; then
+        echo -e "${GREEN}✓ QQ音乐 安装成功${NC}"
+        cat > "$HOME/Desktop/QQ音乐.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=QQ音乐
+Exec=flatpak run ${app_id}
+Icon=${app_id}
+Terminal=false
+Categories=Audio;
+EOF
+        chmod +x "$HOME/Desktop/QQ音乐.desktop"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
+    else
+        echo -e "${RED}✗ QQ音乐 安装失败，请检查网络或手动安装。${NC}"
+    fi
 }
 
 install_baidunetdisk() {
@@ -1857,9 +2545,36 @@ install_baidunetdisk() {
     clear
     echo -e "${YELLOW}════════════════ 安装百度网盘 ════════════════${NC}"
     echo "正在通过 Flatpak 安装百度网盘..."
+
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.baidu.NetDisk -y || flatpak install flathub com.baidu.pan -y
-    echo -e "${GREEN}百度网盘 安装完成${NC}"
+
+    local app_id=""
+    local success=0
+
+    if flatpak install flathub com.baidu.NetDisk -y 2>/dev/null; then
+        app_id="com.baidu.NetDisk"
+        success=1
+    elif flatpak install flathub com.baidu.pan -y 2>/dev/null; then
+        app_id="com.baidu.pan"
+        success=1
+    fi
+
+    if [ $success -eq 1 ]; then
+        echo -e "${GREEN}✓ 百度网盘 安装成功${NC}"
+        cat > "$HOME/Desktop/百度网盘.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=百度网盘
+Exec=flatpak run ${app_id}
+Icon=${app_id}
+Terminal=false
+Categories=Network;FileTransfer;
+EOF
+        chmod +x "$HOME/Desktop/百度网盘.desktop"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
+    else
+        echo -e "${RED}✗ 百度网盘 安装失败，请检查网络或手动安装。${NC}"
+    fi
 }
 
 install_edge() {
@@ -1867,9 +2582,25 @@ install_edge() {
     clear
     echo -e "${YELLOW}════════════════ 安装Edge浏览器 ════════════════${NC}"
     echo "正在通过 Flatpak 安装 Edge..."
+
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.microsoft.Edge -y
-    echo -e "${GREEN}Edge 安装完成${NC}"
+
+    if flatpak install flathub com.microsoft.Edge -y 2>/dev/null; then
+        echo -e "${GREEN}✓ Edge 安装成功${NC}"
+        cat > "$HOME/Desktop/Microsoft Edge.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=Microsoft Edge
+Exec=flatpak run com.microsoft.Edge
+Icon=com.microsoft.Edge
+Terminal=false
+Categories=Network;WebBrowser;
+EOF
+        chmod +x "$HOME/Desktop/Microsoft Edge.desktop"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
+    else
+        echo -e "${RED}✗ Edge 安装失败，请检查网络或手动安装。${NC}"
+    fi
 }
 
 install_chrome() {
@@ -1877,9 +2608,25 @@ install_chrome() {
     clear
     echo -e "${YELLOW}════════════════ 安装Google浏览器 ════════════════${NC}"
     echo "正在通过 Flatpak 安装 Chrome..."
+
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    flatpak install flathub com.google.Chrome -y
-    echo -e "${GREEN}Chrome 安装完成${NC}"
+
+    if flatpak install flathub com.google.Chrome -y 2>/dev/null; then
+        echo -e "${GREEN}✓ Chrome 安装成功${NC}"
+        cat > "$HOME/Desktop/Google Chrome.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=Google Chrome
+Exec=flatpak run com.google.Chrome
+Icon=com.google.Chrome
+Terminal=false
+Categories=Network;WebBrowser;
+EOF
+        chmod +x "$HOME/Desktop/Google Chrome.desktop"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
+    else
+        echo -e "${RED}✗ Chrome 安装失败，请检查网络或手动安装。${NC}"
+    fi
 }
 
 # ========== 更新软件 ==========
@@ -1909,7 +2656,16 @@ uninstall_wps_office() {
         read -p "确定要卸载 WPS Office？(y/N): " -n 1 -r < /dev/tty
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ WPS Office 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+            if flatpak uninstall "$installed" -y; then
+                echo -e "${GREEN}✓ WPS Office 卸载完成${NC}"
+                local desktop_file="$HOME/Desktop/WPS Office.desktop"
+                if [ -f "$desktop_file" ]; then
+                    rm -f "$desktop_file"
+                    echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+                fi
+            else
+                echo -e "${RED}✗ 卸载失败${NC}"
+            fi
         else
             echo "取消卸载。"
         fi
@@ -1933,7 +2689,16 @@ uninstall_qq() {
         read -p "确定要卸载 QQ？(y/N): " -n 1 -r < /dev/tty
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ QQ 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+            if flatpak uninstall "$installed" -y; then
+                echo -e "${GREEN}✓ QQ 卸载完成${NC}"
+                local desktop_file="$HOME/Desktop/QQ.desktop"
+                if [ -f "$desktop_file" ]; then
+                    rm -f "$desktop_file"
+                    echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+                fi
+            else
+                echo -e "${RED}✗ 卸载失败${NC}"
+            fi
         else
             echo "取消卸载。"
         fi
@@ -1957,7 +2722,16 @@ uninstall_wechat() {
         read -p "确定要卸载微信？(y/N): " -n 1 -r < /dev/tty
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ 微信 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+            if flatpak uninstall "$installed" -y; then
+                echo -e "${GREEN}✓ 微信 卸载完成${NC}"
+                local desktop_file="$HOME/Desktop/微信.desktop"
+                if [ -f "$desktop_file" ]; then
+                    rm -f "$desktop_file"
+                    echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+                fi
+            else
+                echo -e "${RED}✗ 卸载失败${NC}"
+            fi
         else
             echo "取消卸载。"
         fi
@@ -1981,7 +2755,16 @@ uninstall_qqmusic() {
         read -p "确定要卸载 QQ音乐？(y/N): " -n 1 -r < /dev/tty
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ QQ音乐 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+            if flatpak uninstall "$installed" -y; then
+                echo -e "${GREEN}✓ QQ音乐 卸载完成${NC}"
+                local desktop_file="$HOME/Desktop/QQ音乐.desktop"
+                if [ -f "$desktop_file" ]; then
+                    rm -f "$desktop_file"
+                    echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+                fi
+            else
+                echo -e "${RED}✗ 卸载失败${NC}"
+            fi
         else
             echo "取消卸载。"
         fi
@@ -2005,7 +2788,16 @@ uninstall_baidunetdisk() {
         read -p "确定要卸载百度网盘？(y/N): " -n 1 -r < /dev/tty
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ 百度网盘 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+            if flatpak uninstall "$installed" -y; then
+                echo -e "${GREEN}✓ 百度网盘 卸载完成${NC}"
+                local desktop_file="$HOME/Desktop/百度网盘.desktop"
+                if [ -f "$desktop_file" ]; then
+                    rm -f "$desktop_file"
+                    echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+                fi
+            else
+                echo -e "${RED}✗ 卸载失败${NC}"
+            fi
         else
             echo "取消卸载。"
         fi
@@ -2029,7 +2821,16 @@ uninstall_edge() {
         read -p "确定要卸载 Edge浏览器？(y/N): " -n 1 -r < /dev/tty
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ Edge浏览器 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+            if flatpak uninstall "$installed" -y; then
+                echo -e "${GREEN}✓ Edge浏览器 卸载完成${NC}"
+                local desktop_file="$HOME/Desktop/Microsoft Edge.desktop"
+                if [ -f "$desktop_file" ]; then
+                    rm -f "$desktop_file"
+                    echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+                fi
+            else
+                echo -e "${RED}✗ 卸载失败${NC}"
+            fi
         else
             echo "取消卸载。"
         fi
@@ -2053,7 +2854,16 @@ uninstall_chrome() {
         read -p "确定要卸载 Google浏览器？(y/N): " -n 1 -r < /dev/tty
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            flatpak uninstall "$installed" -y && echo -e "${GREEN}✓ Google浏览器 卸载完成${NC}" || echo -e "${RED}✗ 卸载失败${NC}"
+            if flatpak uninstall "$installed" -y; then
+                echo -e "${GREEN}✓ Google浏览器 卸载完成${NC}"
+                local desktop_file="$HOME/Desktop/Google Chrome.desktop"
+                if [ -f "$desktop_file" ]; then
+                    rm -f "$desktop_file"
+                    echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+                fi
+            else
+                echo -e "${RED}✗ 卸载失败${NC}"
+            fi
         else
             echo "取消卸载。"
         fi
