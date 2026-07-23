@@ -23,7 +23,7 @@ import urllib.request
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.4.0"
+VERSION = "1.3.9"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 VERSION_CHECK_TIMEOUT = 10
 
