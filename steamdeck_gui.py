@@ -23,7 +23,7 @@ import urllib.request
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.3.8"
+VERSION = "1.3.9"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 VERSION_CHECK_TIMEOUT = 10
 
@@ -2197,7 +2197,7 @@ class TaskWindow(Gtk.Window):
                 Vte.PtyFlags.DEFAULT,
                 os.path.expanduser("~"),
                 ["/bin/bash"],
-                [],
+                None,
                 GLib.SpawnFlags.DEFAULT,
                 None,
                 None,
@@ -2234,6 +2234,7 @@ class TaskWindow(Gtk.Window):
 
     def set_completed(self):
         self.completed = True
+        self.action_btn.set_sensitive(True)
         self.action_btn.set_label("完成")
 
     def on_action_button_clicked(self, button):
@@ -2715,7 +2716,7 @@ def ensure_vte_installed():
         None,
         Gtk.DialogFlags.MODAL,
         Gtk.MessageType.INFO,
-        Gtk.ButtonsType.YES_NO,
+        Gtk.ButtonsType.NONE,
         "VTE 终端组件未安装"
     )
     dialog.format_secondary_text(
@@ -2723,6 +2724,17 @@ def ensure_vte_installed():
         "点击“是”将自动解除只读模式并安装（需要 sudo 密码）。\n"
         "安装完成后请手动重启本程序。"
     )
+    # 按钮顺序：是在左，否在右
+    dialog.add_button("是", Gtk.ResponseType.YES)
+    dialog.add_button("否", Gtk.ResponseType.NO)
+    try:
+        dialog.set_alternative_button_order_from_array([Gtk.ResponseType.YES, Gtk.ResponseType.NO])
+    except AttributeError:
+        try:
+            dialog.set_alternative_button_order(Gtk.ResponseType.YES, Gtk.ResponseType.NO)
+        except AttributeError:
+            pass
+
     response = dialog.run()
     dialog.destroy()
 
@@ -2763,6 +2775,7 @@ def ensure_vte_installed():
             Gtk.ButtonsType.OK,
             "未找到终端模拟器，请手动执行：\n"
             "sudo steamos-readonly disable\n"
+            "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF\n"
             "sudo pacman -S vte3"
         )
         error_dialog.run()
@@ -2770,9 +2783,11 @@ def ensure_vte_installed():
         return
 
     if terminal.endswith("konsole"):
-        cmd = [terminal, "-e", "sudo", "pacman", "-S", "--noconfirm", "vte3"]
+        cmd = [terminal, "-e", "bash", "-c",
+               "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF && sudo pacman -S --noconfirm vte3"]
     else:
-        cmd = [terminal, "-hold", "-e", "sudo", "pacman", "-S", "--noconfirm", "vte3"]
+        cmd = [terminal, "-hold", "-e", "bash", "-c",
+               "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF && sudo pacman -S --noconfirm vte3"]
 
     proc = subprocess.Popen(cmd)
     GLib.child_watch_add(proc.pid, on_vte_install_finished)
