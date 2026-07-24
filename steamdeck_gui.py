@@ -10,7 +10,7 @@ try:
 except (ValueError, ImportError):
     VTE_AVAILABLE = False
 
-from gi.repository import Gtk, GLib, GdkPixbuf
+from gi.repository import Gtk, GLib, GdkPixbuf, Pango   # [新增] 添加 Pango
 import subprocess
 import os
 import sys
@@ -23,7 +23,7 @@ import urllib.request
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.4.2"
+VERSION = "1.4.3"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 VERSION_CHECK_TIMEOUT = 10
 
@@ -3077,6 +3077,7 @@ class MainWindow(Gtk.Window):
         # 分类名称 → 图标文件名 映射
         self.icon_map = {
             "支持和维护": "pushpin.png",
+            "更新日志": "clipboard_twemoji.png",   # [新增]
             "系统优化": "hammer_wrench.png",
             "软件安装": "package.png",
             "网络工具": "globe.png",
@@ -3104,6 +3105,7 @@ class MainWindow(Gtk.Window):
 
         categories = [
             "支持和维护",
+            "更新日志",          # [新增]
             "系统优化",
             "软件安装",
             "网络工具",
@@ -3193,6 +3195,30 @@ steamdeck工具箱 v{VERSION}
         scrolled_about.add(about_textview)
         about_box.pack_start(scrolled_about, True, True, 0)
         self.stack.add_named(about_box, "about")
+
+        # ---------- 更新日志页面 ----------
+        changelog_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        changelog_box.set_margin_top(20)
+        changelog_box.set_margin_bottom(20)
+        changelog_box.set_margin_start(20)
+        changelog_box.set_margin_end(20)
+
+        self.changelog_textview = Gtk.TextView()
+        self.changelog_textview.set_editable(False)
+        self.changelog_textview.set_wrap_mode(Gtk.WrapMode.WORD)
+        self.changelog_textview.set_cursor_visible(False)
+
+        # 等宽字体
+        font_desc = Pango.FontDescription("Monospace 10")
+        self.changelog_textview.modify_font(font_desc)
+
+        scrolled_changelog = Gtk.ScrolledWindow()
+        scrolled_changelog.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled_changelog.set_vexpand(True)
+        scrolled_changelog.add(self.changelog_textview)
+        changelog_box.pack_start(scrolled_changelog, True, True, 0)
+
+        self.stack.add_named(changelog_box, "changelog")
 
         # ---------- 功能列表页面 ----------
         func_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
@@ -3376,6 +3402,24 @@ steamdeck工具箱 v{VERSION}
             self.title_icon.set_visible(False)
             self.category_title.set_visible(False)
             return
+
+        # [新增] 更新日志分支
+        if category == "更新日志":
+            self.stack.set_visible_child_name("changelog")
+            # 显示图标
+            icon_pixbuf = self.category_icons.get(category)
+            if icon_pixbuf:
+                self.title_icon.set_from_pixbuf(icon_pixbuf)
+                self.title_icon.set_visible(True)
+            else:
+                self.title_icon.set_visible(False)
+            # 设置标题文字（和左侧分类名称一致）
+            self.category_title.set_markup(f"<big><b>{category}</b></big>")
+            self.category_title.set_visible(True)
+            # 直接显示手动输入的内容
+            self.display_changelog()
+            return
+
         self.stack.set_visible_child_name("func")
 
         # 更新标题图标和文字
@@ -3408,6 +3452,33 @@ steamdeck工具箱 v{VERSION}
             else:
                 self.func_store.append(None, [item])
         self.func_view.show_all()
+
+    def display_changelog(self):
+        """显示手动输入的更新日志内容"""
+        changelog_content = """2026-07-18（v1.3.8包含 v1.3.7 的调整） 替换steamcommunity 302功能为安装Watt Toolkit (Steam++)，增加实用性
+调整了安装插件商店以及安装LSFG-VK插件和Framegen插件功能的部分逻辑，将校准摇杆更改为校准设备，增加了校准扳机
+2026-07-09（v1.3.6） 修改了修复互通盘功能的实现逻辑，更具有通用性
+2026-07-08（v1.3.5包含 v1.3.4 的调整） 删除了"远程无法连接点我"功能，调整从 GitHub 安装的功能的镜像顺序
+2026-06-30（v1.3.2） 修复了安装AnyDesk功能的bug
+2026-06-28（v1.3.1） 修复了调整虚拟内存大小功能的bug
+2026-06-27（v1.3.0） 增加"远程无法连接点我"功能
+调整安装 AnyDesk 功能的安装逻辑，改为从官网安装
+2026-06-03（v1.2.7） 增加安装/重装 Clover 引导功能，并进行多项完善
+2026-06-02（v1.2.6） 调整从 GitHub 安装的功能的安装逻辑，支持预发布版本和正式版选择
+2026-05-31（v1.2.4，包含 v1.1.9、v1.2.0、v1.2.1 的调整） 增加安装 LSFG‑VK 插件和 Framegen 插件功能（从 GitHub 安装，并使用镜像下载）
+调整插件商店功能的安装步骤，改用国内镜像加快下载速度，并增加镜像下载失败后的自动重试
+调整 Steam Deck 缓存管理器功能的部分参数
+2026-05-30（v1.1.8） 调整自动更新的逻辑
+2026-05-28（v1.1.8，包含 v1.1.7） 更改插件商店功能，改为从 GitHub 安装
+更新工具箱打开后自动更新的步骤
+2026-03-17（v1.1.2） 由于宝葫芦停止维护，删除"安装＆卸载宝葫芦"功能
+2026-03-05（v1.1.1） 更改安装 ToMoon 功能的实现逻辑，改为从 Gitee 克隆下载安装
+2026-03-02（v1.1.0） 更改安装插件商店功能的实现逻辑，改为从 Gitee 克隆下载安装
+2026-01-21（v1.0.9） 新增安装 Steam 社区 302 功能
+2026-01-16（v1.0.8） 完善调整虚拟内存大小功能的文本展示
+2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
+最初发布在github，没做详细的统计，发布日期为2026-01-01"""
+        self.changelog_textview.get_buffer().set_text(changelog_content)
 
     def on_func_row_activated(self, treeview, path, column):
         model = treeview.get_model()
@@ -3462,14 +3533,12 @@ steamdeck工具箱 v{VERSION}
 
     def run_cache_manager_gui(self):
         """直接运行 zenity 图形化缓存管理器，不显示终端窗口"""
-        # 提取 BASH_SCRIPT 中该函数的定义，并直接调用
         func_name = "steamdeck_cache_manager"
         script_content = BASH_SCRIPT + f"\n\n{func_name}\n"
         with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, encoding='utf-8') as f:
             f.write(script_content)
             tmp_path = f.name
         os.chmod(tmp_path, 0o755)
-        # 后台启动，完全不显示任何窗口（stdout/stderr 丢弃）
         subprocess.Popen(
             [tmp_path],
             stdout=subprocess.DEVNULL,
@@ -3557,7 +3626,6 @@ def ensure_vte_installed():
         "点击“是”将自动解除只读模式并安装（需要 sudo 密码）。\n"
         "安装完成后请手动重启本程序。"
     )
-    # 按钮顺序：是在左，否在右
     dialog.add_button("是", Gtk.ResponseType.YES)
     dialog.add_button("否", Gtk.ResponseType.NO)
     try:
