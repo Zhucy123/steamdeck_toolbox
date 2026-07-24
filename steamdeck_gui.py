@@ -10,7 +10,7 @@ try:
 except (ValueError, ImportError):
     VTE_AVAILABLE = False
 
-from gi.repository import Gtk, GLib, GdkPixbuf, Pango   # [新增] 添加 Pango
+from gi.repository import Gtk, GLib, GdkPixbuf, Pango
 import subprocess
 import os
 import sys
@@ -19,13 +19,14 @@ import tempfile
 import shutil
 import threading
 import urllib.request
-import json
+import json          # [新增] 用于解析 API 响应
 
 # ============================================================================
 # 版本定义
 # ============================================================================
 VERSION = "1.4.4"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
+REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"   # [新增] 仓库根地址
 VERSION_CHECK_TIMEOUT = 10
 
 # ============================================================================
@@ -3078,7 +3079,7 @@ class MainWindow(Gtk.Window):
         # 分类名称 → 图标文件名 映射
         self.icon_map = {
             "支持和维护": "pushpin.png",
-            "更新日志": "clipboard_twemoji.png",   # [新增]
+            "更新日志": "clipboard_twemoji.png",
             "系统优化": "hammer_wrench.png",
             "软件安装": "package.png",
             "网络工具": "globe.png",
@@ -3106,7 +3107,7 @@ class MainWindow(Gtk.Window):
 
         categories = [
             "支持和维护",
-            "更新日志",          # [新增]
+            "更新日志",
             "系统优化",
             "软件安装",
             "网络工具",
@@ -3404,20 +3405,17 @@ steamdeck工具箱 v{VERSION}
             self.category_title.set_visible(False)
             return
 
-        # [新增] 更新日志分支
+        # 更新日志分支
         if category == "更新日志":
             self.stack.set_visible_child_name("changelog")
-            # 显示图标
             icon_pixbuf = self.category_icons.get(category)
             if icon_pixbuf:
                 self.title_icon.set_from_pixbuf(icon_pixbuf)
                 self.title_icon.set_visible(True)
             else:
                 self.title_icon.set_visible(False)
-            # 设置标题文字（和左侧分类名称一致）
             self.category_title.set_markup(f"<big><b>{category}</b></big>")
             self.category_title.set_visible(True)
-            # 直接显示手动输入的内容
             self.display_changelog()
             return
 
@@ -3695,6 +3693,69 @@ def ensure_vte_installed():
     GLib.child_watch_add(proc.pid, on_vte_install_finished)
 
 # ============================================================================
+# 图标同步函数（新增）
+# ============================================================================
+def sync_emoji_icons():
+    """检查本地图标是否与远程仓库一致，不一致则同步"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    local_icon_dir = os.path.join(script_dir, "emoji_icons")
+    # 获取远程文件列表
+    remote_count = 0
+    try:
+        api_url = "https://gitee.com/api/v5/repos/Zhucy2100/steamdeck_toolbox/contents/emoji_icons"
+        req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            # data 是列表，每个元素代表一个文件/目录
+            remote_count = len([item for item in data if item['type'] == 'file'])
+    except Exception as e:
+        print(f"获取远程图标列表失败: {e}")
+        # 如果网络失败，跳过同步
+        return False
+    # 本地数量
+    local_count = 0
+    if os.path.isdir(local_icon_dir):
+        local_count = len([f for f in os.listdir(local_icon_dir) if os.path.isfile(os.path.join(local_icon_dir, f))])
+    if local_count == remote_count and remote_count > 0:
+        print("图标数量一致，无需同步。")
+        return True
+    print(f"图标数量不一致: 本地 {local_count}, 远程 {remote_count}，开始同步...")
+    # 进行同步：使用 git clone
+    temp_dir = "/tmp/steamdeck_icons_sync"
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+    try:
+        # 检查 git 命令
+        subprocess.run(["git", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        print("git 未安装，无法同步图标。")
+        return False
+    try:
+        repo_url = "https://gitee.com/Zhucy2100/steamdeck_toolbox.git"
+        subprocess.run(["git", "clone", "--depth=1", repo_url, temp_dir], check=True, timeout=60)
+        remote_icon_dir = os.path.join(temp_dir, "emoji_icons")
+        if os.path.isdir(remote_icon_dir):
+            # 确保本地目录存在
+            os.makedirs(local_icon_dir, exist_ok=True)
+            # 复制所有文件
+            for item in os.listdir(remote_icon_dir):
+                src = os.path.join(remote_icon_dir, item)
+                dst = os.path.join(local_icon_dir, item)
+                if os.path.isfile(src):
+                    shutil.copy2(src, dst)
+            print("图标同步完成。")
+            return True
+        else:
+            print("克隆的仓库中未找到 emoji_icons 目录。")
+            return False
+    except Exception as e:
+        print(f"图标同步失败: {e}")
+        return False
+    finally:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+
+# ============================================================================
 # 更新相关函数
 # ============================================================================
 
@@ -3717,49 +3778,6 @@ def get_remote_version():
         print(f"检查更新失败: {e}")
         return None
 
-def sync_emoji_icons():
-    """从 Gitee 仓库同步 emoji_icons 文件夹到本地（对比文件列表及大小）"""
-    local_icon_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "emoji_icons")
-    os.makedirs(local_icon_dir, exist_ok=True)
-
-    # 获取远程文件列表（Gitee API）
-    api_url = "https://gitee.com/api/v5/repos/Zhucy2100/steamdeck_toolbox/contents/emoji_icons"
-    try:
-        req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
-            data = json.loads(response.read().decode('utf-8'))
-            remote_files = {item['name']: item for item in data if item['type'] == 'file'}
-    except Exception as e:
-        print(f"[图标同步] 获取远程列表失败: {e}")
-        return
-
-    # 遍历远程文件，对比本地
-    for filename, info in remote_files.items():
-        local_path = os.path.join(local_icon_dir, filename)
-        remote_size = info['size']
-        need_download = False
-        if not os.path.exists(local_path):
-            need_download = True
-        else:
-            local_size = os.path.getsize(local_path)
-            if local_size != remote_size:
-                need_download = True
-
-        if need_download:
-            raw_url = f"https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/emoji_icons/{filename}"
-            try:
-                req = urllib.request.Request(raw_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    content = resp.read()
-                    with open(local_path, 'wb') as f:
-                        f.write(content)
-                print(f"[图标同步] 已下载/更新: {filename}")
-            except Exception as e:
-                print(f"[图标同步] 下载 {filename} 失败: {e}")
-
-    # 可选：删除本地多余文件（这里不删，避免误删）
-    print("[图标同步] 同步完成")
-
 def perform_update(remote_version, parent_window=None):
     try:
         progress_dialog = Gtk.MessageDialog(
@@ -3780,12 +3798,6 @@ def perform_update(remote_version, parent_window=None):
         )
         with urllib.request.urlopen(req, timeout=30) as response:
             new_content = response.read().decode('utf-8')
-
-        progress_dialog.set_text("正在同步图标文件...")
-        while Gtk.events_pending():
-            Gtk.main_iteration()
-
-        sync_emoji_icons()
 
         progress_dialog.destroy()
 
@@ -3869,6 +3881,9 @@ class UpdateCheckWindow(Gtk.Window):
 
     def perform_check(self):
         def check_thread():
+            # 先同步图标
+            sync_emoji_icons()
+            # 再检查版本
             remote_version = get_remote_version()
             GLib.idle_add(self.on_check_done, remote_version)
         threading.Thread(target=check_thread, daemon=True).start()
@@ -3930,13 +3945,14 @@ class UpdateCheckWindow(Gtk.Window):
         dialog.destroy()
 
         if response == Gtk.ResponseType.YES:
-            # 先关闭更新检查窗口，避免重叠
-            self.destroy()
-            # 不传父窗口，使进度对话框独立显示
-            perform_update(remote_version, None)
+            perform_update(remote_version, self)
         else:
             self.destroy()
             show_main_window()
+
+    def on_button_clicked(self, button):
+        self.destroy()
+        show_main_window()
 
 # ============================================================================
 # 启动
