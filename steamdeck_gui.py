@@ -24,7 +24,7 @@ import json          # [新增] 用于解析 API 响应
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.4.4"
+VERSION = "1.4.5"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"   # [新增] 仓库根地址
 VERSION_CHECK_TIMEOUT = 10
@@ -2314,9 +2314,8 @@ TOOLBOX_EOF
     chmod +x ~/1Clover-tools/Clover-Toolbox.sh
     echo -e "${GREEN}✓ 已更新 Clover-Toolbox.sh 为汉化版。${NC}"
 
-    echo -e "${YELLOW}建议重启 Steam Deck 以使引导生效。${NC}"
+    echo -e "${YELLOW}建议重启设备以使引导生效。${NC}"
     echo ""
-    read -p "按回车键返回主菜单..." < /dev/tty
 }
 
 # ========== 软件安装 ==========
