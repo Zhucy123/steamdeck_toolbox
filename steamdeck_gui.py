@@ -19,11 +19,12 @@ import tempfile
 import shutil
 import threading
 import urllib.request
+import json
 
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.4.3"
+VERSION = "1.4.4"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 VERSION_CHECK_TIMEOUT = 10
 
@@ -3716,6 +3717,49 @@ def get_remote_version():
         print(f"检查更新失败: {e}")
         return None
 
+def sync_emoji_icons():
+    """从 Gitee 仓库同步 emoji_icons 文件夹到本地（对比文件列表及大小）"""
+    local_icon_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "emoji_icons")
+    os.makedirs(local_icon_dir, exist_ok=True)
+
+    # 获取远程文件列表（Gitee API）
+    api_url = "https://gitee.com/api/v5/repos/Zhucy2100/steamdeck_toolbox/contents/emoji_icons"
+    try:
+        req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            remote_files = {item['name']: item for item in data if item['type'] == 'file'}
+    except Exception as e:
+        print(f"[图标同步] 获取远程列表失败: {e}")
+        return
+
+    # 遍历远程文件，对比本地
+    for filename, info in remote_files.items():
+        local_path = os.path.join(local_icon_dir, filename)
+        remote_size = info['size']
+        need_download = False
+        if not os.path.exists(local_path):
+            need_download = True
+        else:
+            local_size = os.path.getsize(local_path)
+            if local_size != remote_size:
+                need_download = True
+
+        if need_download:
+            raw_url = f"https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/emoji_icons/{filename}"
+            try:
+                req = urllib.request.Request(raw_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    content = resp.read()
+                    with open(local_path, 'wb') as f:
+                        f.write(content)
+                print(f"[图标同步] 已下载/更新: {filename}")
+            except Exception as e:
+                print(f"[图标同步] 下载 {filename} 失败: {e}")
+
+    # 可选：删除本地多余文件（这里不删，避免误删）
+    print("[图标同步] 同步完成")
+
 def perform_update(remote_version, parent_window=None):
     try:
         progress_dialog = Gtk.MessageDialog(
@@ -3738,6 +3782,8 @@ def perform_update(remote_version, parent_window=None):
             new_content = response.read().decode('utf-8')
 
         progress_dialog.destroy()
+
+        sync_emoji_icons()
 
         current_path = os.path.abspath(sys.argv[0])
         backup_path = current_path + ".bak"
