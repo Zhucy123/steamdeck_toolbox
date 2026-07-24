@@ -3781,9 +3781,13 @@ def perform_update(remote_version, parent_window=None):
         with urllib.request.urlopen(req, timeout=30) as response:
             new_content = response.read().decode('utf-8')
 
-        progress_dialog.destroy()
+        progress_dialog.set_text("正在同步图标文件...")
+        while Gtk.events_pending():
+            Gtk.main_iteration()
 
         sync_emoji_icons()
+
+        progress_dialog.destroy()
 
         current_path = os.path.abspath(sys.argv[0])
         backup_path = current_path + ".bak"
@@ -3926,14 +3930,13 @@ class UpdateCheckWindow(Gtk.Window):
         dialog.destroy()
 
         if response == Gtk.ResponseType.YES:
-            perform_update(remote_version, self)
+            # 先关闭更新检查窗口，避免重叠
+            self.destroy()
+            # 不传父窗口，使进度对话框独立显示
+            perform_update(remote_version, None)
         else:
             self.destroy()
             show_main_window()
-
-    def on_button_clicked(self, button):
-        self.destroy()
-        show_main_window()
 
 # ============================================================================
 # 启动
