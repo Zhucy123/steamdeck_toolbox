@@ -24,7 +24,7 @@ import json          # [新增] 用于解析 API 响应
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.4.5"
+VERSION = "1.4.6"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"   # [新增] 仓库根地址
 VERSION_CHECK_TIMEOUT = 10
@@ -3453,7 +3453,8 @@ steamdeck工具箱 v{VERSION}
 
     def display_changelog(self):
         """显示手动输入的更新日志内容"""
-        changelog_content = """2026-07-18（v1.3.8包含 v1.3.7 的调整） 替换steamcommunity 302功能为安装Watt Toolkit (Steam++)，增加实用性
+        changelog_content = """2026-07-25（v1.4.6包含 v1.3.9-v1.4.5 的调整）将文字形式停止更新，替换为图文形式，操作更加便捷，并对功能进行了修改和优化完善
+2026-07-18（v1.3.8包含 v1.3.7 的调整） 替换steamcommunity 302功能为安装Watt Toolkit (Steam++)，增加实用性
 调整了安装插件商店以及安装LSFG-VK插件和Framegen插件功能的部分逻辑，将校准摇杆更改为校准设备，增加了校准扳机
 2026-07-09（v1.3.6） 修改了修复互通盘功能的实现逻辑，更具有通用性
 2026-07-08（v1.3.5包含 v1.3.4 的调整） 删除了"远程无法连接点我"功能，调整从 GitHub 安装的功能的镜像顺序
