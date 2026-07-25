@@ -24,7 +24,7 @@ import json          # [新增] 用于解析 API 响应
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.4.6"
+VERSION = "1.4.7"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"   # [新增] 仓库根地址
 VERSION_CHECK_TIMEOUT = 10
@@ -265,87 +265,163 @@ cleanup_swap() {
     echo -e "${GREEN}✅ 已清理所有Swap配置${NC}"
 }
 
+fix_single_ntfs() {
+    local device="$1"
+    local mountpoint="$2"
+
+    echo ""
+    echo -e "${CYAN}正在修复分区: $device${NC}"
+
+    if [ -n "$mountpoint" ]; then
+        echo "  正在卸载 $mountpoint ..."
+        sudo umount "$device" 2>/dev/null || sudo umount -f "$device" 2>/dev/null
+    fi
+
+    echo "  执行 ntfsfix ..."
+    if sudo ntfsfix "$device" 2>/dev/null; then
+        echo -e "${GREEN}  ✓ 修复成功${NC}"
+    else
+        echo -e "${RED}  ✗ 修复失败，请检查 dmesg 输出。${NC}"
+    fi
+
+    if [ -n "$mountpoint" ] && [ -d "$mountpoint" ]; then
+        echo "  尝试重新挂载到 $mountpoint ..."
+        if sudo mount "$device" "$mountpoint" 2>/dev/null; then
+            echo -e "${GREEN}  ✓ 重新挂载成功${NC}"
+        else
+            echo -e "${YELLOW}  ⚠️  自动挂载失败，请手动挂载。${NC}"
+        fi
+    fi
+}
+
 fix_disk_write_error() {
     mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 修复磁盘写入错误 ════════════════${NC}"
-    echo -e "${CYAN}正在修复磁盘写入错误...${NC}"
+    echo -e "${CYAN}正在扫描 NTFS 分区并检查是否存在错误...${NC}"
+
     echo ""
-    echo "步骤1: 检查并禁用SteamOS只读模式"
-    if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
-        sudo steamos-readonly disable 2>/dev/null
-        if [ $? -eq 0 ]; then echo -e "${GREEN}✓ 已禁用只读模式${NC}"; else echo -e "${YELLOW}⚠️  禁用只读模式时出现警告${NC}"; fi
-    else
-        echo -e "${GREEN}✓ 系统已处于读写模式${NC}"
+    echo -e "${CYAN}请输入您的 sudo 密码以继续操作（输入时不会显示）${NC}"
+    if ! sudo -v 2>/dev/null; then
+        echo -e "${RED}密码验证失败或已取消，操作终止。${NC}"
+        return 1
     fi
-    echo ""
-    echo "步骤2: 检查磁盘设备"
-    DISK_DEVICE="/dev/nvme0n1p10"
-    if [ -b "$DISK_DEVICE" ]; then
-        echo -e "${GREEN}✓ 找到磁盘设备: $DISK_DEVICE${NC}"
-    else
-        echo -e "${RED}✗ 未找到磁盘设备: $DISK_DEVICE${NC}"
-        return
+    echo -e "${GREEN}密码已验证，继续执行。${NC}"
+
+    if ! command -v ntfsfix &> /dev/null; then
+        echo -e "${RED}错误: 未安装 ntfsfix 工具。${NC}"
+        echo "请安装 ntfs-3g 包："
+        echo "  sudo pacman -S ntfs-3g   (Arch/SteamOS)"
+        echo "  sudo apt install ntfs-3g (Debian/Ubuntu)"
+        return 1
     fi
-    echo ""
-    echo "步骤3: 检查分区挂载状态"
-    MOUNT_POINT=$(mount | grep "$DISK_DEVICE" | awk '{print $3}')
-    if [ -n "$MOUNT_POINT" ]; then
-        echo "分区已挂载到: $MOUNT_POINT"
-        echo "正在卸载分区..."
-        if sudo umount "$DISK_DEVICE" 2>/dev/null; then
-            echo -e "${GREEN}✓ 分区卸载成功${NC}"
-        else
-            echo "尝试强制卸载..."
-            if sudo umount -f "$DISK_DEVICE" 2>/dev/null; then
-                echo -e "${GREEN}✓ 分区强制卸载成功${NC}"
+
+    if command -v steamos-readonly &> /dev/null; then
+        echo ""
+        echo "步骤1: 检查并禁用 SteamOS 只读模式"
+        if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
+            sudo steamos-readonly disable 2>/dev/null
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}✓ 已禁用只读模式${NC}"
             else
-                echo -e "${YELLOW}⚠️  分区卸载失败，尝试继续修复${NC}"
+                echo -e "${YELLOW}⚠️  禁用只读模式失败，尝试继续...${NC}"
             fi
+        else
+            echo -e "${GREEN}✓ 系统已处于读写模式${NC}"
         fi
     else
-        echo -e "${GREEN}✓ 分区未挂载，可直接进行修复${NC}"
+        echo ""
+        echo "步骤1: 跳过 SteamOS 只读模式（当前系统非 SteamOS）"
     fi
+
     echo ""
-    echo "步骤4: 修复NTFS文件系统"
-    if mount | grep -q "$DISK_DEVICE"; then
-        if sudo ntfsfix -d "$DISK_DEVICE" 2>/dev/null; then
-            echo -e "${GREEN}✓ NTFS修复完成${NC}"
-        else
-            echo -e "${YELLOW}⚠️  NTFS修复可能存在问题${NC}"
+    echo "步骤2: 扫描 NTFS 分区..."
+    local ntfs_partitions=()
+    while IFS= read -r line; do
+        eval "$line"
+        if [[ "$FSTYPE" == "ntfs" || "$FSTYPE" == "fuseblk" ]]; then
+            ntfs_partitions+=("DEVICE=/dev/$NAME LABEL=$LABEL FSTYPE=$FSTYPE MOUNTPOINT=$MOUNTPOINT SIZE=$SIZE")
         fi
-    else
-        if sudo ntfsfix "$DISK_DEVICE" 2>/dev/null; then
-            echo -e "${GREEN}✓ NTFS修复完成${NC}"
-        else
-            echo -e "${YELLOW}⚠️  NTFS修复可能存在问题${NC}"
-        fi
-    fi
-    echo ""
-    echo "步骤5: 重新挂载分区"
-    if [ -n "$MOUNT_POINT" ] && [ ! -d "$MOUNT_POINT" ]; then
-        sudo mkdir -p "$MOUNT_POINT" 2>/dev/null
-    fi
-    if [ -n "$MOUNT_POINT" ] && [ -d "$MOUNT_POINT" ]; then
-        if sudo mount "$DISK_DEVICE" "$MOUNT_POINT" 2>/dev/null; then
-            echo -e "${GREEN}✓ 分区重新挂载完成${NC}"
-        else
-            if sudo mount "$DISK_DEVICE" 2>/dev/null; then
-                NEW_MOUNT_POINT=$(mount | grep "$DISK_DEVICE" | awk '{print $3}')
-                echo -e "${GREEN}✓ 分区自动挂载完成: $NEW_MOUNT_POINT${NC}"
-            else
-                echo -e "${YELLOW}⚠️  分区重新挂载失败${NC}"
+    done < <(lsblk -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,SIZE -n -P)
+
+    if [ ${#ntfs_partitions[@]} -eq 0 ]; then
+        while IFS= read -r line; do
+            device=$(echo "$line" | cut -d: -f1)
+            fstype=$(echo "$line" | grep -o ' TYPE="[^"]*"' | cut -d'"' -f2)
+            if [[ "$fstype" == "ntfs" || "$fstype" == "fuseblk" ]]; then
+                label=$(echo "$line" | grep -o ' LABEL="[^"]*"' | cut -d'"' -f2)
+                size=$(lsblk -n -o SIZE "$device" 2>/dev/null)
+                ntfs_partitions+=("DEVICE=$device LABEL=$label FSTYPE=$fstype MOUNTPOINT= SIZE=$size")
             fi
-        fi
-    else
-        if sudo mount "$DISK_DEVICE" 2>/dev/null; then
-            echo -e "${GREEN}✓ 分区挂载完成${NC}"
-        else
-            echo -e "${YELLOW}分区未挂载，可在需要时手动挂载${NC}"
-        fi
+        done < <(sudo blkid | grep -E 'TYPE="(ntfs|fuseblk)"')
     fi
+
+    if [ ${#ntfs_partitions[@]} -eq 0 ]; then
+        echo -e "${YELLOW}⚠️  未找到任何 NTFS 分区。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}找到 ${#ntfs_partitions[@]} 个 NTFS 分区，正在检查错误状态...${NC}"
+
+    local dirty_partitions=()
+    for partinfo in "${ntfs_partitions[@]}"; do
+        eval "$partinfo"
+        echo -n "  检查 $DEVICE ... "
+        if sudo ntfsfix -n "$DEVICE" 2>&1 | grep -qi "Volume is dirty"; then
+            echo -e "${RED}有错误（脏）${NC}"
+            dirty_partitions+=("$partinfo")
+        else
+            echo -e "${GREEN}正常${NC}"
+        fi
+    done
+
+    if [ ${#dirty_partitions[@]} -eq 0 ]; then
+        echo ""
+        echo -e "${GREEN}✅ 所有 NTFS 分区状态正常，无磁盘写入错误。${NC}"
+        return 0
+    fi
+
     echo ""
-    echo -e "${GREEN}✓ 磁盘写入错误修复流程已完成${NC}"
+    echo -e "${YELLOW}发现 ${#dirty_partitions[@]} 个分区存在写入错误（脏标志）：${NC}"
+    for i in "${!dirty_partitions[@]}"; do
+        eval "${dirty_partitions[$i]}"
+        echo "  $((i+1)). $DEVICE  标签:${LABEL:-无}  大小:$SIZE  挂载点:${MOUNTPOINT:-未挂载}"
+    done
+
+    echo ""
+    echo "请选择修复方式："
+    echo "  1) 修复所有有错误的分区"
+    echo "  2) 选择特定分区修复"
+    echo "  3) 取消修复"
+    read -p "请输入选项 [1-3]: " fix_choice < /dev/tty
+
+    case $fix_choice in
+        1)
+            for partinfo in "${dirty_partitions[@]}"; do
+                eval "$partinfo"
+                fix_single_ntfs "$DEVICE" "$MOUNTPOINT"
+            done
+            ;;
+        2)
+            echo "请输入要修复的分区编号（多个编号用空格分隔，如 1 3）："
+            read -p "编号: " -a indices < /dev/tty
+            for idx in "${indices[@]}"; do
+                if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -ge 1 ] && [ "$idx" -le ${#dirty_partitions[@]} ]; then
+                    eval "${dirty_partitions[$((idx-1))]}"
+                    fix_single_ntfs "$DEVICE" "$MOUNTPOINT"
+                else
+                    echo -e "${RED}无效编号 $idx，跳过。${NC}"
+                fi
+            done
+            ;;
+        3|*)
+            echo "操作取消。"
+            return 0
+            ;;
+    esac
+
+    echo ""
+    echo -e "${GREEN}✅ 修复流程完成。${NC}"
 }
 
 clear_hosts_cache() {
