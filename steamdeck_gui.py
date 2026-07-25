@@ -24,7 +24,7 @@ import json          # [新增] 用于解析 API 响应
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.4.7"
+VERSION = "1.4.8"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"   # [新增] 仓库根地址
 VERSION_CHECK_TIMEOUT = 10
@@ -434,22 +434,6 @@ clear_hosts_cache() {
     echo -e "${GREEN}✓ hosts缓存已清理完成${NC}"
 }
 
-set_admin_password() {
-    mk_temp_dir
-    clear
-    echo -e "${YELLOW}════════════════ 设置管理员密码 ════════════════${NC}"
-    echo -e "${CYAN}正在检查是否已设置管理员密码...${NC}"
-    if sudo -n true 2>/dev/null; then
-        echo -e "${GREEN}✓ 管理员密码已经设置${NC}"
-    else
-        echo -e "${YELLOW}检测到未设置管理员密码或密码已过期${NC}"
-        echo ""
-        echo "现在开始设置管理员密码..."
-        sudo passwd
-        if [ $? -eq 0 ]; then echo -e "${GREEN}✓ 管理员密码设置完成${NC}"; else echo -e "${RED}✗ 设置失败${NC}"; fi
-    fi
-}
-
 calibrate_joystick_stick() {
     mk_temp_dir
     clear
@@ -851,6 +835,15 @@ install_xunyou_accelerator() {
     echo -e "${CYAN}正在安装迅游加速器插件...${NC}"
     curl -s sd.xunyou.com | sudo sh
     echo -e "${GREEN}迅游加速器插件安装完成。${NC}"
+}
+
+install_qiyou_accelerator() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装奇游联机宝加速插件 ════════════════${NC}"
+    echo -e "${CYAN}正在安装奇游联机宝加速插件...${NC}"
+    curl -s sd.qiyou.cn | sudo sh
+    echo -e "${GREEN}奇游联机宝加速插件安装完成。${NC}"
 }
 
 # ---------- Steam++ 安装 ----------
@@ -3370,7 +3363,6 @@ steamdeck工具箱 v{VERSION}
             "调整虚拟内存": "adjust_swap",
             "修复磁盘写入错误": "fix_disk_write_error",
             "清理hosts缓存": "clear_hosts_cache",
-            "设置管理员密码": "set_admin_password",
             "校准摇杆": "calibrate_joystick_stick",
             "校准扳机": "calibrate_joystick_trigger",
             "Steam缓存管理": "steamdeck_cache_manager",
@@ -3387,6 +3379,7 @@ steamdeck工具箱 v{VERSION}
             "Google浏览器": "install_chrome",
             "UU加速器插件": "install_uu_accelerator",
             "迅游加速器插件": "install_xunyou_accelerator",
+            "奇游联机宝加速插件": "install_qiyou_accelerator",
             "安装/更新": "install_watt_toolkit_install",
             "卸载": "install_watt_toolkit_uninstall",
             "安装插件商店": "install_plugin_store",
@@ -3417,7 +3410,6 @@ steamdeck工具箱 v{VERSION}
                 "调整虚拟内存",
                 "修复磁盘写入错误",
                 "清理hosts缓存",
-                "设置管理员密码",
                 ("校准设备", ["校准摇杆", "校准扳机"]),
                 "Steam缓存管理"
             ],
@@ -3435,6 +3427,7 @@ steamdeck工具箱 v{VERSION}
             "网络工具": [
                 "UU加速器插件",
                 "迅游加速器插件",
+                "奇游联机宝加速插件",
                 ("Watt Toolkit (Steam++)", ["安装/更新", "卸载"])
             ],
             "插件相关": [
@@ -3529,7 +3522,8 @@ steamdeck工具箱 v{VERSION}
 
     def display_changelog(self):
         """显示手动输入的更新日志内容"""
-        changelog_content = """2026-07-25（v1.4.7包含 v1.3.9-v1.4.6 的调整）将文字形式停止更新，替换为图文形式，操作更加便捷，并对功能进行了修改和优化完善
+        changelog_content = """2026-07-25（v1.4.8包含 v1.3.9-v1.4.7 的调整）将文字形式停止更新，替换为图文形式，操作更加便捷，并对功能进行了修改和优化完善
+删除了设置管理员密码的功能，增加了安装奇游联机宝加速插件的功能
 2026-07-18（v1.3.8包含 v1.3.7 的调整） 替换steamcommunity 302功能为安装Watt Toolkit (Steam++)，增加实用性
 调整了安装插件商店以及安装LSFG-VK插件和Framegen插件功能的部分逻辑，将校准摇杆更改为校准设备，增加了校准扳机
 2026-07-09（v1.3.6） 修改了修复互通盘功能的实现逻辑，更具有通用性
