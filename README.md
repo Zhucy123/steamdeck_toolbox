@@ -97,7 +97,7 @@ curl -L https://shoturl.cn/n2eFhl | sh
 - 修复磁盘写入错误（NTFS 分区脏标志修复）  
 - 清理 hosts 缓存   
 - 校准设备（摇杆 + 扳机）   
-- Steam 缓存管理器（图形界面，支持删除/移动着色器缓存与 Proton 兼容数据）   
+- Steam 缓存管理器（图形界面，删除着色器缓存与 Proton 兼容数据）   
 
 ### 引导管理（单 / 双系统通用）
 - 安装 / 重装 Clover 图形化引导管理器  
