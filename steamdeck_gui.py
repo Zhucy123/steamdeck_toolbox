@@ -24,7 +24,7 @@ import json          # [新增] 用于解析 API 响应
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.4.8"
+VERSION = "1.4.9"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"   # [新增] 仓库根地址
 VERSION_CHECK_TIMEOUT = 10
@@ -846,7 +846,109 @@ install_qiyou_accelerator() {
     echo -e "${GREEN}奇游联机宝加速插件安装完成。${NC}"
 }
 
-# ---------- Steam++ 安装 ----------
+install_asklink() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ AskLink 远程 ════════════════${NC}"
+
+    if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
+        echo -e "${GREEN}AskLink 已安装。${NC}"
+        echo -e "${YELLOW}按 回车键/A键 卸载，按其他键保持安装并退出。${NC}"
+        read -p "请选择: " -n 1 -r
+        echo ""
+        if [[ $REPLY == "" ]]; then
+            echo -e "${CYAN}正在卸载 AskLink...${NC}"
+            sudo rm -rf /opt/AskLink
+            rm -f "$HOME/Desktop/AskLink.desktop"
+            sudo rm -f /usr/share/applications/AskLink.desktop
+            rm -f "$HOME/.local/share/applications/AskLink.desktop"
+            if [ -d "$HOME/Documents/AskLink" ]; then
+                rm -rf "$HOME/Documents/AskLink"
+                echo -e "${CYAN}已删除配置文件目录 $HOME/Documents/AskLink${NC}"
+            fi
+            echo -e "${GREEN}✅ AskLink 已卸载。${NC}"
+        else
+            echo -e "${GREEN}保持 AskLink 安装。${NC}"
+        fi
+        return 0
+    fi
+
+    echo -e "${CYAN}检查 SteamOS 只读状态...${NC}"
+    if command -v steamos-readonly &>/dev/null; then
+        if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
+            echo -e "${CYAN}正在禁用只读模式...${NC}"
+            sudo steamos-readonly disable
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}禁用只读模式失败，请手动执行 sudo steamos-readonly disable${NC}"
+                return 1
+            fi
+        else
+            echo -e "${GREEN}只读模式已禁用${NC}"
+        fi
+    fi
+
+    if ! command -v dpkg &>/dev/null; then
+        echo -e "${CYAN}未检测到 dpkg，正在安装...${NC}"
+        if command -v pacman &>/dev/null; then
+            sudo pacman -S --noconfirm dpkg
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}安装 dpkg 失败，请手动执行 sudo pacman -S dpkg${NC}"
+                return 1
+            fi
+            echo -e "${GREEN}dpkg 安装完成${NC}"
+        else
+            echo -e "${RED}未找到包管理器，无法安装 dpkg。请手动安装 dpkg。${NC}"
+            return 1
+        fi
+    else
+        echo -e "${GREEN}dpkg 已存在${NC}"
+    fi
+
+    local ASKLINK_URL="https://dl.asklink.com/linux/4.0.33.0/AskLink-4.0.33.0-x86_64.deb"
+    local FILENAME="AskLink-4.0.33.0-x86_64.deb"
+
+    echo -e "${CYAN}下载地址: ${ASKLINK_URL}${NC}"
+    echo -e "${CYAN}正在下载 ${FILENAME} ...${NC}"
+
+    cd "$TEMP_DIR" || return
+    if command -v wget &>/dev/null; then
+        wget --show-progress "$ASKLINK_URL" -O "$FILENAME"
+    else
+        curl -L --progress-bar "$ASKLINK_URL" -o "$FILENAME"
+    fi
+    if [ $? -ne 0 ] || [ ! -f "$FILENAME" ]; then
+        echo -e "${RED}下载失败。${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}正在安装...${NC}"
+    sudo dpkg --force-depends -i "$FILENAME" 2>/dev/null
+
+    rm -f "$FILENAME"
+
+    if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
+        echo -e "${GREEN}✅ AskLink 安装成功！${NC}"
+        local DESKTOP_FILE="$HOME/Desktop/AskLink.desktop"
+        cat > "$DESKTOP_FILE" << EOF
+[Desktop Entry]
+Type=Application
+Name=AskLink
+Comment=远程协助工具
+Exec=/opt/AskLink/AskLink
+Icon=AskLink
+Terminal=false
+Categories=Network;RemoteAccess;
+EOF
+        chmod +x "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建。${NC}"
+    else
+        echo -e "${RED}安装失败，请手动检查。${NC}"
+        return 1
+    fi
+
+    echo -e "${GREEN}AskLink 安装流程结束。${NC}"
+}
+
 install_watt_toolkit_install() {
     mk_temp_dir
     clear
@@ -3370,6 +3472,7 @@ steamdeck工具箱 v{VERSION}
             "修复互通盘": "fix_shared_disk",
             "AnyDesk": "install_anydesk",
             "ToDesk": "install_todesk",
+            "AskLink远程": "install_asklink",
             "WPS Office": "install_wps_office",
             "QQ": "install_qq",
             "微信": "install_wechat",
@@ -3416,6 +3519,7 @@ steamdeck工具箱 v{VERSION}
             "软件安装": [
                 "AnyDesk",
                 "ToDesk",
+                "AskLink远程",
                 "WPS Office",
                 "QQ",
                 "微信",
@@ -3522,7 +3626,8 @@ steamdeck工具箱 v{VERSION}
 
     def display_changelog(self):
         """显示手动输入的更新日志内容"""
-        changelog_content = """2026-07-25（v1.4.8包含 v1.3.9-v1.4.7 的调整）将文字形式停止更新，替换为图文形式，操作更加便捷，并对功能进行了修改和优化完善
+        changelog_content = """2026-07-26（v1.4.9） 增加了安装Asklink远程的功能
+2026-07-25（v1.4.8包含 v1.3.9-v1.4.7 的调整）将文字形式停止更新，替换为图文形式，操作更加便捷，并对功能进行了修改和优化完善
 删除了设置管理员密码的功能，增加了安装奇游联机宝加速插件的功能
 2026-07-18（v1.3.8包含 v1.3.7 的调整） 替换steamcommunity 302功能为安装Watt Toolkit (Steam++)，增加实用性
 调整了安装插件商店以及安装LSFG-VK插件和Framegen插件功能的部分逻辑，将校准摇杆更改为校准设备，增加了校准扳机
