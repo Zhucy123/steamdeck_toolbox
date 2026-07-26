@@ -2545,31 +2545,50 @@ clover_install_or_reinstall() {
     echo "2) ghproxy.net 镜像"
     echo "3) gh.ddlc.top 镜像"
     echo "4) 测试镜像速度（测速后再选）"
-    read -p "请输入数字 [1-4] (默认 1): " choice < /dev/tty
+    read -p "请输入数字 [1-4]: " choice < /dev/tty
 
     case "$choice" in
+        1) BASE_URL="https://github.com" ;;
         2) BASE_URL="https://ghproxy.net/https://github.com" ;;
         3) BASE_URL="https://gh.ddlc.top/https://github.com" ;;
         4)
             echo "正在测试镜像速度，请稍候..."
-            for m in "https://github.com" "https://ghproxy.net/https://github.com" "https://gh.ddlc.top/https://github.com"; do
-                speed=$(curl -o /dev/null -s -w '%{speed_download}' --connect-timeout 3 --max-time 5 "${m}/raw.githubusercontent.com/SteamDeckHomebrew/decky-loader/main/package.json" 2>/dev/null)
+            local test_url="raw.githubusercontent.com/SteamDeckHomebrew/decky-loader/main/package.json"
+            local speed_mirrors=(
+                "https://raw.githubusercontent.com"
+                "https://ghproxy.net/https://raw.githubusercontent.com"
+                "https://gh.ddlc.top/https://raw.githubusercontent.com"
+            )
+            local display_names=(
+                "GitHub 官方"
+                "ghproxy.net"
+                "gh.ddlc.top"
+            )
+            for i in "${!speed_mirrors[@]}"; do
+                local base="${speed_mirrors[$i]}"
+                local name="${display_names[$i]}"
+                local speed=$(curl -o /dev/null -s -w '%{speed_download}' --connect-timeout 2 --max-time 5 --range 0-1048575 "${base}/${test_url}" 2>/dev/null)
                 if [[ -n "$speed" && "$speed" -gt 0 ]]; then
                     speed_mb=$(echo "scale=1; $speed/1024/1024" | bc 2>/dev/null)
-                    echo "  $m : ${speed_mb} MB/s"
+                    if [[ -n "$speed_mb" ]]; then
+                        echo "  ${name} : ${speed_mb} MB/s"
+                    else
+                        echo "  ${name} : < 1 MB/s"
+                    fi
                 else
-                    echo "  $m : 不可用"
+                    echo "  ${name} : 不可用"
                 fi
             done
             echo "请重新选择镜像。"
-            read -p "请输入数字 [1-3] (默认 1): " choice < /dev/tty
+            read -p "请输入数字 [1-3] : " choice < /dev/tty
             case "$choice" in
+                1) BASE_URL="https://github.com" ;;
                 2) BASE_URL="https://ghproxy.net/https://github.com" ;;
                 3) BASE_URL="https://gh.ddlc.top/https://github.com" ;;
-                *) BASE_URL="https://github.com" ;;
+                *) echo "操作已取消。"; return 0 ;;
             esac
             ;;
-        *) BASE_URL="https://github.com" ;;
+        *) echo "操作已取消。"; return 0 ;;
     esac
 
     REPO_FULL_PATH="ryanrudolfoba/SteamDeck-Clover-dualboot"
