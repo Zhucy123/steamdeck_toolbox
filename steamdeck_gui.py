@@ -19,18 +19,18 @@ import tempfile
 import shutil
 import threading
 import urllib.request
-import json          # [新增] 用于解析 API 响应
+import json
 
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.5.0"
+VERSION = "1.5.1"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
-REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"   # [新增] 仓库根地址
+REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
 
 # ============================================================================
-# 内嵌完整的 Bash 脚本（完全保留用户原版，无改动）
+# 内嵌完整的 Bash 脚本
 # ============================================================================
 BASH_SCRIPT = r'''#!/bin/bash
 trap 'echo -e "\n${YELLOW}用户取消操作，关闭窗口。${NC}"; exit 0' INT TERM
@@ -43,26 +43,12 @@ CYAN='\033[0;36m'
 PURPLE='\033[0;35m'
 NC='\033[0m'
 
-INSTALL_DIR="$HOME/Applications"
-DESKTOP_DIR="$HOME/Desktop"
-BACKUP_DIR="$HOME/backups"
 TEMP_DIR="/tmp/steamdeck_toolbox"
-MAIN_LAUNCHER="$DESKTOP_DIR/SteamDeck工具箱.desktop"
-SCRIPT_PATH="$(realpath "$0")"
-SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-VERSION="1.3.8"
-REPO_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox"
-
-SYSTEM_TYPE=""
-
-# ---------- 通用辅助 ----------
 mk_temp_dir() {
     mkdir -p "$TEMP_DIR"
 }
 
-# ========== 系统优化 ==========
 install_chinese_source() {
     mk_temp_dir
     clear
@@ -460,7 +446,6 @@ calibrate_joystick_trigger() {
     fi
 }
 
-# ========== Steam 缓存管理器（Zenity 图形界面，循环选择） ==========
 steamdeck_cache_manager() {
     if ! command -v zenity &>/dev/null; then
         zenity --error --text="未找到 zenity，请安装。"
@@ -474,7 +459,6 @@ steamdeck_cache_manager() {
     fi
 
     while true; do
-        # 选择缓存类型
         local choice=$(zenity --list --radiolist \
             --title="Steam 缓存管理器" \
             --text="请选择要清理的缓存类型" \
@@ -484,7 +468,7 @@ steamdeck_cache_manager() {
             --width=400 --height=200)
 
         if [ -z "$choice" ]; then
-            break  # 用户取消，退出循环
+            break
         fi
 
         if [ "$choice" = "着色器缓存" ]; then
@@ -501,7 +485,6 @@ steamdeck_cache_manager() {
             continue
         fi
 
-        # 收集所有非空缓存目录
         local apps=()
         for dir in "$cache_dir"/*; do
             if [ -d "$dir" ]; then
@@ -526,14 +509,12 @@ steamdeck_cache_manager() {
             continue
         fi
 
-        # 构建 checklist 数据
         local list_data=()
         for entry in "${apps[@]}"; do
             IFS='|' read -r app_id game_name size dir <<< "$entry"
             list_data+=("FALSE" "$game_name (ID: $app_id)" "${size}MB")
         done
 
-        # 显示多选列表
         local selections=$(zenity --list --checklist \
             --title="选择要删除的 $title" \
             --text="请勾选要删除的缓存项" \
@@ -543,10 +524,9 @@ steamdeck_cache_manager() {
             --multiple)
 
         if [ -z "$selections" ]; then
-            continue  # 用户取消选择，回到类型选择
+            continue
         fi
 
-        # 解析选中的游戏名
         IFS='|' read -r -a selected_names <<< "$selections"
         local selected_dirs=()
         for selected in "${selected_names[@]}"; do
@@ -565,7 +545,6 @@ steamdeck_cache_manager() {
             continue
         fi
 
-        # 确认删除
         zenity --question \
             --text="确定要删除选中的 $title 吗？\n共 ${#selected_dirs[@]} 项。" \
             --ok-label="删除" --cancel-label="取消"
@@ -573,7 +552,6 @@ steamdeck_cache_manager() {
             continue
         fi
 
-        # 执行删除
         local deleted=0 failed=0
         for d in "${selected_dirs[@]}"; do
             if rm -rf "$d"; then
@@ -584,11 +562,9 @@ steamdeck_cache_manager() {
         done
 
         zenity --info --text="删除完成！\n成功: $deleted 项\n失败: $failed 项"
-        # 完成后自动回到类型选择
     done
 }
 
-# ========== 引导相关 ==========
 fix_boot() {
     mk_temp_dir
     clear
@@ -818,7 +794,6 @@ fix_shared_disk() {
     echo -e "${GREEN}════════════════ 全部完成 ════════════════${NC}"
 }
 
-# ========== 网络工具 ==========
 install_uu_accelerator() {
     mk_temp_dir
     clear
@@ -960,9 +935,9 @@ install_watt_toolkit_install() {
     local DESKTOP_DIR="/home/deck/Desktop"
     local TEMP_DIR="/tmp/watt_toolkit_install"
     local MIRRORS=(
-        "https://gh.ddlc.top/"
-        "https://ghproxy.net/"
-        "https://mirror.ghproxy.com/"
+        "http://gh.ddlc.top/"
+        "http://ghproxy.net/"
+        "http://mirror.ghproxy.com/"
         "https://github.com/"
     )
     local DOWNLOAD_TIMEOUT=120
@@ -1174,46 +1149,13 @@ except Exception as e:
     local filename="Steam++_${target_version}_linux_x64.tgz"
     local DOWNLOAD_SUCCESS=false
 
-    declare -A SPEED_TEXT
-    test_mirrors() {
-        echo -e "\n正在测试镜像源速度，请稍候..."
-        local test_file="https://raw.githubusercontent.com/SteamDeckHomebrew/decky-loader/main/package.json"
-        for i in "${!MIRRORS[@]}"; do
-            mirror="${MIRRORS[$i]}"
-            speed=$(curl -o /dev/null -s -w '%{speed_download}' --connect-timeout 3 --max-time 5 "${mirror}${test_file}" 2>/dev/null)
-            if [[ -n "$speed" && "$speed" -gt 0 ]]; then
-                speed_mb=$(echo "scale=1; $speed/1024/1024" | bc 2>/dev/null)
-                if [[ -n "$speed_mb" ]]; then
-                    SPEED_TEXT[$i]="${speed_mb} MB/s"
-                else
-                    SPEED_TEXT[$i]="< 1 MB/s"
-                fi
-            else
-                SPEED_TEXT[$i]="不可用"
-            fi
-        done
-        echo "测速完成。"
-        echo ""
-    }
-
     while true; do
         echo ""
-        echo "请选择下载镜像源（输入编号，或按 t 测速）："
+        echo "请选择下载镜像源（输入编号，0取消）："
         for i in "${!MIRRORS[@]}"; do
-            speed_info=""
-            if [[ -n "${SPEED_TEXT[$i]}" ]]; then
-                speed_info="  [${SPEED_TEXT[$i]}]"
-            fi
-            echo "  $((i+1)). ${MIRRORS[$i]}${speed_info}"
+            echo "  $((i+1)). ${MIRRORS[$i]}"
         done
-        echo "  t. 测试所有镜像速度"
-        echo "  0. 取消"
         read -p "请输入选择: " choice < /dev/tty
-
-        if [[ "$choice" == "t" || "$choice" == "T" ]]; then
-            test_mirrors
-            continue
-        fi
 
         if [[ -z "$choice" ]]; then
             echo "输入无效，请重新选择。"
@@ -1234,7 +1176,7 @@ except Exception as e:
                 if [[ -n "$FILE_SIZE" ]] && [[ "$FILE_SIZE" -gt 1000000 ]]; then
                     echo -e "\n${GREEN}下载成功 (大小: $((FILE_SIZE/1024/1024)) MB)${NC}"
                     DOWNLOAD_SUCCESS=true
-                    break 2
+                    break
                 else
                     echo -e "\n${RED}下载文件无效 (${FILE_SIZE} 字节)。${NC}"
                     rm -f "$filename"
@@ -1243,7 +1185,7 @@ except Exception as e:
                 echo -e "\n${RED}下载失败 (退出码: $curl_exit)。${NC}"
                 rm -f "$filename"
             fi
-            echo -e "${YELLOW}下载失败，请重新选择镜像源或按 t 测速。${NC}"
+            echo -e "${YELLOW}下载失败，请重新选择镜像源。${NC}"
         else
             echo "无效编号，请重新选择。"
         fi
@@ -1336,49 +1278,6 @@ EOF
     echo "请在桌面启动 Watt Toolkit。"
 }
 
-install_watt_toolkit_uninstall() {
-    mk_temp_dir
-    clear
-    echo -e "${YELLOW}════════════════ 卸载 Watt Toolkit ════════════════${NC}"
-    local INSTALL_DIR="/home/deck/Watt Toolkit"
-    local DESKTOP_DIR="/home/deck/Desktop"
-
-    echo -e "${CYAN}正在卸载 Watt Toolkit...${NC}"
-    echo ""
-
-    if [ ! -d "$INSTALL_DIR" ]; then
-        echo -e "${YELLOW}未检测到已安装的 Watt Toolkit。${NC}"
-        return 0
-    fi
-
-    echo "将删除以下目录: ${INSTALL_DIR}"
-    echo "将删除桌面快捷方式: ${DESKTOP_DIR}/Watt_Toolkit.desktop"
-    echo ""
-
-    read -p "确定要卸载吗？(y/N): " -n 1 -r < /dev/tty
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "卸载已取消。"
-        return 0
-    fi
-
-    if rm -rf "$INSTALL_DIR"; then
-        echo -e "${GREEN}✓ 已删除安装目录${NC}"
-    else
-        echo -e "${RED}✗ 删除安装目录失败${NC}"
-    fi
-
-    if rm -f "${DESKTOP_DIR}/Watt_Toolkit.desktop"; then
-        echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
-    else
-        echo -e "${RED}✗ 删除桌面快捷方式失败${NC}"
-    fi
-
-    echo ""
-    echo -e "${GREEN}✅ Watt Toolkit 已卸载完成。${NC}"
-}
-
-# ========== 插件相关 ==========
 install_plugin_store() {
     mk_temp_dir
     clear
@@ -1538,54 +1437,21 @@ except:
     CURRENT_USER=$(whoami)
 
     MIRRORS=(
+        "http://gh.ddlc.top/"
+        "http://ghproxy.net/"
+        "http://mirror.ghproxy.com/"
         "https://github.com/"
-        "https://ghproxy.net/"
-        "https://gh.ddlc.top/"
     )
     DOWNLOAD_PATH="https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${target_version}/PluginLoader"
     TMP_FILE="${PLUGIN_LOADER}.tmp"
 
-    declare -A SPEED_TEXT
-
-    test_mirrors() {
-        echo -e "\n正在测试镜像源速度，请稍候..."
-        local test_file="https://raw.githubusercontent.com/SteamDeckHomebrew/decky-loader/main/package.json"
-        for i in "${!MIRRORS[@]}"; do
-            mirror="${MIRRORS[$i]}"
-            speed=$(curl -o /dev/null -s -w '%{speed_download}' --connect-timeout 3 --max-time 5 "${mirror}${test_file}" 2>/dev/null)
-            if [[ -n "$speed" && "$speed" -gt 0 ]]; then
-                speed_mb=$(echo "scale=1; $speed/1024/1024" | bc 2>/dev/null)
-                if [[ -n "$speed_mb" ]]; then
-                    SPEED_TEXT[$i]="${speed_mb} MB/s"
-                else
-                    SPEED_TEXT[$i]="< 1 MB/s"
-                fi
-            else
-                SPEED_TEXT[$i]="不可用"
-            fi
-        done
-        echo "测速完成。"
-        echo ""
-    }
-
     while true; do
         echo ""
-        echo "请选择下载镜像源（输入编号，或按 t 测速）："
+        echo "请选择下载镜像源（输入编号，0取消）："
         for i in "${!MIRRORS[@]}"; do
-            speed_info=""
-            if [[ -n "${SPEED_TEXT[$i]}" ]]; then
-                speed_info="  [${SPEED_TEXT[$i]}]"
-            fi
-            echo "  $((i+1)). ${MIRRORS[$i]}${speed_info}"
+            echo "  $((i+1)). ${MIRRORS[$i]}"
         done
-        echo "  t. 测试所有镜像速度"
-        echo "  0. 取消"
         read -p "请输入选择: " choice < /dev/tty
-
-        if [[ "$choice" == "t" || "$choice" == "T" ]]; then
-            test_mirrors
-            continue
-        fi
 
         if [[ -z "$choice" ]]; then
             echo "输入无效，请重新选择。"
@@ -1614,7 +1480,7 @@ except:
                 echo -e "\n${RED}下载失败 (退出码: $curl_exit)。${NC}"
                 rm -f "$TMP_FILE"
             fi
-            echo -e "${YELLOW}下载失败，请重新选择镜像源或按 t 测速。${NC}"
+            echo -e "${YELLOW}下载失败，请重新选择镜像源。${NC}"
         else
             echo "无效编号，请重新选择。"
         fi
@@ -1675,28 +1541,6 @@ EOF
     echo "请切换回游戏模式，按 '...' 键打开侧边栏检查。"
 }
 
-uninstall_plugin_store() {
-    mk_temp_dir
-    clear
-    echo -e "${YELLOW}════════════════ 卸载插件商店 ════════════════${NC}"
-    echo -e "${CYAN}正在卸载插件商店...${NC}"
-    echo "警告：这将删除整个 /home/deck/homebrew 目录，包括所有插件。"
-    echo ""
-    read -p "确定要卸载插件商店吗？(y/N): " -n 1 -r < /dev/tty
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "卸载已取消。"
-        return
-    fi
-    echo "正在执行卸载..."
-    if sudo rm -rf /home/deck/homebrew; then
-        echo -e "${GREEN}✓ 插件商店卸载完成${NC}"
-        echo "如需重新安装，请使用 '安装插件商店' 功能。"
-    else
-        echo -e "${RED}✗ 插件商店卸载失败${NC}"
-    fi
-}
-
 install_tomoon_install() {
     mk_temp_dir
     clear
@@ -1707,9 +1551,9 @@ install_tomoon_install() {
     local VERSION_FILE="$PLUGIN_DIR/package.json"
     local TEMP_DIR="/tmp/tomoon_install"
     local MIRRORS=(
-        "https://gh.ddlc.top/"
-        "https://ghproxy.net/"
-        "https://mirror.ghproxy.com/"
+        "http://gh.ddlc.top/"
+        "http://ghproxy.net/"
+        "http://mirror.ghproxy.com/"
         "https://github.com/"
     )
 
@@ -1772,28 +1616,6 @@ install_tomoon_install() {
         echo -e "${YELLOW}将安装最新版本: ${latest_version}${NC}"
     fi
 
-    declare -A SPEED_TEXT
-    test_mirrors() {
-        echo -e "\n正在测试镜像源速度，请稍候..."
-        local test_file="https://raw.githubusercontent.com/SteamDeckHomebrew/decky-loader/main/package.json"
-        for i in "${!MIRRORS[@]}"; do
-            mirror="${MIRRORS[$i]}"
-            speed=$(curl -o /dev/null -s -w '%{speed_download}' --connect-timeout 3 --max-time 5 "${mirror}${test_file}" 2>/dev/null)
-            if [[ -n "$speed" && "$speed" -gt 0 ]]; then
-                speed_mb=$(echo "scale=1; $speed/1024/1024" | bc 2>/dev/null)
-                if [[ -n "$speed_mb" ]]; then
-                    SPEED_TEXT[$i]="${speed_mb} MB/s"
-                else
-                    SPEED_TEXT[$i]="< 1 MB/s"
-                fi
-            else
-                SPEED_TEXT[$i]="不可用"
-            fi
-        done
-        echo "测速完成。"
-        echo ""
-    }
-
     rm -rf "$TEMP_DIR"
     mkdir -p "$TEMP_DIR"
     cd "$TEMP_DIR" || return
@@ -1803,22 +1625,11 @@ install_tomoon_install() {
 
     while true; do
         echo ""
-        echo "请选择下载镜像源（输入编号，或按 t 测速）："
+        echo "请选择下载镜像源（输入编号，0取消）："
         for i in "${!MIRRORS[@]}"; do
-            speed_info=""
-            if [[ -n "${SPEED_TEXT[$i]}" ]]; then
-                speed_info="  [${SPEED_TEXT[$i]}]"
-            fi
-            echo "  $((i+1)). ${MIRRORS[$i]}${speed_info}"
+            echo "  $((i+1)). ${MIRRORS[$i]}"
         done
-        echo "  t. 测试所有镜像速度"
-        echo "  0. 取消"
         read -p "请输入选择: " choice < /dev/tty
-
-        if [[ "$choice" == "t" || "$choice" == "T" ]]; then
-            test_mirrors
-            continue
-        fi
 
         if [[ -z "$choice" ]]; then
             echo "输入无效，请重新选择。"
@@ -1840,7 +1651,7 @@ install_tomoon_install() {
                 if unzip -t "$zip_filename" &> /dev/null; then
                     echo -e "${GREEN}下载成功，文件完整。${NC}"
                     DOWNLOAD_SUCCESS=true
-                    break 2
+                    break
                 else
                     echo -e "${RED}下载文件不完整（zip 校验失败），请重新选择镜像源。${NC}"
                     rm -f "$zip_filename"
@@ -1893,14 +1704,6 @@ install_tomoon_install() {
     echo -e "${GREEN}安装目录: ${PLUGIN_DIR}${NC}"
 }
 
-install_tomoon_uninstall() {
-    mk_temp_dir
-    clear
-    echo -e "${YELLOW}════════════════ 卸载 ToMoon 插件 ════════════════${NC}"
-    sudo rm -rf /home/deck/homebrew/plugins/tomoon
-    echo -e "${GREEN}卸载完成${NC}"
-}
-
 install_decky_lsfg_vk_install() {
     mk_temp_dir
     clear
@@ -1912,9 +1715,9 @@ install_decky_lsfg_vk_install() {
     local VERSION_FILE="$PLUGIN_DIR/package.json"
     local TEMP_DIR="/tmp/lsfg_vk_install"
     local MIRRORS=(
-        "https://gh.ddlc.top/"
-        "https://ghproxy.net/"
-        "https://mirror.ghproxy.com/"
+        "http://gh.ddlc.top/"
+        "http://ghproxy.net/"
+        "http://mirror.ghproxy.com/"
         "https://github.com/"
     )
 
@@ -2087,28 +1890,6 @@ except:
         return 1
     fi
 
-    declare -A SPEED_TEXT
-    test_mirrors() {
-        echo -e "\n正在测试镜像源速度，请稍候..."
-        local test_file="https://raw.githubusercontent.com/SteamDeckHomebrew/decky-loader/main/package.json"
-        for i in "${!MIRRORS[@]}"; do
-            mirror="${MIRRORS[$i]}"
-            speed=$(curl -o /dev/null -s -w '%{speed_download}' --connect-timeout 3 --max-time 5 "${mirror}${test_file}" 2>/dev/null)
-            if [[ -n "$speed" && "$speed" -gt 0 ]]; then
-                speed_mb=$(echo "scale=1; $speed/1024/1024" | bc 2>/dev/null)
-                if [[ -n "$speed_mb" ]]; then
-                    SPEED_TEXT[$i]="${speed_mb} MB/s"
-                else
-                    SPEED_TEXT[$i]="< 1 MB/s"
-                fi
-            else
-                SPEED_TEXT[$i]="不可用"
-            fi
-        done
-        echo "测速完成。"
-        echo ""
-    }
-
     rm -rf "$TEMP_DIR"
     mkdir -p "$TEMP_DIR"
     cd "$TEMP_DIR" || return
@@ -2118,22 +1899,11 @@ except:
 
     while true; do
         echo ""
-        echo "请选择下载镜像源（输入编号，或按 t 测速）："
+        echo "请选择下载镜像源（输入编号，0取消）："
         for i in "${!MIRRORS[@]}"; do
-            speed_info=""
-            if [[ -n "${SPEED_TEXT[$i]}" ]]; then
-                speed_info="  [${SPEED_TEXT[$i]}]"
-            fi
-            echo "  $((i+1)). ${MIRRORS[$i]}${speed_info}"
+            echo "  $((i+1)). ${MIRRORS[$i]}"
         done
-        echo "  t. 测试所有镜像速度"
-        echo "  0. 取消"
         read -p "请输入选择: " choice < /dev/tty
-
-        if [[ "$choice" == "t" || "$choice" == "T" ]]; then
-            test_mirrors
-            continue
-        fi
 
         if [[ -z "$choice" ]]; then
             echo "输入无效，请重新选择。"
@@ -2155,7 +1925,7 @@ except:
                 if unzip -t "$zip_filename" &> /dev/null; then
                     echo -e "${GREEN}下载成功，文件完整。${NC}"
                     DOWNLOAD_SUCCESS=true
-                    break 2
+                    break
                 else
                     echo -e "${RED}下载文件不完整（zip 校验失败），请重新选择镜像源。${NC}"
                     rm -f "$zip_filename"
@@ -2205,14 +1975,6 @@ except:
     echo -e "${GREEN}安装目录: ${PLUGIN_DIR}${NC}"
 }
 
-install_decky_lsfg_vk_uninstall() {
-    mk_temp_dir
-    clear
-    echo -e "${YELLOW}════════════════ 卸载 LSFG-VK 插件 ════════════════${NC}"
-    sudo rm -rf /home/deck/homebrew/plugins/Decky-LSFG-VK
-    echo -e "${GREEN}已卸载${NC}"
-}
-
 install_decky_framegen_install() {
     mk_temp_dir
     clear
@@ -2224,9 +1986,9 @@ install_decky_framegen_install() {
     local VERSION_FILE="$PLUGIN_DIR/package.json"
     local TEMP_DIR="/tmp/framegen_install"
     local MIRRORS=(
-        "https://gh.ddlc.top/"
-        "https://ghproxy.net/"
-        "https://mirror.ghproxy.com/"
+        "http://gh.ddlc.top/"
+        "http://ghproxy.net/"
+        "http://mirror.ghproxy.com/"
         "https://github.com/"
     )
 
@@ -2399,28 +2161,6 @@ except:
         return 1
     fi
 
-    declare -A SPEED_TEXT
-    test_mirrors() {
-        echo -e "\n正在测试镜像源速度，请稍候..."
-        local test_file="https://raw.githubusercontent.com/SteamDeckHomebrew/decky-loader/main/package.json"
-        for i in "${!MIRRORS[@]}"; do
-            mirror="${MIRRORS[$i]}"
-            speed=$(curl -o /dev/null -s -w '%{speed_download}' --connect-timeout 3 --max-time 5 "${mirror}${test_file}" 2>/dev/null)
-            if [[ -n "$speed" && "$speed" -gt 0 ]]; then
-                speed_mb=$(echo "scale=1; $speed/1024/1024" | bc 2>/dev/null)
-                if [[ -n "$speed_mb" ]]; then
-                    SPEED_TEXT[$i]="${speed_mb} MB/s"
-                else
-                    SPEED_TEXT[$i]="< 1 MB/s"
-                fi
-            else
-                SPEED_TEXT[$i]="不可用"
-            fi
-        done
-        echo "测速完成。"
-        echo ""
-    }
-
     rm -rf "$TEMP_DIR"
     mkdir -p "$TEMP_DIR"
     cd "$TEMP_DIR" || return
@@ -2430,22 +2170,11 @@ except:
 
     while true; do
         echo ""
-        echo "请选择下载镜像源（输入编号，或按 t 测速）："
+        echo "请选择下载镜像源（输入编号，0取消）："
         for i in "${!MIRRORS[@]}"; do
-            speed_info=""
-            if [[ -n "${SPEED_TEXT[$i]}" ]]; then
-                speed_info="  [${SPEED_TEXT[$i]}]"
-            fi
-            echo "  $((i+1)). ${MIRRORS[$i]}${speed_info}"
+            echo "  $((i+1)). ${MIRRORS[$i]}"
         done
-        echo "  t. 测试所有镜像速度"
-        echo "  0. 取消"
         read -p "请输入选择: " choice < /dev/tty
-
-        if [[ "$choice" == "t" || "$choice" == "T" ]]; then
-            test_mirrors
-            continue
-        fi
 
         if [[ -z "$choice" ]]; then
             echo "输入无效，请重新选择。"
@@ -2467,7 +2196,7 @@ except:
                 if unzip -t "$zip_filename" &> /dev/null; then
                     echo -e "${GREEN}下载成功，文件完整。${NC}"
                     DOWNLOAD_SUCCESS=true
-                    break 2
+                    break
                 else
                     echo -e "${RED}下载文件不完整（zip 校验失败），请重新选择镜像源。${NC}"
                     rm -f "$zip_filename"
@@ -2517,15 +2246,6 @@ except:
     echo -e "${GREEN}安装目录: ${PLUGIN_DIR}${NC}"
 }
 
-install_decky_framegen_uninstall() {
-    mk_temp_dir
-    clear
-    echo -e "${YELLOW}════════════════ 卸载 Framegen 插件 ════════════════${NC}"
-    sudo rm -rf /home/deck/homebrew/plugins/Decky-Framegen
-    echo -e "${GREEN}已卸载${NC}"
-}
-
-# ========== 引导管理 ==========
 clover_install_or_reinstall() {
     clear
     echo -e "${YELLOW}════════════════ 安装/重装 Clover 引导 ════════════════${NC}"
@@ -2541,53 +2261,13 @@ clover_install_or_reinstall() {
     echo "   Steam Deck Clover 安装助手"
     echo "========================================="
     echo "请选择克隆镜像源："
-    echo "1) GitHub 官方（原始，可能较慢）"
+    echo "1) GitHub 官方"
     echo "2) ghproxy.net 镜像"
-    echo "3) gh.ddlc.top 镜像"
-    echo "4) 测试镜像速度（测速后再选）"
-    read -p "请输入数字 [1-4]: " choice < /dev/tty
+    read -p "请输入数字 [1-2]: " choice < /dev/tty
 
     case "$choice" in
         1) BASE_URL="https://github.com" ;;
         2) BASE_URL="https://ghproxy.net/https://github.com" ;;
-        3) BASE_URL="https://gh.ddlc.top/https://github.com" ;;
-        4)
-            echo "正在测试镜像速度，请稍候..."
-            local test_url="raw.githubusercontent.com/SteamDeckHomebrew/decky-loader/main/package.json"
-            local speed_mirrors=(
-                "https://raw.githubusercontent.com"
-                "https://ghproxy.net/https://raw.githubusercontent.com"
-                "https://gh.ddlc.top/https://raw.githubusercontent.com"
-            )
-            local display_names=(
-                "GitHub 官方"
-                "ghproxy.net"
-                "gh.ddlc.top"
-            )
-            for i in "${!speed_mirrors[@]}"; do
-                local base="${speed_mirrors[$i]}"
-                local name="${display_names[$i]}"
-                local speed=$(curl -o /dev/null -s -w '%{speed_download}' --connect-timeout 2 --max-time 5 --range 0-1048575 "${base}/${test_url}" 2>/dev/null)
-                if [[ -n "$speed" && "$speed" -gt 0 ]]; then
-                    speed_mb=$(echo "scale=1; $speed/1024/1024" | bc 2>/dev/null)
-                    if [[ -n "$speed_mb" ]]; then
-                        echo "  ${name} : ${speed_mb} MB/s"
-                    else
-                        echo "  ${name} : < 1 MB/s"
-                    fi
-                else
-                    echo "  ${name} : 不可用"
-                fi
-            done
-            echo "请重新选择镜像。"
-            read -p "请输入数字 [1-3] : " choice < /dev/tty
-            case "$choice" in
-                1) BASE_URL="https://github.com" ;;
-                2) BASE_URL="https://ghproxy.net/https://github.com" ;;
-                3) BASE_URL="https://gh.ddlc.top/https://github.com" ;;
-                *) echo "操作已取消。"; return 0 ;;
-            esac
-            ;;
         *) echo "操作已取消。"; return 0 ;;
     esac
 
@@ -2660,7 +2340,6 @@ elif [ "$PRODUCT_NAME" = "ONEXPLAYER 2 PRO ARP23P" ]; then
     sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>2560x1600<\/string>' custom/config.plist
 else
     echo "⚠️ 警告：设备不在官方支持列表，强制继续安装（风险自负）！"
-    # exit   # 已跳过退出
 fi
 
 if grep -qi bazzite /etc/os-release; then
@@ -2745,52 +2424,19 @@ CLOVER_FILE="Clover-${CLOVER_VERSION}-X64.iso.7z"
 CLOVER_BASE=$(basename -s .7z "${CLOVER_FILE}")
 
 MIRRORS=(
-    "https://gh.ddlc.top/https://github.com"
-    "https://ghproxy.net/https://github.com"
+    "http://gh.ddlc.top/https://github.com"
+    "http://ghproxy.net/https://github.com"
     "https://github.com"
 )
-declare -A SPEED_TEXT
-
-test_mirrors() {
-    echo -e "\n正在测试镜像源速度，请稍候..."
-    local test_file="/CloverHackyColor/CloverBootloader/releases/download/${CLOVER_VERSION}/${CLOVER_FILE}"
-    for i in "${!MIRRORS[@]}"; do
-        mirror="${MIRRORS[$i]}"
-        speed=$(curl -o /dev/null -s -w '%{speed_download}' --connect-timeout 3 --max-time 5 --range 0-1048575 "${mirror}${test_file}" 2>/dev/null)
-        if [[ -n "$speed" && "$speed" -gt 0 ]]; then
-            speed_mb=$(echo "scale=1; $speed/1024/1024" | bc 2>/dev/null)
-            if [[ -n "$speed_mb" ]]; then
-                SPEED_TEXT[$i]="${speed_mb} MB/s"
-            else
-                SPEED_TEXT[$i]="< 1 MB/s"
-            fi
-        else
-            SPEED_TEXT[$i]="不可用"
-        fi
-    done
-    echo "测速完成。"
-    echo ""
-}
 
 DOWNLOAD_SUCCESS=0
 while true; do
     echo ""
-    echo "请选择下载镜像源（输入编号，或按 t 测速）："
+    echo "请选择下载镜像源（输入编号，0取消）："
     for i in "${!MIRRORS[@]}"; do
-        speed_info=""
-        if [[ -n "${SPEED_TEXT[$i]}" ]]; then
-            speed_info="  [${SPEED_TEXT[$i]}]"
-        fi
-        echo "  $((i+1)). ${MIRRORS[$i]}${speed_info}"
+        echo "  $((i+1)). ${MIRRORS[$i]}"
     done
-    echo "  t. 测试所有镜像速度"
-    echo "  0. 取消"
     read -p "请输入选择: " choice < /dev/tty
-
-    if [[ "$choice" == "t" || "$choice" == "T" ]]; then
-        test_mirrors
-        continue
-    fi
 
     if [[ -z "$choice" ]]; then
         echo "输入无效，请重新选择。"
@@ -2807,7 +2453,7 @@ while true; do
         if curl -# -L --fail --connect-timeout 10 --max-time 120 -o "${CLOVER_FILE}" "${CLOVER_URL}"; then
             echo "✅ 下载成功！"
             DOWNLOAD_SUCCESS=1
-            break 2
+            break
         else
             echo "⚠️ 下载失败，请重新选择镜像源。"
             rm -f "${CLOVER_FILE}"
@@ -2950,7 +2596,6 @@ CLOVER_SCRIPT_EOF
         return 1
     fi
 
-    # 处理桌面快捷方式
     SHORTCUT="$HOME/Desktop/引导文件配置.desktop"
     if [ -f "$SHORTCUT" ]; then
         echo -e "${GREEN}桌面快捷方式“引导文件配置”已存在，无需创建。${NC}"
@@ -2968,19 +2613,15 @@ EOF
         echo -e "${GREEN}已创建桌面快捷方式“引导文件配置”。${NC}"
     fi
 
-    # 覆盖 Clover-Toolbox.sh 为汉化版（此处保留原汉化内容，省略，您可保持原样）
-    # ...（原代码中的汉化部分保持不变，此处不重复）
-
     echo -e "${YELLOW}建议重启设备以使引导生效。${NC}"
     echo ""
 }
 
-# ========== 软件安装 ==========
 install_anydesk() {
     mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 安装 AnyDesk ════════════════${NC}"
-    echo "正在安装 AnyDesk（便携版）..."
+    echo "正在安装 AnyDesk..."
     local ANYDESK_INSTALL_DIR="$HOME/.local/share/anydesk"
     mkdir -p "$ANYDESK_INSTALL_DIR"
     cd /tmp || return
@@ -3108,7 +2749,6 @@ install_wechat() {
     local success=0
     local error_msg=""
 
-    # 尝试安装 com.tencent.WeChat
     echo "尝试安装 com.tencent.WeChat..."
     if flatpak install flathub com.tencent.WeChat -y 2>/tmp/wechat_error.log; then
         app_id="com.tencent.WeChat"
@@ -3287,7 +2927,6 @@ EOF
     fi
 }
 
-# ========== 更新软件 ==========
 update_installed_apps() {
     mk_temp_dir
     clear
@@ -3298,7 +2937,6 @@ update_installed_apps() {
     echo -e "${GREEN}✓ 所有应用更新完成${NC}"
 }
 
-# ---------- 卸载子函数 ----------
 uninstall_wps_office() {
     mk_temp_dir
     clear
@@ -3530,7 +3168,6 @@ uninstall_chrome() {
     fi
 }
 
-# ========== 其他 ==========
 install_yellow_duck_software() {
     mk_temp_dir
     clear
@@ -3584,7 +3221,6 @@ install_yellow_duck_software() {
     echo -e "${GREEN}✅ 小黄鸭软件安装完成！${NC}"
 }
 
-# ---------- 主函数 ----------
 main() {
     echo "此脚本为内嵌库，请通过参数调用具体功能。"
 }
@@ -3732,7 +3368,6 @@ class MainWindow(Gtk.Window):
         self.system_type = self.detect_system_type()
         self.task_window = None
 
-        # 分类名称 → 图标文件名 映射
         self.icon_map = {
             "支持和维护": "pushpin.png",
             "更新日志": "clipboard_twemoji.png",
@@ -3745,17 +3380,15 @@ class MainWindow(Gtk.Window):
             "其他": "trash.png"
         }
 
-        # 存储分类图标 Pixbuf 以便右侧标题使用
         self.category_icons = {}
 
         main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(main_vbox)
 
         hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        hbox.set_vexpand(True)   # 使 hbox 垂直填满
+        hbox.set_vexpand(True)
         main_vbox.pack_start(hbox, True, True, 0)
 
-        # ---------- 左侧分类列表 ----------
         self.list_store = Gtk.ListStore(GdkPixbuf.Pixbuf, str)
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -3784,7 +3417,7 @@ class MainWindow(Gtk.Window):
                     except Exception as e:
                         print(f"加载图标失败 {icon_path}: {e}")
             self.list_store.append([pixbuf, cat])
-            self.category_icons[cat] = pixbuf  # 保存供右侧标题使用
+            self.category_icons[cat] = pixbuf
 
         self.cat_view = Gtk.TreeView(model=self.list_store)
 
@@ -3812,14 +3445,12 @@ class MainWindow(Gtk.Window):
         scrolled_left.set_size_request(250, -1)
         hbox.pack_start(scrolled_left, False, True, 0)
 
-        # ---------- 右侧 Stack ----------
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self.stack.set_vexpand(True)
         self.stack.set_valign(Gtk.Align.FILL)
         hbox.pack_start(self.stack, True, True, 0)
 
-        # 关于页面
         about_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         about_box.set_margin_top(20)
         about_box.set_margin_bottom(20)
@@ -3854,7 +3485,6 @@ steamdeck工具箱 v{VERSION}
         about_box.pack_start(scrolled_about, True, True, 0)
         self.stack.add_named(about_box, "about")
 
-        # ---------- 更新日志页面 ----------
         changelog_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         changelog_box.set_margin_top(20)
         changelog_box.set_margin_bottom(20)
@@ -3866,7 +3496,6 @@ steamdeck工具箱 v{VERSION}
         self.changelog_textview.set_wrap_mode(Gtk.WrapMode.WORD)
         self.changelog_textview.set_cursor_visible(False)
 
-        # 等宽字体
         font_desc = Pango.FontDescription("Monospace 10")
         self.changelog_textview.modify_font(font_desc)
 
@@ -3878,7 +3507,6 @@ steamdeck工具箱 v{VERSION}
 
         self.stack.add_named(changelog_box, "changelog")
 
-        # ---------- 功能列表页面 ----------
         func_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
         func_page.set_margin_top(20)
         func_page.set_margin_bottom(20)
@@ -3887,7 +3515,6 @@ steamdeck工具箱 v{VERSION}
         func_page.set_vexpand(True)
         func_page.set_valign(Gtk.Align.FILL)
 
-        # ---- 右侧分类标题（带图标） ----
         title_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         title_box.set_halign(Gtk.Align.START)
         self.title_icon = Gtk.Image()
@@ -3901,17 +3528,15 @@ steamdeck工具箱 v{VERSION}
 
         func_page.pack_start(title_box, False, False, 0)
 
-        # ---- 功能列表（只有文本，无图标） ----
-        self.func_store = Gtk.TreeStore(str)   # 只存文本
+        self.func_store = Gtk.TreeStore(str)
         self.func_view = Gtk.TreeView(model=self.func_store)
 
-        # 不显示列标题（去掉“功能”二字）
         func_col = Gtk.TreeViewColumn()
         renderer_func = Gtk.CellRendererText()
         func_col.pack_start(renderer_func, True)
         func_col.add_attribute(renderer_func, "text", 0)
         self.func_view.append_column(func_col)
-        self.func_view.set_headers_visible(False)   # 隐藏所有列头
+        self.func_view.set_headers_visible(False)
         self.func_view.set_activate_on_single_click(True)
         self.func_view.connect("row-activated", self.on_func_row_activated)
         self.func_view.set_expander_column(func_col)
@@ -3924,13 +3549,11 @@ steamdeck工具箱 v{VERSION}
         func_page.pack_start(scrolled_func, True, True, 0)
         self.stack.add_named(func_page, "func")
 
-        # 默认选中第一个分类
         selection = self.cat_view.get_selection()
         first_path = Gtk.TreePath.new_first()
         selection.select_path(first_path)
         self.on_category_activated(self.cat_view, first_path, None)
 
-        # 底部按钮
         bottom_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         bottom_bar.set_margin_top(5)
         bottom_bar.set_margin_bottom(5)
@@ -3945,7 +3568,6 @@ steamdeck工具箱 v{VERSION}
         bottom_bar.pack_start(quit_btn, False, False, 0)
         main_vbox.pack_start(bottom_bar, False, False, 0)
 
-        # ---------- 功能映射 ----------
         self.func_map = {
             "安装国内源": "install_chinese_source",
             "调整虚拟内存": "adjust_swap",
@@ -3991,7 +3613,6 @@ steamdeck工具箱 v{VERSION}
             "小黄鸭软件": "install_yellow_duck_software"
         }
 
-        # ---------- 分类树 ----------
         self.category_tree = {
             "支持和维护": [],
             "系统优化": [
@@ -4063,7 +3684,6 @@ steamdeck工具箱 v{VERSION}
             self.category_title.set_visible(False)
             return
 
-        # 更新日志分支
         if category == "更新日志":
             self.stack.set_visible_child_name("changelog")
             icon_pixbuf = self.category_icons.get(category)
@@ -4079,7 +3699,6 @@ steamdeck工具箱 v{VERSION}
 
         self.stack.set_visible_child_name("func")
 
-        # 更新标题图标和文字
         icon_pixbuf = self.category_icons.get(category)
         if icon_pixbuf:
             self.title_icon.set_from_pixbuf(icon_pixbuf)
@@ -4094,7 +3713,6 @@ steamdeck工具箱 v{VERSION}
         self.category_title.set_markup(title_text)
         self.category_title.set_visible(True)
 
-        # 填充功能列表（只存文本）
         self.func_store.clear()
         items = self.category_tree.get(category, [])
         if category == "系统优化" and self.system_type == "双系统":
@@ -4111,8 +3729,7 @@ steamdeck工具箱 v{VERSION}
         self.func_view.show_all()
 
     def display_changelog(self):
-        """显示手动输入的更新日志内容"""
-        changelog_content = """2026-07-27（v1.5.0） 修复了一些bug,并优化了部分功能
+        changelog_content = """2026-07-27（v1.5.1包含 v1.5.0 的调整） 修复了一些bug,并优化完善了一些
 2026-07-26（v1.4.9） 增加了安装Asklink远程的功能
 2026-07-25（v1.4.8包含 v1.3.9-v1.4.7 的调整）将文字形式停止更新，替换为图文形式，操作更加便捷，并对功能进行了修改和优化完善
 删除了设置管理员密码的功能，增加了安装奇游联机宝加速插件的功能
@@ -4148,7 +3765,6 @@ steamdeck工具箱 v{VERSION}
         if not func_name:
             return
 
-        # 如果是父节点，展开/折叠并返回
         if model.iter_has_child(iter_):
             if treeview.row_expanded(path):
                 treeview.collapse_row(path)
@@ -4156,19 +3772,16 @@ steamdeck工具箱 v{VERSION}
                 treeview.expand_row(path, False)
             return
 
-        # 处理“UU加速器插件”：在独立 konsole 中运行
         if func_name == "UU加速器插件":
             func_key = self.func_map.get(func_name)
             if func_key:
                 self.run_external_terminal(func_key)
             return
 
-        # 处理“Steam缓存管理”：使用 zenity 图形界面
         if func_name == "Steam缓存管理":
             self.run_cache_manager_gui()
             return
 
-        # 通用功能：在内嵌终端中运行
         func_key = self.func_map.get(func_name)
         if not func_key:
             return
@@ -4193,7 +3806,6 @@ steamdeck工具箱 v{VERSION}
         help_dialog.destroy()
 
     def run_cache_manager_gui(self):
-        """直接运行 zenity 图形化缓存管理器，不显示终端窗口"""
         func_name = "steamdeck_cache_manager"
         script_content = BASH_SCRIPT + f"\n\n{func_name}\n"
         with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, encoding='utf-8') as f:
@@ -4212,7 +3824,6 @@ steamdeck工具箱 v{VERSION}
         self.destroy()
 
     def run_external_terminal(self, func_key):
-        """在独立的 konsole 终端中运行指定的 Bash 函数"""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, encoding='utf-8') as f:
             f.write(BASH_SCRIPT + f"\n\n{func_key}\n")
             tmp_path = f.name
@@ -4355,26 +3966,21 @@ def ensure_vte_installed():
     GLib.child_watch_add(proc.pid, on_vte_install_finished)
 
 # ============================================================================
-# 图标同步函数（新增）
+# 图标同步函数
 # ============================================================================
 def sync_emoji_icons():
-    """检查本地图标是否与远程仓库一致，不一致则同步"""
     script_dir = os.path.dirname(os.path.abspath(__file__))
     local_icon_dir = os.path.join(script_dir, "emoji_icons")
-    # 获取远程文件列表
     remote_count = 0
     try:
         api_url = "https://gitee.com/api/v5/repos/Zhucy2100/steamdeck_toolbox/contents/emoji_icons"
         req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode('utf-8'))
-            # data 是列表，每个元素代表一个文件/目录
             remote_count = len([item for item in data if item['type'] == 'file'])
     except Exception as e:
         print(f"获取远程图标列表失败: {e}")
-        # 如果网络失败，跳过同步
         return False
-    # 本地数量
     local_count = 0
     if os.path.isdir(local_icon_dir):
         local_count = len([f for f in os.listdir(local_icon_dir) if os.path.isfile(os.path.join(local_icon_dir, f))])
@@ -4382,12 +3988,10 @@ def sync_emoji_icons():
         print("图标数量一致，无需同步。")
         return True
     print(f"图标数量不一致: 本地 {local_count}, 远程 {remote_count}，开始同步...")
-    # 进行同步：使用 git clone
     temp_dir = "/tmp/steamdeck_icons_sync"
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
     try:
-        # 检查 git 命令
         subprocess.run(["git", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         print("git 未安装，无法同步图标。")
@@ -4397,9 +4001,7 @@ def sync_emoji_icons():
         subprocess.run(["git", "clone", "--depth=1", repo_url, temp_dir], check=True, timeout=60)
         remote_icon_dir = os.path.join(temp_dir, "emoji_icons")
         if os.path.isdir(remote_icon_dir):
-            # 确保本地目录存在
             os.makedirs(local_icon_dir, exist_ok=True)
-            # 复制所有文件
             for item in os.listdir(remote_icon_dir):
                 src = os.path.join(remote_icon_dir, item)
                 dst = os.path.join(local_icon_dir, item)
@@ -4543,9 +4145,7 @@ class UpdateCheckWindow(Gtk.Window):
 
     def perform_check(self):
         def check_thread():
-            # 先同步图标
             sync_emoji_icons()
-            # 再检查版本
             remote_version = get_remote_version()
             GLib.idle_add(self.on_check_done, remote_version)
         threading.Thread(target=check_thread, daemon=True).start()
