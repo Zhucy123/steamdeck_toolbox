@@ -80,42 +80,59 @@ install_chinese_source() {
 
 adjust_swap() {
     mk_temp_dir
-    clear
-    echo -e "${YELLOW}════════════════ 调整虚拟内存大小 ════════════════${NC}"
-    echo ""
-    echo -e "${CYAN}当前系统状态${NC}"
-    echo "--------------------------------------------"
-    if command -v free &> /dev/null; then
-        mem_line=$(LANG=C free -h | grep '^Mem:')
-        swap_line=$(LANG=C free -h | grep '^Swap:')
-        if [ -n "$mem_line" ]; then
-            mem_total=$(echo "$mem_line" | awk '{print $2}')
-            mem_used=$(echo "$mem_line" | awk '{print $3}')
-            echo -e "物理内存: ${GREEN}${mem_total}${NC} | 已用: ${YELLOW}${mem_used}${NC}"
+    while true; do
+        clear
+        echo -e "${YELLOW}════════════════ 调整虚拟内存大小 ════════════════${NC}"
+        echo ""
+        echo -e "${CYAN}当前系统状态${NC}"
+        echo "--------------------------------------------"
+        if command -v free &> /dev/null; then
+            mem_line=$(LANG=C free -h | grep '^Mem:')
+            swap_line=$(LANG=C free -h | grep '^Swap:')
+            if [ -n "$mem_line" ]; then
+                mem_total=$(echo "$mem_line" | awk '{print $2}')
+                mem_used=$(echo "$mem_line" | awk '{print $3}')
+                echo -e "物理内存: ${GREEN}${mem_total}${NC} | 已用: ${YELLOW}${mem_used}${NC}"
+            fi
+            if [ -n "$swap_line" ]; then
+                swap_total=$(echo "$swap_line" | awk '{print $2}')
+                swap_used=$(echo "$swap_line" | awk '{print $3}')
+                echo -e "交换空间: ${GREEN}${swap_total}${NC} | 已用: ${YELLOW}${swap_used}${NC}"
+            fi
         fi
-        if [ -n "$swap_line" ]; then
-            swap_total=$(echo "$swap_line" | awk '{print $2}')
-            swap_used=$(echo "$swap_line" | awk '{print $3}')
-            echo -e "交换空间: ${GREEN}${swap_total}${NC} | 已用: ${YELLOW}${swap_used}${NC}"
-        fi
-    fi
-    echo ""
-    echo -e "${CYAN}请选择要执行的操作${NC}"
-    echo "============================================"
-    echo -e "${GREEN}[1] 一键应用CryoByte33推荐方案${NC}"
-    echo -e "${GREEN}[2] 调整传统Swap文件大小${NC}"
-    echo -e "${GREEN}[3] 配置ZRAM (内存压缩交换)${NC}"
-    echo -e "${GREEN}[4] 清理所有Swap配置并重新开始${NC}"
-    echo "============================================"
-    echo ""
-    read -p "请输入选项 [1-4]: " main_choice < /dev/tty
-    case $main_choice in
-        1) apply_cryo_recommendation ;;
-        2) adjust_swapfile ;;
-        3) configure_zram ;;
-        4) cleanup_swap ;;
-        *) echo -e "${RED}无效选择${NC}" ;;
-    esac
+        echo ""
+        echo -e "${CYAN}请选择要执行的操作${NC}"
+        echo "============================================"
+        echo -e "${GREEN}[1] 一键应用CryoByte33推荐方案${NC}"
+        echo -e "${GREEN}[2] 调整传统Swap文件大小${NC}"
+        echo -e "${GREEN}[3] 配置ZRAM (内存压缩交换)${NC}"
+        echo -e "${GREEN}[4] 清理所有虚拟内存配置并重新开始${NC}"
+        echo "============================================"
+        echo ""
+
+        read -p "请输入选项 [1-4]: " main_choice < /dev/tty
+        case $main_choice in
+            1) apply_cryo_recommendation
+               echo ""
+               read -p "按回车键返回主菜单..." < /dev/tty
+               continue ;;
+            2) adjust_swapfile
+               echo ""
+               read -p "按回车键返回主菜单..." < /dev/tty
+               continue ;;
+            3) configure_zram
+               echo ""
+               read -p "按回车键返回主菜单..." < /dev/tty
+               continue ;;
+            4) cleanup_swap
+               echo ""
+               read -p "按回车键返回主菜单..." < /dev/tty
+               continue ;;
+            *) echo -e "${RED}无效选择，请重新输入。${NC}"
+               sleep 1
+               ;;
+        esac
+    done
 }
 
 apply_cryo_recommendation() {
@@ -123,9 +140,14 @@ apply_cryo_recommendation() {
     echo ""
     echo -e "${YELLOW}═══════════════ 应用CryoByte33推荐方案 ═══════════════${NC}"
     echo ""
-    read -p "是否继续？(输入 y 确认，其他键取消): " -n 1 -r < /dev/tty
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then echo "取消"; return; fi
+    read -n1 -p "按回车键或 A 键确认，其他键取消: " confirm
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "继续执行..."
+    else
+        echo "取消操作。"
+        return
+    fi
     local swap_size_gb=16
     local block_count=$((swap_size_gb * 1024))
     echo "• 停用现有交换文件..."
@@ -134,7 +156,7 @@ apply_cryo_recommendation() {
     sudo rm -f /home/swapfile
     echo "• 创建新文件..."
     sudo touch /home/swapfile
-    sudo chattr +C /home/swapfile 2>/dev/null || echo -e "${YELLOW}  提示: chattr +C 可能失败，继续执行...${NC}"
+    sudo chattr +C /home/swapfile 2>/dev/null || true
     sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$block_count conv=fsync status=progress 2>/dev/null
     sudo chmod 600 /home/swapfile
     sudo mkswap /home/swapfile
@@ -149,7 +171,7 @@ vm.page-cluster=0
 vm.dirty_background_ratio=3
 vm.dirty_ratio=50
 EOF
-    sudo sysctl --system --load=/etc/sysctl.d/99-cryo-optimizations.conf
+    sudo sysctl --system --load=/etc/sysctl.d/99-cryo-optimizations.conf >/dev/null 2>&1
     echo -e "${GREEN}✓ 内核参数优化完成${NC}"
     sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
     sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null
@@ -159,40 +181,61 @@ EOF
 
 adjust_swapfile() {
     mk_temp_dir
-    echo ""
-    echo -e "${YELLOW}调整传统Swap文件大小${NC}"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    if [ -f "/home/swapfile" ]; then
-        current_size=$(sudo du -h /home/swapfile 2>/dev/null | cut -f1)
-        echo -e "现有文件大小: ${GREEN}$current_size${NC}"
-    else
-        echo -e "现有文件: ${YELLOW}未找到${NC}"
-    fi
-    echo ""
-    df -h / | tail -1
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "选择新的大小:"
-    echo " 1.  1GB (轻度使用)"
-    echo " 2.  4GB (基础游戏)"
-    echo " 3.  8GB (推荐，平衡型)"
-    echo " 4. 16GB (大型游戏/多任务)"
-    echo " 5. 32GB (虚拟机/专业用途)"
-    echo " 6. 自定义大小"
-    read -p "请选择 [1-6]: " size_choice < /dev/tty
-    case $size_choice in
-        1) swap_size_gb=1;; 2) swap_size_gb=4;; 3) swap_size_gb=8;;
-        4) swap_size_gb=16;; 5) swap_size_gb=32;;
-        6) read -p "请输入大小 (单位GB，数字): " custom_size < /dev/tty
-           if [[ "$custom_size" =~ ^[0-9]+$ ]]; then swap_size_gb=$custom_size; else echo "无效"; return; fi;;
-        *) echo "无效"; return;;
-    esac
-    read -p "是否继续? (y/N): " -n 1 -r < /dev/tty
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then return; fi
+    while true; do
+        clear
+        echo ""
+        echo -e "${YELLOW}调整传统Swap文件大小${NC}"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        if [ -f "/home/swapfile" ]; then
+            current_size=$(sudo du -h /home/swapfile 2>/dev/null | cut -f1)
+            echo -e "现有文件大小: ${GREEN}$current_size${NC}"
+        else
+            echo -e "现有文件: ${YELLOW}未找到${NC}"
+        fi
+        echo ""
+        df -h / | tail -1
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "选择新的大小:"
+        echo " 1.  1GB (轻度使用)"
+        echo " 2.  4GB (基础游戏)"
+        echo " 3.  8GB (推荐，平衡型)"
+        echo " 4. 16GB (大型游戏/多任务)"
+        echo " 5. 32GB (虚拟机/专业用途)"
+        echo " 6. 自定义大小"
+
+        local swap_size_gb=""
+        read -p "请选择 [1-6]: " size_choice < /dev/tty
+        case $size_choice in
+            1) swap_size_gb=1 ;;
+            2) swap_size_gb=4 ;;
+            3) swap_size_gb=8 ;;
+            4) swap_size_gb=16 ;;
+            5) swap_size_gb=32 ;;
+            6) read -p "请输入大小 (单位GB，数字): " custom_size < /dev/tty
+                if [[ "$custom_size" =~ ^[0-9]+$ ]]; then
+                    swap_size_gb=$custom_size
+                else
+                    echo -e "${RED}无效数字，请重新选择。${NC}"
+                    sleep 1
+                    continue
+                fi
+                ;;
+            *) echo -e "${RED}无效选项，请重新选择。${NC}"
+               sleep 1
+               continue
+               ;;
+        esac
+
+        break
+    done
+
+    echo "正在创建 ${swap_size_gb}GB 交换文件..."
     sudo swapoff /home/swapfile 2>/dev/null
     sudo rm -f /home/swapfile
     sudo touch /home/swapfile
+if mount | grep " /home " | grep -q btrfs; then
     sudo chattr +C /home/swapfile 2>/dev/null || echo -e "${YELLOW}⚠  chattr +C 失败，继续${NC}"
+fi
     block_count=$((swap_size_gb * 1024))
     sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$block_count status=progress conv=fsync 2>/dev/null
     sudo chmod 600 /home/swapfile
@@ -206,49 +249,116 @@ adjust_swapfile() {
 
 configure_zram() {
     mk_temp_dir
-    echo ""
-    echo -e "${YELLOW}配置ZRAM (内存压缩交换)${NC}"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "选择ZRAM大小 (基于16GB物理内存):"
-    echo " 1. 2GB (保守)"
-    echo " 2. 4GB (平衡推荐)"
-    echo " 3. 8GB (积极)"
-    read -p "请选择 [1-3]: " zram_choice < /dev/tty
-    case $zram_choice in
-        1) zram_size_gb=2;; 2) zram_size_gb=4;; 3) zram_size_gb=8;;
-        *) echo "无效"; return;;
-    esac
-    sudo pacman -S --noconfirm systemd-zram-generator 2>/dev/null
-    sudo tee /etc/systemd/zram-generator.conf > /dev/null <<EOF
-[zram0]
-zram-size = min(ram, ${zram_size_gb}G)
-compression-algorithm = lz4
-swap-priority = 100
-EOF
-    sudo systemctl daemon-reload
+    while true; do
+        clear
+        echo ""
+        echo -e "${YELLOW}配置ZRAM (内存压缩交换)${NC}"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "选择ZRAM大小 (基于16GB物理内存):"
+        echo " 1. 2GB (保守)"
+        echo " 2. 4GB (平衡推荐)"
+        echo " 3. 8GB (积极)"
+
+        local zram_size_gb=""
+        read -p "请选择 [1-3]: " zram_choice < /dev/tty
+        case $zram_choice in
+            1) zram_size_gb=2 ;;
+            2) zram_size_gb=4 ;;
+            3) zram_size_gb=8 ;;
+            *) echo -e "${RED}无效选项，请重新选择。${NC}"
+               sleep 1
+               continue
+               ;;
+        esac
+
+        break
+    done
+
+    echo "正在加载 ZRAM 内核模块..."
+    sudo modprobe zram
+
+    echo "正在清理旧的 ZRAM 配置..."
     sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
-    sudo systemctl start systemd-zram-setup@zram0
-    sudo systemctl enable systemd-zram-setup@zram0
-    sleep 2
-    if swapon --show | grep -q zram; then echo -e "${GREEN}✓ ZRAM已启用${NC}"; else echo -e "${YELLOW}⚠  ZRAM可能未启动${NC}"; fi
+    sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null
+    sudo systemctl daemon-reload 2>/dev/null
+
+    if swapon --show | grep -q /dev/zram0; then
+        sudo swapoff /dev/zram0 2>/dev/null
+    fi
+    sudo zramctl /dev/zram0 --reset 2>/dev/null
+
+    echo "正在创建 ${zram_size_gb}GB ZRAM 设备..."
+    sudo zramctl /dev/zram0 --size ${zram_size_gb}G --algorithm lz4 2>/dev/null
+    if [ $? -ne 0 ]; then
+        echo "尝试动态创建 ZRAM 设备..."
+        local zram_dev=$(sudo zramctl --find --size ${zram_size_gb}G --algorithm lz4)
+        if [ -n "$zram_dev" ]; then
+            echo "ZRAM 设备创建成功: $zram_dev"
+            sudo mkswap $zram_dev
+            sudo swapon $zram_dev -p 100
+            if swapon --show | grep -q "$zram_dev"; then
+                local actual_size=$(swapon --show | grep "$zram_dev" | awk '{print $3}')
+                echo -e "${GREEN}✅ ZRAM 已成功启用！设备: $zram_dev, 大小: ${actual_size}${NC}"
+            else
+                echo -e "${RED}❌ ZRAM 启用失败。${NC}"
+            fi
+            sudo rm -f /etc/systemd/zram-generator.conf 2>/dev/null
+            echo "完成。"
+            return 0
+        else
+            echo -e "${RED}❌ 无法创建 ZRAM 设备。${NC}"
+            return 1
+        fi
+    else
+        sudo mkswap /dev/zram0
+        sudo swapon /dev/zram0 -p 100
+        if swapon --show | grep -q /dev/zram0; then
+            local actual_size=$(swapon --show | grep /dev/zram0 | awk '{print $3}')
+            echo -e "${GREEN}✅ ZRAM 已成功启用！大小: ${actual_size}${NC}"
+        else
+            echo -e "${RED}❌ ZRAM 启用失败。${NC}"
+        fi
+        sudo rm -f /etc/systemd/zram-generator.conf 2>/dev/null
+        echo "完成。"
+        return 0
+    fi
 }
 
 cleanup_swap() {
     mk_temp_dir
     echo ""
-    echo -e "${YELLOW}清理所有Swap配置${NC}"
+    echo -e "${YELLOW}清理所有虚拟内存配置${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    read -p "确定要清理吗？(y/N): " -n 1 -r < /dev/tty
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then return; fi
-    sudo swapoff -a
-    sudo rm -f /home/swapfile
-    sudo sed -i '\\|/home/swapfile|d' /etc/fstab
+    read -n1 -p "按回车键或 A 键确认，其他键取消: " confirm
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "继续执行..."
+    else
+        echo "操作已取消。"
+        return
+    fi
+
+    echo "正在关闭所有交换设备..."
+    sudo swapoff -a 2>/dev/null
+
+    if [ -b /dev/zram0 ]; then
+        echo "正在重置 ZRAM 设备..."
+        sudo zramctl /dev/zram0 --reset 2>/dev/null || echo -e "${YELLOW}⚠️  ZRAM 重置失败，可能未加载 zram 模块。${NC}"
+    fi
+
+    echo "正在删除交换文件..."
+    sudo rm -f /home/swapfile 2>/dev/null
+
+    echo "正在清理 fstab 配置..."
+    sudo sed -i '/\/home\/swapfile/d' /etc/fstab 2>/dev/null
+
+    echo "正在清理 systemd zram 服务..."
     sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
     sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null
     sudo rm -f /etc/systemd/zram-generator.conf 2>/dev/null
     sudo systemctl daemon-reload
-    echo -e "${GREEN}✅ 已清理所有Swap配置${NC}"
+
+    echo -e "${GREEN}✅ 所有虚拟内存配置已清理完成。${NC}"
 }
 
 fix_single_ntfs() {
@@ -379,7 +489,15 @@ fix_disk_write_error() {
     echo "  1) 修复所有有错误的分区"
     echo "  2) 选择特定分区修复"
     echo "  3) 取消修复"
-    read -p "请输入选项 [1-3]: " fix_choice < /dev/tty
+
+    local fix_choice
+    while true; do
+        read -p "请输入选项 [1-3]: " fix_choice < /dev/tty
+        case $fix_choice in
+            1|2|3) break ;;
+            *) echo -e "${RED}无效选项，请重新选择。${NC}" ;;
+        esac
+    done
 
     case $fix_choice in
         1)
@@ -390,7 +508,22 @@ fix_disk_write_error() {
             ;;
         2)
             echo "请输入要修复的分区编号（多个编号用空格分隔，如 1 3）："
-            read -p "编号: " -a indices < /dev/tty
+            local indices_input
+            while true; do
+                read -p "编号: " -a indices < /dev/tty
+                local valid=false
+                for idx in "${indices[@]}"; do
+                    if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -ge 1 ] && [ "$idx" -le ${#dirty_partitions[@]} ]; then
+                        valid=true
+                        break
+                    fi
+                done
+                if [ "$valid" = true ]; then
+                    break
+                else
+                    echo -e "${RED}无效编号，请重新输入。${NC}"
+                fi
+            done
             for idx in "${indices[@]}"; do
                 if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -ge 1 ] && [ "$idx" -le ${#dirty_partitions[@]} ]; then
                     eval "${dirty_partitions[$((idx-1))]}"
@@ -657,10 +790,12 @@ echo "  • 将Clover (Boot$CLOVER_BOOTNUM) 设为第一启动项"
 echo "  • 其他启动项顺序保持不变"
 echo ""
 
-read -p "是否继续？(输入 y 确认，其他键取消): " -n 1 -r CONFIRM < /dev/tty
-echo ""
+read -n1 -p "按回车键或 A 键确认，其他键取消: " confirm_boot
+echo
 
-if [[ ! $CONFIRM =~ ^[Yy]$ ]]; then
+if [[ -z "$confirm_boot" || "$confirm_boot" =~ [Aa] ]]; then
+    echo "继续执行..."
+else
     echo "❌ 操作已取消。"
     exit 0
 fi
@@ -927,281 +1062,55 @@ EOF
 install_watt_toolkit_install() {
     mk_temp_dir
     clear
-    echo -e "${YELLOW}════════════════ 安装/更新 Watt Toolkit (Steam++) ════════════════${NC}"
+    echo -e "${YELLOW}═══════安装/更新 Watt Toolkit (Steam++) ═══════${NC}"
     echo ""
 
-    local GITHUB_REPO="BeyondDimension/SteamTools"
     local INSTALL_DIR="/home/deck/Watt Toolkit"
     local DESKTOP_DIR="/home/deck/Desktop"
-    local TEMP_DIR="/tmp/watt_toolkit_install"
-    local MIRRORS=(
-        "http://gh.ddlc.top/"
-        "http://ghproxy.net/"
-        "http://mirror.ghproxy.com/"
-        "https://github.com/"
-    )
-    local DOWNLOAD_TIMEOUT=120
-    local MAX_RETRY_PER_MIRROR=1
+    local DOWNLOAD_URL="https://gitee.com/rmbgame/SteamTools/releases/download/3.1.0/Steam%20%20_v3.1.0_linux_x64.tgz"
+    local VERSION="3.1.0"
 
-    for cmd in curl sudo unzip tar python3; do
+    for cmd in curl sudo unzip tar; do
         if ! command -v $cmd &> /dev/null; then
             echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
             return 1
         fi
     done
 
-    echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
-    local releases_json=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases")
-    if [ -z "$releases_json" ]; then
-        echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
-        return 1
-    fi
-
-    local versions_info=$(echo "$releases_json" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    for rel in data:
-        tag = rel.get('tag_name', '')
-        prerelease = rel.get('prerelease', False)
-        if tag:
-            print(f'{tag}|{str(prerelease).lower()}')
-except:
-    pass
-")
-    if [ -z "$versions_info" ]; then
-        echo -e "${RED}错误: 无法解析版本信息。${NC}"
-        return 1
-    fi
-
-    local stable_versions=()
-    local prerelease_versions=()
-    while IFS='|' read -r tag prerelease; do
-        [ -z "$tag" ] && continue
-        if [[ "$prerelease" == "true" ]]; then
-            prerelease_versions+=("$tag")
-        else
-            stable_versions+=("$tag")
-        fi
-    done <<< "$versions_info"
-
-    local latest_stable=""
-    local latest_prerelease=""
-    if [ ${#stable_versions[@]} -gt 0 ]; then
-        latest_stable=$(printf '%s\n' "${stable_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
-        latest_stable="v${latest_stable}"
-    fi
-    if [ ${#prerelease_versions[@]} -gt 0 ]; then
-        latest_prerelease=$(printf '%s\n' "${prerelease_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
-        latest_prerelease="v${latest_prerelease}"
-    fi
-
     local installed_version=""
     if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/.version" ]; then
         installed_version=$(cat "$INSTALL_DIR/.version")
         echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
     else
-        echo "未检测到已安装版本。"
+        echo -e "${YELLOW}未检测到已安装的 Watt Toolkit。${NC}"
     fi
 
-    local target_version=""
-    if [ -n "$installed_version" ]; then
-        if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
-            local stable_num=$(echo "$latest_stable" | sed 's/^v//')
-            local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
-            local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
-            if [ "$higher" = "$prerelease_num" ]; then
-                echo -e "${GREEN}已安装最新正式版 ${installed_version}${NC}"
-                echo -e "${YELLOW}发现更高版本的预发布版: ${latest_prerelease}${NC}"
-                read -p "输入 y 升级到预发布版，按其他键保持当前版本: " upgrade < /dev/tty
-                if [[ $upgrade =~ ^[Yy]$ ]]; then
-                    target_version="$latest_prerelease"
-                else
-                    echo "保持当前版本。"
-                    return 0
-                fi
-            else
-                echo -e "${GREEN}已经是最新版本 (正式版 ${installed_version})${NC}"
-                return 0
-            fi
-        elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -n "$latest_stable" ]; then
-            local stable_num=$(echo "$latest_stable" | sed 's/^v//')
-            local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
-            local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
-            if [ "$higher" = "$prerelease_num" ]; then
-                echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
-                echo -e "${YELLOW}当前正式版为: ${latest_stable}${NC}"
-                read -p "输入 y 切换到正式版，按其他键保持当前版本: " switch < /dev/tty
-                if [[ $switch =~ ^[Yy]$ ]]; then
-                    target_version="$latest_stable"
-                else
-                    echo "保持当前版本。"
-                    return 0
-                fi
-            else
-                echo -e "${YELLOW}当前预发布版 ${installed_version} 低于正式版 ${latest_stable}，将升级到正式版。${NC}"
-                target_version="$latest_stable"
-            fi
-        elif [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ] && [ -z "$latest_prerelease" ]; then
-            echo -e "${GREEN}已经是最新版本 (正式版 ${installed_version})，无需更新。${NC}"
-            return 0
-        elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ] && [ -z "$latest_stable" ]; then
-            echo -e "${GREEN}已经是最新版本 (预发布版 ${installed_version})，无需更新。${NC}"
-            return 0
-        else
-            echo -e "${YELLOW}已安装版本 ${installed_version} 不是最新版本。${NC}"
-            if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
-                echo "请选择要安装的版本："
-                echo "1. 正式版 ${latest_stable}"
-                echo "2. 预发布版 ${latest_prerelease}"
-                read -p "请输入选择 [1-2] : " choice < /dev/tty
-                case $choice in
-                    2) target_version="$latest_prerelease" ;;
-                    *) target_version="$latest_stable" ;;
-                esac
-            elif [ -n "$latest_stable" ]; then
-                target_version="$latest_stable"
-                echo "将安装正式版 ${target_version}"
-            elif [ -n "$latest_prerelease" ]; then
-                target_version="$latest_prerelease"
-                echo "将安装预发布版 ${target_version}"
-            else
-                echo -e "${RED}错误: 无法找到任何版本。${NC}"
-                return 1
-            fi
-        fi
-    else
-        if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
-            local stable_num=$(echo "$latest_stable" | sed 's/^v//')
-            local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
-            local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
-            if [ "$higher" = "$prerelease_num" ]; then
-                echo "请选择要安装的版本："
-                echo "1. 正式版 ${latest_stable}"
-                echo "2. 预发布版 ${latest_prerelease}"
-                read -p "请输入选择 [1-2] : " choice < /dev/tty
-                case $choice in
-                    2) target_version="$latest_prerelease" ;;
-                    *) target_version="$latest_stable" ;;
-                esac
-            else
-                target_version="$latest_stable"
-            fi
-        elif [ -n "$latest_stable" ]; then
-            target_version="$latest_stable"
-            echo "将安装正式版 ${target_version}"
-        elif [ -n "$latest_prerelease" ]; then
-            target_version="$latest_prerelease"
-            echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
-        else
-            echo -e "${RED}错误: 无法获取任何版本。${NC}"
-            return 1
-        fi
-    fi
-
-    if [ -z "$target_version" ]; then
-        echo "未选择版本，操作取消。"
+    if [ -n "$installed_version" ] && [ "$installed_version" = "$VERSION" ]; then
+        echo -e "${GREEN}✅ 已是最新版本 ${installed_version}，无需操作。${NC}"
         return 0
     fi
 
-    echo -e "${GREEN}将安装版本: ${target_version}${NC}"
+    echo -e "${GREEN}将安装版本: ${VERSION}${NC}"
+    echo "正在下载 ${DOWNLOAD_URL} ..."
 
-    local download_url=""
-    local asset_info=$(echo "$releases_json" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    target_tag = '$target_version'
-    found = False
-    for rel in data:
-        if rel.get('tag_name') == target_tag:
-            for asset in rel.get('assets', []):
-                name = asset.get('name', '')
-                if name.endswith('_linux_x64.tgz') and '_linux_x64.tgz' in name:
-                    print(asset.get('browser_download_url', ''))
-                    found = True
-                    break
-            break
-    if not found:
-        for rel in data:
-            for asset in rel.get('assets', []):
-                name = asset.get('name', '')
-                if 'linux_x64.tgz' in name and 'source' not in name.lower():
-                    print(asset.get('browser_download_url', ''))
-                    found = True
-                    break
-            if found:
-                break
-except Exception as e:
-    pass
-")
-    if [ -z "$asset_info" ]; then
-        echo -e "${RED}错误: 无法获取 ${target_version} 的下载链接。${NC}"
-        echo "请检查 GitHub 上该版本是否包含 linux_x64.tgz 文件。"
-        return 1
-    fi
-    download_url="$asset_info"
+    local temp_dir="/tmp/watt_toolkit_install"
+    rm -rf "$temp_dir"
+    mkdir -p "$temp_dir"
+    cd "$temp_dir" || return 1
 
-    rm -rf "$TEMP_DIR"
-    mkdir -p "$TEMP_DIR"
-    cd "$TEMP_DIR"
-
-    local filename="Steam++_${target_version}_linux_x64.tgz"
-    local DOWNLOAD_SUCCESS=false
-
-    while true; do
-        echo ""
-        echo "请选择下载镜像源（输入编号，0取消）："
-        for i in "${!MIRRORS[@]}"; do
-            echo "  $((i+1)). ${MIRRORS[$i]}"
-        done
-        read -p "请输入选择: " choice < /dev/tty
-
-        if [[ -z "$choice" ]]; then
-            echo "输入无效，请重新选择。"
-            continue
-        fi
-        if [[ "$choice" == "0" ]]; then
-            echo "操作已取消。"
-            return 0
-        fi
-        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
-            mirror="${MIRRORS[$((choice-1))]}"
-            FULL_URL="${mirror}${download_url}"
-            echo -e "尝试从 ${mirror} 下载..."
-            curl -L --progress-bar --max-time "$DOWNLOAD_TIMEOUT" -o "$filename" "$FULL_URL"
-            curl_exit=$?
-            if [[ $curl_exit -eq 0 ]] && [[ -f "$filename" ]]; then
-                FILE_SIZE=$(stat -c%s "$filename" 2>/dev/null || stat -f%z "$filename" 2>/dev/null)
-                if [[ -n "$FILE_SIZE" ]] && [[ "$FILE_SIZE" -gt 1000000 ]]; then
-                    echo -e "\n${GREEN}下载成功 (大小: $((FILE_SIZE/1024/1024)) MB)${NC}"
-                    DOWNLOAD_SUCCESS=true
-                    break
-                else
-                    echo -e "\n${RED}下载文件无效 (${FILE_SIZE} 字节)。${NC}"
-                    rm -f "$filename"
-                fi
-            else
-                echo -e "\n${RED}下载失败 (退出码: $curl_exit)。${NC}"
-                rm -f "$filename"
-            fi
-            echo -e "${YELLOW}下载失败，请重新选择镜像源。${NC}"
-        else
-            echo "无效编号，请重新选择。"
-        fi
-    done
-
-    if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
-        echo -e "${RED}下载失败，安装中止。${NC}"
+    local filename="Steam_v${VERSION}_linux_x64.tgz"
+    curl -L --progress-bar -o "$filename" "$DOWNLOAD_URL"
+    if [ $? -ne 0 ] || [ ! -f "$filename" ]; then
+        echo -e "${RED}下载失败，请检查网络后重试。${NC}"
         return 1
     fi
 
-    echo -e "${CYAN}正在解压到临时目录...${NC}"
-    local temp_extract="$TEMP_DIR/extracted"
+    echo -e "${CYAN}正在解压...${NC}"
+    local temp_extract="$temp_dir/extracted"
     mkdir -p "$temp_extract"
     if ! tar -xzf "$filename" -C "$temp_extract"; then
         echo -e "${RED}解压失败。${NC}"
-        rm -rf "$TEMP_DIR"
+        rm -rf "$temp_dir"
         return 1
     fi
 
@@ -1229,9 +1138,10 @@ except Exception as e:
         find "$temp_extract" -maxdepth 1 -name ".*" ! -name "." ! -name ".." -exec mv {} "$INSTALL_DIR/" \;
     fi
 
-    rm -rf "$TEMP_DIR"
+    rm -rf "$temp_dir"
 
-    echo "$target_version" > "$INSTALL_DIR/.version"
+
+    echo "$VERSION" > "$INSTALL_DIR/.version"
 
     local desktop_file="$DESKTOP_DIR/Watt_Toolkit.desktop"
     local dotnet_root="$INSTALL_DIR/dotnet"
@@ -1268,7 +1178,7 @@ EOF
     echo -e "${GREEN}✓ 桌面快捷方式已创建: ${desktop_file}${NC}"
 
     echo ""
-    echo -e "${GREEN}✅ Watt Toolkit ${target_version} 安装完成！${NC}"
+    echo -e "${GREEN}✅ Watt Toolkit ${VERSION} 安装完成！${NC}"
     echo -e "${GREEN}安装目录: ${INSTALL_DIR}${NC}"
     echo ""
     echo -e "${YELLOW}使用提示：${NC}"
@@ -1276,6 +1186,48 @@ EOF
     echo "  网络加速 → 加速设置 → 安装证书"
     echo ""
     echo "请在桌面启动 Watt Toolkit。"
+}
+
+install_watt_toolkit_uninstall() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}══════════════ 卸载 Watt Toolkit ══════════════${NC}"
+    local INSTALL_DIR="/home/deck/Watt Toolkit"
+    local DESKTOP_DIR="/home/deck/Desktop"
+
+    if [ ! -d "$INSTALL_DIR" ]; then
+        echo -e "${YELLOW}未检测到已安装的 Watt Toolkit。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}正在卸载 Watt Toolkit...${NC}"
+    echo "将删除以下目录: ${INSTALL_DIR}"
+    echo "将删除桌面快捷方式: ${DESKTOP_DIR}/Watt_Toolkit.desktop"
+    echo ""
+
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "继续卸载..."
+    else
+        echo "取消卸载。"
+        return 0
+    fi
+
+    if rm -rf "$INSTALL_DIR"; then
+        echo -e "${GREEN}✓ 已删除安装目录${NC}"
+    else
+        echo -e "${RED}✗ 删除安装目录失败${NC}"
+    fi
+
+    if rm -f "${DESKTOP_DIR}/Watt_Toolkit.desktop"; then
+        echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
+    else
+        echo -e "${RED}✗ 删除桌面快捷方式失败${NC}"
+    fi
+
+    echo ""
+    echo -e "${GREEN}✅ Watt Toolkit 已卸载完成。${NC}"
 }
 
 install_plugin_store() {
@@ -1294,39 +1246,39 @@ install_plugin_store() {
 import sys, json
 try:
     data = json.load(sys.stdin)
+    stable = []
+    prerelease = []
     for rel in data:
         tag = rel.get('tag_name', '')
-        prerelease = rel.get('prerelease', False)
         if tag:
-            print(f'{tag}|{str(prerelease).lower()}')
+            if rel.get('prerelease', False):
+                prerelease.append(tag)
+            else:
+                stable.append(tag)
+    print('STABLE:' + ','.join(stable) if stable else 'STABLE:')
+    print('PRERELEASE:' + ','.join(prerelease) if prerelease else 'PRERELEASE:')
 except:
-    pass
+    print('STABLE:')
+    print('PRERELEASE:')
 ")
     if [ -z "$versions_info" ]; then
         echo -e "${RED}错误: 无法解析版本信息。${NC}"
         return 1
     fi
 
-    local stable_versions=()
-    local prerelease_versions=()
-    while IFS='|' read -r tag prerelease; do
-        [ -z "$tag" ] && continue
-        if [[ "$prerelease" == "true" ]]; then
-            prerelease_versions+=("$tag")
-        else
-            stable_versions+=("$tag")
-        fi
-    done <<< "$versions_info"
+    local stable_list=$(echo "$versions_info" | grep "^STABLE:" | sed 's/^STABLE://')
+    local prerelease_list=$(echo "$versions_info" | grep "^PRERELEASE:" | sed 's/^PRERELEASE://')
 
     local latest_stable=""
-    local latest_prerelease=""
-    if [ ${#stable_versions[@]} -gt 0 ]; then
-        latest_stable=$(printf '%s\n' "${stable_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
-        latest_stable="v${latest_stable}"
+    if [ -n "$stable_list" ]; then
+        latest_stable=$(echo "$stable_list" | tr ',' '\n' | sed 's/^v//' | sort -V | tail -1)
+        [ -n "$latest_stable" ] && latest_stable="v${latest_stable}"
     fi
-    if [ ${#prerelease_versions[@]} -gt 0 ]; then
-        latest_prerelease=$(printf '%s\n' "${prerelease_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
-        latest_prerelease="v${latest_prerelease}"
+
+    local latest_prerelease=""
+    if [ -n "$prerelease_list" ]; then
+        latest_prerelease=$(echo "$prerelease_list" | tr ',' '\n' | sed 's/^v//' | sort -V | tail -1)
+        [ -n "$latest_prerelease" ] && latest_prerelease="v${latest_prerelease}"
     fi
 
     local PLUGIN_LOADER="/home/deck/homebrew/services/PluginLoader"
@@ -1346,86 +1298,114 @@ except:
         echo "未检测到现有安装。"
     fi
 
+    local options=()
+    local labels=()
+    if [ -n "$latest_stable" ]; then
+        options+=("$latest_stable")
+        labels+=("正式版 $latest_stable")
+    fi
+    if [ -n "$latest_prerelease" ]; then
+        options+=("$latest_prerelease")
+        labels+=("预发布版 $latest_prerelease")
+    fi
+
+    if [ ${#options[@]} -eq 0 ]; then
+        echo -e "${RED}错误: 未找到任何版本。${NC}"
+        return 1
+    fi
+
     local target_version=""
-    if [ -n "$installed_version" ]; then
-        if [ -n "$latest_stable" ] && [ "$installed_version" = "$latest_stable" ]; then
-            echo -e "${GREEN}已经是最新稳定版 ${installed_version}，无需更新。${NC}"
-            if [ -n "$latest_prerelease" ]; then
-                echo -e "${YELLOW}发现预发布版: ${latest_prerelease}${NC}"
-                read -p "是否升级到预发布版？(y/N): " upgrade < /dev/tty
-                if [[ $upgrade =~ ^[Yy]$ ]]; then
-                    target_version="$latest_prerelease"
-                else
-                    echo "保持当前版本。"
-                    return 0
-                fi
+
+    if [ -z "$installed_version" ]; then
+        while true; do
+            clear
+            echo -e "${YELLOW}════════════════ 安装插件商店 ════════════════${NC}"
+            echo ""
+            echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+            echo -e "${YELLOW}未检测到现有安装。${NC}"
+            echo ""
+            if [ ${#options[@]} -eq 1 ]; then
+                target_version="${options[0]}"
+                echo -e "${GREEN}将安装唯一版本: ${target_version}${NC}"
+                break
             else
-                return 0
-            fi
-        elif [ -n "$latest_prerelease" ] && [ "$installed_version" = "$latest_prerelease" ]; then
-            echo -e "${GREEN}已安装最新预发布版 ${installed_version}${NC}"
-            if [ -n "$latest_stable" ]; then
-                echo -e "${YELLOW}发现正式版: ${latest_stable}${NC}"
-                read -p "是否切换到正式版？(y/N): " switch < /dev/tty
-                if [[ $switch =~ ^[Yy]$ ]]; then
-                    target_version="$latest_stable"
-                else
-                    echo "保持当前版本。"
-                    return 0
-                fi
-            else
-                return 0
-            fi
-        else
-            echo -e "${YELLOW}已安装版本 ${installed_version} 不是最新版本。${NC}"
-            if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
                 echo "请选择要安装的版本："
-                echo "1. 正式版 ${latest_stable}"
-                echo "2. 预发布版 ${latest_prerelease}"
-                read -p "请输入选择 [1-2] : " choice < /dev/tty
-                case $choice in
-                    2) target_version="$latest_prerelease" ;;
-                    *) target_version="$latest_stable" ;;
-                esac
-            elif [ -n "$latest_stable" ]; then
-                target_version="$latest_stable"
-                echo "将安装正式版 ${target_version}"
-            elif [ -n "$latest_prerelease" ]; then
-                target_version="$latest_prerelease"
-                echo "将安装预发布版 ${target_version}"
-            else
-                echo -e "${RED}错误: 无法找到任何版本。${NC}"
-                return 1
+                for i in "${!options[@]}"; do
+                    echo "$((i+1))) ${labels[$i]}"
+                done
+                read -p "请输入选择 [1-${#options[@]}]: " choice < /dev/tty
+                if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#options[@]} ]; then
+                    target_version="${options[$((choice-1))]}"
+                    break
+                else
+                    echo -e "${RED}无效选择，请重新输入。${NC}"
+                    sleep 1
+                fi
             fi
-        fi
+        done
+        echo -e "${GREEN}将安装版本: ${target_version}${NC}"
     else
-        if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
-            echo "请选择要安装的版本："
-            echo "1. 正式版 ${latest_stable}"
-            echo "2. 预发布版 ${latest_prerelease}"
-            read -p "请输入选择 [1-2] : " choice < /dev/tty
-            case $choice in
-                2) target_version="$latest_prerelease" ;;
-                *) target_version="$latest_stable" ;;
-            esac
-        elif [ -n "$latest_stable" ]; then
-            target_version="$latest_stable"
-            echo "将安装正式版 ${target_version}"
-        elif [ -n "$latest_prerelease" ]; then
-            target_version="$latest_prerelease"
-            echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
+        local is_prerelease=false
+        if [ -n "$prerelease_list" ]; then
+            local inst_ver_clean=$(echo "$installed_version" | sed 's/^v//')
+            for tag in $(echo "$prerelease_list" | tr ',' '\n'); do
+                local tag_clean=$(echo "$tag" | sed 's/^v//')
+                if [ "$tag_clean" = "$inst_ver_clean" ]; then
+                    is_prerelease=true
+                    break
+                fi
+            done
+        fi
+
+        if [ "$is_prerelease" = true ]; then
+            if [ -n "$latest_stable" ]; then
+                echo -e "${YELLOW}当前已安装预发布版 ${installed_version}。${NC}"
+                echo -e "${YELLOW}是否切换为正式版 ${latest_stable}？${NC}"
+                read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice
+                echo
+                if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
+                    target_version="$latest_stable"
+                    echo -e "${GREEN}将切换至正式版: ${target_version}${NC}"
+                else
+                    echo "保持当前版本。"
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}已是最新预发布版 ${installed_version}，且没有正式版可切换。${NC}"
+                return 0
+            fi
         else
-            echo -e "${RED}错误: 无法获取任何版本。${NC}"
-            return 1
+            if [ -n "$latest_prerelease" ]; then
+                local stable_num=$(echo "$installed_version" | sed 's/^v//')
+                local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+                local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
+                if [ "$higher" = "$prerelease_num" ]; then
+                    echo -e "${YELLOW}当前已安装正式版 ${installed_version}。${NC}"
+                    echo -e "${YELLOW}发现更高或相等的预发布版 ${latest_prerelease}，是否切换？${NC}"
+                    read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice
+                    echo
+                    if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
+                        target_version="$latest_prerelease"
+                        echo -e "${GREEN}将切换至预发布版: ${target_version}${NC}"
+                    else
+                        echo "保持当前版本。"
+                        return 0
+                    fi
+                else
+                    echo -e "${GREEN}已是最新正式版 ${installed_version}，且没有更高的预发布版。${NC}"
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}已是最新正式版 ${installed_version}，且没有预发布版。${NC}"
+                return 0
+            fi
         fi
     fi
 
     if [ -z "$target_version" ]; then
-        echo "未选择版本，操作取消。"
-        return 0
+        echo -e "${RED}错误: 未确定目标版本。${NC}"
+        return 1
     fi
-
-    echo -e "${GREEN}将安装版本: ${target_version}${NC}"
 
     HOME_DIR="/home/deck"
     HOMEBREW_DIR="${HOME_DIR}/homebrew"
@@ -1445,16 +1425,26 @@ except:
     DOWNLOAD_PATH="https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${target_version}/PluginLoader"
     TMP_FILE="${PLUGIN_LOADER}.tmp"
 
+    mkdir -p "$SERVICE_DIR" "$PLUGIN_DIR"
+    sudo chown -R ${CURRENT_USER}:${CURRENT_USER} "$HOMEBREW_DIR" 2>/dev/null || true
+
+    local DOWNLOAD_SUCCESS=false
     while true; do
+        clear
+        echo -e "${YELLOW}════════════════ 安装插件商店 ════════════════${NC}"
+        echo ""
+        echo -e "${GREEN}将安装版本: ${target_version}${NC}"
         echo ""
         echo "请选择下载镜像源（输入编号，0取消）："
         for i in "${!MIRRORS[@]}"; do
             echo "  $((i+1)). ${MIRRORS[$i]}"
         done
+
         read -p "请输入选择: " choice < /dev/tty
 
         if [[ -z "$choice" ]]; then
-            echo "输入无效，请重新选择。"
+            echo -e "${RED}输入无效，请重新选择。${NC}"
+            sleep 1
             continue
         fi
         if [[ "$choice" == "0" ]]; then
@@ -1471,20 +1461,28 @@ except:
                 FILE_SIZE=$(stat -c%s "$TMP_FILE" 2>/dev/null || stat -f%z "$TMP_FILE" 2>/dev/null)
                 if [[ -n "$FILE_SIZE" ]] && [[ "$FILE_SIZE" -gt 1000000 ]]; then
                     echo -e "\n${GREEN}下载成功 (大小: $((FILE_SIZE/1024/1024)) MB)${NC}"
+                    DOWNLOAD_SUCCESS=true
                     break
                 else
                     echo -e "\n${RED}下载文件无效 (${FILE_SIZE} 字节)。${NC}"
                     rm -f "$TMP_FILE"
+                    sleep 1
                 fi
             else
                 echo -e "\n${RED}下载失败 (退出码: $curl_exit)。${NC}"
                 rm -f "$TMP_FILE"
+                sleep 1
             fi
-            echo -e "${YELLOW}下载失败，请重新选择镜像源。${NC}"
         else
-            echo "无效编号，请重新选择。"
+            echo -e "${RED}无效编号，请重新选择。${NC}"
+            sleep 1
         fi
     done
+
+    if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
+        echo -e "${RED}下载失败，安装中止。${NC}"
+        return 1
+    fi
 
     for cmd in curl python3 systemctl sudo journalctl stat; do
         if ! command -v $cmd &> /dev/null; then
@@ -1541,6 +1539,36 @@ EOF
     echo "请切换回游戏模式，按 '...' 键打开侧边栏检查。"
 }
 
+uninstall_plugin_store() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载插件商店 ════════════════${NC}"
+    if [ ! -d "/home/deck/homebrew" ]; then
+        echo -e "${YELLOW}未检测到已安装的插件商店。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}检测到已安装插件商店。${NC}"
+    echo "警告：这将删除整个 /home/deck/homebrew 目录，包括所有插件。"
+    echo ""
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "继续卸载..."
+    else
+        echo "取消卸载。"
+        return 0
+    fi
+
+    echo "正在执行卸载..."
+    if sudo rm -rf /home/deck/homebrew; then
+        echo -e "${GREEN}✓ 插件商店卸载完成${NC}"
+        echo "如需重新安装，请使用 '安装插件商店' 功能。"
+    else
+        echo -e "${RED}✗ 插件商店卸载失败${NC}"
+    fi
+}
+
 install_tomoon_install() {
     mk_temp_dir
     clear
@@ -1577,7 +1605,6 @@ install_tomoon_install() {
         echo -e "${YELLOW}返回内容（前200字符）: ${release_info:0:200}${NC}"
         return 1
     fi
-    echo -e "${GREEN}最新版本: ${latest_version}${NC}"
 
     local download_url=$(echo "$release_info" | grep -o '"browser_download_url": *"[^"]*tomoon-[^"]*\.zip"' | head -1 | sed 's/.*"browser_download_url": *"//; s/".*//')
     if [ -z "$download_url" ]; then
@@ -1591,29 +1618,14 @@ install_tomoon_install() {
         local_version=$(grep -o '"version": *"[^"]*"' "$VERSION_FILE" | head -1 | sed 's/.*"version": *"//; s/".*//')
         if [ -n "$local_version" ]; then
             local_version="v${local_version}"
-            echo -e "${CYAN}当前已安装版本: ${local_version}${NC}"
         else
             echo -e "${YELLOW}已安装但无法读取版本号。${NC}"
         fi
-    else
-        echo -e "${YELLOW}未检测到已安装的 ToMoon 插件。${NC}"
     fi
 
     if [ -n "$local_version" ] && [ "$local_version" = "$latest_version" ]; then
         echo -e "${GREEN}已经是最新版本 ${local_version}，无需更新。${NC}"
         return 0
-    fi
-
-    if [ -n "$local_version" ]; then
-        echo -e "${YELLOW}发现新版本: ${latest_version}（当前: ${local_version}）${NC}"
-        read -p "是否继续更新？(y/N): " -n 1 -r
-        echo ""
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo "操作已取消。"
-            return 0
-        fi
-    else
-        echo -e "${YELLOW}将安装最新版本: ${latest_version}${NC}"
     fi
 
     rm -rf "$TEMP_DIR"
@@ -1624,15 +1636,27 @@ install_tomoon_install() {
     local DOWNLOAD_SUCCESS=false
 
     while true; do
+        clear
+        echo -e "${YELLOW}════════════════ 安装/更新 ToMoon 插件 ════════════════${NC}"
+        echo ""
+        echo -e "${GREEN}最新版本: ${latest_version}${NC}"
+        if [ -n "$local_version" ]; then
+            echo -e "${CYAN}当前已安装版本: ${local_version}${NC}"
+        else
+            echo -e "${YELLOW}未检测到已安装的 ToMoon 插件。${NC}"
+        fi
+        echo -e "${GREEN}将安装版本: ${latest_version}${NC}"
         echo ""
         echo "请选择下载镜像源（输入编号，0取消）："
         for i in "${!MIRRORS[@]}"; do
             echo "  $((i+1)). ${MIRRORS[$i]}"
         done
+
         read -p "请输入选择: " choice < /dev/tty
 
         if [[ -z "$choice" ]]; then
-            echo "输入无效，请重新选择。"
+            echo -e "${RED}输入无效，请重新选择。${NC}"
+            sleep 1
             continue
         fi
         if [[ "$choice" == "0" ]]; then
@@ -1655,13 +1679,16 @@ install_tomoon_install() {
                 else
                     echo -e "${RED}下载文件不完整（zip 校验失败），请重新选择镜像源。${NC}"
                     rm -f "$zip_filename"
+                    sleep 1
                 fi
             else
                 echo -e "${RED}下载失败（curl 退出码: $curl_exit），请重新选择镜像源。${NC}"
                 rm -f "$zip_filename"
+                sleep 1
             fi
         else
-            echo "无效编号，请重新选择。"
+            echo -e "${RED}无效编号，请重新选择。${NC}"
+            sleep 1
         fi
     done
 
@@ -1704,6 +1731,29 @@ install_tomoon_install() {
     echo -e "${GREEN}安装目录: ${PLUGIN_DIR}${NC}"
 }
 
+install_tomoon_uninstall() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 ToMoon 插件 ════════════════${NC}"
+    if [ ! -d "/home/deck/homebrew/plugins/tomoon" ]; then
+        echo -e "${YELLOW}未检测到已安装的 ToMoon 插件。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}检测到已安装 ToMoon 插件。${NC}"
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "继续卸载..."
+    else
+        echo "取消卸载。"
+        return 0
+    fi
+
+    sudo rm -rf /home/deck/homebrew/plugins/tomoon
+    echo -e "${GREEN}✅ 卸载完成${NC}"
+}
+
 install_decky_lsfg_vk_install() {
     mk_temp_dir
     clear
@@ -1739,39 +1789,39 @@ install_decky_lsfg_vk_install() {
 import sys, json
 try:
     data = json.load(sys.stdin)
+    stable = []
+    prerelease = []
     for rel in data:
         tag = rel.get('tag_name', '')
-        prerelease = rel.get('prerelease', False)
         if tag:
-            print(f'{tag}|{str(prerelease).lower()}')
+            if rel.get('prerelease', False):
+                prerelease.append(tag)
+            else:
+                stable.append(tag)
+    print('STABLE:' + ','.join(stable) if stable else 'STABLE:')
+    print('PRERELEASE:' + ','.join(prerelease) if prerelease else 'PRERELEASE:')
 except:
-    pass
+    print('STABLE:')
+    print('PRERELEASE:')
 ")
     if [ -z "$versions_info" ]; then
         echo -e "${RED}错误: 无法解析版本信息。${NC}"
         return 1
     fi
 
-    local stable_versions=()
-    local prerelease_versions=()
-    while IFS='|' read -r tag prerelease; do
-        [ -z "$tag" ] && continue
-        if [[ "$prerelease" == "true" ]]; then
-            prerelease_versions+=("$tag")
-        else
-            stable_versions+=("$tag")
-        fi
-    done <<< "$versions_info"
+    local stable_list=$(echo "$versions_info" | grep "^STABLE:" | sed 's/^STABLE://')
+    local prerelease_list=$(echo "$versions_info" | grep "^PRERELEASE:" | sed 's/^PRERELEASE://')
 
     local latest_stable=""
-    local latest_prerelease=""
-    if [ ${#stable_versions[@]} -gt 0 ]; then
-        latest_stable=$(printf '%s\n' "${stable_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
-        latest_stable="v${latest_stable}"
+    if [ -n "$stable_list" ]; then
+        latest_stable=$(echo "$stable_list" | tr ',' '\n' | sed 's/^v//' | sort -V | tail -1)
+        [ -n "$latest_stable" ] && latest_stable="v${latest_stable}"
     fi
-    if [ ${#prerelease_versions[@]} -gt 0 ]; then
-        latest_prerelease=$(printf '%s\n' "${prerelease_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
-        latest_prerelease="v${latest_prerelease}"
+
+    local latest_prerelease=""
+    if [ -n "$prerelease_list" ]; then
+        latest_prerelease=$(echo "$prerelease_list" | tr ',' '\n' | sed 's/^v//' | sort -V | tail -1)
+        [ -n "$latest_prerelease" ] && latest_prerelease="v${latest_prerelease}"
     fi
 
     local local_version=""
@@ -1787,87 +1837,114 @@ except:
         echo -e "${YELLOW}未检测到已安装的 LSFG-VK 插件。${NC}"
     fi
 
+    local options=()
+    local labels=()
+    if [ -n "$latest_stable" ]; then
+        options+=("$latest_stable")
+        labels+=("正式版 $latest_stable")
+    fi
+    if [ -n "$latest_prerelease" ]; then
+        options+=("$latest_prerelease")
+        labels+=("预发布版 $latest_prerelease")
+    fi
+
+    if [ ${#options[@]} -eq 0 ]; then
+        echo -e "${RED}错误: 未找到任何版本。${NC}"
+        return 1
+    fi
+
     local target_version=""
 
-    if [ -n "$local_version" ]; then
-        if [ -n "$latest_stable" ] && [ "$local_version" = "$latest_stable" ]; then
-            echo -e "${GREEN}已经是最新稳定版 ${local_version}${NC}"
-            if [ -n "$latest_prerelease" ]; then
-                echo -e "${YELLOW}发现预发布版: ${latest_prerelease}${NC}"
-                read -p "是否升级到预发布版？(y/N): " upgrade < /dev/tty
-                if [[ $upgrade =~ ^[Yy]$ ]]; then
-                    target_version="$latest_prerelease"
-                else
-                    echo "保持当前版本。"
-                    return 0
-                fi
+    if [ -z "$local_version" ]; then
+        while true; do
+            clear
+            echo -e "${YELLOW}════════════════ 安装/更新 LSFG-VK 插件 ════════════════${NC}"
+            echo ""
+            echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+            echo -e "${YELLOW}未检测到已安装的 LSFG-VK 插件。${NC}"
+            echo ""
+            if [ ${#options[@]} -eq 1 ]; then
+                target_version="${options[0]}"
+                echo -e "${GREEN}将安装唯一版本: ${target_version}${NC}"
+                break
             else
-                return 0
-            fi
-        elif [ -n "$latest_prerelease" ] && [ "$local_version" = "$latest_prerelease" ]; then
-            echo -e "${GREEN}已安装最新预发布版 ${local_version}${NC}"
-            if [ -n "$latest_stable" ]; then
-                echo -e "${YELLOW}发现正式版: ${latest_stable}${NC}"
-                read -p "是否切换到正式版？(y/N): " switch < /dev/tty
-                if [[ $switch =~ ^[Yy]$ ]]; then
-                    target_version="$latest_stable"
-                else
-                    echo "保持当前版本。"
-                    return 0
-                fi
-            else
-                return 0
-            fi
-        else
-            echo -e "${YELLOW}已安装版本 ${local_version} 不是最新版本。${NC}"
-            if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
                 echo "请选择要安装的版本："
-                echo "1. 正式版 ${latest_stable}"
-                echo "2. 预发布版 ${latest_prerelease}"
-                read -p "请输入选择 [1-2] : " choice < /dev/tty
-                case $choice in
-                    2) target_version="$latest_prerelease" ;;
-                    *) target_version="$latest_stable" ;;
-                esac
-            elif [ -n "$latest_stable" ]; then
-                target_version="$latest_stable"
-                echo "将安装正式版 ${target_version}"
-            elif [ -n "$latest_prerelease" ]; then
-                target_version="$latest_prerelease"
-                echo "将安装预发布版 ${target_version}"
-            else
-                echo -e "${RED}错误: 无法找到任何版本。${NC}"
-                return 1
+                for i in "${!options[@]}"; do
+                    echo "$((i+1))) ${labels[$i]}"
+                done
+                read -p "请输入选择 [1-${#options[@]}]: " choice < /dev/tty
+                if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#options[@]} ]; then
+                    target_version="${options[$((choice-1))]}"
+                    break
+                else
+                    echo -e "${RED}无效选择，请重新输入。${NC}"
+                    sleep 1
+                fi
             fi
-        fi
+        done
+        echo -e "${GREEN}将安装版本: ${target_version}${NC}"
     else
-        if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
-            echo "请选择要安装的版本："
-            echo "1. 正式版 ${latest_stable}"
-            echo "2. 预发布版 ${latest_prerelease}"
-            read -p "请输入选择 [1-2] : " choice < /dev/tty
-            case $choice in
-                2) target_version="$latest_prerelease" ;;
-                *) target_version="$latest_stable" ;;
-            esac
-        elif [ -n "$latest_stable" ]; then
-            target_version="$latest_stable"
-            echo "将安装正式版 ${target_version}"
-        elif [ -n "$latest_prerelease" ]; then
-            target_version="$latest_prerelease"
-            echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
+        local is_prerelease=false
+        if [ -n "$prerelease_list" ]; then
+            local inst_ver_clean=$(echo "$local_version" | sed 's/^v//')
+            for tag in $(echo "$prerelease_list" | tr ',' '\n'); do
+                local tag_clean=$(echo "$tag" | sed 's/^v//')
+                if [ "$tag_clean" = "$inst_ver_clean" ]; then
+                    is_prerelease=true
+                    break
+                fi
+            done
+        fi
+
+        if [ "$is_prerelease" = true ]; then
+            if [ -n "$latest_stable" ]; then
+                echo -e "${YELLOW}当前已安装预发布版 ${local_version}。${NC}"
+                echo -e "${YELLOW}是否切换为正式版 ${latest_stable}？${NC}"
+                read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice
+                echo
+                if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
+                    target_version="$latest_stable"
+                    echo -e "${GREEN}将切换至正式版: ${target_version}${NC}"
+                else
+                    echo "保持当前版本。"
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}已是最新预发布版 ${local_version}，且没有正式版可切换。${NC}"
+                return 0
+            fi
         else
-            echo -e "${RED}错误: 无法获取任何版本。${NC}"
-            return 1
+            if [ -n "$latest_prerelease" ]; then
+                local stable_num=$(echo "$local_version" | sed 's/^v//')
+                local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+                local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
+                if [ "$higher" = "$prerelease_num" ]; then
+                    echo -e "${YELLOW}当前已安装正式版 ${local_version}。${NC}"
+                    echo -e "${YELLOW}发现更高或相等的预发布版 ${latest_prerelease}，是否切换？${NC}"
+                    read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice
+                    echo
+                    if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
+                        target_version="$latest_prerelease"
+                        echo -e "${GREEN}将切换至预发布版: ${target_version}${NC}"
+                    else
+                        echo "保持当前版本。"
+                        return 0
+                    fi
+                else
+                    echo -e "${GREEN}已是最新正式版 ${local_version}，且没有更高的预发布版。${NC}"
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}已是最新正式版 ${local_version}，且没有预发布版。${NC}"
+                return 0
+            fi
         fi
     fi
 
     if [ -z "$target_version" ]; then
-        echo "未选择版本，操作取消。"
-        return 0
+        echo -e "${RED}错误: 未确定目标版本。${NC}"
+        return 1
     fi
-
-    echo -e "${GREEN}将安装版本: ${target_version}${NC}"
 
     local download_url=$(echo "$releases_json" | python3 -c "
 import sys, json
@@ -1898,15 +1975,21 @@ except:
     local DOWNLOAD_SUCCESS=false
 
     while true; do
+        clear
+        echo -e "${YELLOW}════════════════ 安装/更新 LSFG-VK 插件 ════════════════${NC}"
+        echo ""
+        echo -e "${GREEN}将安装版本: ${target_version}${NC}"
         echo ""
         echo "请选择下载镜像源（输入编号，0取消）："
         for i in "${!MIRRORS[@]}"; do
             echo "  $((i+1)). ${MIRRORS[$i]}"
         done
+
         read -p "请输入选择: " choice < /dev/tty
 
         if [[ -z "$choice" ]]; then
-            echo "输入无效，请重新选择。"
+            echo -e "${RED}输入无效，请重新选择。${NC}"
+            sleep 1
             continue
         fi
         if [[ "$choice" == "0" ]]; then
@@ -1929,13 +2012,16 @@ except:
                 else
                     echo -e "${RED}下载文件不完整（zip 校验失败），请重新选择镜像源。${NC}"
                     rm -f "$zip_filename"
+                    sleep 1
                 fi
             else
                 echo -e "${RED}下载失败（curl 退出码: $curl_exit），请重新选择镜像源。${NC}"
                 rm -f "$zip_filename"
+                sleep 1
             fi
         else
-            echo "无效编号，请重新选择。"
+            echo -e "${RED}无效编号，请重新选择。${NC}"
+            sleep 1
         fi
     done
 
@@ -1975,6 +2061,29 @@ except:
     echo -e "${GREEN}安装目录: ${PLUGIN_DIR}${NC}"
 }
 
+install_decky_lsfg_vk_uninstall() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 LSFG-VK 插件 ════════════════${NC}"
+    if [ ! -d "/home/deck/homebrew/plugins/Decky-LSFG-VK" ]; then
+        echo -e "${YELLOW}未检测到已安装的 LSFG-VK 插件。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}检测到已安装 LSFG-VK 插件。${NC}"
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "继续卸载..."
+    else
+        echo "取消卸载。"
+        return 0
+    fi
+
+    sudo rm -rf /home/deck/homebrew/plugins/Decky-LSFG-VK
+    echo -e "${GREEN}已卸载${NC}"
+}
+
 install_decky_framegen_install() {
     mk_temp_dir
     clear
@@ -2010,39 +2119,39 @@ install_decky_framegen_install() {
 import sys, json
 try:
     data = json.load(sys.stdin)
+    stable = []
+    prerelease = []
     for rel in data:
         tag = rel.get('tag_name', '')
-        prerelease = rel.get('prerelease', False)
         if tag:
-            print(f'{tag}|{str(prerelease).lower()}')
+            if rel.get('prerelease', False):
+                prerelease.append(tag)
+            else:
+                stable.append(tag)
+    print('STABLE:' + ','.join(stable) if stable else 'STABLE:')
+    print('PRERELEASE:' + ','.join(prerelease) if prerelease else 'PRERELEASE:')
 except:
-    pass
+    print('STABLE:')
+    print('PRERELEASE:')
 ")
     if [ -z "$versions_info" ]; then
         echo -e "${RED}错误: 无法解析版本信息。${NC}"
         return 1
     fi
 
-    local stable_versions=()
-    local prerelease_versions=()
-    while IFS='|' read -r tag prerelease; do
-        [ -z "$tag" ] && continue
-        if [[ "$prerelease" == "true" ]]; then
-            prerelease_versions+=("$tag")
-        else
-            stable_versions+=("$tag")
-        fi
-    done <<< "$versions_info"
+    local stable_list=$(echo "$versions_info" | grep "^STABLE:" | sed 's/^STABLE://')
+    local prerelease_list=$(echo "$versions_info" | grep "^PRERELEASE:" | sed 's/^PRERELEASE://')
 
     local latest_stable=""
-    local latest_prerelease=""
-    if [ ${#stable_versions[@]} -gt 0 ]; then
-        latest_stable=$(printf '%s\n' "${stable_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
-        latest_stable="v${latest_stable}"
+    if [ -n "$stable_list" ]; then
+        latest_stable=$(echo "$stable_list" | tr ',' '\n' | sed 's/^v//' | sort -V | tail -1)
+        [ -n "$latest_stable" ] && latest_stable="v${latest_stable}"
     fi
-    if [ ${#prerelease_versions[@]} -gt 0 ]; then
-        latest_prerelease=$(printf '%s\n' "${prerelease_versions[@]}" | sed 's/^v//' | sort -V | tail -1)
-        latest_prerelease="v${latest_prerelease}"
+
+    local latest_prerelease=""
+    if [ -n "$prerelease_list" ]; then
+        latest_prerelease=$(echo "$prerelease_list" | tr ',' '\n' | sed 's/^v//' | sort -V | tail -1)
+        [ -n "$latest_prerelease" ] && latest_prerelease="v${latest_prerelease}"
     fi
 
     local local_version=""
@@ -2058,87 +2167,114 @@ except:
         echo -e "${YELLOW}未检测到已安装的 Framegen 插件。${NC}"
     fi
 
+    local options=()
+    local labels=()
+    if [ -n "$latest_stable" ]; then
+        options+=("$latest_stable")
+        labels+=("正式版 $latest_stable")
+    fi
+    if [ -n "$latest_prerelease" ]; then
+        options+=("$latest_prerelease")
+        labels+=("预发布版 $latest_prerelease")
+    fi
+
+    if [ ${#options[@]} -eq 0 ]; then
+        echo -e "${RED}错误: 未找到任何版本。${NC}"
+        return 1
+    fi
+
     local target_version=""
 
-    if [ -n "$local_version" ]; then
-        if [ -n "$latest_stable" ] && [ "$local_version" = "$latest_stable" ]; then
-            echo -e "${GREEN}已经是最新稳定版 ${local_version}${NC}"
-            if [ -n "$latest_prerelease" ]; then
-                echo -e "${YELLOW}发现预发布版: ${latest_prerelease}${NC}"
-                read -p "是否升级到预发布版？(y/N): " upgrade < /dev/tty
-                if [[ $upgrade =~ ^[Yy]$ ]]; then
-                    target_version="$latest_prerelease"
-                else
-                    echo "保持当前版本。"
-                    return 0
-                fi
+    if [ -z "$local_version" ]; then
+        while true; do
+            clear
+            echo -e "${YELLOW}════════════════ 安装/更新 Framegen 插件 ════════════════${NC}"
+            echo ""
+            echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+            echo -e "${YELLOW}未检测到已安装的 Framegen 插件。${NC}"
+            echo ""
+            if [ ${#options[@]} -eq 1 ]; then
+                target_version="${options[0]}"
+                echo -e "${GREEN}将安装唯一版本: ${target_version}${NC}"
+                break
             else
-                return 0
-            fi
-        elif [ -n "$latest_prerelease" ] && [ "$local_version" = "$latest_prerelease" ]; then
-            echo -e "${GREEN}已安装最新预发布版 ${local_version}${NC}"
-            if [ -n "$latest_stable" ]; then
-                echo -e "${YELLOW}发现正式版: ${latest_stable}${NC}"
-                read -p "是否切换到正式版？(y/N): " switch < /dev/tty
-                if [[ $switch =~ ^[Yy]$ ]]; then
-                    target_version="$latest_stable"
-                else
-                    echo "保持当前版本。"
-                    return 0
-                fi
-            else
-                return 0
-            fi
-        else
-            echo -e "${YELLOW}已安装版本 ${local_version} 不是最新版本。${NC}"
-            if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
                 echo "请选择要安装的版本："
-                echo "1. 正式版 ${latest_stable}"
-                echo "2. 预发布版 ${latest_prerelease}"
-                read -p "请输入选择 [1-2] : " choice < /dev/tty
-                case $choice in
-                    2) target_version="$latest_prerelease" ;;
-                    *) target_version="$latest_stable" ;;
-                esac
-            elif [ -n "$latest_stable" ]; then
-                target_version="$latest_stable"
-                echo "将安装正式版 ${target_version}"
-            elif [ -n "$latest_prerelease" ]; then
-                target_version="$latest_prerelease"
-                echo "将安装预发布版 ${target_version}"
-            else
-                echo -e "${RED}错误: 无法找到任何版本。${NC}"
-                return 1
+                for i in "${!options[@]}"; do
+                    echo "$((i+1))) ${labels[$i]}"
+                done
+                read -p "请输入选择 [1-${#options[@]}]: " choice < /dev/tty
+                if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#options[@]} ]; then
+                    target_version="${options[$((choice-1))]}"
+                    break
+                else
+                    echo -e "${RED}无效选择，请重新输入。${NC}"
+                    sleep 1
+                fi
             fi
-        fi
+        done
+        echo -e "${GREEN}将安装版本: ${target_version}${NC}"
     else
-        if [ -n "$latest_stable" ] && [ -n "$latest_prerelease" ]; then
-            echo "请选择要安装的版本："
-            echo "1. 正式版 ${latest_stable}"
-            echo "2. 预发布版 ${latest_prerelease}"
-            read -p "请输入选择 [1-2] : " choice < /dev/tty
-            case $choice in
-                2) target_version="$latest_prerelease" ;;
-                *) target_version="$latest_stable" ;;
-            esac
-        elif [ -n "$latest_stable" ]; then
-            target_version="$latest_stable"
-            echo "将安装正式版 ${target_version}"
-        elif [ -n "$latest_prerelease" ]; then
-            target_version="$latest_prerelease"
-            echo -e "${YELLOW}注意: 当前只有预发布版本 ${target_version}${NC}"
+        local is_prerelease=false
+        if [ -n "$prerelease_list" ]; then
+            local inst_ver_clean=$(echo "$local_version" | sed 's/^v//')
+            for tag in $(echo "$prerelease_list" | tr ',' '\n'); do
+                local tag_clean=$(echo "$tag" | sed 's/^v//')
+                if [ "$tag_clean" = "$inst_ver_clean" ]; then
+                    is_prerelease=true
+                    break
+                fi
+            done
+        fi
+
+        if [ "$is_prerelease" = true ]; then
+            if [ -n "$latest_stable" ]; then
+                echo -e "${YELLOW}当前已安装预发布版 ${local_version}。${NC}"
+                echo -e "${YELLOW}是否切换为正式版 ${latest_stable}？${NC}"
+                read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice
+                echo
+                if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
+                    target_version="$latest_stable"
+                    echo -e "${GREEN}将切换至正式版: ${target_version}${NC}"
+                else
+                    echo "保持当前版本。"
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}已是最新预发布版 ${local_version}，且没有正式版可切换。${NC}"
+                return 0
+            fi
         else
-            echo -e "${RED}错误: 无法获取任何版本。${NC}"
-            return 1
+            if [ -n "$latest_prerelease" ]; then
+                local stable_num=$(echo "$local_version" | sed 's/^v//')
+                local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+                local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
+                if [ "$higher" = "$prerelease_num" ]; then
+                    echo -e "${YELLOW}当前已安装正式版 ${local_version}。${NC}"
+                    echo -e "${YELLOW}发现更高或相等的预发布版 ${latest_prerelease}，是否切换？${NC}"
+                    read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice
+                    echo
+                    if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
+                        target_version="$latest_prerelease"
+                        echo -e "${GREEN}将切换至预发布版: ${target_version}${NC}"
+                    else
+                        echo "保持当前版本。"
+                        return 0
+                    fi
+                else
+                    echo -e "${GREEN}已是最新正式版 ${local_version}，且没有更高的预发布版。${NC}"
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}已是最新正式版 ${local_version}，且没有预发布版。${NC}"
+                return 0
+            fi
         fi
     fi
 
     if [ -z "$target_version" ]; then
-        echo "未选择版本，操作取消。"
-        return 0
+        echo -e "${RED}错误: 未确定目标版本。${NC}"
+        return 1
     fi
-
-    echo -e "${GREEN}将安装版本: ${target_version}${NC}"
 
     local download_url=$(echo "$releases_json" | python3 -c "
 import sys, json
@@ -2169,15 +2305,21 @@ except:
     local DOWNLOAD_SUCCESS=false
 
     while true; do
+        clear
+        echo -e "${YELLOW}════════════════ 安装/更新 Framegen 插件 ════════════════${NC}"
+        echo ""
+        echo -e "${GREEN}将安装版本: ${target_version}${NC}"
         echo ""
         echo "请选择下载镜像源（输入编号，0取消）："
         for i in "${!MIRRORS[@]}"; do
             echo "  $((i+1)). ${MIRRORS[$i]}"
         done
+
         read -p "请输入选择: " choice < /dev/tty
 
         if [[ -z "$choice" ]]; then
-            echo "输入无效，请重新选择。"
+            echo -e "${RED}输入无效，请重新选择。${NC}"
+            sleep 1
             continue
         fi
         if [[ "$choice" == "0" ]]; then
@@ -2200,13 +2342,16 @@ except:
                 else
                     echo -e "${RED}下载文件不完整（zip 校验失败），请重新选择镜像源。${NC}"
                     rm -f "$zip_filename"
+                    sleep 1
                 fi
             else
                 echo -e "${RED}下载失败（curl 退出码: $curl_exit），请重新选择镜像源。${NC}"
                 rm -f "$zip_filename"
+                sleep 1
             fi
         else
-            echo "无效编号，请重新选择。"
+            echo -e "${RED}无效编号，请重新选择。${NC}"
+            sleep 1
         fi
     done
 
@@ -2244,6 +2389,29 @@ except:
 
     echo -e "${GREEN}✅ Framegen 插件 ${target_version} 安装完成！${NC}"
     echo -e "${GREEN}安装目录: ${PLUGIN_DIR}${NC}"
+}
+
+install_decky_framegen_uninstall() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 Framegen 插件 ════════════════${NC}"
+    if [ ! -d "/home/deck/homebrew/plugins/Decky-Framegen" ]; then
+        echo -e "${YELLOW}未检测到已安装的 Framegen 插件。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}检测到已安装 Framegen 插件。${NC}"
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "继续卸载..."
+    else
+        echo "取消卸载。"
+        return 0
+    fi
+
+    sudo rm -rf /home/deck/homebrew/plugins/Decky-Framegen
+    echo -e "${GREEN}已卸载${NC}"
 }
 
 clover_install_or_reinstall() {
@@ -2620,33 +2788,91 @@ EOF
 install_anydesk() {
     mk_temp_dir
     clear
-    echo -e "${YELLOW}════════════════ 安装 AnyDesk ════════════════${NC}"
-    echo "正在安装 AnyDesk..."
+    echo -e "${YELLOW}════════════════ 安装/更新 AnyDesk ════════════════${NC}"
+
     local ANYDESK_INSTALL_DIR="$HOME/.local/share/anydesk"
-    mkdir -p "$ANYDESK_INSTALL_DIR"
+    local ANYDESK_BIN="$ANYDESK_INSTALL_DIR/anydesk"
+    local DESKTOP_FILE="$HOME/Desktop/AnyDesk.desktop"
+
+    echo "正在检查最新版本..."
+    local REMOTE_VERSION=$(curl -s https://anydesk.com.cn/zhs/downloads/linux | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/^v//')
+    if [ -z "$REMOTE_VERSION" ]; then
+        echo -e "${YELLOW}无法自动获取版本，尝试使用默认版本 8.0.4${NC}"
+        REMOTE_VERSION="8.0.4"
+    fi
+    echo "最新版本: $REMOTE_VERSION"
+
+    local LOCAL_VERSION=""
+    if [ -f "$ANYDESK_BIN" ] && [ -x "$ANYDESK_BIN" ]; then
+        LOCAL_VERSION=$("$ANYDESK_BIN" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        if [ -n "$LOCAL_VERSION" ]; then
+            echo -e "${CYAN}当前已安装版本: ${LOCAL_VERSION}${NC}"
+        else
+            echo -e "${YELLOW}已安装但无法读取版本号，将重新安装。${NC}"
+        fi
+    else
+        echo -e "${YELLOW}未检测到已安装的 AnyDesk。${NC}"
+    fi
+
+    local TARGET_VERSION=""
+    if [ -n "$LOCAL_VERSION" ]; then
+        if [ "$LOCAL_VERSION" = "$REMOTE_VERSION" ]; then
+            echo -e "${GREEN}✅ 已是最新版本 ${LOCAL_VERSION}，无需操作。${NC}"
+            return 0
+        else
+            echo -e "${YELLOW}发现新版本 ${REMOTE_VERSION}（当前: ${LOCAL_VERSION}）${NC}"
+            read -n1 -p "按回车键或 A 键更新，其他键取消: " confirm
+            echo
+            if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+                TARGET_VERSION="$REMOTE_VERSION"
+            else
+                echo "取消更新。"
+                return 0
+            fi
+        fi
+    else
+        TARGET_VERSION="$REMOTE_VERSION"
+    fi
+
+    if [ -z "$TARGET_VERSION" ]; then
+        echo "未指定目标版本，操作取消。"
+        return 0
+    fi
+
+    echo "正在安装 AnyDesk ${TARGET_VERSION}..."
     cd /tmp || return
-    echo "获取最新版本..."
-    local VERSION=$(curl -s https://anydesk.com.cn/zhs/downloads/linux | grep -oP 'v?\\d+\\.\\d+\\.\\d+' | head -1 | sed 's/^v//')
-    if [ -z "$VERSION" ]; then echo "版本获取失败"; return; fi
-    echo "版本: $VERSION"
-    local URL="https://download.anydesk.com/linux/anydesk-${VERSION}-amd64.tar.gz"
+
+    local URL="https://download.anydesk.com/linux/anydesk-${TARGET_VERSION}-amd64.tar.gz"
     echo "下载中..."
-    wget -q --show-progress "$URL" -O anydesk.tar.gz
+
+    if [ -d "$ANYDESK_INSTALL_DIR" ]; then
+        rm -rf "$ANYDESK_INSTALL_DIR"
+    fi
+    mkdir -p "$ANYDESK_INSTALL_DIR"
+
+    wget -q --show-progress "$URL" -O anydesk.tar.gz || {
+        echo -e "${RED}下载失败，请检查网络后重试。${NC}"
+        return 1
+    }
+
     tar -xzf anydesk.tar.gz -C "$ANYDESK_INSTALL_DIR" --strip-components=1
-    chmod +x "$ANYDESK_INSTALL_DIR/anydesk"
+    chmod +x "$ANYDESK_BIN"
     mkdir -p "$HOME/.local/bin"
-    ln -sf "$ANYDESK_INSTALL_DIR/anydesk" "$HOME/.local/bin/anydesk"
-    cat > "$HOME/Desktop/AnyDesk.desktop" << EOF
+    ln -sf "$ANYDESK_BIN" "$HOME/.local/bin/anydesk"
+
+    cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Name=AnyDesk
-Exec=$ANYDESK_INSTALL_DIR/anydesk
+Exec=$ANYDESK_BIN
 Icon=$ANYDESK_INSTALL_DIR/icons/hicolor/256x256/apps/anydesk.png
 Type=Application
 Categories=Network;RemoteAccess;
 EOF
-    chmod +x "$HOME/Desktop/AnyDesk.desktop"
+    chmod +x "$DESKTOP_FILE"
     rm -f anydesk.tar.gz
-    echo -e "${GREEN}✓ AnyDesk 安装完成！桌面快捷方式已创建。${NC}"
+
+    echo ""
+    echo -e "${GREEN}✅ AnyDesk ${TARGET_VERSION} 安装完成！桌面快捷方式已创建。${NC}"
 }
 
 install_todesk() {
@@ -2949,9 +3175,10 @@ uninstall_wps_office() {
         fi
     done
     if [ -n "$installed" ]; then
-        read -p "确定要卸载 WPS Office？(y/N): " -n 1 -r < /dev/tty
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+        echo
+        if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+            echo "继续卸载..."
             if flatpak uninstall "$installed" -y; then
                 echo -e "${GREEN}✓ WPS Office 卸载完成${NC}"
                 local desktop_file="$HOME/Desktop/WPS Office.desktop"
@@ -2982,9 +3209,10 @@ uninstall_qq() {
         fi
     done
     if [ -n "$installed" ]; then
-        read -p "确定要卸载 QQ？(y/N): " -n 1 -r < /dev/tty
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+        echo
+        if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+            echo "继续卸载..."
             if flatpak uninstall "$installed" -y; then
                 echo -e "${GREEN}✓ QQ 卸载完成${NC}"
                 local desktop_file="$HOME/Desktop/QQ.desktop"
@@ -3015,9 +3243,10 @@ uninstall_wechat() {
         fi
     done
     if [ -n "$installed" ]; then
-        read -p "确定要卸载微信？(y/N): " -n 1 -r < /dev/tty
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+        echo
+        if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+            echo "继续卸载..."
             if flatpak uninstall "$installed" -y; then
                 echo -e "${GREEN}✓ 微信 卸载完成${NC}"
                 local desktop_file="$HOME/Desktop/微信.desktop"
@@ -3048,9 +3277,10 @@ uninstall_qqmusic() {
         fi
     done
     if [ -n "$installed" ]; then
-        read -p "确定要卸载 QQ音乐？(y/N): " -n 1 -r < /dev/tty
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+        echo
+        if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+            echo "继续卸载..."
             if flatpak uninstall "$installed" -y; then
                 echo -e "${GREEN}✓ QQ音乐 卸载完成${NC}"
                 local desktop_file="$HOME/Desktop/QQ音乐.desktop"
@@ -3081,9 +3311,10 @@ uninstall_baidunetdisk() {
         fi
     done
     if [ -n "$installed" ]; then
-        read -p "确定要卸载百度网盘？(y/N): " -n 1 -r < /dev/tty
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+        echo
+        if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+            echo "继续卸载..."
             if flatpak uninstall "$installed" -y; then
                 echo -e "${GREEN}✓ 百度网盘 卸载完成${NC}"
                 local desktop_file="$HOME/Desktop/百度网盘.desktop"
@@ -3114,9 +3345,10 @@ uninstall_edge() {
         fi
     done
     if [ -n "$installed" ]; then
-        read -p "确定要卸载 Edge浏览器？(y/N): " -n 1 -r < /dev/tty
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+        echo
+        if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+            echo "继续卸载..."
             if flatpak uninstall "$installed" -y; then
                 echo -e "${GREEN}✓ Edge浏览器 卸载完成${NC}"
                 local desktop_file="$HOME/Desktop/Microsoft Edge.desktop"
@@ -3147,9 +3379,10 @@ uninstall_chrome() {
         fi
     done
     if [ -n "$installed" ]; then
-        read -p "确定要卸载 Google浏览器？(y/N): " -n 1 -r < /dev/tty
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+        echo
+        if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+            echo "继续卸载..."
             if flatpak uninstall "$installed" -y; then
                 echo -e "${GREEN}✓ Google浏览器 卸载完成${NC}"
                 local desktop_file="$HOME/Desktop/Google Chrome.desktop"
@@ -3166,6 +3399,38 @@ uninstall_chrome() {
     else
         echo -e "${YELLOW}未检测到已安装的 Google浏览器。${NC}"
     fi
+}
+
+uninstall_anydesk() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 AnyDesk ════════════════${NC}"
+
+    local ANYDESK_INSTALL_DIR="$HOME/.local/share/anydesk"
+    local DESKTOP_FILE="$HOME/Desktop/AnyDesk.desktop"
+    local BIN_LINK="$HOME/.local/bin/anydesk"
+
+    if [ ! -d "$ANYDESK_INSTALL_DIR" ]; then
+        echo -e "${YELLOW}未检测到已安装的 AnyDesk。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}检测到已安装 AnyDesk。${NC}"
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "继续卸载..."
+    else
+        echo "取消卸载。"
+        return 0
+    fi
+
+    rm -rf "$ANYDESK_INSTALL_DIR" && echo -e "${GREEN}✓ 已删除安装目录${NC}"
+    rm -f "$DESKTOP_FILE" && echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
+    rm -f "$BIN_LINK" && echo -e "${GREEN}✓ 已删除命令链接${NC}"
+
+    echo ""
+    echo -e "${GREEN}✅ AnyDesk 已卸载完成。${NC}"
 }
 
 install_yellow_duck_software() {
@@ -3376,7 +3641,7 @@ class MainWindow(Gtk.Window):
             "网络工具": "globe.png",
             "插件相关": "game_controller.png",
             "引导管理": "refresh.png",
-            "更新软件": "inbox.png",
+            "更新和卸载软件": "inbox.png",
             "其他": "trash.png"
         }
 
@@ -3402,7 +3667,7 @@ class MainWindow(Gtk.Window):
             "网络工具",
             "插件相关",
             "引导管理",
-            "更新软件",
+            "更新和卸载软件",
             "其他"
         ]
 
@@ -3591,7 +3856,7 @@ steamdeck工具箱 v{VERSION}
             "UU加速器插件": "install_uu_accelerator",
             "迅游加速器插件": "install_xunyou_accelerator",
             "奇游联机宝加速插件": "install_qiyou_accelerator",
-            "安装/更新": "install_watt_toolkit_install",
+            "安装": "install_watt_toolkit_install",
             "卸载": "install_watt_toolkit_uninstall",
             "安装插件商店": "install_plugin_store",
             "卸载插件商店": "uninstall_plugin_store",
@@ -3610,6 +3875,7 @@ steamdeck工具箱 v{VERSION}
             "卸载百度网盘": "uninstall_baidunetdisk",
             "卸载 Edge浏览器": "uninstall_edge",
             "卸载 Google浏览器": "uninstall_chrome",
+            "卸载 AnyDesk": "uninstall_anydesk",
             "小黄鸭软件": "install_yellow_duck_software"
         }
 
@@ -3639,7 +3905,7 @@ steamdeck工具箱 v{VERSION}
                 "UU加速器插件",
                 "迅游加速器插件",
                 "奇游联机宝加速插件",
-                ("Watt Toolkit (Steam++)", ["安装/更新", "卸载"])
+                ("Watt Toolkit (Steam++)", ["安装", "卸载"])
             ],
             "插件相关": [
                 ("安装/卸载插件商店", ["安装插件商店", "卸载插件商店"]),
@@ -3650,9 +3916,9 @@ steamdeck工具箱 v{VERSION}
             "引导管理": [
                 "安装/重装 Clover"
             ],
-            "更新软件": [
+            "更新和卸载软件": [
                 "更新已安装应用",
-                ("卸载已安装应用", ["卸载 WPS Office", "卸载 QQ", "卸载微信", "卸载 QQ音乐", "卸载百度网盘", "卸载 Edge浏览器", "卸载 Google浏览器"])
+                ("卸载已安装应用", ["卸载 WPS Office", "卸载 QQ", "卸载微信", "卸载 QQ音乐", "卸载百度网盘", "卸载 Edge浏览器", "卸载 Google浏览器", "卸载 AnyDesk"])
             ],
             "其他": [
                 "小黄鸭软件"
