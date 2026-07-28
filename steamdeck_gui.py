@@ -24,7 +24,7 @@ import json
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.5.1"
+VERSION = "1.5.2"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
