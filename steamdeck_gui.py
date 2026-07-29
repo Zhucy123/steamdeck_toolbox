@@ -24,7 +24,7 @@ import json
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.5.3"
+VERSION = "1.5.4"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -3833,18 +3833,24 @@ class TaskWindow(Gtk.Window):
         if VTE_AVAILABLE:
             env = os.environ.copy()
             env['TERM'] = 'xterm-256color'
-            self.terminal.spawn_sync(
+            # 可选：消除 IBus 警告
+            # env['GTK_IM_MODULE'] = 'xim'
+
+            # 将字典转换为列表
+            env_list = [f"{k}={v}" for k, v in env.items()]
+
+            self.terminal.spawn_async(
                 Vte.PtyFlags.DEFAULT,
                 os.path.expanduser("~"),
                 ["/bin/bash"],
-                None,
+                env_list,                     # ✅ 传入列表
                 GLib.SpawnFlags.DEFAULT,
                 None,
                 None,
-                None
+                None,
+                self.on_spawn_complete,
+                func_key
             )
-            cmd = f"bash {self.temp_script} {func_key}; exit 2>/dev/null\n"
-            self.terminal.feed_child(cmd.encode('utf-8'))
             self.terminal.connect("child-exited", self.on_child_exited)
         else:
             self.process = subprocess.Popen(
@@ -3863,6 +3869,14 @@ class TaskWindow(Gtk.Window):
             thread = threading.Thread(target=read_output)
             thread.daemon = True
             thread.start()
+
+    def on_spawn_complete(self, terminal, pid, error, user_data):
+        if error:
+            print("spawn error:", error.message)
+            return
+        func_key = user_data
+        cmd = f"bash {self.temp_script} {func_key}; exit 2>/dev/null\n"
+        terminal.feed_child(cmd.encode('utf-8'))
 
     def on_child_exited(self, terminal, status):
         GLib.idle_add(self.set_completed)
@@ -4044,8 +4058,10 @@ steamdeck工具箱 v{VERSION}
         self.changelog_textview.set_wrap_mode(Gtk.WrapMode.WORD)
         self.changelog_textview.set_cursor_visible(False)
 
-        font_desc = Pango.FontDescription("Monospace 10")
-        self.changelog_textview.modify_font(font_desc)
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b'textview { font: 10pt Monospace; }')
+        style_context = self.changelog_textview.get_style_context()
+        style_context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
         scrolled_changelog = Gtk.ScrolledWindow()
         scrolled_changelog.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
@@ -4278,7 +4294,7 @@ steamdeck工具箱 v{VERSION}
         self.func_view.show_all()
 
     def display_changelog(self):
-        changelog_content = """2026-07-29（v1.5.3包含 v1.5.2 的调整） 继续修复了一些bug,并调整了部分功能的逻辑
+        changelog_content = """2026-07-29（v1.5.4包含 v1.5.2、v1.5.3 的调整） 继续修复了一些bug,并调整了部分功能的逻辑
 2026-07-27（v1.5.1包含 v1.5.0 的调整） 修复了一些bug,并优化完善了一些功能
 2026-07-26（v1.4.9） 增加了安装Asklink远程的功能
 2026-07-25（v1.4.8包含 v1.3.9-v1.4.7 的调整）将文字形式停止更新，替换为图文形式，操作更加便捷，并对功能进行了修改和优化完善
