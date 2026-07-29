@@ -3836,14 +3836,13 @@ class TaskWindow(Gtk.Window):
             # 可选：消除 IBus 警告
             # env['GTK_IM_MODULE'] = 'xim'
 
-            # 将字典转换为列表
             env_list = [f"{k}={v}" for k, v in env.items()]
 
             self.terminal.spawn_async(
                 Vte.PtyFlags.DEFAULT,
                 os.path.expanduser("~"),
                 ["/bin/bash"],
-                env_list,                     # ✅ 传入列表
+                env_list,
                 GLib.SpawnFlags.DEFAULT,
                 None,
                 None,
