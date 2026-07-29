@@ -1,6 +1,6 @@
 # SteamDeck 工具箱
 
-一个专为 Steam Deck 打造的一站式系统管理与增强工具，集成系统优化、引导管理、软件安装、网络加速、双系统支持、游戏增强等 30 项实用功能，全面覆盖日常使用与进阶调校需求。
+一个专为 Steam Deck 打造的一站式系统管理与增强工具，集成系统优化、引导管理、软件安装、网络加速、双系统支持、游戏增强等 30 余项实用功能，全面覆盖日常使用与进阶调校需求。
 
 > **版本：v1.5.6** | 更新日期：2026-07-29
 > 制作人：薯条 & DeepSeek
@@ -132,6 +132,7 @@ curl -L https://shoturl.cn/n2eFhl | sh
 - 百度网盘  
 - Microsoft Edge 浏览器  
 - Google Chrome 浏览器  
+- Fcitx 5等
 
 ### 游戏增强与 Decky 插件  
 - 插件商店（Decky Loader）安装 / 卸载 
@@ -142,7 +143,7 @@ curl -L https://shoturl.cn/n2eFhl | sh
 
 ### 应用管理与维护
 - 更新已安装应用（Flatpak 全局更新）
-- 卸载已安装应用（支持 WPS Office / QQ / 微信 / QQ音乐 / 百度网盘 / Edge / Chrome）  
+- 卸载已安装应用（支持 WPS Office / QQ / 微信 / QQ音乐 / 百度网盘 / Edge / Chrome / Fcitx 5等）  
 
 ### 工具箱自身
 - 启动时自动检查更新，支持一键更新（无需手动下载）
