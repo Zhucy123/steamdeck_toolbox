@@ -24,7 +24,7 @@ import json
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.5.5"
+VERSION = "1.5.6"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -3716,6 +3716,94 @@ uninstall_anydesk() {
     echo -e "${GREEN}✅ AnyDesk 已卸载完成。${NC}"
 }
 
+install_fcitx5() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装 Fcitx 5 ════════════════${NC}"
+    echo ""
+
+    if flatpak list | grep -q "org.fcitx.Fcitx5"; then
+        echo -e "${GREEN}✅ Fcitx 5 已安装，无需重复安装。${NC}"
+        return 0
+    fi
+
+    echo "正在通过 Flatpak 安装 Fcitx 5 及中文插件..."
+    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+    if flatpak install flathub org.fcitx.Fcitx5 org.fcitx.Fcitx5.Addon.ChineseAddons -y; then
+        echo -e "${GREEN}✓ Fcitx 5 安装成功${NC}"
+
+        cat > "$HOME/Desktop/Fcitx 5.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=Fcitx 5
+Exec=flatpak run org.fcitx.Fcitx5
+Icon=org.fcitx.Fcitx5
+Terminal=false
+Categories=Utility;Settings;
+EOF
+        chmod +x "$HOME/Desktop/Fcitx 5.desktop"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
+    else
+        echo -e "${RED}✗ Fcitx5 安装失败，请检查网络或手动安装。${NC}"
+    fi
+}
+
+uninstall_fcitx5() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 Fcitx 5 ════════════════${NC}"
+
+    local has_main=false
+    local has_addon=false
+    if flatpak list | grep -q "org.fcitx.Fcitx5"; then
+        has_main=true
+    fi
+    if flatpak list | grep -q "org.fcitx.Fcitx5.Addon.ChineseAddons"; then
+        has_addon=true
+    fi
+
+    if [ "$has_main" = false ] && [ "$has_addon" = false ]; then
+        echo -e "${YELLOW}未检测到已安装的 Fcitx 5。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}检测到已安装的 Fcitx 5 组件：${NC}"
+    [ "$has_addon" = true ] && echo "  - org.fcitx.Fcitx5.Addon.ChineseAddons"
+    [ "$has_main" = true ] && echo "  - org.fcitx.Fcitx5"
+
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "继续卸载..."
+
+        if [ "$has_addon" = true ]; then
+            if flatpak uninstall org.fcitx.Fcitx5.Addon.ChineseAddons -y; then
+                echo -e "${GREEN}✓ 插件已卸载${NC}"
+            else
+                echo -e "${YELLOW}⚠ 插件卸载过程中出现警告（可能已被移除），继续...${NC}"
+            fi
+        fi
+
+        if [ "$has_main" = true ]; then
+            if flatpak uninstall org.fcitx.Fcitx5 -y; then
+                echo -e "${GREEN}✓ 主包已卸载${NC}"
+            else
+                echo -e "${YELLOW}⚠ 主包卸载过程中出现警告（可能已被移除），继续...${NC}"
+            fi
+        fi
+
+        echo -e "${GREEN}✓ Fcitx 5 卸载完成${NC}"
+        local desktop_file="$HOME/Desktop/Fcitx 5.desktop"
+        if [ -f "$desktop_file" ]; then
+            rm -f "$desktop_file"
+            echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+        fi
+    else
+        echo "取消卸载。"
+    fi
+}
+
 install_yellow_duck_software() {
     mk_temp_dir
     clear
@@ -4159,6 +4247,8 @@ steamdeck工具箱 v{VERSION}
             "卸载 Edge浏览器": "uninstall_edge",
             "卸载 Google浏览器": "uninstall_chrome",
             "卸载 AnyDesk": "uninstall_anydesk",
+            "Fcitx 5": "install_fcitx5",
+            "卸载Fcitx 5": "uninstall_fcitx5",
             "小黄鸭软件": "install_yellow_duck_software"
         }
 
@@ -4182,7 +4272,8 @@ steamdeck工具箱 v{VERSION}
                 "QQ音乐",
                 "百度网盘",
                 "Edge浏览器",
-                "Google浏览器"
+                "Google浏览器",
+                "Fcitx 5"
             ],
             "网络工具": [
                 "UU加速器插件",
@@ -4201,7 +4292,7 @@ steamdeck工具箱 v{VERSION}
             ],
             "更新和卸载软件": [
                 "更新已安装应用",
-                ("卸载已安装应用", ["卸载 WPS Office", "卸载 QQ", "卸载微信", "卸载 QQ音乐", "卸载百度网盘", "卸载 Edge浏览器", "卸载 Google浏览器", "卸载 AnyDesk"])
+                ("卸载已安装应用", ["卸载 WPS Office", "卸载 QQ", "卸载微信", "卸载 QQ音乐", "卸载百度网盘", "卸载 Edge浏览器", "卸载 Google浏览器", "卸载 AnyDesk","卸载Fcitx 5"])
             ],
             "其他": [
                 "小黄鸭软件"
@@ -4278,7 +4369,7 @@ steamdeck工具箱 v{VERSION}
         self.func_view.show_all()
 
     def display_changelog(self):
-        changelog_content = """2026-07-29（v1.5.5包含 v1.5.2-v1.5.4 的调整） 继续修复了一些bug,并调整了部分功能的逻辑
+        changelog_content = """2026-07-29（v1.5.6包含 v1.5.2-v1.5.5 的调整） 增加了安装Fcitx 5的功能并继续修复了一些bug,并调整了部分功能的逻辑
 2026-07-27（v1.5.1包含 v1.5.0 的调整） 修复了一些bug,并优化完善了一些功能
 2026-07-26（v1.4.9） 增加了安装Asklink远程的功能
 2026-07-25（v1.4.8包含 v1.3.9-v1.4.7 的调整）将文字形式停止更新，替换为图文形式，操作更加便捷，并对功能进行了修改和优化完善
