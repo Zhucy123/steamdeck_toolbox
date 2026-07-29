@@ -81,8 +81,32 @@ echo "正在从 Gitee 下载 Steam Deck GUI 工具箱..."
 
 if curl -L --progress-bar "$TOOLBOX_URL" -o "$TOOLBOX_NAME"; then
     chmod +x "$TOOLBOX_NAME"
-    echo "下载完成，正在启动..."
-    exec python3 "$TOOLBOX_NAME"
+    echo "下载完成！"
+    echo "✅ 安装成功！"
+    echo ""
+
+    # 创建桌面快捷方式（与程序内建的 ensure_desktop_shortcut 保持一致）
+    DESKTOP_FILE="$HOME/Desktop/Deck工具箱.desktop"
+    if [ -f "$DESKTOP_FILE" ]; then
+        echo "桌面快捷方式已存在。"
+    else
+        cat > "$DESKTOP_FILE" << EOF
+[Desktop Entry]
+Type=Application
+Name=Deck工具箱
+Exec=python3 $TOOLBOX_NAME
+Icon=input-gamepad-symbolic
+Terminal=false
+StartupNotify=true
+Categories=Utility;
+EOF
+        chmod +x "$DESKTOP_FILE"
+        echo "✅ 已创建桌面快捷方式：Deck工具箱.desktop"
+    fi
+
+    echo "请单击或双击桌面上的 'Deck工具箱' 图标来启动程序。"
+    echo ""
+    exit 0
 else
     echo "❌ 下载失败，请检查网络后重试"
     exit 1
