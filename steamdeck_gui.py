@@ -4255,7 +4255,16 @@ def get_remote_version():
         return None
 
 def perform_update(remote_version):
-    import threading
+    dialog = Gtk.MessageDialog(
+        None,
+        Gtk.DialogFlags.MODAL,
+        Gtk.MessageType.INFO,
+        Gtk.ButtonsType.NONE,
+        "正在更新，请稍候..."
+    )
+    dialog.format_secondary_text("正在下载新版本，请勿关闭。")
+    dialog.set_icon_name("input-gamepad-symbolic")
+    dialog.show_all()
 
     def do_download():
         try:
@@ -4277,44 +4286,32 @@ def perform_update(remote_version):
                 f.write(new_content)
             os.chmod(current_path, 0o755)
 
-            GLib.idle_add(_show_update_success, remote_version)
+            GLib.idle_add(_update_dialog_success, dialog, remote_version)
 
         except Exception as e:
-            GLib.idle_add(_show_update_error, str(e))
+            GLib.idle_add(_update_dialog_error, dialog, str(e))
 
     threading.Thread(target=do_download, daemon=True).start()
 
 
-def _show_update_success(remote_version):
-    dialog = Gtk.MessageDialog(
-        None,
-        Gtk.DialogFlags.MODAL,
-        Gtk.MessageType.INFO,
-        Gtk.ButtonsType.OK,
-        "✅ 更新完成！"
-    )
+def _update_dialog_success(dialog, remote_version):
+    dialog.set_markup("<big><b>✅ 更新完成！</b></big>")
     dialog.format_secondary_text(
         f"新版本 v{remote_version} 已下载。\n点击下方按钮关闭并重新打开Deck工具箱。"
     )
+    dialog.add_button("关闭并重启", Gtk.ResponseType.OK)
     dialog.connect("response", lambda d, r: Gtk.main_quit())
-    dialog.run()
+    dialog.show_all()
 
 
-def _show_update_error(error_msg):
-    error_dialog = Gtk.MessageDialog(
-        None,
-        Gtk.DialogFlags.MODAL,
-        Gtk.MessageType.ERROR,
-        Gtk.ButtonsType.OK,
-        f"更新失败：{error_msg}"
+def _update_dialog_error(dialog, error_msg):
+    dialog.set_markup("<big><b>❌ 更新失败</b></big>")
+    dialog.format_secondary_text(
+        f"更新过程中发生错误：{error_msg}\n请手动从以下地址下载最新版本：\n{REPO_RAW_URL}"
     )
-    error_dialog.format_secondary_text(
-        "请手动从以下地址下载最新版本：\n"
-        f"{REPO_RAW_URL}"
-    )
-    error_dialog.run()
-    error_dialog.destroy()
-    show_main_window()
+    dialog.add_button("确定", Gtk.ResponseType.CLOSE)
+    dialog.connect("response", lambda d, r: dialog.destroy() or show_main_window())
+    dialog.show_all()
 
 class UpdateCheckWindow(Gtk.Window):
     def __init__(self):
