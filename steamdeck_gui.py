@@ -10,7 +10,7 @@ try:
 except (ValueError, ImportError):
     VTE_AVAILABLE = False
 
-from gi.repository import Gtk, GLib, GdkPixbuf, Pango
+from gi.repository import Gtk, GLib, GdkPixbuf
 import subprocess
 import os
 import sys
@@ -19,13 +19,12 @@ import tempfile
 import shutil
 import threading
 import urllib.request
-import json
-import time
+import atexit
 
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.5.8"
+VERSION = "1.5.9"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -57,11 +56,10 @@ mk_temp_dir() {
     mkdir -p "$TEMP_DIR"
 }
 
-# 安全解析 lsblk（JSON -> 管道分隔，杜绝 eval）
 safe_lsblk() {
     local pycmd="python3"
     command -v python3 &>/dev/null || pycmd="python"
-    lsblk -J -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,PARTTYPE,SIZE | $pycmd -c "
+    lsblk -J -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,PARTTYPE,SIZE | $pycmd << 'PYEOF'
 import sys, json
 data = json.load(sys.stdin)
 for dev in data.get('blockdevices', []):
@@ -81,7 +79,7 @@ for dev in data.get('blockdevices', []):
             for child in d['children']:
                 process(child, name + '/')
     process(dev)
-" 2>/dev/null
+PYEOF
 }
 
 install_flatpak_app() {
@@ -163,8 +161,20 @@ uninstall_flatpak_app() {
             echo "继续卸载..."
             if flatpak uninstall "$installed" -y; then
                 echo -e "${GREEN}✓ ${app_title} 卸载完成${NC}"
-                local desktop_file="$HOME/Desktop/${desktop_name}.desktop"
-                [ -f "$desktop_file" ] && rm -f "$desktop_file" && echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+
+                local desktop_dir="$HOME/Desktop"
+                if [ -d "$desktop_dir" ]; then
+                    local deleted_any=false
+                    for f in "$desktop_dir"/*.desktop; do
+                        local base=$(basename "$f")
+                        if [ "$base" = "${installed}.desktop" ] || [[ "$base" == *"${installed//./_}"* ]]; then
+                            rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ 桌面快捷方式已删除: $base${NC}" && deleted_any=true
+                        fi
+                    done
+                    if ! $deleted_any; then
+                        echo -e "${YELLOW}未找到与 ${installed} 匹配的桌面快捷方式。${NC}"
+                    fi
+                fi
             else
                 echo -e "${RED}✗ 卸载失败${NC}"
             fi
@@ -561,16 +571,54 @@ fix_disk_write_error() {
     local ntfs_devices=()
     local ntfs_labels=()
     local ntfs_mountpoints=()
+    local ntfs_uuids=()
     local ntfs_count=0
 
-    while IFS='|' read -r device label fstype mountpoint uuid size; do
+    # 方法1: 使用 blkid 直接获取所有 NTFS 分区（推荐，稳定且无需 JSON）
+    while IFS= read -r line; do
+        # 提取设备路径 (第一个冒号前)
+        dev=$(echo "$line" | cut -d: -f1)
+        # 提取文件系统类型 (TYPE="xxx")
+        fstype=$(echo "$line" | grep -oP 'TYPE="\K[^"]+' | head -1)
+        # 提取卷标 (LABEL="xxx")
+        label=$(echo "$line" | grep -oP 'LABEL="\K[^"]+' | head -1)
+        # 提取 UUID
+        uuid=$(echo "$line" | grep -oP 'UUID="\K[^"]+' | head -1)
+
+        # 只处理 NTFS 或 fuseblk
         if [[ "$fstype" == "ntfs" || "$fstype" == "fuseblk" ]]; then
-            ntfs_devices+=("/dev/$device")
-            ntfs_labels+=("$label")
+            ntfs_devices+=("$dev")
+            ntfs_labels+=("${label:-无标签}")
+            ntfs_uuids+=("${uuid:-}")
+            # 获取当前挂载点（如果已挂载）
+            mountpoint=$(findmnt -n -o TARGET "$dev" 2>/dev/null || echo "")
             ntfs_mountpoints+=("$mountpoint")
             ((ntfs_count++))
         fi
-    done < <(safe_lsblk)
+    done < <(sudo blkid 2>/dev/null)
+
+    # 如果 blkid 没有找到，尝试使用 lsblk（但这次用非 JSON 模式，纯文本）
+    if [ $ntfs_count -eq 0 ]; then
+        echo -e "${YELLOW}⚠️  blkid 未找到 NTFS 分区，尝试使用 lsblk 文本模式...${NC}"
+        # 使用 lsblk -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,SIZE 输出，不依赖 JSON
+        while read -r name type label fstype mountpoint uuid size; do
+            # 跳过表头
+            [[ "$name" == "NAME" ]] && continue
+            if [[ "$fstype" == "ntfs" || "$fstype" == "fuseblk" ]]; then
+                dev="/dev/$name"
+                ntfs_devices+=("$dev")
+                ntfs_labels+=("${label:-无标签}")
+                ntfs_uuids+=("${uuid:-}")
+                ntfs_mountpoints+=("$mountpoint")
+                ((ntfs_count++))
+            fi
+        done < <(lsblk -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,SIZE --noheadings 2>/dev/null)
+    fi
+
+    if [ $ntfs_count -eq 0 ]; then
+        echo -e "${YELLOW}⚠️  未找到任何 NTFS 分区。${NC}"
+        return 0
+    fi
 
     if [ $ntfs_count -eq 0 ]; then
         while IFS='|' read -r device fstype label; do
@@ -580,16 +628,17 @@ fix_disk_write_error() {
                 ntfs_mountpoints+=("")
                 ((ntfs_count++))
             fi
-        done < <(sudo blkid | grep -E 'TYPE="(ntfs|fuseblk)"' | $PYTHON_CMD -c "
+done < <(sudo blkid | grep -E 'TYPE="(ntfs|fuseblk)"' | $PYTHON_CMD << 'PYEOF'
 import sys, re
 for line in sys.stdin:
     dev = line.split(':')[0]
-    fstype_m = re.search(r'TYPE=\"(.*?)\"', line)
-    label_m = re.search(r'LABEL=\"(.*?)\"', line)
+    fstype_m = re.search(r'TYPE="(.*?)"', line)
+    label_m = re.search(r'LABEL="(.*?)"', line)
     fstype = fstype_m.group(1) if fstype_m else ''
     label = label_m.group(1) if label_m else ''
     print('{}|{}|{}'.format(dev, fstype, label))
-")
+PYEOF
+        )
     fi
 
     if [ $ntfs_count -eq 0 ]; then
@@ -1004,24 +1053,11 @@ fix_shared_disk() {
     local part_sizes=()
     local part_count=0
     local all_mounted=true
-    local device label fstype mountpoint uuid parttype size
-    local i
 
-    while IFS='|' read -r device label fstype mountpoint uuid parttype size; do
+    while read -r name type label fstype mountpoint uuid parttype size; do
+        [[ "$name" == "NAME" ]] && continue
+        [[ "$type" != "part" ]] && continue
         [[ "$fstype" != "ntfs" && "$fstype" != "fuseblk" ]] && continue
-
-        if [ -n "$parttype" ] && [[ "${parttype,,}" == "$recovery_guid" ]]; then
-            if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint"; then
-                echo "  恢复分区 /dev/$device 已挂载，正在卸载..."
-                sudo umount "$mountpoint" 2>/dev/null
-            fi
-            if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && [ -d "$mountpoint" ]; then
-                if [ -z "$(ls -A "$mountpoint" 2>/dev/null)" ]; then
-                    sudo rmdir "$mountpoint" 2>/dev/null && echo "  已删除空挂载点 $mountpoint"
-                fi
-            fi
-            continue
-        fi
 
         local skip=0
         local sysmp
@@ -1033,7 +1069,20 @@ fix_shared_disk() {
         done
         [ $skip -eq 1 ] && continue
 
-        part_devices+=("/dev/$device")
+        if [ -n "$parttype" ] && [[ "${parttype,,}" == "$recovery_guid" ]]; then
+            if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint"; then
+                echo "  恢复分区 /dev/$name 已挂载，正在卸载..."
+                sudo umount "$mountpoint" 2>/dev/null
+            fi
+            if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && [ -d "$mountpoint" ]; then
+                if [ -z "$(ls -A "$mountpoint" 2>/dev/null)" ]; then
+                    sudo rmdir "$mountpoint" 2>/dev/null && echo "  已删除空挂载点 $mountpoint"
+                fi
+            fi
+            continue
+        fi
+
+        part_devices+=("/dev/$name")
         part_labels+=("$label")
         part_mountpoints+=("$mountpoint")
         part_uuids+=("$uuid")
@@ -1045,7 +1094,7 @@ fix_shared_disk() {
         else
             all_mounted=false
         fi
-    done < <(safe_lsblk)
+    done < <(lsblk -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,PARTTYPE,SIZE --noheadings 2>/dev/null)
 
     if [ $part_count -eq 0 ]; then
         echo -e "${YELLOW}⚠️  未检测到任何符合条件的 Windows (NTFS) 分区。${NC}"
@@ -1276,7 +1325,7 @@ EOF
     echo -e "${GREEN}AskLink 安装流程结束。${NC}"
 }
 
-install_watt_toolkit_install() {
+watt_toolkit_install() {
     mk_temp_dir
     clear
     echo -e "${YELLOW}═══════安装/更新 Watt Toolkit (Steam++) ═══════${NC}"
@@ -1405,7 +1454,7 @@ EOF
     echo "请在桌面启动 Watt Toolkit。"
 }
 
-install_watt_toolkit_uninstall() {
+watt_toolkit_uninstall() {
     mk_temp_dir
     clear
     echo -e "${YELLOW}══════════════ 卸载 Watt Toolkit ══════════════${NC}"
@@ -3440,14 +3489,26 @@ uninstall_anydesk() {
     mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 卸载 AnyDesk ════════════════${NC}"
+
     local ANYDESK_INSTALL_DIR="$HOME/.local/share/anydesk"
     local DESKTOP_FILE="$HOME/Desktop/AnyDesk.desktop"
     local BIN_LINK="$HOME/.local/bin/anydesk"
-    if [ ! -d "$ANYDESK_INSTALL_DIR" ]; then
+    local flatpak_id="com.anydesk.Anydesk"
+
+    local local_found=false
+    local flatpak_found=false
+    [ -d "$ANYDESK_INSTALL_DIR" ] && local_found=true
+    flatpak info "$flatpak_id" &>/dev/null && flatpak_found=true
+
+    if ! $local_found && ! $flatpak_found; then
         echo -e "${YELLOW}未检测到已安装的 AnyDesk。${NC}"
         return 0
     fi
-    echo -e "${CYAN}检测到已安装 AnyDesk。${NC}"
+
+    echo -e "${CYAN}检测到 AnyDesk 安装：${NC}"
+    $local_found && echo "  • 本地安装 ($ANYDESK_INSTALL_DIR)"
+    $flatpak_found && echo "  • Flatpak 安装 ($flatpak_id)"
+
     read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
     echo
     if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
@@ -3456,16 +3517,211 @@ uninstall_anydesk() {
         echo "取消卸载。"
         return 0
     fi
-    rm -rf "$ANYDESK_INSTALL_DIR" && echo -e "${GREEN}✓ 已删除安装目录${NC}"
-    rm -f "$DESKTOP_FILE" && echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
-    rm -f "$BIN_LINK" && echo -e "${GREEN}✓ 已删除命令链接${NC}"
+
+    if $local_found; then
+        rm -rf "$ANYDESK_INSTALL_DIR" && echo -e "${GREEN}✓ 已删除本地安装目录${NC}"
+        rm -f "$DESKTOP_FILE" && echo -e "${GREEN}✓ 已删除本地桌面快捷方式${NC}"
+        rm -f "$BIN_LINK" && echo -e "${GREEN}✓ 已删除命令链接${NC}"
+    fi
+
+    if $flatpak_found; then
+        echo "正在卸载 Flatpak 版本的 AnyDesk..."
+        if flatpak uninstall "$flatpak_id" -y &>/dev/null; then
+            echo -e "${GREEN}✓ Flatpak 版本已卸载${NC}"
+            local desktop_dir="$HOME/Desktop"
+            if [ -d "$desktop_dir" ]; then
+                for f in "$desktop_dir"/*.desktop; do
+                    local base=$(basename "$f")
+                    if [ "$base" = "${flatpak_id}.desktop" ] || [[ "$base" == *"${flatpak_id//./_}"* ]]; then
+                        rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ 已删除桌面快捷方式 $base${NC}"
+                    fi
+                done
+            fi
+        else
+            echo -e "${RED}✗ Flatpak 版本卸载失败${NC}"
+        fi
+    fi
+
     echo ""
-    echo -e "${GREEN}✅ AnyDesk 已卸载完成。${NC}"
+    echo -e "${GREEN}✅ AnyDesk 卸载完成。${NC}"
 }
 uninstall_fcitx5() {
-    uninstall_flatpak_app "Fcitx 5" "Fcitx 5" "org.fcitx.Fcitx5"
-    echo "正在卸载中文插件..."
-    flatpak uninstall org.fcitx.Fcitx5.Addon.ChineseAddons -y 2>/dev/null || true
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 Fcitx 5 ════════════════${NC}"
+
+    local MAIN_APP="org.fcitx.Fcitx5"
+    local ADDON_APP="org.fcitx.Fcitx5.Addon.ChineseAddons"
+    local DESKTOP_NAME="Fcitx 5"
+
+    if ! flatpak info "$MAIN_APP" &>/dev/null; then
+        echo -e "${YELLOW}未检测到已安装的 Fcitx 5 主程序。${NC}"
+        if flatpak info "$ADDON_APP" &>/dev/null; then
+            echo -e "${CYAN}检测到中文插件已安装但主程序缺失，是否只卸载插件？${NC}"
+            read -n1 -p "按回车键或 A 键确认卸载插件，其他键取消: " confirm
+            echo
+            if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+                flatpak uninstall "$ADDON_APP" -y 2>/dev/null && echo -e "${GREEN}✓ 中文插件已卸载${NC}"
+            else
+                echo "取消操作。"
+            fi
+        fi
+        return 0
+    fi
+
+    echo -e "${CYAN}检测到 Fcitx 5 主程序已安装。${NC}"
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "开始卸载..."
+    else
+        echo "取消卸载。"
+        return 0
+    fi
+
+    if flatpak info "$ADDON_APP" &>/dev/null; then
+        echo "正在卸载中文插件..."
+        flatpak uninstall "$ADDON_APP" -y 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ 中文插件已卸载${NC}"
+        else
+            echo -e "${YELLOW}⚠️  中文插件卸载失败（可能已被移除）${NC}"
+        fi
+    else
+        echo -e "${YELLOW}中文插件未安装，跳过。${NC}"
+    fi
+
+    echo "正在卸载 Fcitx 5 主程序..."
+    flatpak uninstall "$MAIN_APP" -y 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Fcitx 5 主程序已卸载${NC}"
+    else
+        echo -e "${RED}✗ 主程序卸载失败，请检查 flatpak 状态。${NC}"
+        return 1
+    fi
+
+    local desktop_dir="$HOME/Desktop"
+    if [ -d "$desktop_dir" ]; then
+        for f in "$desktop_dir/Fcitx 5.desktop" "$desktop_dir/org.fcitx.Fcitx5.desktop"; do
+            if [ -f "$f" ]; then
+                rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ 已删除桌面快捷方式 $(basename "$f")${NC}"
+            fi
+        done
+        find "$desktop_dir" -maxdepth 1 -name "*Fcitx*" -name "*.desktop" -exec rm -f {} \; 2>/dev/null
+    fi
+
+    echo ""
+    echo -e "${GREEN}✅ Fcitx 5 及其相关组件已卸载完成。${NC}"
+}
+
+uninstall_other_flatpak_apps() {
+    if ! command -v zenity &>/dev/null; then
+        echo "未找到 zenity，请在桌面环境运行。"
+        return 1
+    fi
+
+    local exclude_ids=(
+        "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"
+        "com.qq.QQ" "com.tencent.qq"
+        "com.tencent.WeChat" "com.qq.weixin"
+        "com.qq.QQmusic" "com.tencent.QQmusic"
+        "com.baidu.NetDisk" "com.baidu.pan"
+        "com.microsoft.Edge"
+        "com.google.Chrome" "org.chromium.Chromium"
+        "org.fcitx.Fcitx5" "org.fcitx.Fcitx5.Addon.ChineseAddons"
+    )
+
+    _remove_shortcut() {
+        local app_id="$1"
+        local desktop_dir="$HOME/Desktop"
+        [ -d "$desktop_dir" ] || return
+        for f in "$desktop_dir"/*.desktop; do
+            local base=$(basename "$f")
+            if [ "$base" = "${app_id}.desktop" ] || [[ "$base" == *"${app_id//./_}"* ]]; then
+                rm -f "$f" 2>/dev/null && echo "已删除桌面快捷方式 $base"
+            fi
+        done
+    }
+
+    while true; do
+        local installed_apps=()
+        while IFS=$'\t' read -r app_id app_name; do
+            local skip=0
+            for exclude in "${exclude_ids[@]}"; do
+                if [[ "$app_id" == "$exclude" ]]; then
+                    skip=1
+                    break
+                fi
+            done
+            if [ $skip -eq 0 ]; then
+                installed_apps+=("$app_id|$app_name")
+            fi
+        done < <(flatpak list --app --columns=application,name 2>/dev/null)
+
+        if [ ${#installed_apps[@]} -eq 0 ]; then
+            zenity --info --text="没有找到其他已安装的 Flatpak 应用。"
+            return
+        fi
+
+        local list_data=()
+        for entry in "${installed_apps[@]}"; do
+            IFS='|' read -r app_id app_name <<< "$entry"
+            list_data+=("FALSE" "$app_name ($app_id)")
+        done
+
+        local selections=$(zenity --list --checklist \
+            --title="卸载其他 Flatpak 应用" \
+            --text="请选择要卸载的应用（可多选）：" \
+            --column="选择" --column="应用" \
+            "${list_data[@]}" \
+            --width=700 --height=400 \
+            --multiple 2>/dev/null)
+
+        if [ -z "$selections" ]; then
+            return
+        fi
+
+        IFS='|' read -r -a selected_names <<< "$selections"
+        local selected_ids=()
+        for selected in "${selected_names[@]}"; do
+            for entry in "${installed_apps[@]}"; do
+                IFS='|' read -r app_id app_name <<< "$entry"
+                if [ "$app_name ($app_id)" = "$selected" ]; then
+                    selected_ids+=("$app_id")
+                    break
+                fi
+            done
+        done
+
+        if [ ${#selected_ids[@]} -eq 0 ]; then
+            continue
+        fi
+
+        zenity --question \
+            --text="确定要卸载选中的应用吗？\n共 ${#selected_ids[@]} 项。" \
+            --ok-label="卸载" --cancel-label="取消" 2>/dev/null || continue
+
+        local success=0
+        local fail=0
+        local failed_list=""
+        for app_id in "${selected_ids[@]}"; do
+            if flatpak uninstall "$app_id" -y &>/dev/null; then
+                ((success++))
+                _remove_shortcut "$app_id"
+            else
+                ((fail++))
+                failed_list+=" $app_id"
+            fi
+        done
+
+        local msg="卸载完成！\n成功: $success 项\n失败: $fail 项"
+        [ -n "$failed_list" ] && msg+="\n失败的 ID: $failed_list"
+        msg+="\n\n是否继续卸载其他应用？"
+
+        if ! zenity --question --text="$msg" --ok-label="继续卸载" --cancel-label="返回"; then
+            return
+        fi
+    done
 }
 
 install_yellow_duck_software() {
@@ -3517,19 +3773,25 @@ install_yellow_duck_software() {
     echo -e "${GREEN}✅ 小黄鸭软件安装完成！${NC}"
 }
 
-main() {
-    echo "此脚本为内嵌库，请通过参数调用具体功能。"
-}
 if [ -n "$1" ] && declare -f "$1" > /dev/null; then
     "$@"
 else
-    main "$@"
+    echo "此脚本为内嵌库，请通过参数调用具体功能。"
 fi
 '''
 
 # ============================================================================
 # Python GUI 部分
 # ============================================================================
+def create_temp_script(extra_content=''):
+    fd, path = tempfile.mkstemp(suffix='.sh')
+    with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        f.write(BASH_SCRIPT)
+        if extra_content:
+            f.write('\n' + extra_content + '\n')
+    os.chmod(path, 0o755)
+    atexit.register(lambda: os.path.exists(path) and os.unlink(path))
+    return path
 
 class TaskWindow(Gtk.Window):
     def __init__(self, parent, func_key, display_name):
@@ -3539,9 +3801,9 @@ class TaskWindow(Gtk.Window):
         self.set_transient_for(parent)
         self.set_modal(True)
         self.terminal = None
-        self.process = None
         self.completed = False
         self.temp_script = None
+        self._force_closing = False
         self.use_external_terminal = not VTE_AVAILABLE
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(vbox)
@@ -3575,19 +3837,13 @@ class TaskWindow(Gtk.Window):
             self.action_btn.connect("clicked", self.on_action_button_clicked)
             button_box.pack_start(self.action_btn, False, False, 0)
             vbox.pack_start(button_box, False, False, 0)
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, encoding='utf-8') as f:
-                f.write(BASH_SCRIPT)
-                self.temp_script = f.name
-            os.chmod(self.temp_script, 0o755)
+            self.temp_script = create_temp_script()
             self.connect("destroy", self.on_window_destroy)
             self.start_command(func_key)
             self.show_all()
 
     def run_external(self, func_key):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, encoding='utf-8') as f:
-            f.write(BASH_SCRIPT + f"\n\n{func_key}\n")
-            tmp_path = f.name
-        os.chmod(tmp_path, 0o755)
+        tmp_path = create_temp_script(func_key)
         cmd = [
             "konsole",
             "-e",
@@ -3602,11 +3858,6 @@ class TaskWindow(Gtk.Window):
             stdin=subprocess.DEVNULL,
             start_new_session=True
         )
-        import atexit
-        def cleanup_script():
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-        atexit.register(cleanup_script)
 
     def start_command(self, func_key):
         self.terminal.spawn_sync(
@@ -3642,19 +3893,22 @@ class TaskWindow(Gtk.Window):
 
     def force_kill(self):
         if not self.completed:
+            self._force_closing = True
             self.terminal.feed_child(b'\x1a')
             self.destroy()
         return False
 
     def on_window_destroy(self, widget):
-        if self.temp_script and os.path.exists(self.temp_script):
-            try:
-                os.unlink(self.temp_script)
-            except:
-                pass
-        if self.process and self.process.poll() is None:
-            self.process.terminate()
+        if self._force_closing:
+            return
+        if self.terminal and not self.completed:
+            self.terminal.feed_child(b'\x03')
+            GLib.timeout_add(500, self._force_close)
 
+    def _force_close(self):
+        self._force_closing = True
+        self.destroy()
+        return False
 
 # ============================================================================
 # 主窗口
@@ -3895,8 +4149,8 @@ steamdeck工具箱 v{VERSION}
             "UU加速器插件": "install_uu_accelerator",
             "迅游加速器插件": "install_xunyou_accelerator",
             "奇游联机宝加速插件": "install_qiyou_accelerator",
-            "安装": "install_watt_toolkit_install",
-            "卸载": "install_watt_toolkit_uninstall",
+            "安装": "watt_toolkit_install",
+            "卸载": "watt_toolkit_uninstall",
             "安装插件商店": "install_plugin_store",
             "卸载插件商店": "uninstall_plugin_store",
             "安装/更新 ToMoon": "install_tomoon_install",
@@ -3917,6 +4171,7 @@ steamdeck工具箱 v{VERSION}
             "卸载 AnyDesk": "uninstall_anydesk",
             "Fcitx 5": "install_fcitx5",
             "卸载Fcitx 5": "uninstall_fcitx5",
+            "卸载其他已安装应用": "uninstall_other_flatpak_apps",
             "小黄鸭软件": "install_yellow_duck_software"
         }
 
@@ -3960,7 +4215,7 @@ steamdeck工具箱 v{VERSION}
             ],
             "更新和卸载软件": [
                 "更新已安装应用",
-                ("卸载已安装应用", ["卸载 WPS Office", "卸载 QQ", "卸载微信", "卸载 QQ音乐", "卸载百度网盘", "卸载 Edge浏览器", "卸载 Google浏览器", "卸载 AnyDesk","卸载Fcitx 5"])
+                ("卸载已安装应用", ["卸载 WPS Office", "卸载 QQ", "卸载微信", "卸载 QQ音乐", "卸载百度网盘", "卸载 Edge浏览器", "卸载 Google浏览器", "卸载 AnyDesk","卸载Fcitx 5", "卸载其他已安装应用"])
             ],
             "其他": [
                 "小黄鸭软件"
@@ -4032,7 +4287,7 @@ steamdeck工具箱 v{VERSION}
         self.func_view.show_all()
 
     def display_changelog(self):
-        changelog_content = """2026-07-30（v1.5.8包含 v1.5.7 的调整） 修复了一些bug,并优化完善了一些功能
+        changelog_content = """2026-07-30（v1.5.9包含 v1.5.7-v1.5.8 的调整） 修复了一些bug,并优化完善了一些功能
 2026-07-29（v1.5.6包含 v1.5.2-v1.5.5 的调整） 增加了安装Fcitx 5的功能并继续修复了一些bug,并调整了部分功能的逻辑
 2026-07-27（v1.5.1包含 v1.5.0 的调整） 修复了一些bug,并优化完善了一些功能
 2026-07-26（v1.4.9） 增加了安装Asklink远程的功能
@@ -4087,6 +4342,10 @@ steamdeck工具箱 v{VERSION}
             self.run_cache_manager_gui()
             return
 
+        if func_name == "卸载其他已安装应用":
+            self.run_uninstall_other_apps_gui()
+            return
+
         func_key = self.func_map.get(func_name)
         if not func_key:
             return
@@ -4110,13 +4369,8 @@ steamdeck工具箱 v{VERSION}
         help_dialog.run()
         help_dialog.destroy()
 
-    def run_cache_manager_gui(self):
-        func_name = "steamdeck_cache_manager"
-        script_content = BASH_SCRIPT + f"\n\n{func_name}\n"
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, encoding='utf-8') as f:
-            f.write(script_content)
-            tmp_path = f.name
-        os.chmod(tmp_path, 0o755)
+    def _run_standalone_script(self, func_key):
+        tmp_path = create_temp_script(func_key)
         subprocess.Popen(
             [tmp_path],
             stdout=subprocess.DEVNULL,
@@ -4124,21 +4378,18 @@ steamdeck工具箱 v{VERSION}
             stdin=subprocess.DEVNULL,
             start_new_session=True
         )
-        import atexit
-        def cleanup_script():
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-        atexit.register(cleanup_script)
+
+    def run_cache_manager_gui(self):
+        self._run_standalone_script("steamdeck_cache_manager")
+
+    def run_uninstall_other_apps_gui(self):
+        self._run_standalone_script("uninstall_other_flatpak_apps")
 
     def on_quit_clicked(self, button):
         self.destroy()
 
     def run_external_terminal(self, func_key):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, encoding='utf-8') as f:
-            f.write(BASH_SCRIPT + f"\n\n{func_key}\n")
-            tmp_path = f.name
-        os.chmod(tmp_path, 0o755)
-
+        tmp_path = create_temp_script(func_key)
         cmd = [
             "konsole",
             "-e",
@@ -4146,7 +4397,6 @@ steamdeck工具箱 v{VERSION}
             "-c",
             f"bash {tmp_path}; read -p '按回车键关闭...' -n1"
         ]
-
         subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
@@ -4154,7 +4404,6 @@ steamdeck工具箱 v{VERSION}
             stdin=subprocess.DEVNULL,
             start_new_session=True
         )
-        threading.Timer(10, lambda: os.path.exists(tmp_path) and os.unlink(tmp_path)).start()
 
 # ============================================================================
 # 启动后处理
@@ -4286,13 +4535,14 @@ def _perform_update_in_dialog(dialog, remote_version):
 def _update_dialog_success(dialog, remote_version):
     dialog.set_markup("<big><b>✅ 更新完成</b></big>")
     dialog.format_secondary_text(
-        f"新版本 v{remote_version} 已下载。\n点击下方按钮关闭并重新打开Deck工具箱。"
+        f"新版本 v{remote_version} 已下载。\n程序即将自动重启..."
     )
-    for btn in dialog.get_action_area().get_children():
-        btn.destroy()
-    dialog.add_button("关闭", Gtk.ResponseType.OK)
-    dialog.connect("response", lambda d, r: Gtk.main_quit())
-    dialog.show_all()
+    def restart():
+        dialog.destroy()
+        import sys, subprocess
+        subprocess.Popen([sys.executable, sys.argv[0]])
+        Gtk.main_quit()
+    GLib.timeout_add(500, restart)
 
 
 def _update_dialog_error(dialog, error_msg):
