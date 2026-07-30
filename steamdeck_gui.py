@@ -4254,18 +4254,7 @@ def get_remote_version():
         print(f"检查更新失败: {e}")
         return None
 
-def perform_update(remote_version):
-    dialog = Gtk.MessageDialog(
-        None,
-        Gtk.DialogFlags.MODAL,
-        Gtk.MessageType.INFO,
-        Gtk.ButtonsType.NONE,
-        "正在更新，请稍候..."
-    )
-    dialog.format_secondary_text("正在下载新版本，请勿关闭。")
-    dialog.set_icon_name("input-gamepad-symbolic")
-    dialog.show_all()
-
+def _perform_update_in_dialog(dialog, remote_version):
     def do_download():
         try:
             req = urllib.request.Request(
@@ -4295,10 +4284,12 @@ def perform_update(remote_version):
 
 
 def _update_dialog_success(dialog, remote_version):
-    dialog.set_markup("<big><b>✅ 更新完成！</b></big>")
+    dialog.set_markup("<big><b>✅ 更新完成</b></big>")
     dialog.format_secondary_text(
         f"新版本 v{remote_version} 已下载。\n点击下方按钮关闭并重新打开Deck工具箱。"
     )
+    for btn in dialog.get_action_area().get_children():
+        btn.destroy()
     dialog.add_button("关闭", Gtk.ResponseType.OK)
     dialog.connect("response", lambda d, r: Gtk.main_quit())
     dialog.show_all()
@@ -4309,8 +4300,10 @@ def _update_dialog_error(dialog, error_msg):
     dialog.format_secondary_text(
         f"更新过程中发生错误：{error_msg}\n请手动从以下地址下载最新版本：\n{REPO_RAW_URL}"
     )
+    for btn in dialog.get_action_area().get_children():
+        btn.destroy()
     dialog.add_button("确定", Gtk.ResponseType.CLOSE)
-    dialog.connect("response", lambda d, r: dialog.destroy() or show_main_window())
+    dialog.connect("response", lambda d, r: (dialog.destroy(), show_main_window()))
     dialog.show_all()
 
 class UpdateCheckWindow(Gtk.Window):
@@ -4373,38 +4366,34 @@ class UpdateCheckWindow(Gtk.Window):
         return False
 
     def show_update_prompt(self, remote_version):
-        dialog = Gtk.MessageDialog(
-            parent=self,
-            flags=Gtk.DialogFlags.MODAL,
-            type=Gtk.MessageType.QUESTION,
-            buttons=Gtk.ButtonsType.NONE,
-            text=f"发现新版本 v{remote_version}"
-        )
-        dialog.format_secondary_text(
-            f"当前版本: v{VERSION}\n"
-            f"最新版本: v{remote_version}\n\n"
-            "是否立即更新？\n（更新将下载新版本，完成后请手动重启程序）"
-        )
+        self.destroy()
 
+        dialog = Gtk.MessageDialog(
+            None,
+            Gtk.DialogFlags.MODAL,
+            Gtk.MessageType.QUESTION,
+            Gtk.ButtonsType.NONE,
+            "发现新版本"
+        )
+        dialog.set_default_size(400, 150)
+        dialog.set_markup(f"<big><b>发现新版本 v{remote_version}</b></big>")
+        dialog.format_secondary_text(
+            f"当前版本: v{VERSION}\n最新版本: v{remote_version}\n\n是否立即更新？"
+        )
         dialog.add_button("是", Gtk.ResponseType.YES)
         dialog.add_button("否", Gtk.ResponseType.NO)
-
-        try:
-            dialog.set_alternative_button_order_from_array([Gtk.ResponseType.YES, Gtk.ResponseType.NO])
-        except AttributeError:
-            try:
-                dialog.set_alternative_button_order(Gtk.ResponseType.YES, Gtk.ResponseType.NO)
-            except AttributeError:
-                pass
+        dialog.set_icon_name("input-gamepad-symbolic")
 
         response = dialog.run()
-        dialog.destroy()
-
         if response == Gtk.ResponseType.YES:
-            self.destroy()
-            perform_update(remote_version)
+            dialog.set_markup("<big><b>正在更新...</b></big>")
+            dialog.format_secondary_text("正在下载新版本，请稍候。")
+            for btn in dialog.get_action_area().get_children():
+                btn.destroy()
+            dialog.show_all()
+            _perform_update_in_dialog(dialog, remote_version)
         else:
-            self.destroy()
+            dialog.destroy()
             show_main_window()
 
     def on_button_clicked(self, button):
