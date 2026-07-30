@@ -24,7 +24,7 @@ import atexit
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.5.9"
+VERSION = "1.6.0"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -2017,6 +2017,199 @@ install_tomoon_uninstall() {
     fi
 
     sudo rm -rf /home/deck/homebrew/plugins/tomoon
+    echo -e "${GREEN}✅ 卸载完成${NC}"
+}
+
+install_freedeck_install() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装/更新 Freedeck 插件 ════════════════${NC}"
+    echo ""
+
+    local GITHUB_REPO="panyiwei-home/Freedeck"
+    local PLUGIN_DIR="/home/deck/homebrew/plugins/Freedeck"
+    local VERSION_FILE="$PLUGIN_DIR/package.json"
+    local TEMP_DIR="/tmp/freedeck_install"
+    local MIRRORS=(
+        "http://gh.ddlc.top/"
+        "http://ghproxy.net/"
+        "http://mirror.ghproxy.com/"
+        "https://github.com/"
+    )
+
+    for cmd in curl sudo unzip; do
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
+            return 1
+        fi
+    done
+
+    echo -e "${CYAN}正在从 GitHub 获取最新正式版信息...${NC}"
+    local release_json=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases/latest")
+    if [ -z "$release_json" ]; then
+        echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
+        return 1
+    fi
+
+    local target_version=$(echo "$release_json" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    tag = data.get('tag_name', '')
+    print(tag)
+except:
+    print('')
+")
+    if [ -z "$target_version" ]; then
+        echo -e "${RED}错误: 无法解析最新版本号。${NC}"
+        return 1
+    fi
+
+    local download_url=$(echo "$release_json" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for asset in data.get('assets', []):
+        if asset.get('name', '').endswith('.zip'):
+            print(asset.get('browser_download_url', ''))
+            break
+except:
+    pass
+")
+    if [ -z "$download_url" ]; then
+        echo -e "${RED}错误: 无法获取 ${target_version} 的下载链接。${NC}"
+        return 1
+    fi
+
+    local local_version=""
+    if [ -f "$VERSION_FILE" ]; then
+        local_version=$(grep -o '"version": *"[^"]*"' "$VERSION_FILE" | head -1 | sed 's/.*"version": *"//; s/".*//')
+        if [ -n "$local_version" ]; then
+            local_ver_clean="${local_version#v}"
+            target_ver_clean="${target_version#v}"
+            if [ "$local_ver_clean" = "$target_ver_clean" ]; then
+                echo -e "${GREEN}✅ 已是最新版本 ${target_version}，无需操作。${NC}"
+                return 0
+            fi
+        fi
+    fi
+
+    echo -e "${CYAN}将安装版本: ${target_version}${NC}"
+
+    rm -rf "$TEMP_DIR"
+    mkdir -p "$TEMP_DIR"
+    cd "$TEMP_DIR" || return
+
+    local zip_filename="Freedeck.zip"
+    local DOWNLOAD_SUCCESS=false
+
+    while true; do
+        clear
+        echo -e "${YELLOW}════════════════ 安装/更新 Freedeck 插件 ════════════════${NC}"
+        echo ""
+        echo -e "${GREEN}将安装版本: ${target_version}${NC}"
+        echo ""
+        echo "请选择下载镜像源（输入编号，0取消）："
+        for i in "${!MIRRORS[@]}"; do
+            echo "  $((i+1)). ${MIRRORS[$i]}"
+        done
+
+        read -p "请输入选择: " choice < /dev/tty
+
+        if [[ -z "$choice" ]]; then
+            echo -e "${RED}输入无效，请重新选择。${NC}"
+            sleep 1
+            continue
+        fi
+        if [[ "$choice" == "0" ]]; then
+            echo "操作已取消。"
+            return 0
+        fi
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
+            mirror="${MIRRORS[$((choice-1))]}"
+            FULL_URL="${mirror}${download_url}"
+            echo -e "尝试从 ${mirror} 下载..."
+
+            curl -L --progress-bar -f -o "$zip_filename" "$FULL_URL"
+            local curl_exit=$?
+
+            if [ $curl_exit -eq 0 ] && [ -f "$zip_filename" ]; then
+                if unzip -t "$zip_filename" &> /dev/null; then
+                    echo -e "${GREEN}下载成功，文件完整。${NC}"
+                    DOWNLOAD_SUCCESS=true
+                    break
+                else
+                    echo -e "${RED}下载文件不完整（zip 校验失败），请重新选择镜像源。${NC}"
+                    rm -f "$zip_filename"
+                    sleep 1
+                fi
+            else
+                echo -e "${RED}下载失败（curl 退出码: $curl_exit），请重新选择镜像源。${NC}"
+                rm -f "$zip_filename"
+                sleep 1
+            fi
+        else
+            echo -e "${RED}无效编号，请重新选择。${NC}"
+            sleep 1
+        fi
+    done
+
+    if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
+        echo -e "${RED}下载失败，安装中止。${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}正在解压并安装到 ${PLUGIN_DIR}...${NC}"
+
+    local EXTRACT_DIR="$TEMP_DIR/extract"
+    mkdir -p "$EXTRACT_DIR"
+
+    if ! unzip -q "$zip_filename" -d "$EXTRACT_DIR"; then
+        echo -e "${RED}解压失败。${NC}"
+        rm -rf "$TEMP_DIR"
+        return 1
+    fi
+
+    local extracted_dir=""
+    extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 2 -type f -name "package.json" -exec dirname {} \; | head -1)
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 1 -type d ! -path "$EXTRACT_DIR" | head -1)
+    fi
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir="$EXTRACT_DIR"
+    fi
+
+    sudo rm -rf "$PLUGIN_DIR"
+    sudo mkdir -p /home/deck/homebrew/plugins
+    sudo mv "$extracted_dir" "$PLUGIN_DIR"
+    sudo chown -R deck:deck "$PLUGIN_DIR"
+
+    rm -rf "$TEMP_DIR"
+
+    echo -e "${GREEN}✅ Freedeck 插件 ${target_version} 安装完成！${NC}"
+    echo -e "${GREEN}安装目录: ${PLUGIN_DIR}${NC}"
+}
+
+install_freedeck_uninstall() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 Freedeck 插件 ════════════════${NC}"
+    if [ ! -d "/home/deck/homebrew/plugins/Freedeck" ]; then
+        echo -e "${YELLOW}未检测到已安装的 Freedeck 插件。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}检测到已安装 Freedeck 插件。${NC}"
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "继续卸载..."
+    else
+        echo "取消卸载。"
+        return 0
+    fi
+
+    sudo rm -rf /home/deck/homebrew/plugins/Freedeck
     echo -e "${GREEN}✅ 卸载完成${NC}"
 }
 
@@ -4172,7 +4365,9 @@ steamdeck工具箱 v{VERSION}
             "Fcitx 5": "install_fcitx5",
             "卸载Fcitx 5": "uninstall_fcitx5",
             "卸载其他已安装应用": "uninstall_other_flatpak_apps",
-            "小黄鸭软件": "install_yellow_duck_software"
+            "小黄鸭软件": "install_yellow_duck_software",
+            "安装/更新 Freedeck": "install_freedeck_install",
+            "卸载 Freedeck": "install_freedeck_uninstall"
         }
 
         self.category_tree = {
@@ -4207,6 +4402,7 @@ steamdeck工具箱 v{VERSION}
             "插件相关": [
                 ("安装/卸载插件商店", ["安装插件商店", "卸载插件商店"]),
                 ("ToMoon 插件", ["安装/更新 ToMoon", "卸载 ToMoon"]),
+                ("Freedeck 插件", ["安装/更新 Freedeck", "卸载 Freedeck"]),
                 ("LSFG-VK插件", ["安装/更新 LSFG-VK", "卸载 LSFG-VK"]),
                 ("Framegen插件", ["安装/更新 Framegen", "卸载 Framegen"])
             ],
@@ -4287,7 +4483,7 @@ steamdeck工具箱 v{VERSION}
         self.func_view.show_all()
 
     def display_changelog(self):
-        changelog_content = """2026-07-30（v1.5.9包含 v1.5.7-v1.5.8 的调整） 修复了一些bug,并优化完善了一些功能
+        changelog_content = """2026-07-30（v1.6.0包含 v1.5.7-v1.5.9 的调整） 新增了安装Freedeck插件的功能，并修复了一些bug和优化完善了一些功能
 2026-07-29（v1.5.6包含 v1.5.2-v1.5.5 的调整） 增加了安装Fcitx 5的功能并继续修复了一些bug,并调整了部分功能的逻辑
 2026-07-27（v1.5.1包含 v1.5.0 的调整） 修复了一些bug,并优化完善了一些功能
 2026-07-26（v1.4.9） 增加了安装Asklink远程的功能
