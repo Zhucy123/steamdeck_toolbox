@@ -4161,6 +4161,7 @@ def ensure_vte_installed():
     dialog.format_secondary_text(
         "点击“是”将自动解除只读模式并安装 vte3。"
     )
+    dialog.set_alternative_button_order([Gtk.ResponseType.YES, Gtk.ResponseType.NO])
     response = dialog.run()
     dialog.destroy()
     if response == Gtk.ResponseType.YES:
