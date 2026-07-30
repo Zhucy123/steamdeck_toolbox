@@ -4254,28 +4254,14 @@ def get_remote_version():
         print(f"检查更新失败: {e}")
         return None
 
-def perform_update(remote_version, parent_window=None):
+def perform_update(remote_version):
     try:
-        progress_dialog = Gtk.MessageDialog(
-            parent=parent_window,
-            flags=Gtk.DialogFlags.MODAL,
-            type=Gtk.MessageType.INFO,
-            buttons=Gtk.ButtonsType.NONE,
-            text="正在下载更新..."
-        )
-        progress_dialog.set_default_size(300, 100)
-        progress_dialog.show_all()
-        while Gtk.events_pending():
-            Gtk.main_iteration()
-
         req = urllib.request.Request(
             REPO_RAW_URL,
             headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'}
         )
         with urllib.request.urlopen(req, timeout=30) as response:
             new_content = response.read().decode('utf-8')
-
-        progress_dialog.destroy()
 
         current_path = os.path.abspath(sys.argv[0])
         backup_path = current_path + ".bak"
@@ -4288,26 +4274,26 @@ def perform_update(remote_version, parent_window=None):
             f.write(new_content)
         os.chmod(current_path, 0o755)
 
-        restart_dialog = Gtk.MessageDialog(
-            parent=parent_window,
-            flags=Gtk.DialogFlags.MODAL,
-            type=Gtk.MessageType.INFO,
-            buttons=Gtk.ButtonsType.OK,
-            text="✅ 更新完成！"
+        dialog = Gtk.MessageDialog(
+            None,
+            Gtk.DialogFlags.MODAL,
+            Gtk.MessageType.INFO,
+            Gtk.ButtonsType.OK,
+            "✅ 更新完成！"
         )
-        restart_dialog.format_secondary_text(
+        dialog.format_secondary_text(
             f"新版本 v{remote_version} 已下载。\n点击下方按钮关闭并重新打开Deck工具箱。"
         )
-        restart_dialog.connect("response", lambda dialog, resp: Gtk.main_quit() or sys.exit(0))
-        restart_dialog.run()
+        dialog.connect("response", lambda d, r: Gtk.main_quit())
+        dialog.run()
 
     except Exception as e:
         error_dialog = Gtk.MessageDialog(
-            parent=parent_window,
-            flags=Gtk.DialogFlags.MODAL,
-            type=Gtk.MessageType.ERROR,
-            buttons=Gtk.ButtonsType.OK,
-            text=f"更新失败：{e}"
+            None,
+            Gtk.DialogFlags.MODAL,
+            Gtk.MessageType.ERROR,
+            Gtk.ButtonsType.OK,
+            f"更新失败：{e}"
         )
         error_dialog.format_secondary_text(
             "请手动从以下地址下载最新版本：\n"
@@ -4315,10 +4301,7 @@ def perform_update(remote_version, parent_window=None):
         )
         error_dialog.run()
         error_dialog.destroy()
-        if parent_window:
-            parent_window.destroy()
         show_main_window()
-
 
 class UpdateCheckWindow(Gtk.Window):
     def __init__(self):
@@ -4408,7 +4391,8 @@ class UpdateCheckWindow(Gtk.Window):
         dialog.destroy()
 
         if response == Gtk.ResponseType.YES:
-            perform_update(remote_version, self)
+            self.destroy()
+            perform_update(remote_version)
         else:
             self.destroy()
             show_main_window()
