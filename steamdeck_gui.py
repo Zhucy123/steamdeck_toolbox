@@ -25,7 +25,7 @@ import time
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.5.7"
+VERSION = "1.5.8"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -61,19 +61,20 @@ mk_temp_dir() {
 safe_lsblk() {
     local pycmd="python3"
     command -v python3 &>/dev/null || pycmd="python"
-    lsblk -J -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,SIZE | $pycmd -c "
+    lsblk -J -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,PARTTYPE,SIZE | $pycmd -c "
 import sys, json
 data = json.load(sys.stdin)
 for dev in data.get('blockdevices', []):
     def process(d, parent_name=''):
         name = parent_name + d['name']
         if d.get('type') == 'part':
-            print('{}|{}|{}|{}|{}|{}'.format(
+            print('{}|{}|{}|{}|{}|{}|{}'.format(
                 name,
                 d.get('label', ''),
                 d.get('fstype', ''),
                 d.get('mountpoint', ''),
                 d.get('uuid', ''),
+                d.get('parttype', ''),
                 d.get('size', '')
             ))
         if 'children' in d:
@@ -981,9 +982,20 @@ fix_shared_disk() {
     sudo steamos-readonly disable 2>/dev/null
     echo -e "${GREEN}✓ 已处理${NC}"
     echo ""
+    echo "步骤2: 修改 UDisks2 权限文件"
+    UDISKS2_FILE="/usr/share/polkit-1/actions/org.freedesktop.UDisks2.policy"
+    if [ -f "$UDISKS2_FILE" ]; then
+        sudo cp "$UDISKS2_FILE" "$UDISKS2_FILE.backup.$(date +%Y%m%d)" 2>/dev/null
+        sudo sed -i '181s/<allow_active>[^<]*<\\/allow_active>/<allow_active>yes<\\/allow_active>/' "$UDISKS2_FILE" 2>/dev/null
+        echo -e "${GREEN}✓ 已修改${NC}"
+    else
+        echo -e "${YELLOW}⚠️  未找到 UDisks2 文件，跳过${NC}"
+    fi
+    echo ""
 
-    echo "步骤2: 扫描 Windows (NTFS) 分区..."
+    echo "步骤3: 扫描 Windows (NTFS) 分区（忽略恢复分区）..."
     local sys_mounts=("/" "/home" "/var" "/efi" "/esp" "/boot" "/boot/efi")
+    local recovery_guid="de94bba4-06d1-4d40-a16a-bfd50179d6ac"
 
     local part_devices=()
     local part_labels=()
@@ -992,11 +1004,25 @@ fix_shared_disk() {
     local part_sizes=()
     local part_count=0
     local all_mounted=true
-    local device label fstype mountpoint uuid size
+    local device label fstype mountpoint uuid parttype size
     local i
 
-    while IFS='|' read -r device label fstype mountpoint uuid size; do
+    while IFS='|' read -r device label fstype mountpoint uuid parttype size; do
         [[ "$fstype" != "ntfs" && "$fstype" != "fuseblk" ]] && continue
+
+        if [ -n "$parttype" ] && [[ "${parttype,,}" == "$recovery_guid" ]]; then
+            if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint"; then
+                echo "  恢复分区 /dev/$device 已挂载，正在卸载..."
+                sudo umount "$mountpoint" 2>/dev/null
+            fi
+            if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && [ -d "$mountpoint" ]; then
+                if [ -z "$(ls -A "$mountpoint" 2>/dev/null)" ]; then
+                    sudo rmdir "$mountpoint" 2>/dev/null && echo "  已删除空挂载点 $mountpoint"
+                fi
+            fi
+            continue
+        fi
+
         local skip=0
         local sysmp
         for sysmp in "${sys_mounts[@]}"; do
@@ -1022,7 +1048,7 @@ fix_shared_disk() {
     done < <(safe_lsblk)
 
     if [ $part_count -eq 0 ]; then
-        echo -e "${YELLOW}⚠️  未检测到任何 Windows (NTFS) 分区。${NC}"
+        echo -e "${YELLOW}⚠️  未检测到任何符合条件的 Windows (NTFS) 分区。${NC}"
         return
     fi
 
@@ -1032,27 +1058,30 @@ fix_shared_disk() {
     done
     echo ""
 
-    if $all_mounted; then
-        echo -e "${GREEN}✅ 所有 Windows 分区均已挂载，无需操作。${NC}"
-        return
-    fi
-
-    echo "步骤3: 清理之前的非 Windows 分区挂载条目..."
+    echo "步骤4: 清理残留的非 Windows 分区挂载条目和空目录..."
     local cleaned=0
-    local mp
+    local mp dev parttype fstype
     while read -r mp; do
         if [ -n "$mp" ] && mountpoint -q "$mp"; then
-            echo "  正在卸载 $mp ..."
-            sudo umount "$mp" 2>/dev/null && ((cleaned++))
+            dev=$(findmnt -n -o SOURCE "$mp" 2>/dev/null)
+            if [ -n "$dev" ]; then
+                parttype=$(lsblk -n -o PARTTYPE "$dev" 2>/dev/null)
+                fstype=$(df -T "$mp" | tail -1 | awk '{print $2}')
+                if [[ "${parttype,,}" == "$recovery_guid" ]] || [[ "$fstype" != "ntfs" && "$fstype" != "fuseblk" ]]; then
+                    echo "  正在卸载 $mp ..."
+                    sudo umount "$mp" 2>/dev/null && ((cleaned++))
+                fi
+            fi
         fi
     done < <(mount | grep ' /run/media/deck/' | awk '{print $3}')
 
-    if grep -q '/run/media/deck/' /etc/fstab 2>/dev/null; then
-        sudo cp /etc/fstab /etc/fstab.backup.$(date +%Y%m%d_%H%M%S) 2>/dev/null
-        sudo sed -i '/\/run\/media\/deck\//d' /etc/fstab
-        echo "  已从 fstab 中移除所有之前的挂载条目。"
-        ((cleaned++))
-    fi
+    for d in /run/media/deck/*; do
+        if [ -d "$d" ] && ! mountpoint -q "$d" && [ -z "$(ls -A "$d" 2>/dev/null)" ]; then
+            echo "  删除空目录 $d"
+            sudo rmdir "$d" 2>/dev/null && ((cleaned++))
+        fi
+    done
+
     if [ $cleaned -gt 0 ]; then
         echo -e "${GREEN}✓ 清理完成${NC}"
     else
@@ -1060,7 +1089,12 @@ fix_shared_disk() {
     fi
     echo ""
 
-    echo "步骤4: 开始挂载并写入 fstab..."
+    if $all_mounted; then
+        echo -e "${GREEN}✅ 所有 Windows 分区均已挂载，无需操作。${NC}"
+        return
+    fi
+
+    echo "步骤5: 开始挂载并写入 fstab..."
     local mount_point clean_label devname suffix
     for ((i=0; i<part_count; i++)); do
         device="${part_devices[$i]}"
@@ -3998,7 +4032,7 @@ steamdeck工具箱 v{VERSION}
         self.func_view.show_all()
 
     def display_changelog(self):
-        changelog_content = """2026-07-30（v1.5.7） 修复了一些bug,并优化完善了一些功能
+        changelog_content = """2026-07-30（v1.5.8包含 v1.5.7 的调整） 修复了一些bug,并优化完善了一些功能
 2026-07-29（v1.5.6包含 v1.5.2-v1.5.5 的调整） 增加了安装Fcitx 5的功能并继续修复了一些bug,并调整了部分功能的逻辑
 2026-07-27（v1.5.1包含 v1.5.0 的调整） 修复了一些bug,并优化完善了一些功能
 2026-07-26（v1.4.9） 增加了安装Asklink远程的功能
