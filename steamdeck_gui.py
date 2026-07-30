@@ -4255,53 +4255,66 @@ def get_remote_version():
         return None
 
 def perform_update(remote_version):
-    try:
-        req = urllib.request.Request(
-            REPO_RAW_URL,
-            headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'}
-        )
-        with urllib.request.urlopen(req, timeout=30) as response:
-            new_content = response.read().decode('utf-8')
+    import threading
 
-        current_path = os.path.abspath(sys.argv[0])
-        backup_path = current_path + ".bak"
+    def do_download():
         try:
-            shutil.copy2(current_path, backup_path)
-        except:
-            pass
+            req = urllib.request.Request(
+                REPO_RAW_URL,
+                headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'}
+            )
+            with urllib.request.urlopen(req, timeout=30) as response:
+                new_content = response.read().decode('utf-8')
 
-        with open(current_path, 'w', encoding='utf-8') as f:
-            f.write(new_content)
-        os.chmod(current_path, 0o755)
+            current_path = os.path.abspath(sys.argv[0])
+            backup_path = current_path + ".bak"
+            try:
+                shutil.copy2(current_path, backup_path)
+            except:
+                pass
 
-        dialog = Gtk.MessageDialog(
-            None,
-            Gtk.DialogFlags.MODAL,
-            Gtk.MessageType.INFO,
-            Gtk.ButtonsType.OK,
-            "✅ 更新完成！"
-        )
-        dialog.format_secondary_text(
-            f"新版本 v{remote_version} 已下载。\n点击下方按钮关闭并重新打开Deck工具箱。"
-        )
-        dialog.connect("response", lambda d, r: Gtk.main_quit())
-        dialog.run()
+            with open(current_path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            os.chmod(current_path, 0o755)
 
-    except Exception as e:
-        error_dialog = Gtk.MessageDialog(
-            None,
-            Gtk.DialogFlags.MODAL,
-            Gtk.MessageType.ERROR,
-            Gtk.ButtonsType.OK,
-            f"更新失败：{e}"
-        )
-        error_dialog.format_secondary_text(
-            "请手动从以下地址下载最新版本：\n"
-            f"{REPO_RAW_URL}"
-        )
-        error_dialog.run()
-        error_dialog.destroy()
-        show_main_window()
+            GLib.idle_add(_show_update_success, remote_version)
+
+        except Exception as e:
+            GLib.idle_add(_show_update_error, str(e))
+
+    threading.Thread(target=do_download, daemon=True).start()
+
+
+def _show_update_success(remote_version):
+    dialog = Gtk.MessageDialog(
+        None,
+        Gtk.DialogFlags.MODAL,
+        Gtk.MessageType.INFO,
+        Gtk.ButtonsType.OK,
+        "✅ 更新完成！"
+    )
+    dialog.format_secondary_text(
+        f"新版本 v{remote_version} 已下载。\n点击下方按钮关闭并重新打开Deck工具箱。"
+    )
+    dialog.connect("response", lambda d, r: Gtk.main_quit())
+    dialog.run()
+
+
+def _show_update_error(error_msg):
+    error_dialog = Gtk.MessageDialog(
+        None,
+        Gtk.DialogFlags.MODAL,
+        Gtk.MessageType.ERROR,
+        Gtk.ButtonsType.OK,
+        f"更新失败：{error_msg}"
+    )
+    error_dialog.format_secondary_text(
+        "请手动从以下地址下载最新版本：\n"
+        f"{REPO_RAW_URL}"
+    )
+    error_dialog.run()
+    error_dialog.destroy()
+    show_main_window()
 
 class UpdateCheckWindow(Gtk.Window):
     def __init__(self):
