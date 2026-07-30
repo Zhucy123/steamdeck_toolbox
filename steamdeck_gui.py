@@ -4226,21 +4226,14 @@ def sync_emoji_icons():
         local_path = os.path.join(local_icon_dir, icon_name)
         if os.path.isfile(local_path):
             continue
-        url = f"{base_raw_url}/{icon_name}"
-        success = False
-        for attempt in range(3):  # 重试 3 次
-            try:
-                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    with open(local_path, 'wb') as f:
-                        f.write(resp.read())
-                success = True
-                break
-            except Exception as e:
-                print(f"下载图标 {icon_name} 失败 (尝试 {attempt+1}/3): {e}")
-                time.sleep(1)
-        if not success:
-            print(f"警告：图标 {icon_name} 最终下载失败，可能影响界面显示。")
+        try:
+            url = f"{base_raw_url}/{icon_name}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                with open(local_path, 'wb') as f:
+                    f.write(resp.read())
+        except Exception as e:
+            print(f"下载图标 {icon_name} 失败: {e}")
 
 def get_remote_version():
     try:
@@ -4263,34 +4256,50 @@ def get_remote_version():
 
 def perform_update(remote_version, parent_window=None):
     try:
+        progress_dialog = Gtk.MessageDialog(
+            parent=parent_window,
+            flags=Gtk.DialogFlags.MODAL,
+            type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.NONE,
+            text="正在下载更新..."
+        )
+        progress_dialog.set_default_size(300, 100)
+        progress_dialog.show_all()
+        while Gtk.events_pending():
+            Gtk.main_iteration()
+
         req = urllib.request.Request(
             REPO_RAW_URL,
             headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'}
         )
         with urllib.request.urlopen(req, timeout=30) as response:
-            new_content = response.read()
+            new_content = response.read().decode('utf-8')
 
-        content_str = new_content.decode('utf-8')
-        if not content_str.startswith('#!/usr/bin/env python3') or len(new_content) < 10000:
-            raise ValueError("下载文件无效或不完整（长度不足或格式错误）")
+        progress_dialog.destroy()
 
         current_path = os.path.abspath(sys.argv[0])
-        backup_path = current_path + f".bak.{int(time.time())}"
-        shutil.copy2(current_path, backup_path)
+        backup_path = current_path + ".bak"
+        try:
+            shutil.copy2(current_path, backup_path)
+        except:
+            pass
 
-        with open(current_path, 'wb') as f:
+        with open(current_path, 'w', encoding='utf-8') as f:
             f.write(new_content)
         os.chmod(current_path, 0o755)
 
-        dialog = Gtk.MessageDialog(
+        restart_dialog = Gtk.MessageDialog(
             parent=parent_window,
             flags=Gtk.DialogFlags.MODAL,
             type=Gtk.MessageType.INFO,
             buttons=Gtk.ButtonsType.OK,
-            text=f"✅ 更新到 v{remote_version} 成功！\n备份保存在 {backup_path}"
+            text="✅ 更新完成！"
         )
-        dialog.connect("response", lambda d, r: (Gtk.main_quit(), sys.exit(0)))
-        dialog.run()
+        restart_dialog.format_secondary_text(
+            f"新版本 v{remote_version} 已下载。\n点击下方按钮关闭并重新打开Deck工具箱。"
+        )
+        restart_dialog.connect("response", lambda dialog, resp: Gtk.main_quit() or sys.exit(0))
+        restart_dialog.run()
 
     except Exception as e:
         error_dialog = Gtk.MessageDialog(
@@ -4298,10 +4307,18 @@ def perform_update(remote_version, parent_window=None):
             flags=Gtk.DialogFlags.MODAL,
             type=Gtk.MessageType.ERROR,
             buttons=Gtk.ButtonsType.OK,
-            text=f"更新失败: {e}\n请手动从 {REPO_RAW_URL} 下载替换。"
+            text=f"更新失败：{e}"
+        )
+        error_dialog.format_secondary_text(
+            "请手动从以下地址下载最新版本：\n"
+            f"{REPO_RAW_URL}"
         )
         error_dialog.run()
         error_dialog.destroy()
+        if parent_window:
+            parent_window.destroy()
+        show_main_window()
+
 
 class UpdateCheckWindow(Gtk.Window):
     def __init__(self):
@@ -4322,8 +4339,8 @@ class UpdateCheckWindow(Gtk.Window):
         self.label.set_justify(Gtk.Justification.CENTER)
         vbox.pack_start(self.label, True, True, 0)
 
-        self.vbox = vbox
         self.button = None
+        self.vbox = vbox
         self.show_all()
         GLib.timeout_add(200, self.perform_check)
 
@@ -4340,17 +4357,21 @@ class UpdateCheckWindow(Gtk.Window):
             self.label.set_text("检查更新失败，请检查网络连接。")
             if self.button is None:
                 self.button = Gtk.Button(label="进入主界面")
-                self.button.connect("clicked", lambda btn: (self.destroy(), show_main_window()))
+                self.button.connect("clicked", self.on_button_clicked)
                 self.vbox.pack_start(self.button, False, False, 0)
             self.button.show()
             return
 
         if remote_version == VERSION:
             self.label.set_text(f"当前已是最新版本 (v{VERSION})")
+            if self.button is not None:
+                self.button.hide()
             GLib.timeout_add(300, self.auto_enter_main)
             return
 
         self.label.set_text(f"发现新版本 v{remote_version}\n当前版本: v{VERSION}")
+        if self.button is not None:
+            self.button.hide()
         self.show_update_prompt(remote_version)
 
     def auto_enter_main(self):
@@ -4391,6 +4412,10 @@ class UpdateCheckWindow(Gtk.Window):
         else:
             self.destroy()
             show_main_window()
+
+    def on_button_clicked(self, button):
+        self.destroy()
+        show_main_window()
 
 def show_main_window():
     window = MainWindow()
