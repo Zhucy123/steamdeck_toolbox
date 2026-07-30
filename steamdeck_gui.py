@@ -4155,22 +4155,21 @@ def ensure_vte_installed():
         None,
         Gtk.DialogFlags.MODAL,
         Gtk.MessageType.QUESTION,
-        Gtk.ButtonsType.YES_NO,
+        Gtk.ButtonsType.NONE,
         "未检测到 VTE 终端组件。\n是否立即安装？(需要 sudo 密码，安装后请手动重启程序)"
     )
     dialog.format_secondary_text(
         "点击“是”将自动解除只读模式并安装 vte3。"
     )
-    dialog.set_alternative_button_order([Gtk.ResponseType.YES, Gtk.ResponseType.NO])
+    dialog.add_button("是", Gtk.ResponseType.YES)
+    dialog.add_button("否", Gtk.ResponseType.NO)
+    dialog.set_icon_name("input-gamepad-symbolic")
     response = dialog.run()
     dialog.destroy()
     if response == Gtk.ResponseType.YES:
-        try:
-            subprocess.run(["sudo", "steamos-readonly", "disable"], check=True)
-        except Exception:
-            pass
         subprocess.Popen(
             ["konsole", "-e", "bash", "-c",
+             "sudo steamos-readonly disable 2>/dev/null; "
              "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF && "
              "sudo pacman -S --noconfirm vte3; "
              "echo '安装完成，请手动重启本程序。'; read -n1"],
