@@ -4299,7 +4299,7 @@ def _update_dialog_success(dialog, remote_version):
     dialog.format_secondary_text(
         f"新版本 v{remote_version} 已下载。\n点击下方按钮关闭并重新打开Deck工具箱。"
     )
-    dialog.add_button("关闭并重启", Gtk.ResponseType.OK)
+    dialog.add_button("关闭", Gtk.ResponseType.OK)
     dialog.connect("response", lambda d, r: Gtk.main_quit())
     dialog.show_all()
 
