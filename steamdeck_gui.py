@@ -24,7 +24,7 @@ import atexit
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.6.0"
+VERSION = "1.6.1"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -2213,6 +2213,314 @@ install_freedeck_uninstall() {
     echo -e "${GREEN}✅ 卸载完成${NC}"
 }
 
+get_ge_proton_versions() {
+    curl -s "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases?per_page=100" | \
+        python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    tags = []
+    for rel in data:
+        tag = rel.get('tag_name', '')
+        if tag.startswith('GE-Proton'):
+            tags.append(tag)
+    print('\n'.join(tags))
+except:
+    pass
+"
+}
+
+get_installed_ge_proton() {
+    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    [ -d "$install_dir" ] || return
+    for dir in "$install_dir"/GE-Proton*; do
+        [ -d "$dir" ] && basename "$dir"
+    done
+}
+
+ge_proton_manager() {
+    while true; do
+        local choice=$(zenity --list --radiolist \
+            --title="GE-Proton 兼容层管理" \
+            --text="请选择要执行的操作" \
+            --column="选择" --column="操作" \
+            FALSE "安装 GE-Proton" \
+            FALSE "卸载 GE-Proton" \
+            --width=400 --height=200 2>/dev/null)
+        [ $? -eq 1 ] && return 0
+        case "$choice" in
+            "安装 GE-Proton") ge_proton_install ;;
+            "卸载 GE-Proton") ge_proton_uninstall ;;
+            *) return 0 ;;
+        esac
+    done
+}
+
+ge_proton_install() {
+    (
+        echo "10"; echo "# 正在获取版本列表，请稍候..."
+        sleep 0.5
+        echo "50"; echo "# 正在连接 GitHub API..."
+        sleep 0.5
+        echo "100"
+    ) | zenity --progress --pulsate --title="加载中" --text="正在获取版本列表..." --width=400 2>/dev/null &
+    ZENITY_PID=$!
+
+    local all_versions=$(get_ge_proton_versions)
+
+    kill $ZENITY_PID 2>/dev/null
+    wait $ZENITY_PID 2>/dev/null
+
+    [ -z "$all_versions" ] && {
+        zenity --error --text="无法获取版本列表，请检查网络。" --width=400 2>/dev/null
+        return 1
+    }
+    mapfile -t version_array <<< "$all_versions"
+
+    local installed_list=$(get_installed_ge_proton)
+    local installed_array=()
+    [ -n "$installed_list" ] && mapfile -t installed_array <<< "$installed_list"
+
+    local available_versions=()
+    for ver in "${version_array[@]}"; do
+        local already=false
+        for inst in "${installed_array[@]}"; do
+            [ "$ver" = "$inst" ] && { already=true; break; }
+        done
+        [ "$already" = false ] && available_versions+=("$ver")
+    done
+
+    [ ${#available_versions[@]} -eq 0 ] && {
+        zenity --info --text="所有 GE-Proton 版本已安装！" --width=400 2>/dev/null
+        return 0
+    }
+
+    local list_args=(
+        --list --checklist
+        --title="安装 GE-Proton 兼容层"
+        --text="请选择要安装的版本（可多选）\n共 ${#available_versions[@]} 个版本可用，已排除已安装版本"
+        --column="选择" --column="版本"
+        --width=600 --height=500
+        --ok-label="安装"
+        --cancel-label="返回"
+    )
+    for ver in "${available_versions[@]}"; do
+        list_args+=("FALSE" "$ver")
+    done
+
+    local selection
+    selection=$(zenity "${list_args[@]}" 2>/dev/null)
+    local ret=$?
+
+    if [ $ret -eq 1 ] || [ $ret -eq -1 ]; then
+        return 0
+    elif [ $ret -eq 0 ]; then
+        [ -z "$selection" ] && {
+            zenity --warning --text="请至少选择一个版本。" --width=300 2>/dev/null
+            return 0
+        }
+        IFS='|' read -r -a selected <<< "$selection"
+        ge_proton_do_install "${selected[@]}"
+    fi
+}
+
+ge_proton_do_install() {
+    local versions=("$@")
+    local total=${#versions[@]}
+    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    mkdir -p "$install_dir"
+
+    local success_count=0
+    local failed_count=0
+    local failed_list=""
+
+    local mirror_choice=$(zenity --list --radiolist \
+        --title="选择下载镜像源" \
+        --text="所有版本将使用同一镜像源" \
+        --column="选择" --column="镜像源" \
+        FALSE "gh.ddlc.top (国内镜像)" \
+        FALSE "ghproxy.net (国内镜像)" \
+        FALSE "mirror.ghproxy.com (国内镜像)" \
+        FALSE "GitHub (官方源)" \
+        --width=500 --height=250 2>/dev/null)
+    [ -z "$mirror_choice" ] && return 0
+
+    local mirror=""
+    case "$mirror_choice" in
+        "gh.ddlc.top (国内镜像)") mirror="http://gh.ddlc.top/" ;;
+        "ghproxy.net (国内镜像)") mirror="http://ghproxy.net/" ;;
+        "mirror.ghproxy.com (国内镜像)") mirror="http://mirror.ghproxy.com/" ;;
+        "GitHub (官方源)") mirror="https://github.com/" ;;
+    esac
+
+    local pipe="/tmp/zenity_pipe_$$"
+    mkfifo "$pipe"
+    zenity --progress --pulsate --title="安装 GE-Proton" --text="准备开始..." --width=500 < "$pipe" &
+    local zenity_pid=$!
+    exec 3> "$pipe"
+
+    for i in "${!versions[@]}"; do
+        if ! kill -0 $zenity_pid 2>/dev/null; then
+            echo "用户取消安装" >&2
+            break
+        fi
+
+        local version="${versions[$i]}"
+        local idx=$((i+1))
+        echo "# 正在处理第 $idx/$total 个: $version (准备下载...)" >&3
+
+        local download_url=$(curl -s "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/tags/${version}" | \
+            python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for asset in data.get('assets', []):
+        name = asset.get('name', '')
+        if name.endswith('.tar.gz') and 'aarch64' not in name:
+            print(asset.get('browser_download_url', ''))
+            break
+except:
+    pass
+")
+        if [ -z "$download_url" ]; then
+            echo "# 错误：无法获取 $version 的下载链接，跳过" >&3
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (无法获取下载链接)"
+            continue
+        fi
+
+        local full_url="${mirror}${download_url}"
+        local temp_dir="/tmp/ge_proton_$$"
+        mkdir -p "$temp_dir"
+        cd "$temp_dir" || continue
+        local filename="${version}.tar.gz"
+
+        echo "# 正在处理第 $idx/$total 个: $version (下载中...)" >&3
+        curl -L -f -S --connect-timeout 30 --max-time 600 -o "$filename" "$full_url" 2> /tmp/curl_err_$$.log
+        local curl_ret=$?
+        if [ $curl_ret -ne 0 ]; then
+            echo "# 下载失败，错误信息：" >&3
+            tail -n 5 /tmp/curl_err_$$.log >&3
+            rm -f /tmp/curl_err_$$.log
+            rm -f "$filename"
+            cd /tmp && rm -rf "$temp_dir"
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (下载失败)"
+            continue
+        fi
+        rm -f /tmp/curl_err_$$.log
+
+        echo "# 正在处理第 $idx/$total 个: $version (解压中...)" >&3
+        tar -xzf "$filename" -C "$install_dir"
+        local tar_ret=$?
+
+        rm -f "$filename"
+        cd /tmp && rm -rf "$temp_dir"
+
+        if [ $tar_ret -eq 0 ] && [ -d "$install_dir/$version" ]; then
+            echo "# 第 $idx/$total 个: $version 安装成功" >&3
+            ((success_count++))
+        else
+            echo "# 第 $idx/$total 个: $version 安装失败" >&3
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (解压失败)"
+        fi
+    done
+
+    if kill -0 $zenity_pid 2>/dev/null; then
+        local result_msg="\n========== 安装完成 ==========\n成功: $success_count 个"
+        if [ $failed_count -gt 0 ]; then
+            result_msg+="\n失败: $failed_count 个\n失败的版本:${failed_list}"
+        fi
+        if [ $success_count -gt 0 ]; then
+            result_msg+="\n\n建议重启 Steam 以刷新兼容层列表。"
+        fi
+        echo "# $result_msg" >&3
+        exec 3>&-
+        wait $zenity_pid 2>/dev/null
+    fi
+
+    rm -f "$pipe"
+}
+
+ge_proton_uninstall() {
+    local installed_list=$(get_installed_ge_proton)
+    [ -z "$installed_list" ] && {
+        zenity --info --text="未检测到已安装的 GE-Proton。" --ok-label="返回" --width=400 2>/dev/null
+        return 0
+    }
+    mapfile -t installed_array <<< "$installed_list"
+
+    local list_args=(
+        --list --checklist
+        --title="卸载 GE-Proton 兼容层"
+        --text="请选择要卸载的版本（可多选）"
+        --column="选择" --column="版本"
+        --width=500 --height=350
+        --ok-label="卸载"
+        --cancel-label="返回"
+    )
+    for ver in "${installed_array[@]}"; do
+        list_args+=("FALSE" "$ver")
+    done
+
+    local selection=$(zenity "${list_args[@]}" 2>/dev/null)
+    [ -z "$selection" ] && return 0
+    IFS='|' read -r -a selected <<< "$selection"
+
+    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    local total=${#selected[@]}
+    local success=0 fail=0
+    local failed_list=""
+
+    local pipe="/tmp/zenity_pipe_$$"
+    mkfifo "$pipe"
+    zenity --progress --pulsate --title="卸载 GE-Proton" --text="准备开始..." --width=500 < "$pipe" &
+    local zenity_pid=$!
+    exec 3> "$pipe"
+
+    for i in "${!selected[@]}"; do
+        if ! kill -0 $zenity_pid 2>/dev/null; then
+            echo "用户取消卸载" >&2
+            break
+        fi
+
+        local version="${selected[$i]}"
+        local idx=$((i+1))
+
+        echo "# 正在处理第 $idx/$total 个: $version ..." >&3
+
+        if [ -d "$install_dir/$version" ]; then
+            rm -rf "$install_dir/$version"
+            if [ ! -d "$install_dir/$version" ]; then
+                ((success++))
+                echo "# 第 $idx/$total 个: $version 已卸载" >&3
+            else
+                ((fail++))
+                failed_list="${failed_list}\n  $version (删除失败)"
+                echo "# 第 $idx/$total 个: $version 卸载失败" >&3
+            fi
+        else
+            ((success++))
+            echo "# 第 $idx/$total 个: $version (目录不存在，跳过)" >&3
+        fi
+        sleep 0.3
+    done
+
+    if kill -0 $zenity_pid 2>/dev/null; then
+        local result_msg="\n========== 卸载完成 ==========\n成功: $success 个"
+        if [ $fail -gt 0 ]; then
+            result_msg+="\n失败: $fail 个\n失败的版本:${failed_list}"
+        fi
+        result_msg+="\n\n建议重启 Steam 以使更改生效。"
+        echo "# $result_msg" >&3
+        exec 3>&-
+        wait $zenity_pid 2>/dev/null
+    fi
+
+    rm -f "$pipe"
+}
+
 install_decky_lsfg_vk_install() {
     mk_temp_dir
     clear
@@ -4036,13 +4344,13 @@ class TaskWindow(Gtk.Window):
             self.show_all()
 
     def run_external(self, func_key):
-        tmp_path = create_temp_script(func_key)
+        tmp_path = create_temp_script()
         cmd = [
             "konsole",
             "-e",
             "bash",
             "-c",
-            f"bash {tmp_path}; read -p '按回车键关闭...' -n1"
+            f"bash {tmp_path} {func_key}; read -p '按回车键关闭...' -n1"
         ]
         subprocess.Popen(
             cmd,
@@ -4367,7 +4675,8 @@ steamdeck工具箱 v{VERSION}
             "卸载其他已安装应用": "uninstall_other_flatpak_apps",
             "小黄鸭软件": "install_yellow_duck_software",
             "安装/更新 Freedeck": "install_freedeck_install",
-            "卸载 Freedeck": "install_freedeck_uninstall"
+            "卸载 Freedeck": "install_freedeck_uninstall",
+            "GE-Proton 管理": "ge_proton_manager"
         }
 
         self.category_tree = {
@@ -4378,7 +4687,8 @@ steamdeck工具箱 v{VERSION}
                 "修复磁盘写入错误",
                 "清理hosts缓存",
                 ("校准设备", ["校准摇杆", "校准扳机"]),
-                "Steam缓存管理"
+                "Steam缓存管理",
+                "GE-Proton 管理"
             ],
             "软件安装": [
                 "AnyDesk",
@@ -4483,7 +4793,8 @@ steamdeck工具箱 v{VERSION}
         self.func_view.show_all()
 
     def display_changelog(self):
-        changelog_content = """2026-07-30（v1.6.0包含 v1.5.7-v1.5.9 的调整） 新增了安装Freedeck插件的功能，并修复了一些bug和优化完善了一些功能
+        changelog_content = """2026-07-31（v1.6.1） 增加了GE-Proton 管理的功能，可以安装/卸载GE兼容层
+2026-07-30（v1.6.0包含 v1.5.7-v1.5.9 的调整） 新增了安装Freedeck插件的功能，并修复了一些bug和优化完善了一些功能
 2026-07-29（v1.5.6包含 v1.5.2-v1.5.5 的调整） 增加了安装Fcitx 5的功能并继续修复了一些bug,并调整了部分功能的逻辑
 2026-07-27（v1.5.1包含 v1.5.0 的调整） 修复了一些bug,并优化完善了一些功能
 2026-07-26（v1.4.9） 增加了安装Asklink远程的功能
@@ -4538,6 +4849,10 @@ steamdeck工具箱 v{VERSION}
             self.run_cache_manager_gui()
             return
 
+        if func_name == "GE-Proton 管理":
+            self.run_ge_proton_manager_gui()
+            return
+
         if func_name == "卸载其他已安装应用":
             self.run_uninstall_other_apps_gui()
             return
@@ -4566,9 +4881,9 @@ steamdeck工具箱 v{VERSION}
         help_dialog.destroy()
 
     def _run_standalone_script(self, func_key):
-        tmp_path = create_temp_script(func_key)
+        tmp_path = create_temp_script()
         subprocess.Popen(
-            [tmp_path],
+            [tmp_path, func_key],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             stdin=subprocess.DEVNULL,
@@ -4578,6 +4893,9 @@ steamdeck工具箱 v{VERSION}
     def run_cache_manager_gui(self):
         self._run_standalone_script("steamdeck_cache_manager")
 
+    def run_ge_proton_manager_gui(self):
+        self._run_standalone_script("ge_proton_manager")
+
     def run_uninstall_other_apps_gui(self):
         self._run_standalone_script("uninstall_other_flatpak_apps")
 
@@ -4585,13 +4903,13 @@ steamdeck工具箱 v{VERSION}
         self.destroy()
 
     def run_external_terminal(self, func_key):
-        tmp_path = create_temp_script(func_key)
+        tmp_path = create_temp_script()
         cmd = [
             "konsole",
             "-e",
             "bash",
             "-c",
-            f"bash {tmp_path}; read -p '按回车键关闭...' -n1"
+            f"bash {tmp_path} {func_key}; read -p '按回车键关闭...' -n1"
         ]
         subprocess.Popen(
             cmd,
