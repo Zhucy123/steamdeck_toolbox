@@ -24,7 +24,7 @@ import atexit
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.6.1"
+VERSION = "1.6.2"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -33,7 +33,6 @@ VERSION_CHECK_TIMEOUT = 10
 # 内嵌完整的 Bash 脚本
 # ============================================================================
 BASH_SCRIPT = r'''#!/bin/bash
-# 自动清理临时目录
 TEMP_DIR="/tmp/steamdeck_toolbox"
 cleanup_temp() {
     rm -rf "$TEMP_DIR" 2>/dev/null
@@ -167,14 +166,34 @@ uninstall_flatpak_app() {
                     local deleted_any=false
                     for f in "$desktop_dir"/*.desktop; do
                         local base=$(basename "$f")
-                        if [ "$base" = "${installed}.desktop" ] || [[ "$base" == *"${installed//./_}"* ]]; then
+                        if [ "$base" = "${desktop_name}.desktop" ] || \
+                           [ "$base" = "${installed}.desktop" ] || \
+                           [[ "$base" == *"${installed//./_}"* ]]; then
                             rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ 桌面快捷方式已删除: $base${NC}" && deleted_any=true
                         fi
                     done
                     if ! $deleted_any; then
-                        echo -e "${YELLOW}未找到与 ${installed} 匹配的桌面快捷方式。${NC}"
+                        echo -e "${YELLOW}未找到与 ${desktop_name} 或 ${installed} 匹配的桌面快捷方式。${NC}"
                     fi
                 fi
+
+                local data_dir="$HOME/.var/app/$installed"
+                if [ -d "$data_dir" ]; then
+                    echo ""
+                    echo -e "${CYAN}是否删除该应用的所有设置和用户数据？${NC}"
+                    read -n1 -p "按回车键或 A 键确认删除，其他键保留: " del_data
+                    echo
+                    if [[ -z "$del_data" || "$del_data" =~ [Aa] ]]; then
+                        rm -rf "$data_dir" && echo -e "${GREEN}✓ 用户数据已删除${NC}"
+                    else
+                        echo -e "${YELLOW}已保留用户数据。${NC}"
+                    fi
+                else
+                    echo -e "${GREEN}未发现用户数据目录，无需清理。${NC}"
+                fi
+
+                echo ""
+                echo -e "${GREEN}${app_title} 卸载流程结束。${NC}"
             else
                 echo -e "${RED}✗ 卸载失败${NC}"
             fi
@@ -1057,7 +1076,7 @@ fix_shared_disk() {
     while read -r name type label fstype mountpoint uuid parttype size; do
         [[ "$name" == "NAME" ]] && continue
         [[ "$type" != "part" ]] && continue
-        [[ "$fstype" != "ntfs" && "$fstype" != "fuseblk" ]] && continue
+        [[ ! "$fstype" =~ ^(ntfs|fuseblk|ntfs3)$ ]] && continue
 
         local skip=0
         local sysmp
@@ -1089,12 +1108,29 @@ fix_shared_disk() {
         part_sizes+=("$size")
         ((part_count++))
 
-        if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint"; then
+        if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint" 2>/dev/null; then
             :
         else
             all_mounted=false
         fi
     done < <(lsblk -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,PARTTYPE,SIZE --noheadings 2>/dev/null)
+
+    if [ $part_count -eq 0 ]; then
+        while read -r source fstype mountpoint; do
+            if [[ "$source" =~ ^/dev/ ]]; then
+                dev="$source"
+                label=$(lsblk -n -o LABEL "$dev" 2>/dev/null)
+                uuid=$(lsblk -n -o UUID "$dev" 2>/dev/null)
+                size=$(lsblk -n -o SIZE "$dev" 2>/dev/null)
+                part_devices+=("$dev")
+                part_labels+=("${label:-无标签}")
+                part_mountpoints+=("$mountpoint")
+                part_uuids+=("$uuid")
+                part_sizes+=("${size:-}")
+                ((part_count++))
+            fi
+        done < <(findmnt -t ntfs,fuseblk,ntfs3 -o SOURCE,FSTYPE,TARGET -n 2>/dev/null)
+    fi
 
     if [ $part_count -eq 0 ]; then
         echo -e "${YELLOW}⚠️  未检测到任何符合条件的 Windows (NTFS) 分区。${NC}"
@@ -4033,11 +4069,29 @@ uninstall_anydesk() {
             if [ -d "$desktop_dir" ]; then
                 for f in "$desktop_dir"/*.desktop; do
                     local base=$(basename "$f")
-                    if [ "$base" = "${flatpak_id}.desktop" ] || [[ "$base" == *"${flatpak_id//./_}"* ]]; then
+                    if [ "$base" = "AnyDesk.desktop" ] || \
+                       [ "$base" = "${flatpak_id}.desktop" ] || \
+                       [[ "$base" == *"${flatpak_id//./_}"* ]]; then
                         rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ 已删除桌面快捷方式 $base${NC}"
                     fi
                 done
             fi
+
+            local data_dir="$HOME/.var/app/$flatpak_id"
+            if [ -d "$data_dir" ]; then
+                echo ""
+                echo -e "${CYAN}是否删除 AnyDesk 的所有设置和用户数据？${NC}"
+                read -n1 -p "按回车键或 A 键确认删除，其他键保留: " del_data
+                echo
+                if [[ -z "$del_data" || "$del_data" =~ [Aa] ]]; then
+                    rm -rf "$data_dir" && echo -e "${GREEN}✓ 用户数据已删除${NC}"
+                else
+                    echo -e "${YELLOW}已保留用户数据。${NC}"
+                fi
+            else
+                echo -e "${YELLOW}未找到用户数据目录，跳过。${NC}"
+            fi
+
         else
             echo -e "${RED}✗ Flatpak 版本卸载失败${NC}"
         fi
@@ -4046,6 +4100,7 @@ uninstall_anydesk() {
     echo ""
     echo -e "${GREEN}✅ AnyDesk 卸载完成。${NC}"
 }
+
 uninstall_fcitx5() {
     mk_temp_dir
     clear
@@ -4209,6 +4264,20 @@ uninstall_other_flatpak_apps() {
             if flatpak uninstall "$app_id" -y &>/dev/null; then
                 ((success++))
                 _remove_shortcut "$app_id"
+
+                local data_dir="$HOME/.var/app/$app_id"
+                if [ -d "$data_dir" ]; then
+                    zenity --question \
+                        --title="删除用户数据" \
+                        --text="应用 $app_id 的用户数据目录存在：\n$data_dir\n\n是否删除该应用的所有设置和用户数据？" \
+                        --width=500 2>/dev/null
+                    if [ $? -eq 0 ]; then
+                        rm -rf "$data_dir" && echo "已删除 $app_id 的用户数据"
+                    else
+                        echo "保留 $app_id 的用户数据"
+                    fi
+                fi
+
             else
                 ((fail++))
                 failed_list+=" $app_id"
@@ -4793,7 +4862,8 @@ steamdeck工具箱 v{VERSION}
         self.func_view.show_all()
 
     def display_changelog(self):
-        changelog_content = """2026-07-31（v1.6.1） 增加了GE-Proton 管理的功能，可以安装/卸载GE兼容层
+        changelog_content = """2026-08-01（v1.6.2） 完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
+2026-07-31（v1.6.1） 增加了GE-Proton 管理的功能，可以安装/卸载GE兼容层
 2026-07-30（v1.6.0包含 v1.5.7-v1.5.9 的调整） 新增了安装Freedeck插件的功能，并修复了一些bug和优化完善了一些功能
 2026-07-29（v1.5.6包含 v1.5.2-v1.5.5 的调整） 增加了安装Fcitx 5的功能并继续修复了一些bug,并调整了部分功能的逻辑
 2026-07-27（v1.5.1包含 v1.5.0 的调整） 修复了一些bug,并优化完善了一些功能
