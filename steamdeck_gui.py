@@ -24,7 +24,7 @@ import atexit
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.6.2"
+VERSION = "1.6.3"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -4215,8 +4215,8 @@ uninstall_other_flatpak_apps() {
         done < <(flatpak list --app --columns=application,name 2>/dev/null)
 
         if [ ${#installed_apps[@]} -eq 0 ]; then
-            zenity --info --text="没有找到其他已安装的 Flatpak 应用。"
-            return
+            zenity --info --text="没有其他已安装的 Flatpak 应用可卸载。" --width=400
+            break
         fi
 
         local list_data=()
@@ -4225,7 +4225,8 @@ uninstall_other_flatpak_apps() {
             list_data+=("FALSE" "$app_name ($app_id)")
         done
 
-        local selections=$(zenity --list --checklist \
+        local selections
+        selections=$(zenity --list --checklist \
             --title="卸载其他 Flatpak 应用" \
             --text="请选择要卸载的应用（可多选）：" \
             --column="选择" --column="应用" \
@@ -4233,8 +4234,8 @@ uninstall_other_flatpak_apps() {
             --width=700 --height=400 \
             --multiple 2>/dev/null)
 
-        if [ -z "$selections" ]; then
-            return
+        if [ $? -ne 0 ] || [ -z "$selections" ]; then
+            break
         fi
 
         IFS='|' read -r -a selected_names <<< "$selections"
@@ -4249,47 +4250,77 @@ uninstall_other_flatpak_apps() {
             done
         done
 
-        if [ ${#selected_ids[@]} -eq 0 ]; then
-            continue
-        fi
+        [ ${#selected_ids[@]} -eq 0 ] && continue
 
         zenity --question \
             --text="确定要卸载选中的应用吗？\n共 ${#selected_ids[@]} 项。" \
             --ok-label="卸载" --cancel-label="取消" 2>/dev/null || continue
 
+        local total=${#selected_ids[@]}
         local success=0
         local fail=0
         local failed_list=""
-        for app_id in "${selected_ids[@]}"; do
+        local data_dirs=()
+
+        local pipe="/tmp/zenity_pipe_$$"
+        mkfifo "$pipe"
+        zenity --progress --pulsate --no-cancel --auto-close \
+            --title="卸载应用" --text="准备开始..." --width=500 < "$pipe" &
+        local zenity_pid=$!
+        exec 3> "$pipe"
+
+        for i in "${!selected_ids[@]}"; do
+            local app_id="${selected_ids[$i]}"
+            local idx=$((i+1))
+
+            echo "# 正在处理第 $idx/$total 个: $app_id (卸载中...)" >&3
+
             if flatpak uninstall "$app_id" -y &>/dev/null; then
                 ((success++))
                 _remove_shortcut "$app_id"
-
                 local data_dir="$HOME/.var/app/$app_id"
                 if [ -d "$data_dir" ]; then
-                    zenity --question \
-                        --title="删除用户数据" \
-                        --text="应用 $app_id 的用户数据目录存在：\n$data_dir\n\n是否删除该应用的所有设置和用户数据？" \
-                        --width=500 2>/dev/null
-                    if [ $? -eq 0 ]; then
-                        rm -rf "$data_dir" && echo "已删除 $app_id 的用户数据"
-                    else
-                        echo "保留 $app_id 的用户数据"
-                    fi
+                    data_dirs+=("$data_dir")
                 fi
-
+                echo "# 第 $idx/$total 个: $app_id 卸载成功" >&3
             else
                 ((fail++))
                 failed_list+=" $app_id"
+                echo "# 第 $idx/$total 个: $app_id 卸载失败" >&3
             fi
+            sleep 0.2
         done
 
-        local msg="卸载完成！\n成功: $success 项\n失败: $fail 项"
-        [ -n "$failed_list" ] && msg+="\n失败的 ID: $failed_list"
-        msg+="\n\n是否继续卸载其他应用？"
+        exec 3>&-
+        wait $zenity_pid 2>/dev/null
+        rm -f "$pipe"
 
-        if ! zenity --question --text="$msg" --ok-label="继续卸载" --cancel-label="返回"; then
-            return
+        sleep 1.0
+
+        local result_msg="卸载结果：\n成功: $success 个"
+        if [ $fail -gt 0 ]; then
+            result_msg+="\n失败: $fail 个\n失败的 ID:${failed_list}"
+        fi
+
+        if [ ${#data_dirs[@]} -gt 0 ]; then
+            local question_msg="$result_msg\n\n以下应用的用户数据目录仍然存在："
+            for d in "${data_dirs[@]}"; do
+                question_msg+="\n  $d"
+            done
+            question_msg+="\n\n是否删除这些数据目录？"
+
+            if zenity --question --text="$question_msg" --width=600 \
+                --ok-label="删除数据" --cancel-label="保留" 2>/dev/null; then
+                for d in "${data_dirs[@]}"; do
+                    rm -rf "$d" && echo "已删除 $d"
+                done
+            else
+                :
+            fi
+            continue
+        else
+            zenity --info --text="$result_msg" --width=400 2>/dev/null
+            continue
         fi
     done
 }
@@ -4862,7 +4893,7 @@ steamdeck工具箱 v{VERSION}
         self.func_view.show_all()
 
     def display_changelog(self):
-        changelog_content = """2026-08-01（v1.6.2） 完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
+        changelog_content = """2026-08-01（v1.6.3包含 v1.6.2 的调整） 完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
 2026-07-31（v1.6.1） 增加了GE-Proton 管理的功能，可以安装/卸载GE兼容层
 2026-07-30（v1.6.0包含 v1.5.7-v1.5.9 的调整） 新增了安装Freedeck插件的功能，并修复了一些bug和优化完善了一些功能
 2026-07-29（v1.5.6包含 v1.5.2-v1.5.5 的调整） 增加了安装Fcitx 5的功能并继续修复了一些bug,并调整了部分功能的逻辑
