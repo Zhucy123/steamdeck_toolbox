@@ -24,7 +24,7 @@ import atexit
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.6.3"
+VERSION = "1.6.4"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -523,16 +523,22 @@ fix_single_ntfs() {
     echo ""
     echo -e "${CYAN}正在修复分区: $device${NC}"
 
-    if [ -n "$mountpoint" ]; then
-        echo "  正在卸载 $mountpoint ..."
-        sudo umount "$device" 2>/dev/null || sudo umount -f "$device" 2>/dev/null
+    if [ -n "$mountpoint" ] && mountpoint -q "$mountpoint" 2>/dev/null; then
+        echo "  分区当前挂载于 $mountpoint，正在卸载..."
+        if sudo umount "$device" 2>/dev/null || sudo umount -f "$device" 2>/dev/null; then
+            echo -e "${GREEN}  ✓ 卸载成功${NC}"
+        else
+            echo -e "${RED}  ✗ 卸载失败，无法继续修复${NC}"
+            return 1
+        fi
     fi
 
-    echo "  执行 ntfsfix ..."
+    echo "  正在运行 ntfsfix ..."
     if sudo ntfsfix "$device" 2>/dev/null; then
         echo -e "${GREEN}  ✓ 修复成功${NC}"
     else
-        echo -e "${RED}  ✗ 修复失败，请检查 dmesg 输出。${NC}"
+        echo -e "${RED}  ✗ 修复失败，请检查 dmesg 输出${NC}"
+        sudo dmesg | grep -i ntfs | tail -5
     fi
 
     if [ -n "$mountpoint" ] && [ -d "$mountpoint" ]; then
@@ -540,7 +546,7 @@ fix_single_ntfs() {
         if sudo mount "$device" "$mountpoint" 2>/dev/null; then
             echo -e "${GREEN}  ✓ 重新挂载成功${NC}"
         else
-            echo -e "${YELLOW}  ⚠️  自动挂载失败，请手动挂载。${NC}"
+            echo -e "${YELLOW}  ⚠️  自动挂载失败，请稍后手动挂载${NC}"
         fi
     fi
 }
@@ -582,7 +588,7 @@ fix_disk_write_error() {
         fi
     else
         echo ""
-        echo "步骤1: 跳过 SteamOS 只读模式（当前系统非 SteamOS）"
+        echo "步骤1: 跳过 SteamOS 只读检查（非 SteamOS）"
     fi
 
     echo ""
@@ -593,71 +599,42 @@ fix_disk_write_error() {
     local ntfs_uuids=()
     local ntfs_count=0
 
-    # 方法1: 使用 blkid 直接获取所有 NTFS 分区（推荐，稳定且无需 JSON）
     while IFS= read -r line; do
-        # 提取设备路径 (第一个冒号前)
-        dev=$(echo "$line" | cut -d: -f1)
-        # 提取文件系统类型 (TYPE="xxx")
-        fstype=$(echo "$line" | grep -oP 'TYPE="\K[^"]+' | head -1)
-        # 提取卷标 (LABEL="xxx")
-        label=$(echo "$line" | grep -oP 'LABEL="\K[^"]+' | head -1)
-        # 提取 UUID
-        uuid=$(echo "$line" | grep -oP 'UUID="\K[^"]+' | head -1)
+        unset NAME TYPE LABEL FSTYPE MOUNTPOINT UUID
+        eval "$line"
 
-        # 只处理 NTFS 或 fuseblk
-        if [[ "$fstype" == "ntfs" || "$fstype" == "fuseblk" ]]; then
-            ntfs_devices+=("$dev")
-            ntfs_labels+=("${label:-无标签}")
-            ntfs_uuids+=("${uuid:-}")
-            # 获取当前挂载点（如果已挂载）
-            mountpoint=$(findmnt -n -o TARGET "$dev" 2>/dev/null || echo "")
-            ntfs_mountpoints+=("$mountpoint")
-            ((ntfs_count++))
+        [ "$TYPE" != "part" ] && continue
+        [[ "$FSTYPE" =~ ^(ntfs|fuseblk|ntfs3)$ ]] || continue
+
+        dev="/dev/$NAME"
+        ntfs_devices+=("$dev")
+        ntfs_labels+=("${LABEL:-无标签}")
+        ntfs_uuids+=("${UUID:-}")
+
+        if [ -z "$MOUNTPOINT" ] || [ "$MOUNTPOINT" = "None" ]; then
+            ntfs_mountpoints+=("")
+        else
+            ntfs_mountpoints+=("$MOUNTPOINT")
         fi
-    done < <(sudo blkid 2>/dev/null)
+        ((ntfs_count++))
+    done < <(lsblk -P -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID --noheadings 2>/dev/null)
 
-    # 如果 blkid 没有找到，尝试使用 lsblk（但这次用非 JSON 模式，纯文本）
     if [ $ntfs_count -eq 0 ]; then
-        echo -e "${YELLOW}⚠️  blkid 未找到 NTFS 分区，尝试使用 lsblk 文本模式...${NC}"
-        # 使用 lsblk -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,SIZE 输出，不依赖 JSON
-        while read -r name type label fstype mountpoint uuid size; do
-            # 跳过表头
-            [[ "$name" == "NAME" ]] && continue
+        echo -e "${YELLOW}⚠️  lsblk 未找到 NTFS 分区，尝试使用 blkid ...${NC}"
+        while IFS= read -r line; do
+            dev=$(echo "$line" | cut -d: -f1)
+            fstype=$(echo "$line" | sed -n 's/.* TYPE="\([^"]*\)".*/\1/p')
+            label=$(echo "$line" | sed -n 's/.* LABEL="\([^"]*\)".*/\1/p')
+            uuid=$(echo "$line" | sed -n 's/.* UUID="\([^"]*\)".*/\1/p')
+
             if [[ "$fstype" == "ntfs" || "$fstype" == "fuseblk" ]]; then
-                dev="/dev/$name"
                 ntfs_devices+=("$dev")
                 ntfs_labels+=("${label:-无标签}")
                 ntfs_uuids+=("${uuid:-}")
-                ntfs_mountpoints+=("$mountpoint")
-                ((ntfs_count++))
-            fi
-        done < <(lsblk -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,SIZE --noheadings 2>/dev/null)
-    fi
-
-    if [ $ntfs_count -eq 0 ]; then
-        echo -e "${YELLOW}⚠️  未找到任何 NTFS 分区。${NC}"
-        return 0
-    fi
-
-    if [ $ntfs_count -eq 0 ]; then
-        while IFS='|' read -r device fstype label; do
-            if [[ "$fstype" == "ntfs" || "$fstype" == "fuseblk" ]]; then
-                ntfs_devices+=("$device")
-                ntfs_labels+=("$label")
                 ntfs_mountpoints+=("")
                 ((ntfs_count++))
             fi
-done < <(sudo blkid | grep -E 'TYPE="(ntfs|fuseblk)"' | $PYTHON_CMD << 'PYEOF'
-import sys, re
-for line in sys.stdin:
-    dev = line.split(':')[0]
-    fstype_m = re.search(r'TYPE="(.*?)"', line)
-    label_m = re.search(r'LABEL="(.*?)"', line)
-    fstype = fstype_m.group(1) if fstype_m else ''
-    label = label_m.group(1) if label_m else ''
-    print('{}|{}|{}'.format(dev, fstype, label))
-PYEOF
-        )
+        done < <(sudo blkid 2>/dev/null)
     fi
 
     if [ $ntfs_count -eq 0 ]; then
@@ -666,7 +643,6 @@ PYEOF
     fi
 
     echo -e "${CYAN}找到 $ntfs_count 个 NTFS 分区，正在检查错误状态...${NC}"
-
     local dirty_indices=()
     for ((i=0; i<ntfs_count; i++)); do
         echo -n "  检查 ${ntfs_devices[$i]} ... "
@@ -687,7 +663,8 @@ PYEOF
     echo ""
     echo -e "${YELLOW}发现 ${#dirty_indices[@]} 个分区存在写入错误（脏标志）：${NC}"
     for idx in "${dirty_indices[@]}"; do
-        echo "  $(($idx+1)). ${ntfs_devices[$idx]}  标签:${ntfs_labels[$idx]:-无}  挂载点:${ntfs_mountpoints[$idx]:-未挂载}"
+        local mp_display="${ntfs_mountpoints[$idx]:-未挂载}"
+        echo "  $(($idx+1)). ${ntfs_devices[$idx]}  标签:${ntfs_labels[$idx]}  挂载点:${mp_display}"
     done
 
     echo ""
@@ -715,32 +692,29 @@ PYEOF
             echo "请输入要修复的分区编号（多个编号用空格分隔，如 1 3）："
             while true; do
                 read -p "编号: " -a indices < /dev/tty
-                local valid=false
-                for idx in "${indices[@]}"; do
-                    if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -ge 1 ] && [ "$idx" -le $ntfs_count ]; then
-                        for d in "${dirty_indices[@]}"; do
-                            if [ "$d" -eq "$((idx-1))" ]; then
-                                valid=true
-                                break 2
-                            fi
-                        done
+                local valid=true
+                for num in "${indices[@]}"; do
+                    if [[ ! "$num" =~ ^[0-9]+$ ]] || [ "$num" -lt 1 ] || [ "$num" -gt $ntfs_count ]; then
+                        valid=false; break
                     fi
+                    local found=0
+                    for d in "${dirty_indices[@]}"; do
+                        [ "$d" -eq "$((num-1))" ] && found=1 && break
+                    done
+                    [ $found -eq 0 ] && valid=false && break
                 done
-                if [ "$valid" = true ]; then
+                if $valid; then
                     break
                 else
                     echo -e "${RED}无效编号或分区未脏，请重新输入。${NC}"
                 fi
             done
-            for idx in "${indices[@]}"; do
-                if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -ge 1 ] && [ "$idx" -le $ntfs_count ]; then
-                    fix_single_ntfs "${ntfs_devices[$((idx-1))]}" "${ntfs_mountpoints[$((idx-1))]}"
-                fi
+            for num in "${indices[@]}"; do
+                fix_single_ntfs "${ntfs_devices[$((num-1))]}" "${ntfs_mountpoints[$((num-1))]}"
             done
             ;;
         3|*)
             echo "操作取消。"
-            return 0
             ;;
     esac
 
@@ -1046,15 +1020,19 @@ fix_shared_disk() {
     clear
     echo -e "${YELLOW}════════════════ 自动挂载 Windows 分区 ════════════════${NC}"
     echo ""
+
     echo "步骤1: 禁用 SteamOS 只读模式"
     sudo steamos-readonly disable 2>/dev/null
     echo -e "${GREEN}✓ 已处理${NC}"
     echo ""
+
     echo "步骤2: 修改 UDisks2 权限文件"
     UDISKS2_FILE="/usr/share/polkit-1/actions/org.freedesktop.UDisks2.policy"
     if [ -f "$UDISKS2_FILE" ]; then
         sudo cp "$UDISKS2_FILE" "$UDISKS2_FILE.backup.$(date +%Y%m%d)" 2>/dev/null
-        sudo sed -i '181s/<allow_active>[^<]*<\\/allow_active>/<allow_active>yes<\\/allow_active>/' "$UDISKS2_FILE" 2>/dev/null
+        sudo sed -i '/<action id="org.freedesktop.udisks2.filesystem-mount-system">/,/<\/action>/ {
+            s|<allow_active>[^<]*</allow_active>|<allow_active>yes</allow_active>|
+        }' "$UDISKS2_FILE" 2>/dev/null
         echo -e "${GREEN}✓ 已修改${NC}"
     else
         echo -e "${YELLOW}⚠️  未找到 UDisks2 文件，跳过${NC}"
@@ -1073,13 +1051,41 @@ fix_shared_disk() {
     local part_count=0
     local all_mounted=true
 
-    while read -r name type label fstype mountpoint uuid parttype size; do
-        [[ "$name" == "NAME" ]] && continue
+    echo "  清理无效的 fstab 条目..."
+    local bad_entries=()
+    while IFS= read -r line; do
+        if echo "$line" | grep -qE '^\s*UUID=[^\s]+\s+(\S+)\s+ntfs'; then
+            mp=$(echo "$line" | awk '{print $2}')
+            if [[ -z "$mp" || "$mp" != /* || "$mp" =~ ^[A-F0-9]{8,} ]]; then
+                bad_entries+=("$line")
+            fi
+        fi
+    done < /etc/fstab
+    if [ ${#bad_entries[@]} -gt 0 ]; then
+        echo "  检测到 ${#bad_entries[@]} 条无效条目，正在删除..."
+        for entry in "${bad_entries[@]}"; do
+            sudo sed -i "\|^$(echo "$entry" | sed 's/[.[\*^$]/\\&/g')$|d" /etc/fstab
+        done
+        echo -e "${GREEN}✓ 无效条目已清除${NC}"
+    fi
+
+    while IFS= read -r line; do
+        unset NAME TYPE LABEL FSTYPE MOUNTPOINT UUID PARTTYPE SIZE
+        eval "$line"
+
+        name="$NAME"
+        type="$TYPE"
+        label="$LABEL"
+        fstype="$FSTYPE"
+        mountpoint="$MOUNTPOINT"
+        uuid="$UUID"
+        parttype="$PARTTYPE"
+        size="$SIZE"
+
         [[ "$type" != "part" ]] && continue
         [[ ! "$fstype" =~ ^(ntfs|fuseblk|ntfs3)$ ]] && continue
 
         local skip=0
-        local sysmp
         for sysmp in "${sys_mounts[@]}"; do
             if [[ "$mountpoint" == "$sysmp" ]]; then
                 skip=1
@@ -1089,8 +1095,8 @@ fix_shared_disk() {
         [ $skip -eq 1 ] && continue
 
         if [ -n "$parttype" ] && [[ "${parttype,,}" == "$recovery_guid" ]]; then
-            if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint"; then
-                echo "  恢复分区 /dev/$name 已挂载，正在卸载..."
+            if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint" 2>/dev/null; then
+                echo "  恢复分区 $name 已挂载，正在卸载..."
                 sudo umount "$mountpoint" 2>/dev/null
             fi
             if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && [ -d "$mountpoint" ]; then
@@ -1102,10 +1108,14 @@ fix_shared_disk() {
         fi
 
         part_devices+=("/dev/$name")
-        part_labels+=("$label")
-        part_mountpoints+=("$mountpoint")
+        part_labels+=("${label:-}")
+        if [ "$mountpoint" = "None" ] || [ -z "$mountpoint" ]; then
+            part_mountpoints+=("")
+        else
+            part_mountpoints+=("$mountpoint")
+        fi
         part_uuids+=("$uuid")
-        part_sizes+=("$size")
+        part_sizes+=("${size:-}")
         ((part_count++))
 
         if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint" 2>/dev/null; then
@@ -1113,10 +1123,10 @@ fix_shared_disk() {
         else
             all_mounted=false
         fi
-    done < <(lsblk -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,PARTTYPE,SIZE --noheadings 2>/dev/null)
+    done < <(lsblk -P -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,PARTTYPE,SIZE --noheadings 2>/dev/null)
 
     if [ $part_count -eq 0 ]; then
-        while read -r source fstype mountpoint; do
+        while IFS= read -r source fstype mountpoint; do
             if [[ "$source" =~ ^/dev/ ]]; then
                 dev="$source"
                 label=$(lsblk -n -o LABEL "$dev" 2>/dev/null)
@@ -1125,7 +1135,7 @@ fix_shared_disk() {
                 part_devices+=("$dev")
                 part_labels+=("${label:-无标签}")
                 part_mountpoints+=("$mountpoint")
-                part_uuids+=("$uuid")
+                part_uuids+=("${uuid:-}")
                 part_sizes+=("${size:-}")
                 ((part_count++))
             fi
@@ -1139,29 +1149,29 @@ fix_shared_disk() {
 
     echo -e "${CYAN}检测到以下 Windows 分区：${NC}"
     for ((i=0; i<part_count; i++)); do
-        echo "  $((i+1)). ${part_devices[$i]} 标签:${part_labels[$i]:-无} 大小:${part_sizes[$i]} 挂载点:${part_mountpoints[$i]:-未挂载}"
+        local mp_display="${part_mountpoints[$i]:-未挂载}"
+        echo "  $((i+1)). ${part_devices[$i]}  标签:${part_labels[$i]:-无}  大小:${part_sizes[$i]}  挂载点:${mp_display}"
     done
     echo ""
 
     echo "步骤4: 清理残留的非 Windows 分区挂载条目和空目录..."
     local cleaned=0
-    local mp dev parttype fstype
-    while read -r mp; do
-        if [ -n "$mp" ] && mountpoint -q "$mp"; then
+    while IFS= read -r mp; do
+        if [ -n "$mp" ] && mountpoint -q "$mp" 2>/dev/null; then
             dev=$(findmnt -n -o SOURCE "$mp" 2>/dev/null)
             if [ -n "$dev" ]; then
+                fstype=$(df -T "$mp" 2>/dev/null | tail -1 | awk '{print $2}')
                 parttype=$(lsblk -n -o PARTTYPE "$dev" 2>/dev/null)
-                fstype=$(df -T "$mp" | tail -1 | awk '{print $2}')
                 if [[ "${parttype,,}" == "$recovery_guid" ]] || [[ "$fstype" != "ntfs" && "$fstype" != "fuseblk" ]]; then
                     echo "  正在卸载 $mp ..."
                     sudo umount "$mp" 2>/dev/null && ((cleaned++))
                 fi
             fi
         fi
-    done < <(mount | grep ' /run/media/deck/' | awk '{print $3}')
+    done < <(findmnt -t ntfs,fuseblk,ntfs3 -o TARGET -n 2>/dev/null | grep '/run/media/deck/')
 
     for d in /run/media/deck/*; do
-        if [ -d "$d" ] && ! mountpoint -q "$d" && [ -z "$(ls -A "$d" 2>/dev/null)" ]; then
+        if [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && [ -z "$(ls -A "$d" 2>/dev/null)" ]; then
             echo "  删除空目录 $d"
             sudo rmdir "$d" 2>/dev/null && ((cleaned++))
         fi
@@ -1180,7 +1190,6 @@ fix_shared_disk() {
     fi
 
     echo "步骤5: 开始挂载并写入 fstab..."
-    local mount_point clean_label devname suffix
     for ((i=0; i<part_count; i++)); do
         device="${part_devices[$i]}"
         label="${part_labels[$i]}"
@@ -1189,7 +1198,7 @@ fix_shared_disk() {
 
         echo -e "\n${CYAN}处理分区 $device${NC}"
 
-        if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ]; then
+        if [ -n "$mountpoint" ]; then
             mount_point="$mountpoint"
             echo "  当前已挂载到 $mount_point"
         else
@@ -1201,12 +1210,12 @@ fix_shared_disk() {
                 mount_point="/run/media/deck/$devname"
             fi
             if [ -d "$mount_point" ] && [ -n "$(ls -A "$mount_point" 2>/dev/null)" ]; then
-                suffix=1
+                local suffix=1
                 while [ -d "${mount_point}_$suffix" ]; do ((suffix++)); done
                 mount_point="${mount_point}_$suffix"
             fi
             sudo mkdir -p "$mount_point"
-            sudo chown deck:deck "$mount_point"
+            sudo chown deck:deck "$mount_point" 2>/dev/null
             echo "  创建挂载点: $mount_point"
         fi
 
@@ -1217,13 +1226,15 @@ fix_shared_disk() {
             echo "  已添加 fstab 条目。"
         fi
 
-        if mountpoint -q "$mount_point"; then
+        if mountpoint -q "$mount_point" 2>/dev/null; then
             echo "  分区已挂载到 $mount_point"
         else
             if sudo mount -U "$uuid" "$mount_point" 2>/dev/null; then
                 echo -e "${GREEN}  ✓ 挂载成功到 $mount_point${NC}"
             else
                 echo -e "${RED}  ✗ 挂载失败，请检查 dmesg 输出。${NC}"
+                echo "  最近的 dmesg NTFS 相关错误："
+                sudo dmesg | grep -i ntfs | tail -5
             fi
         fi
     done
@@ -4374,6 +4385,241 @@ install_yellow_duck_software() {
     echo -e "${GREEN}✅ 小黄鸭软件安装完成！${NC}"
 }
 
+install_third_party_platform() {
+    mk_temp_dir
+    while true; do
+        clear
+        echo -e "${YELLOW}═══════════ 安装第三方游戏平台 ═══════════${NC}"
+        echo ""
+
+        local UBISOFT_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+        local EPIC_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+        local ubisoft_installed=false
+        local epic_installed=false
+        [ -d "$UBISOFT_DIR" ] && ubisoft_installed=true
+        [ -d "$EPIC_DIR" ] && epic_installed=true
+
+        echo "当前状态："
+        if $ubisoft_installed; then
+            echo -e "  ${GREEN}✓ 育碧平台已安装${NC}"
+        else
+            echo -e "  ${YELLOW}✗ 育碧平台未安装${NC}"
+        fi
+        if $epic_installed; then
+            echo -e "  ${GREEN}✓ Epic平台已安装${NC}"
+        else
+            echo -e "  ${YELLOW}✗ Epic平台未安装${NC}"
+        fi
+        echo ""
+
+        echo "请选择要安装的平台："
+        echo "  1) 安装育碧平台"
+        echo "  2) 安装Epic平台"
+        read -p "请输入 [1-2]: " choice < /dev/tty
+        case $choice in
+            1) install_ubisoft; break ;;
+            2) install_epic; break ;;
+            *) echo -e "${RED}无效选项 请重新输入${NC}"; sleep 0.5 ;;
+        esac
+    done
+}
+
+install_ubisoft() {
+    local UBISOFT_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+    if [ -d "$UBISOFT_DIR" ]; then
+        echo -e "${GREEN}✓ 育碧平台已安装，无需重复操作。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}正在下载育碧安装程序...${NC}"
+    cd /home/deck || return
+    rm -f UbisoftConnectInstaller.exe
+    curl -# -L -o UbisoftConnectInstaller.exe "https://ubistatic3-a.akamaihd.net/orbit/launcher_installer/UbisoftConnectInstaller.exe"
+    if [ $? -ne 0 ] || [ ! -f "UbisoftConnectInstaller.exe" ]; then
+        echo -e "${RED}下载失败，请检查网络。${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}正在通过 Proton Experimental 静默安装...${NC}"
+    mkdir -p /home/deck/Applications/third-party-game-platform
+
+    export STEAM_COMPAT_DATA_PATH="/home/deck/Applications/third-party-game-platform"
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH="/home/deck/.local/share/Steam"
+
+    "$HOME/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun \
+        "/home/deck/UbisoftConnectInstaller.exe" /S
+
+    echo -e "${CYAN}等待安装完成...${NC}"
+    local WAIT_TIME=0
+    local MAX_WAIT=60
+    while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+        if [ -d "$UBISOFT_DIR" ]; then
+            break
+        fi
+        sleep 2
+        WAIT_TIME=$((WAIT_TIME + 2))
+        echo -n "."
+    done
+    echo ""
+
+    if [ -d "$UBISOFT_DIR" ]; then
+        echo -e "${GREEN}✓ 育碧平台安装成功！${NC}"
+        echo -e "${CYAN}正在添加到 Steam 库...${NC}"
+        steamos-add-to-steam "/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ 已添加 Steam 快捷方式。${NC}"
+            echo -e "${YELLOW}请手动在 Steam 库中为该快捷方式设置兼容层为 Proton Experimental。${NC}"
+        else
+            echo -e "${YELLOW}⚠️ 自动添加到 Steam 失败，请手动添加该 exe 文件。${NC}"
+        fi
+        rm -f /home/deck/UbisoftConnectInstaller.exe
+    else
+        echo -e "${RED}✗ 安装失败（超时），请检查 Proton 环境或日志。${NC}"
+        echo -e "${YELLOW}安装程序保留在 /home/deck/UbisoftConnectInstaller.exe，可手动运行。${NC}"
+    fi
+}
+
+install_epic() {
+    local EPIC_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+    if [ -d "$EPIC_DIR" ]; then
+        echo -e "${GREEN}✓ Epic平台已安装，无需重复操作。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}正在下载 Epic 安装程序...${NC}"
+    cd /home/deck || return
+    rm -f EpicGamesLauncherInstaller.msi
+    wget -O EpicGamesLauncherInstaller.msi "https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/installer/download/EpicGamesLauncherInstaller.msi"
+    if [ $? -ne 0 ] || [ ! -f "EpicGamesLauncherInstaller.msi" ]; then
+        echo -e "${RED}下载失败，请检查网络。${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}正在通过 Proton Experimental 静默安装...${NC}"
+    mkdir -p /home/deck/Applications/third-party-game-platform
+
+    export STEAM_COMPAT_DATA_PATH="/home/deck/Applications/third-party-game-platform"
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH="/home/deck/.local/share/Steam"
+
+    MSI_LOG="/tmp/epic_install_msi_$(date +%Y%m%d_%H%M%S).log"
+    echo "安装日志将保存到: $MSI_LOG"
+
+    "$HOME/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun \
+        "/home/deck/EpicGamesLauncherInstaller.msi" /quiet /log "$MSI_LOG"
+
+    echo -e "${CYAN}等待安装完成...${NC}"
+    local WAIT_TIME=0
+    local MAX_WAIT=60
+    while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+        if [ -d "$EPIC_DIR" ]; then
+            break
+        fi
+        sleep 2
+        WAIT_TIME=$((WAIT_TIME + 2))
+        echo -n "."
+    done
+    echo ""
+
+    if [ -d "$EPIC_DIR" ]; then
+        echo -e "${GREEN}✓ Epic平台安装成功！${NC}"
+        echo -e "${CYAN}正在添加到 Steam 库...${NC}"
+        steamos-add-to-steam "/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ 已添加 Steam 快捷方式。${NC}"
+            echo -e "${YELLOW}请手动在 Steam 库中为该快捷方式设置兼容层为 Proton Experimental。${NC}"
+        else
+            echo -e "${YELLOW}⚠️ 自动添加到 Steam 失败，请手动添加该 exe 文件。${NC}"
+        fi
+        rm -f /home/deck/EpicGamesLauncherInstaller.msi
+        rm -f "$MSI_LOG"
+    else
+        echo -e "${RED}✗ 安装失败（超时），请检查日志：${MSI_LOG}${NC}"
+        echo -e "${YELLOW}安装程序保留在 /home/deck/EpicGamesLauncherInstaller.msi，可手动运行。${NC}"
+    fi
+}
+
+uninstall_third_party_platform() {
+    mk_temp_dir
+    while true; do
+        clear
+        echo -e "${YELLOW}═══════════ 卸载第三方游戏平台 ═══════════${NC}"
+        echo ""
+
+        local UBISOFT_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+        local EPIC_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+        local ubisoft_installed=false
+        local epic_installed=false
+        [ -d "$UBISOFT_DIR" ] && ubisoft_installed=true
+        [ -d "$EPIC_DIR" ] && epic_installed=true
+
+        if ! $ubisoft_installed && ! $epic_installed; then
+            echo -e "${YELLOW}未检测到通过本程序安装的第三方游戏平台。${NC}"
+            sleep 2
+            return 0
+        fi
+
+        echo "当前已安装的平台："
+        $ubisoft_installed && echo -e "  ${GREEN}✓ 育碧平台${NC}"
+        $epic_installed && echo -e "  ${GREEN}✓ Epic平台${NC}"
+        echo ""
+
+        echo "请选择要卸载的平台："
+        echo "  1) 卸载育碧平台"
+        echo "  2) 卸载Epic平台"
+        read -p "请输入 [1-2]: " choice < /dev/tty
+        case $choice in
+            1) uninstall_ubisoft; break ;;
+            2) uninstall_epic; break ;;
+            *) echo -e "${RED}无效选项 请重新输入${NC}"; sleep 0.5 ;;
+        esac
+    done
+}
+
+uninstall_ubisoft() {
+    local UBISOFT_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+    if [ ! -d "$UBISOFT_DIR" ]; then
+        echo -e "${YELLOW}未检测到育碧平台，无需卸载。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}正在执行育碧官方卸载程序...${NC}"
+    export STEAM_COMPAT_DATA_PATH="/home/deck/Applications/third-party-game-platform"
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH="/home/deck/.local/share/Steam"
+    ~/.steam/root/steamapps/common/Proton\ -\ Experimental/proton waitforexitandrun \
+        "/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/Uninstall.exe" /S
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ 卸载程序执行成功，正在删除残留目录...${NC}"
+        rm -rf "$UBISOFT_DIR"
+        if [ ! -d "$UBISOFT_DIR" ]; then
+            echo -e "${GREEN}✓ 育碧平台已成功卸载。${NC}"
+        else
+            echo -e "${YELLOW}⚠️ 残留目录删除失败，请手动删除：$UBISOFT_DIR${NC}"
+        fi
+    else
+        echo -e "${RED}✗ 卸载程序执行失败，请尝试手动删除目录。${NC}"
+    fi
+    echo ""
+    echo -e "${YELLOW}请手动在 Steam 库中删除对应的非 Steam 游戏快捷方式（右键→管理→从您的库中删除非 Steam 游戏）。${NC}"
+}
+
+uninstall_epic() {
+    local EPIC_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+    if [ ! -d "$EPIC_DIR" ]; then
+        echo -e "${YELLOW}未检测到 Epic 平台，无需卸载。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}正在删除 Epic 平台目录...${NC}"
+    rm -rf "$EPIC_DIR"
+    if [ ! -d "$EPIC_DIR" ]; then
+        echo -e "${GREEN}✓ Epic 平台已成功卸载。${NC}"
+    else
+        echo -e "${RED}✗ 删除失败，请手动删除：$EPIC_DIR${NC}"
+    fi
+    echo ""
+    echo -e "${YELLOW}请手动在 Steam 库中删除对应的非 Steam 游戏快捷方式（右键→管理→从您的库中删除非 Steam 游戏）。${NC}"
+}
+
 if [ -n "$1" ] && declare -f "$1" > /dev/null; then
     "$@"
 else
@@ -4776,7 +5022,9 @@ steamdeck工具箱 v{VERSION}
             "小黄鸭软件": "install_yellow_duck_software",
             "安装/更新 Freedeck": "install_freedeck_install",
             "卸载 Freedeck": "install_freedeck_uninstall",
-            "GE-Proton 管理": "ge_proton_manager"
+            "GE-Proton 管理": "ge_proton_manager",
+            "安装第三方游戏平台": "install_third_party_platform",
+            "卸载第三方游戏平台": "uninstall_third_party_platform"
         }
 
         self.category_tree = {
@@ -4824,7 +5072,8 @@ steamdeck工具箱 v{VERSION}
                 ("卸载已安装应用", ["卸载 WPS Office", "卸载 QQ", "卸载微信", "卸载 QQ音乐", "卸载百度网盘", "卸载 Edge浏览器", "卸载 Google浏览器", "卸载 AnyDesk","卸载Fcitx 5", "卸载其他已安装应用"])
             ],
             "其他": [
-                "小黄鸭软件"
+                "小黄鸭软件",
+                ("安装/卸载第三方游戏平台", ["安装第三方游戏平台", "卸载第三方游戏平台"])
             ]
         }
 
@@ -4893,7 +5142,8 @@ steamdeck工具箱 v{VERSION}
         self.func_view.show_all()
 
     def display_changelog(self):
-        changelog_content = """2026-08-01（v1.6.3包含 v1.6.2 的调整） 完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
+        changelog_content = """2026-08-04（v1.6.4） 增加了安装第三方游戏平台的功能（目前包含育碧，Epic）
+2026-08-01（v1.6.3包含 v1.6.2 的调整） 完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
 2026-07-31（v1.6.1） 增加了GE-Proton 管理的功能，可以安装/卸载GE兼容层
 2026-07-30（v1.6.0包含 v1.5.7-v1.5.9 的调整） 新增了安装Freedeck插件的功能，并修复了一些bug和优化完善了一些功能
 2026-07-29（v1.5.6包含 v1.5.2-v1.5.5 的调整） 增加了安装Fcitx 5的功能并继续修复了一些bug,并调整了部分功能的逻辑
