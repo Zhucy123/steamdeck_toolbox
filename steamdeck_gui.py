@@ -25,7 +25,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.6.5"
+VERSION = "1.6.6"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1651,7 +1651,168 @@ except:
     echo -e "${GREEN}安装目录: ${PLUGIN_PATH}${NC}"
 }
 
-install_tomoon_install() { install_decky_plugin "YukiCoco/ToMoon" "tomoon" "ToMoon"; }
+install_tomoon_install() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装/更新 ToMoon 插件 ════════════════${NC}"
+    echo ""
+
+    local PLUGIN_DIR="/home/deck/homebrew/plugins/tomoon"
+    local VERSION_FILE="$PLUGIN_DIR/package.json"
+    local TEMP_DIR="/tmp/tomoon_install"
+    local MIRRORS=(
+        "http://gh.ddlc.top/"
+        "http://ghproxy.net/"
+        "http://mirror.ghproxy.com/"
+        "https://github.com/"
+    )
+
+    for cmd in curl sudo unzip; do
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
+            return 1
+        fi
+    done
+
+    echo -e "${CYAN}正在从 GitHub 获取最新版本...${NC}"
+    local release_info=$(curl -s "https://api.github.com/repos/YukiCoco/ToMoon/releases/latest")
+    if [ -z "$release_info" ]; then
+        echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
+        return 1
+    fi
+
+    local latest_version=$(echo "$release_info" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//; s/".*//')
+    if [ -z "$latest_version" ]; then
+        echo -e "${RED}错误: 无法解析版本号，API 返回内容可能异常。${NC}"
+        echo -e "${YELLOW}返回内容（前200字符）: ${release_info:0:200}${NC}"
+        return 1
+    fi
+
+    local download_url=$(echo "$release_info" | grep -o '"browser_download_url": *"[^"]*tomoon-[^"]*\.zip"' | head -1 | sed 's/.*"browser_download_url": *"//; s/".*//')
+    if [ -z "$download_url" ]; then
+        echo -e "${RED}错误: 无法获取 ZIP 下载链接。${NC}"
+        echo -e "${YELLOW}请检查该 release 是否包含 tomoon-*.zip 资产。${NC}"
+        return 1
+    fi
+
+    local local_version=""
+    if [ -f "$VERSION_FILE" ]; then
+        local_version=$(grep -o '"version": *"[^"]*"' "$VERSION_FILE" | head -1 | sed 's/.*"version": *"//; s/".*//')
+        if [ -n "$local_version" ]; then
+            local_version="v${local_version}"
+            echo -e "${CYAN}当前已安装版本: ${local_version}${NC}"
+        else
+            echo -e "${YELLOW}已安装但无法读取版本号。${NC}"
+        fi
+    fi
+
+    if [ -n "$local_version" ] && [ "$local_version" = "$latest_version" ]; then
+        echo -e "${GREEN}已经是最新版本 ${local_version}，无需更新。${NC}"
+        return 0
+    fi
+
+    rm -rf "$TEMP_DIR"
+    mkdir -p "$TEMP_DIR"
+    cd "$TEMP_DIR" || return
+
+    local zip_filename="tomoon-${latest_version}.zip"
+    local DOWNLOAD_SUCCESS=false
+
+    while true; do
+        clear
+        echo -e "${YELLOW}════════════════ 安装/更新 ToMoon 插件 ════════════════${NC}"
+        echo ""
+        echo -e "${GREEN}最新版本: ${latest_version}${NC}"
+        if [ -n "$local_version" ]; then
+            echo -e "${CYAN}当前已安装版本: ${local_version}${NC}"
+        else
+            echo -e "${YELLOW}未检测到已安装的 ToMoon 插件。${NC}"
+        fi
+        echo -e "${GREEN}将安装版本: ${latest_version}${NC}"
+        echo ""
+        echo "请选择下载镜像源（输入编号，0取消）："
+        for i in "${!MIRRORS[@]}"; do
+            echo "  $((i+1)). ${MIRRORS[$i]}"
+        done
+
+        read -p "请输入选择: " choice < /dev/tty
+
+        if [[ -z "$choice" ]]; then
+            echo -e "${RED}输入无效，请重新选择。${NC}"
+            sleep 1
+            continue
+        fi
+        if [[ "$choice" == "0" ]]; then
+            echo "操作已取消。"
+            return 0
+        fi
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
+            mirror="${MIRRORS[$((choice-1))]}"
+            FULL_URL="${mirror}${download_url}"
+            echo -e "尝试从 ${mirror} 下载..."
+
+            curl -L --progress-bar -f -o "$zip_filename" "$FULL_URL"
+            local curl_exit=$?
+
+            if [ $curl_exit -eq 0 ] && [ -f "$zip_filename" ]; then
+                if unzip -t "$zip_filename" &> /dev/null; then
+                    echo -e "${GREEN}下载成功，文件完整。${NC}"
+                    DOWNLOAD_SUCCESS=true
+                    break
+                else
+                    echo -e "${RED}下载文件不完整（zip 校验失败），请重新选择镜像源。${NC}"
+                    rm -f "$zip_filename"
+                    sleep 1
+                fi
+            else
+                echo -e "${RED}下载失败（curl 退出码: $curl_exit），请重新选择镜像源。${NC}"
+                rm -f "$zip_filename"
+                sleep 1
+            fi
+        else
+            echo -e "${RED}无效编号，请重新选择。${NC}"
+            sleep 1
+        fi
+    done
+
+    if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
+        echo -e "${RED}下载失败，安装中止。${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}正在解压并安装到 ${PLUGIN_DIR}...${NC}"
+
+    local EXTRACT_DIR="$TEMP_DIR/extract"
+    mkdir -p "$EXTRACT_DIR"
+
+    if ! sudo unzip -q "$zip_filename" -d "$EXTRACT_DIR"; then
+        echo -e "${RED}解压失败。${NC}"
+        rm -rf "$TEMP_DIR"
+        return 1
+    fi
+
+    local extracted_dir=""
+    extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 2 -type f -name "package.json" -exec dirname {} \; | head -1)
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 2 -type f -name "tomoon" -exec dirname {} \; | head -1)
+    fi
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 1 -type d ! -path "$EXTRACT_DIR" | head -1)
+    fi
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir="$EXTRACT_DIR"
+    fi
+
+    sudo rm -rf "$PLUGIN_DIR"
+    sudo mkdir -p /home/deck/homebrew/plugins
+    sudo mv "$extracted_dir" "$PLUGIN_DIR"
+    sudo chown -R deck:deck "$PLUGIN_DIR"
+
+    rm -rf "$TEMP_DIR"
+
+    echo -e "${GREEN}✅ ToMoon 插件 ${latest_version} 安装完成！${NC}"
+    echo -e "${GREEN}安装目录: ${PLUGIN_DIR}${NC}"
+}
 install_freedeck_install() { install_decky_plugin "panyiwei-home/Freedeck" "Freedeck" "Freedeck"; }
 install_decky_lsfg_vk_install() { install_decky_plugin "xXJSONDeruloXx/decky-lsfg-vk" "Decky-LSFG-VK" "LSFG-VK"; }
 install_decky_framegen_install() { install_decky_plugin "xXJSONDeruloXx/Decky-Framegen" "Decky-Framegen" "Framegen"; }
@@ -3403,6 +3564,18 @@ install_yellow_duck_software() {
     echo -e "${GREEN}✅ 小黄鸭软件安装完成！${NC}"
 }
 
+list_steam_icons() {
+    local dirs=(
+        "$HOME/.local/share/Steam/userdata"/*/config/grid
+        "$HOME/.steam/steam/userdata"/*/config/grid
+    )
+    local d
+    for d in "${dirs[@]}"; do
+        [ -d "$d" ] || continue
+        find "$d" -maxdepth 1 -name "*_icon.png" 2>/dev/null
+    done
+}
+
 install_third_party_platform() {
     mk_temp_dir
     while true; do
@@ -3483,13 +3656,39 @@ install_ubisoft() {
     if [ -d "$UBISOFT_DIR" ]; then
         echo -e "${GREEN}✓ 育碧平台安装成功！${NC}"
         echo -e "${CYAN}正在添加到 Steam 库...${NC}"
-        steamos-add-to-steam "/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe"
+        local EXE_PATH="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe"
+        steamos-add-to-steam "$EXE_PATH"
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ 已添加 Steam 快捷方式。${NC}"
             echo -e "${YELLOW}请手动在 Steam 库中为该快捷方式设置兼容层为 Proton Experimental。${NC}"
+            echo -e "${YELLOW}或者点击桌面快捷方式运行。${NC}"
         else
             echo -e "${YELLOW}⚠️ 自动添加到 Steam 失败，请手动添加该 exe 文件。${NC}"
         fi
+
+        local ICON_PATH="$UBISOFT_DIR/ubisoft.png"
+        echo -e "${CYAN}正在下载图标...${NC}"
+        if curl -sL -o "$ICON_PATH" "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/app_icons/ubisoft.png" && [ -s "$ICON_PATH" ]; then
+            echo -e "${GREEN}✓ 图标已下载到: $ICON_PATH${NC}"
+        else
+            ICON_PATH="applications-games"
+            echo -e "${YELLOW}⚠️ 图标下载失败，使用系统游戏图标。${NC}"
+        fi
+
+        local DESKTOP_FILE="$HOME/Desktop/Ubisoft Connect.desktop"
+        cat > "$DESKTOP_FILE" << EOF
+[Desktop Entry]
+Type=Application
+Name=Ubisoft Connect
+Comment=Ubisoft Game Launcher
+Exec=env STEAM_COMPAT_DATA_PATH="/home/deck/Applications/third-party-game-platform" STEAM_COMPAT_CLIENT_INSTALL_PATH="/home/deck/.local/share/Steam" "/home/deck/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun "$EXE_PATH"
+Icon=${ICON_PATH}
+Terminal=false
+Categories=Game;
+EOF
+        chmod +x "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建：~/Desktop/Ubisoft Connect.desktop${NC}"
+
         rm -f /home/deck/UbisoftConnectInstaller.exe
     else
         echo -e "${RED}✗ 安装失败（超时），请检查 Proton 环境或日志。${NC}"
@@ -3541,13 +3740,39 @@ install_epic() {
     if [ -d "$EPIC_DIR" ]; then
         echo -e "${GREEN}✓ Epic平台安装成功！${NC}"
         echo -e "${CYAN}正在添加到 Steam 库...${NC}"
-        steamos-add-to-steam "/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
+        local EXE_PATH="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
+        steamos-add-to-steam "$EXE_PATH"
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ 已添加 Steam 快捷方式。${NC}"
             echo -e "${YELLOW}请手动在 Steam 库中为该快捷方式设置兼容层为 Proton Experimental。${NC}"
+            echo -e "${YELLOW}或者点击桌面快捷方式运行。${NC}"
         else
             echo -e "${YELLOW}⚠️ 自动添加到 Steam 失败，请手动添加该 exe 文件。${NC}"
         fi
+
+        local ICON_PATH="$EPIC_DIR/epic.png"
+        echo -e "${CYAN}正在下载图标...${NC}"
+        if curl -sL -o "$ICON_PATH" "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/app_icons/epic.png" && [ -s "$ICON_PATH" ]; then
+            echo -e "${GREEN}✓ 图标已下载到: $ICON_PATH${NC}"
+        else
+            ICON_PATH="applications-games"
+            echo -e "${YELLOW}⚠️ 图标下载失败，使用系统游戏图标。${NC}"
+        fi
+
+        local DESKTOP_FILE="$HOME/Desktop/Epic Games Launcher.desktop"
+        cat > "$DESKTOP_FILE" << EOF
+[Desktop Entry]
+Type=Application
+Name=Epic Games Launcher
+Comment=Epic Games Launcher
+Exec=env STEAM_COMPAT_DATA_PATH="/home/deck/Applications/third-party-game-platform" STEAM_COMPAT_CLIENT_INSTALL_PATH="/home/deck/.local/share/Steam" "/home/deck/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun "$EXE_PATH"
+Icon=${ICON_PATH}
+Terminal=false
+Categories=Game;
+EOF
+        chmod +x "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建：~/Desktop/Epic Games Launcher.desktop${NC}"
+
         rm -f /home/deck/EpicGamesLauncherInstaller.msi
         rm -f "$MSI_LOG"
     else
@@ -3616,6 +3841,15 @@ uninstall_ubisoft() {
     else
         echo -e "${RED}✗ 卸载程序执行失败，请尝试手动删除目录。${NC}"
     fi
+
+    local DESKTOP_FILE="$HOME/Desktop/Ubisoft Connect.desktop"
+    if [ -f "$DESKTOP_FILE" ]; then
+        rm -f "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ 桌面快捷方式已删除：Ubisoft Connect.desktop${NC}"
+    else
+        echo -e "${YELLOW}未找到桌面快捷方式，跳过。${NC}"
+    fi
+
     echo ""
     echo -e "${YELLOW}请手动在 Steam 库中删除对应的非 Steam 游戏快捷方式（右键→管理→从您的库中删除非 Steam 游戏）。${NC}"
 }
@@ -3634,6 +3868,15 @@ uninstall_epic() {
     else
         echo -e "${RED}✗ 删除失败，请手动删除：$EPIC_DIR${NC}"
     fi
+
+    local DESKTOP_FILE="$HOME/Desktop/Epic Games Launcher.desktop"
+    if [ -f "$DESKTOP_FILE" ]; then
+        rm -f "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ 桌面快捷方式已删除：Epic Games Launcher.desktop${NC}"
+    else
+        echo -e "${YELLOW}未找到桌面快捷方式，跳过。${NC}"
+    fi
+
     echo ""
     echo -e "${YELLOW}请手动在 Steam 库中删除对应的非 Steam 游戏快捷方式（右键→管理→从您的库中删除非 Steam 游戏）。${NC}"
 }
@@ -4022,7 +4265,7 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
                     self.func_store.append(parent_iter, [child[0]])
 
     def display_changelog(self):
-        changelog_content = """2026-08-04（v1.6.5包含 v1.6.4 的调整） 增加了安装第三方游戏平台的功能（目前包含育碧，Epic）
+        changelog_content = """2026-08-04（v1.6.6包含 v1.6.4-v1.6.5 的调整） 增加了安装第三方游戏平台的功能（目前包含育碧，Epic）
 2026-08-01（v1.6.3包含 v1.6.2 的调整） 完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
 2026-07-31（v1.6.1） 增加了GE-Proton 管理的功能，可以安装/卸载GE兼容层
 2026-07-30（v1.6.0包含 v1.5.7-v1.5.9 的调整） 新增了安装Freedeck插件的功能，并修复了一些bug和优化完善了一些功能
