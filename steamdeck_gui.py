@@ -1154,21 +1154,33 @@ fix_shared_disk() {
     done
     echo ""
 
-    echo "步骤4: 清理残留的非 Windows 分区挂载条目和空目录..."
+    echo "步骤4: 清理 /run/media/deck/ 下非 Windows 分区的挂载和 fstab 条目..."
     local cleaned=0
+
     while IFS= read -r mp; do
-        if [ -n "$mp" ] && mountpoint -q "$mp" 2>/dev/null; then
-            dev=$(findmnt -n -o SOURCE "$mp" 2>/dev/null)
+        [ -z "$mp" ] && continue
+        dev=$(findmnt -n -o SOURCE "$mp" 2>/dev/null)
+        fstype=$(findmnt -n -o FSTYPE "$mp" 2>/dev/null)
+        if [[ ! "$fstype" =~ ^(ntfs|fuseblk|ntfs3|ntfs-3g)$ ]]; then
+            echo "  发现非 Windows 分区挂载: $mp (类型: $fstype)"
+            if mountpoint -q "$mp" 2>/dev/null; then
+                sudo umount "$mp" 2>/dev/null && echo "    已卸载" && ((cleaned++))
+            fi
             if [ -n "$dev" ]; then
-                fstype=$(df -T "$mp" 2>/dev/null | tail -1 | awk '{print $2}')
-                parttype=$(lsblk -n -o PARTTYPE "$dev" 2>/dev/null)
-                if [[ "${parttype,,}" == "$recovery_guid" ]] || [[ "$fstype" != "ntfs" && "$fstype" != "fuseblk" ]]; then
-                    echo "  正在卸载 $mp ..."
-                    sudo umount "$mp" 2>/dev/null && ((cleaned++))
+                uuid=$(lsblk -n -o UUID "$dev" 2>/dev/null)
+                if [ -n "$uuid" ] && grep -q "UUID=$uuid" /etc/fstab 2>/dev/null; then
+                    sudo sed -i "\|^UUID=$uuid|d" /etc/fstab
+                    echo "    已从 fstab 移除 UUID=$uuid"
+                elif grep -q "$dev" /etc/fstab 2>/dev/null; then
+                    sudo sed -i "\|^$dev|d" /etc/fstab
+                    echo "    已从 fstab 移除设备条目 $dev"
                 fi
             fi
+            if [ -d "$mp" ] && [ -z "$(ls -A "$mp" 2>/dev/null)" ]; then
+                sudo rmdir "$mp" 2>/dev/null && echo "    已删除空目录 $mp"
+            fi
         fi
-    done < <(findmnt -t ntfs,fuseblk,ntfs3 -o TARGET -n 2>/dev/null | grep '/run/media/deck/')
+    done < <(findmnt -o TARGET -n -l 2>/dev/null | grep '^/run/media/deck/')
 
     for d in /run/media/deck/*; do
         if [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && [ -z "$(ls -A "$d" 2>/dev/null)" ]; then
@@ -1176,6 +1188,24 @@ fix_shared_disk() {
             sudo rmdir "$d" 2>/dev/null && ((cleaned++))
         fi
     done
+
+    while IFS= read -r line; do
+        if echo "$line" | grep -qE '^\s*(UUID=|/dev/)\S+\s+/run/media/deck/'; then
+            mp=$(echo "$line" | awk '{print $2}')
+            fs=$(echo "$line" | awk '{print $3}')
+            if [[ ! "$fs" =~ ^(ntfs|fuseblk|ntfs3|ntfs-3g)$ ]]; then
+                echo "  清理 fstab 中的非 NTFS 条目: $mp ($fs)"
+                sudo sed -i "\|^$(echo "$line" | sed 's/[.[\*^$]/\\&/g')$|d" /etc/fstab
+                ((cleaned++))
+                if mountpoint -q "$mp" 2>/dev/null; then
+                    sudo umount "$mp" 2>/dev/null
+                fi
+                if [ -d "$mp" ] && [ -z "$(ls -A "$mp" 2>/dev/null)" ]; then
+                    sudo rmdir "$mp" 2>/dev/null
+                fi
+            fi
+        fi
+    done < /etc/fstab
 
     if [ $cleaned -gt 0 ]; then
         echo -e "${GREEN}✓ 清理完成${NC}"
