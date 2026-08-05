@@ -25,7 +25,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.6.6"
+VERSION = "1.6.7"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -34,6 +34,7 @@ VERSION_CHECK_TIMEOUT = 10
 # 内嵌 Bash 脚本
 # ============================================================================
 BASH_SCRIPT = r'''#!/bin/bash
+set -uo pipefail
 TEMP_DIR="/tmp/steamdeck_toolbox"
 cleanup_temp() { rm -rf "$TEMP_DIR" 2>/dev/null; }
 trap 'cleanup_temp; exit 0' EXIT
@@ -46,9 +47,8 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CY
 
 mk_temp_dir() { mkdir -p "$TEMP_DIR"; }
 
-# 通用功能：确认操作（回车或 A 键确认）
 confirm_action() {
-    read -n1 -p "按回车键或 A 键确认，其他键取消: " confirm
+    read -n1 -p "按回车键或 A 键确认，其他键取消: " confirm < /dev/tty
     echo
     [[ -z "$confirm" || "$confirm" =~ [Aa] ]]
 }
@@ -741,7 +741,7 @@ echo "  • 将Clover (Boot$CLOVER_BOOTNUM) 设为第一启动项"
 echo "  • 其他启动项顺序保持不变"
 echo ""
 
-read -n1 -p "按回车键或 A 键确认，其他键取消: " confirm_boot
+read -n1 -p "按回车键或 A 键确认，其他键取消: " confirm_boot < /dev/tty
 echo
 
 if [[ -z "$confirm_boot" || "$confirm_boot" =~ [Aa] ]]; then
@@ -1073,7 +1073,7 @@ install_asklink() {
     if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
         echo -e "${GREEN}AskLink 已安装。${NC}"
         echo -e "${YELLOW}按 回车键/A键 卸载，按其他键保持安装并退出。${NC}"
-        read -p "请选择: " -n 1 -r
+        read -p "请选择: " -n 1 -r < /dev/tty
         echo ""
         if [[ $REPLY == "" ]]; then
             echo -e "${CYAN}正在卸载 AskLink...${NC}"
@@ -1133,7 +1133,7 @@ install_asklink() {
     if command -v wget &>/dev/null; then
         wget --show-progress "$ASKLINK_URL" -O "$FILENAME"
     else
-        curl -L --progress-bar "$ASKLINK_URL" -o "$FILENAME"
+        curl -L --fail --progress-bar "$ASKLINK_URL" -o "$FILENAME"
     fi
     if [ $? -ne 0 ] || [ ! -f "$FILENAME" ]; then
         echo -e "${RED}下载失败。${NC}"
@@ -1314,7 +1314,7 @@ watt_toolkit_uninstall() {
     echo "将删除桌面快捷方式: ${DESKTOP_DIR}/Watt_Toolkit.desktop"
     echo ""
 
-    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm < /dev/tty
     echo
     if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
         echo "继续卸载..."
@@ -1487,7 +1487,7 @@ except:
             if [ -n "$latest_stable" ]; then
                 echo -e "${YELLOW}当前已安装预发布版 ${local_version}。${NC}"
                 echo -e "${YELLOW}是否切换为正式版 ${latest_stable}？${NC}"
-                read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice
+                read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice < /dev/tty
                 echo
                 if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
                     target_version="$latest_stable"
@@ -1508,7 +1508,7 @@ except:
                 if [ "$higher" = "$prerelease_num" ]; then
                     echo -e "${YELLOW}当前已安装正式版 ${local_version}。${NC}"
                     echo -e "${YELLOW}发现更高或相等的预发布版 ${latest_prerelease}，是否切换？${NC}"
-                    read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice
+                    read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice < /dev/tty
                     echo
                     if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
                         target_version="$latest_prerelease"
@@ -1962,7 +1962,7 @@ except:
             if [ -n "$latest_stable" ]; then
                 echo -e "${YELLOW}当前已安装预发布版 ${installed_version}。${NC}"
                 echo -e "${YELLOW}是否切换为正式版 ${latest_stable}？${NC}"
-                read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice
+                read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice < /dev/tty
                 echo
                 if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
                     target_version="$latest_stable"
@@ -1983,7 +1983,7 @@ except:
                 if [ "$higher" = "$prerelease_num" ]; then
                     echo -e "${YELLOW}当前已安装正式版 ${installed_version}。${NC}"
                     echo -e "${YELLOW}发现更高或相等的预发布版 ${latest_prerelease}，是否切换？${NC}"
-                    read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice
+                    read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice < /dev/tty
                     echo
                     if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
                         target_version="$latest_prerelease"
@@ -2096,7 +2096,7 @@ uninstall_plugin_store() {
     echo -e "${CYAN}检测到已安装插件商店。${NC}"
     echo "警告：这将删除整个 /home/deck/homebrew 目录，包括所有插件。"
     echo ""
-    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm < /dev/tty
     echo
     if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
         echo "继续卸载..."
@@ -3112,7 +3112,7 @@ install_anydesk() {
             return 0
         else
             echo -e "${YELLOW}发现新版本 ${REMOTE_VERSION}（当前: ${LOCAL_VERSION}）${NC}"
-            read -n1 -p "按回车键或 A 键更新，其他键取消: " confirm
+            read -n1 -p "按回车键或 A 键更新，其他键取消: " confirm < /dev/tty
             echo
             if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
                 TARGET_VERSION="$REMOTE_VERSION"
@@ -3190,7 +3190,7 @@ uninstall_anydesk() {
     $local_found && echo "  • 本地安装 ($ANYDESK_INSTALL_DIR)"
     $flatpak_found && echo "  • Flatpak 安装 ($flatpak_id)"
 
-    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm < /dev/tty
     echo
     if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
         echo "继续卸载..."
@@ -3225,7 +3225,7 @@ uninstall_anydesk() {
             if [ -d "$data_dir" ]; then
                 echo ""
                 echo -e "${CYAN}是否删除 AnyDesk 的所有设置和用户数据？${NC}"
-                read -n1 -p "按回车键或 A 键确认删除，其他键保留: " del_data
+                read -n1 -p "按回车键或 A 键确认删除，其他键保留: " del_data < /dev/tty
                 echo
                 if [[ -z "$del_data" || "$del_data" =~ [Aa] ]]; then
                     rm -rf "$data_dir" && echo -e "${GREEN}✓ 用户数据已删除${NC}"
@@ -3304,7 +3304,7 @@ uninstall_fcitx5() {
         echo -e "${YELLOW}未检测到已安装的 Fcitx 5 主程序。${NC}"
         if flatpak info "$ADDON_APP" &>/dev/null; then
             echo -e "${CYAN}检测到中文插件已安装但主程序缺失，是否只卸载插件？${NC}"
-            read -n1 -p "按回车键或 A 键确认卸载插件，其他键取消: " confirm
+            read -n1 -p "按回车键或 A 键确认卸载插件，其他键取消: " confirm < /dev/tty
             echo
             if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
                 flatpak uninstall "$ADDON_APP" -y 2>/dev/null && echo -e "${GREEN}✓ 中文插件已卸载${NC}"
@@ -3316,7 +3316,7 @@ uninstall_fcitx5() {
     fi
 
     echo -e "${CYAN}检测到 Fcitx 5 主程序已安装。${NC}"
-    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm < /dev/tty
     echo
     if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
         echo "开始卸载..."
@@ -3541,39 +3541,204 @@ install_yellow_duck_software() {
             return
         fi
     fi
-    echo -e "${CYAN}未检测到小黄鸭软件，开始从 Gitee 克隆并安装...${NC}"
-    local CLONE_DIR="$HOME/lossless-scaling-repo"
-    rm -rf "$CLONE_DIR"
-    git clone --depth=1 https://gitee.com/Zhucy2100/lossless-scaling.git "$CLONE_DIR"
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}克隆失败，请检查网络。${NC}"
+
+    echo -e "${CYAN}未检测到小黄鸭软件，开始从 Gitee 下载分卷文件...${NC}"
+    local DOWNLOAD_DIR="/tmp/lossless_scaling_download"
+    rm -rf "$DOWNLOAD_DIR"
+    mkdir -p "$DOWNLOAD_DIR"
+    cd "$DOWNLOAD_DIR" || return
+
+    local BASE_URL="https://gitee.com/Zhucy2100/app-backup/raw/master/Lossless%20Scaling/Lossless%20Scaling.zip"
+    local failed=0
+    for i in 001 002 003 004 005 006 007; do
+        echo "正在下载 Lossless Scaling.zip.${i} ..."
+        if ! curl -L --fail -o "Lossless Scaling.zip.${i}" "${BASE_URL}.${i}"; then
+            echo -e "${RED}下载 Lossless Scaling.zip.${i} 失败。${NC}"
+            failed=1
+            break
+        fi
+    done
+
+    if [ $failed -ne 0 ]; then
+        echo -e "${RED}下载失败，请检查网络。${NC}"
+        rm -rf "$DOWNLOAD_DIR"
         return
     fi
-    cd "$CLONE_DIR" || return
+
     echo "合并分卷文件并解压..."
     cat "Lossless Scaling.zip".* > Lossless-Scaling-Combined.zip
     unzip -o Lossless-Scaling-Combined.zip -d "/home/deck/.local/share/Steam/steamapps/common/"
     if [ $? -ne 0 ]; then
         echo -e "${RED}解压失败。${NC}"
-        cd
-        rm -rf "$CLONE_DIR"
+        rm -rf "$DOWNLOAD_DIR"
         return
     fi
+
     sudo chown -R deck:deck "/home/deck/.local/share/Steam/steamapps/common/Lossless Scaling"
-    rm -rf "$CLONE_DIR"
+    rm -rf "$DOWNLOAD_DIR"
     echo -e "${GREEN}✅ 小黄鸭软件安装完成！${NC}"
 }
 
-list_steam_icons() {
-    local dirs=(
-        "$HOME/.local/share/Steam/userdata"/*/config/grid
-        "$HOME/.steam/steam/userdata"/*/config/grid
-    )
-    local d
-    for d in "${dirs[@]}"; do
-        [ -d "$d" ] || continue
-        find "$d" -maxdepth 1 -name "*_icon.png" 2>/dev/null
-    done
+extract_exe_icon() {
+    local exe_path="$1"
+    local out_dir stem
+    out_dir="$(dirname "$exe_path")"
+    stem="$(basename "$exe_path")"
+    stem="${stem%.*}"
+
+    python3 - "$exe_path" "$out_dir" "$stem" <<'PYEOF'
+import struct, sys, os
+
+RT_ICON = 3
+RT_GROUP_ICON = 14
+
+def u16(b, o): return struct.unpack_from('<H', b, o)[0]
+def u32(b, o): return struct.unpack_from('<I', b, o)[0]
+
+def parse_pe(data):
+    if data[:2] != b'MZ':
+        raise ValueError('not a PE file')
+    pe_off = u32(data, 0x3C)
+    if data[pe_off:pe_off+4] != b'PE\0\0':
+        raise ValueError('bad PE signature')
+    num_sections = u16(data, pe_off + 6)
+    opt_off = pe_off + 24
+    magic = u16(data, opt_off)
+    if magic == 0x10B:
+        dd_off = opt_off + 96
+        sec_off = opt_off + 224
+    elif magic == 0x20B:
+        dd_off = opt_off + 112
+        sec_off = opt_off + 240
+    else:
+        raise ValueError('bad magic')
+    res_rva = u32(data, dd_off + 16)
+    sections = []
+    for i in range(num_sections):
+        s = sec_off + i * 40
+        vaddr = u32(data, s + 12)
+        vsize = u32(data, s + 8)
+        roff = u32(data, s + 20)
+        rsize = u32(data, s + 16)
+        sections.append((vaddr, vsize, roff, rsize))
+    return res_rva, sections
+
+def rva_to_off(rva, sections):
+    for vaddr, vsize, roff, rsize in sections:
+        if vaddr <= rva < vaddr + max(vsize, rsize):
+            return roff + (rva - vaddr)
+    raise ValueError('rva not found')
+
+def read_res_dir(data, base_off, off, depth=0):
+    if depth > 5:
+        return []
+    n_named = u16(data, off + 12)
+    n_id = u16(data, off + 14)
+    entries = []
+    for i in range(n_named + n_id):
+        e = off + 16 + i * 8
+        name_id = u32(data, e)
+        offset_to_data = u32(data, e + 4)
+        if name_id & 0x80000000:
+            name_off = base_off + (name_id & 0x7FFFFFFF)
+            nchars = u16(data, name_off)
+            name = data[name_off+2:name_off+2+nchars*2].decode('utf-16-le', 'replace')
+        else:
+            name = str(name_id)
+        if offset_to_data & 0x80000000:
+            sub = base_off + (offset_to_data & 0x7FFFFFFF)
+            entries.append((name, read_res_dir(data, base_off, sub, depth+1)))
+        else:
+            de = base_off + offset_to_data
+            entries.append((name, (u32(data, de), u32(data, de+4))))
+    return entries
+
+def read_blob(rva, size, data, sections):
+    off = rva_to_off(rva, sections)
+    return data[off:off+size]
+
+def collect(tree, type_id, data, sections):
+    out = {}
+    for t, children in tree:
+        if t != str(type_id):
+            continue
+        for name, val in children:
+            if isinstance(val, tuple):
+                rva, size = val
+                out[name] = read_blob(rva, size, data, sections)
+            else:
+                for name2, val2 in val:
+                    if isinstance(val2, tuple):
+                        rva, size = val2
+                        out[name + '/' + name2] = read_blob(rva, size, data, sections)
+    return out
+
+def main():
+    path, out_dir, stem = sys.argv[1], sys.argv[2], sys.argv[3]
+    with open(path, 'rb') as f:
+        data = f.read()
+    res_rva, sections = parse_pe(data)
+    base_off = rva_to_off(res_rva, sections)
+    tree = read_res_dir(data, base_off, base_off)
+    icons = collect(tree, RT_ICON, data, sections)
+    groups = collect(tree, RT_GROUP_ICON, data, sections)
+    if not groups:
+        sys.exit(1)
+    os.makedirs(out_dir, exist_ok=True)
+    gkey = sorted(groups)[0]
+    g = groups[gkey]
+    count = u16(g, 4)
+    entries = []
+    for i in range(count):
+        e = 6 + i * 14
+        w = g[e] or 256
+        h = g[e+1] or 256
+        colors = g[e+2]
+        planes = u16(g, e+4)
+        bpp = u16(g, e+6)
+        icon_id = u16(g, e+12)
+        blob = None
+        for k, v in icons.items():
+            if k == str(icon_id) or k.startswith(str(icon_id) + '/') or k.endswith('/' + str(icon_id)):
+                blob = v
+                break
+        if blob is None:
+            continue
+        entries.append((w, h, colors, planes, bpp, blob))
+    if not entries:
+        sys.exit(1)
+    n = len(entries)
+    header = struct.pack('<HHH', 0, 1, n)
+    dir_entries = b''
+    blobs = b''
+    offset = 6 + 16 * n
+    for w, h, colors, planes, bpp, blob in entries:
+        dir_entries += struct.pack('<BBBBHHII',
+                                   w if w < 256 else 0,
+                                   h if h < 256 else 0,
+                                   colors, 0, planes, bpp, len(blob), offset)
+        blobs += blob
+        offset += len(blob)
+    ico_path = os.path.join(out_dir, stem + '.ico')
+    with open(ico_path, 'wb') as f:
+        f.write(header + dir_entries + blobs)
+    png_icons = [(k, v) for k, v in icons.items() if v[:8] == b'\x89PNG\r\n\x1a\n']
+    if png_icons:
+        best = max(png_icons, key=lambda kv: len(kv[1]))
+        png_path = os.path.join(out_dir, stem + '.png')
+        with open(png_path, 'wb') as f:
+            f.write(best[1])
+        print(png_path)
+    else:
+        print(ico_path)
+
+try:
+    main()
+except Exception as e:
+    print('图标提取失败: %s' % e, file=sys.stderr)
+    sys.exit(1)
+PYEOF
+
 }
 
 install_third_party_platform() {
@@ -3585,10 +3750,13 @@ install_third_party_platform() {
 
         local UBISOFT_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
         local EPIC_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+        local BATTLE_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
         local ubisoft_installed=false
         local epic_installed=false
+        local battle_installed=false
         [ -d "$UBISOFT_DIR" ] && ubisoft_installed=true
         [ -d "$EPIC_DIR" ] && epic_installed=true
+        [ -d "$BATTLE_DIR" ] && battle_installed=true
 
         echo "当前状态："
         if $ubisoft_installed; then
@@ -3601,15 +3769,22 @@ install_third_party_platform() {
         else
             echo -e "  ${YELLOW}✗ Epic平台未安装${NC}"
         fi
+        if $battle_installed; then
+            echo -e "  ${GREEN}✓ 战网平台已安装${NC}"
+        else
+            echo -e "  ${YELLOW}✗ 战网平台未安装${NC}"
+        fi
         echo ""
 
         echo "请选择要安装的平台："
         echo "  1) 安装育碧平台"
         echo "  2) 安装Epic平台"
-        read -p "请输入 [1-2]: " choice < /dev/tty
+        echo "  3) 安装战网平台"
+        read -p "请输入 [1-3]: " choice < /dev/tty
         case $choice in
             1) install_ubisoft; break ;;
             2) install_epic; break ;;
+            3) install_battle_net; break ;;
             *) echo -e "${RED}无效选项 请重新输入${NC}"; sleep 0.5 ;;
         esac
     done
@@ -3655,8 +3830,9 @@ install_ubisoft() {
 
     if [ -d "$UBISOFT_DIR" ]; then
         echo -e "${GREEN}✓ 育碧平台安装成功！${NC}"
-        echo -e "${CYAN}正在添加到 Steam 库...${NC}"
         local EXE_PATH="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe"
+
+        echo -e "${CYAN}正在添加到 Steam 库...${NC}"
         steamos-add-to-steam "$EXE_PATH"
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ 已添加 Steam 快捷方式。${NC}"
@@ -3666,13 +3842,14 @@ install_ubisoft() {
             echo -e "${YELLOW}⚠️ 自动添加到 Steam 失败，请手动添加该 exe 文件。${NC}"
         fi
 
-        local ICON_PATH="$UBISOFT_DIR/ubisoft.png"
-        echo -e "${CYAN}正在下载图标...${NC}"
-        if curl -sL -o "$ICON_PATH" "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/app_icons/ubisoft.png" && [ -s "$ICON_PATH" ]; then
-            echo -e "${GREEN}✓ 图标已下载到: $ICON_PATH${NC}"
+        local ICON_PATH=""
+        echo -e "${CYAN}正在从 exe 提取图标...${NC}"
+        ICON_PATH=$(extract_exe_icon "$EXE_PATH")
+        if [ -n "$ICON_PATH" ] && [ -s "$ICON_PATH" ]; then
+            echo -e "${GREEN}✓ 图标已提取: $ICON_PATH${NC}"
         else
             ICON_PATH="applications-games"
-            echo -e "${YELLOW}⚠️ 图标下载失败，使用系统游戏图标。${NC}"
+            echo -e "${YELLOW}⚠️ 图标提取失败，使用系统游戏图标。${NC}"
         fi
 
         local DESKTOP_FILE="$HOME/Desktop/Ubisoft Connect.desktop"
@@ -3739,8 +3916,9 @@ install_epic() {
 
     if [ -d "$EPIC_DIR" ]; then
         echo -e "${GREEN}✓ Epic平台安装成功！${NC}"
-        echo -e "${CYAN}正在添加到 Steam 库...${NC}"
         local EXE_PATH="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
+
+        echo -e "${CYAN}正在添加到 Steam 库...${NC}"
         steamos-add-to-steam "$EXE_PATH"
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ 已添加 Steam 快捷方式。${NC}"
@@ -3750,13 +3928,14 @@ install_epic() {
             echo -e "${YELLOW}⚠️ 自动添加到 Steam 失败，请手动添加该 exe 文件。${NC}"
         fi
 
-        local ICON_PATH="$EPIC_DIR/epic.png"
-        echo -e "${CYAN}正在下载图标...${NC}"
-        if curl -sL -o "$ICON_PATH" "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/app_icons/epic.png" && [ -s "$ICON_PATH" ]; then
-            echo -e "${GREEN}✓ 图标已下载到: $ICON_PATH${NC}"
+        local ICON_PATH=""
+        echo -e "${CYAN}正在从 exe 提取图标...${NC}"
+        ICON_PATH=$(extract_exe_icon "$EXE_PATH")
+        if [ -n "$ICON_PATH" ] && [ -s "$ICON_PATH" ]; then
+            echo -e "${GREEN}✓ 图标已提取: $ICON_PATH${NC}"
         else
             ICON_PATH="applications-games"
-            echo -e "${YELLOW}⚠️ 图标下载失败，使用系统游戏图标。${NC}"
+            echo -e "${YELLOW}⚠️ 图标提取失败，使用系统游戏图标。${NC}"
         fi
 
         local DESKTOP_FILE="$HOME/Desktop/Epic Games Launcher.desktop"
@@ -3781,6 +3960,99 @@ EOF
     fi
 }
 
+install_battle_net() {
+    local BATTLE_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
+    if [ -d "$BATTLE_DIR" ]; then
+        echo -e "${GREEN}✓ 战网平台已安装，无需重复操作。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}正在从 Gitee Release 下载战网备份文件...${NC}"
+    local DOWNLOAD_DIR="/tmp/battlenet_download"
+    rm -rf "$DOWNLOAD_DIR"
+    mkdir -p "$DOWNLOAD_DIR"
+    cd "$DOWNLOAD_DIR" || return
+
+    local BASE_URL="https://gitee.com/Zhucy2100/app-backup/releases/download/v1.0.0/Battle.net_backup.part"
+    local files=("aa" "ab" "ac" "ad")
+    local failed=0
+    local CURL_UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    local CURL_REFERER="https://gitee.com/Zhucy2100/app-backup/releases"
+
+    for part in "${files[@]}"; do
+        echo "正在下载 Battle.net_backup.part_${part} ..."
+        if ! curl -L --fail --retry 2 \
+             -H "User-Agent: ${CURL_UA}" \
+             -H "Referer: ${CURL_REFERER}" \
+             -o "Battle.net_backup.part_${part}" "${BASE_URL}_${part}"; then
+            echo -e "${RED}下载 Battle.net_backup.part_${part} 失败。${NC}"
+            failed=1
+            break
+        fi
+    done
+
+    if [ $failed -ne 0 ]; then
+        echo -e "${RED}下载失败，请检查网络。${NC}"
+        rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+
+    echo "合并分卷文件..."
+    cat Battle.net_backup.part_* > Battle.net_backup.tar.xz
+
+    echo -e "${CYAN}正在解压到目标目录...${NC}"
+    mkdir -p "/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)"
+    if ! tar -xJf Battle.net_backup.tar.xz -C "/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/"; then
+        echo -e "${RED}解压失败。${NC}"
+        rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+
+    local EXE_PATH="$BATTLE_DIR/Battle.net Launcher.exe"
+    if [ ! -f "$EXE_PATH" ]; then
+        echo -e "${RED}错误: 解压后未找到 Battle.net Launcher.exe，安装失败。${NC}"
+        rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+
+    echo -e "${CYAN}正在添加到 Steam 库...${NC}"
+    steamos-add-to-steam "$EXE_PATH"
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ 已添加 Steam 快捷方式。${NC}"
+        echo -e "${YELLOW}请手动在 Steam 库中为该快捷方式设置兼容层为 Proton Experimental。${NC}"
+        echo -e "${YELLOW}或者点击桌面快捷方式运行。${NC}"
+    else
+        echo -e "${YELLOW}⚠️ 自动添加到 Steam 失败，请手动添加该 exe 文件。${NC}"
+    fi
+
+    local ICON_PATH=""
+    echo -e "${CYAN}正在从 exe 提取图标...${NC}"
+    ICON_PATH=$(extract_exe_icon "$EXE_PATH")
+    if [ -n "$ICON_PATH" ] && [ -s "$ICON_PATH" ]; then
+        echo -e "${GREEN}✓ 图标已提取: $ICON_PATH${NC}"
+    else
+        ICON_PATH="applications-games"
+        echo -e "${YELLOW}⚠️ 图标提取失败，使用系统游戏图标。${NC}"
+    fi
+
+    local DESKTOP_FILE="$HOME/Desktop/Battle.net.desktop"
+    cat > "$DESKTOP_FILE" << EOF
+[Desktop Entry]
+Type=Application
+Name=Battle.net
+Comment=Blizzard Battle.net Launcher
+Exec=env STEAM_COMPAT_DATA_PATH="/home/deck/Applications/third-party-game-platform" STEAM_COMPAT_CLIENT_INSTALL_PATH="/home/deck/.local/share/Steam" "/home/deck/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun "$EXE_PATH"
+Icon=${ICON_PATH}
+Terminal=false
+Categories=Game;
+EOF
+        chmod +x "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ 桌面快捷方式已创建：~/Desktop/Battle.net.desktop${NC}"
+
+    rm -rf "$DOWNLOAD_DIR"
+    echo -e "${GREEN}✅ 战网平台安装完成！${NC}"
+}
+
 uninstall_third_party_platform() {
     mk_temp_dir
     while true; do
@@ -3790,12 +4062,15 @@ uninstall_third_party_platform() {
 
         local UBISOFT_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
         local EPIC_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+        local BATTLE_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
         local ubisoft_installed=false
         local epic_installed=false
+        local battle_installed=false
         [ -d "$UBISOFT_DIR" ] && ubisoft_installed=true
         [ -d "$EPIC_DIR" ] && epic_installed=true
+        [ -d "$BATTLE_DIR" ] && battle_installed=true
 
-        if ! $ubisoft_installed && ! $epic_installed; then
+        if ! $ubisoft_installed && ! $epic_installed && ! $battle_installed; then
             echo -e "${YELLOW}未检测到通过本程序安装的第三方游戏平台。${NC}"
             sleep 2
             return 0
@@ -3804,15 +4079,18 @@ uninstall_third_party_platform() {
         echo "当前已安装的平台："
         $ubisoft_installed && echo -e "  ${GREEN}✓ 育碧平台${NC}"
         $epic_installed && echo -e "  ${GREEN}✓ Epic平台${NC}"
+        $battle_installed && echo -e "  ${GREEN}✓ 战网平台${NC}"
         echo ""
 
         echo "请选择要卸载的平台："
         echo "  1) 卸载育碧平台"
         echo "  2) 卸载Epic平台"
-        read -p "请输入 [1-2]: " choice < /dev/tty
+        echo "  3) 卸载战网平台"
+        read -p "请输入 [1-3]: " choice < /dev/tty
         case $choice in
             1) uninstall_ubisoft; break ;;
             2) uninstall_epic; break ;;
+            3) uninstall_battle_net; break ;;
             *) echo -e "${RED}无效选项 请重新输入${NC}"; sleep 0.5 ;;
         esac
     done
@@ -3856,23 +4134,62 @@ uninstall_ubisoft() {
 
 uninstall_epic() {
     local EPIC_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
-    if [ ! -d "$EPIC_DIR" ]; then
+    local EPIC_DIR_X86="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Epic Games"
+    if [ ! -d "$EPIC_DIR" ] && [ ! -d "$EPIC_DIR_X86" ]; then
         echo -e "${YELLOW}未检测到 Epic 平台，无需卸载。${NC}"
         return 0
     fi
 
     echo -e "${CYAN}正在删除 Epic 平台目录...${NC}"
-    rm -rf "$EPIC_DIR"
-    if [ ! -d "$EPIC_DIR" ]; then
-        echo -e "${GREEN}✓ Epic 平台已成功卸载。${NC}"
-    else
-        echo -e "${RED}✗ 删除失败，请手动删除：$EPIC_DIR${NC}"
+    if [ -d "$EPIC_DIR" ]; then
+        rm -rf "$EPIC_DIR"
+        if [ ! -d "$EPIC_DIR" ]; then
+            echo -e "${GREEN}✓ Epic 平台目录已删除: $EPIC_DIR${NC}"
+        else
+            echo -e "${RED}✗ 删除失败，请手动删除：$EPIC_DIR${NC}"
+        fi
+    fi
+
+    if [ -d "$EPIC_DIR_X86" ]; then
+        rm -rf "$EPIC_DIR_X86"
+        if [ ! -d "$EPIC_DIR_X86" ]; then
+            echo -e "${GREEN}✓ Epic 平台目录已删除: $EPIC_DIR_X86${NC}"
+        else
+            echo -e "${RED}✗ 删除失败，请手动删除：$EPIC_DIR_X86${NC}"
+        fi
     fi
 
     local DESKTOP_FILE="$HOME/Desktop/Epic Games Launcher.desktop"
     if [ -f "$DESKTOP_FILE" ]; then
         rm -f "$DESKTOP_FILE"
         echo -e "${GREEN}✓ 桌面快捷方式已删除：Epic Games Launcher.desktop${NC}"
+    else
+        echo -e "${YELLOW}未找到桌面快捷方式，跳过。${NC}"
+    fi
+
+    echo ""
+    echo -e "${YELLOW}请手动在 Steam 库中删除对应的非 Steam 游戏快捷方式（右键→管理→从您的库中删除非 Steam 游戏）。${NC}"
+}
+
+uninstall_battle_net() {
+    local BATTLE_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
+    if [ ! -d "$BATTLE_DIR" ]; then
+        echo -e "${YELLOW}未检测到战网平台，无需卸载。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}正在删除战网平台目录...${NC}"
+    rm -rf "$BATTLE_DIR"
+    if [ ! -d "$BATTLE_DIR" ]; then
+        echo -e "${GREEN}✓ 战网平台已成功卸载。${NC}"
+    else
+        echo -e "${RED}✗ 删除失败，请手动删除：$BATTLE_DIR${NC}"
+    fi
+
+    local DESKTOP_FILE="$HOME/Desktop/Battle.net.desktop"
+    if [ -f "$DESKTOP_FILE" ]; then
+        rm -f "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ 桌面快捷方式已删除：Battle.net.desktop${NC}"
     else
         echo -e "${YELLOW}未找到桌面快捷方式，跳过。${NC}"
     fi
@@ -4220,13 +4537,17 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
             walk(items)
 
     def detect_system_type(self):
-        try:
-            result = subprocess.run(["efibootmgr"], capture_output=True, text=True, timeout=2)
-            if result.returncode == 0:
-                if re.search(r'(?i)windows', result.stdout) or re.search(r'(?i)clover', result.stdout):
-                    return "双系统"
-        except:
-            pass
+        # 优先用免密 sudo 读取 efibootmgr（普通用户下裸命令可能无权限导致误判），
+        # 失败再降级尝试普通权限，都不行按单系统处理
+        for cmd in (["sudo", "-n", "efibootmgr"], ["efibootmgr"]):
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+                if result.returncode == 0:
+                    if re.search(r'(?i)windows', result.stdout) or re.search(r'(?i)clover', result.stdout):
+                        return "双系统"
+                    return "单系统"
+            except Exception:
+                continue
         return "单系统"
 
     def on_category_activated(self, treeview, path, column):
@@ -4265,7 +4586,8 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
                     self.func_store.append(parent_iter, [child[0]])
 
     def display_changelog(self):
-        changelog_content = """2026-08-04（v1.6.6包含 v1.6.4-v1.6.5 的调整） 增加了安装第三方游戏平台的功能（目前包含育碧，Epic）
+        changelog_content = """2026-08-05（v1.6.7） 修复了部分bug，并完善了部分功能的逻辑
+2026-08-04（v1.6.6包含 v1.6.4-v1.6.5 的调整） 增加了安装第三方游戏平台的功能（目前包含育碧，Epic）
 2026-08-01（v1.6.3包含 v1.6.2 的调整） 完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
 2026-07-31（v1.6.1） 增加了GE-Proton 管理的功能，可以安装/卸载GE兼容层
 2026-07-30（v1.6.0包含 v1.5.7-v1.5.9 的调整） 新增了安装Freedeck插件的功能，并修复了一些bug和优化完善了一些功能
@@ -4320,7 +4642,10 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
 
     def _run_standalone_script(self, func_key):
         tmp_path = create_temp_script()
-        subprocess.Popen([tmp_path, func_key], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True)
+        log_path = "/tmp/steamdeck_toolbox_standalone.log"
+        with open(log_path, 'w', encoding='utf-8') as log_f:
+            subprocess.Popen([tmp_path, func_key], stdout=log_f, stderr=subprocess.STDOUT,
+                             stdin=subprocess.DEVNULL, start_new_session=True)
 
     def run_external_terminal(self, func_key):
         tmp_path = create_temp_script()
