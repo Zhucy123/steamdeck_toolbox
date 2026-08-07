@@ -25,7 +25,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.6.7"
+VERSION = "1.6.8"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1426,11 +1426,24 @@ except:
 
     local options=()
     local labels=()
+    local show_prerelease=false
+    if [ -n "$latest_prerelease" ]; then
+        if [ -z "$latest_stable" ]; then
+            show_prerelease=true
+        else
+            local opt_stable_num=$(echo "$latest_stable" | sed 's/^v//')
+            local opt_pre_num=$(echo "$latest_prerelease" | sed 's/^v//')
+            local opt_higher=$(printf '%s\n' "$opt_stable_num" "$opt_pre_num" | sort -V | tail -1)
+            if [ "$opt_higher" = "$opt_pre_num" ]; then
+                show_prerelease=true
+            fi
+        fi
+    fi
     if [ -n "$latest_stable" ]; then
         options+=("$latest_stable")
         labels+=("正式版 $latest_stable")
     fi
-    if [ -n "$latest_prerelease" ]; then
+    if [ "$show_prerelease" = true ]; then
         options+=("$latest_prerelease")
         labels+=("预发布版 $latest_prerelease")
     fi
@@ -1484,7 +1497,50 @@ except:
         fi
 
         if [ "$is_prerelease" = true ]; then
-            if [ -n "$latest_stable" ]; then
+            local new_prerelease=""
+            if [ -n "$latest_prerelease" ]; then
+                local local_clean=$(echo "$local_version" | sed 's/^v//')
+                local pre_clean=$(echo "$latest_prerelease" | sed 's/^v//')
+                local higher_pre=$(printf '%s\n' "$local_clean" "$pre_clean" | sort -V | tail -1)
+                if [ "$higher_pre" = "$pre_clean" ] && [ "$local_clean" != "$pre_clean" ]; then
+                    new_prerelease="$latest_prerelease"
+                fi
+            fi
+
+            if [ -n "$new_prerelease" ]; then
+                echo -e "${YELLOW}当前已安装预发布版 ${local_version}。${NC}"
+                echo -e "${YELLOW}检测到更新：预发布版 ${new_prerelease}。${NC}"
+                echo "请选择操作："
+                echo "1) 更新到最新预发布版 ${new_prerelease}"
+                if [ -n "$latest_stable" ]; then
+                    echo "2) 切换到正式版 ${latest_stable}"
+                    echo "3) 保持当前版本"
+                else
+                    echo "2) 保持当前版本"
+                fi
+                while true; do
+                    read -p "请输入选择: " choice < /dev/tty
+                    if [ "$choice" = "1" ]; then
+                        target_version="$new_prerelease"
+                        echo -e "${GREEN}将更新至预发布版: ${target_version}${NC}"
+                        break
+                    elif [ "$choice" = "2" ]; then
+                        if [ -n "$latest_stable" ]; then
+                            target_version="$latest_stable"
+                            echo -e "${GREEN}将切换至正式版: ${target_version}${NC}"
+                            break
+                        else
+                            echo "保持当前版本。"
+                            return 0
+                        fi
+                    elif [ -n "$latest_stable" ] && [ "$choice" = "3" ]; then
+                        echo "保持当前版本。"
+                        return 0
+                    else
+                        echo -e "${RED}无效选择，请重新输入。${NC}"
+                    fi
+                done
+            elif [ -n "$latest_stable" ]; then
                 echo -e "${YELLOW}当前已安装预发布版 ${local_version}。${NC}"
                 echo -e "${YELLOW}是否切换为正式版 ${latest_stable}？${NC}"
                 read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice < /dev/tty
@@ -1813,7 +1869,219 @@ install_tomoon_install() {
     echo -e "${GREEN}✅ ToMoon 插件 ${latest_version} 安装完成！${NC}"
     echo -e "${GREEN}安装目录: ${PLUGIN_DIR}${NC}"
 }
-install_freedeck_install() { install_decky_plugin "panyiwei-home/Freedeck" "Freedeck" "Freedeck"; }
+install_freedeck_install() {
+    local GITHUB_REPO="panyiwei-home/Freedeck"
+    local PLUGIN_DIR="Freedeck"
+    local DISPLAY_NAME="Freedeck"
+    local PLUGIN_PATH="/home/deck/homebrew/plugins/${PLUGIN_DIR}"
+    local VERSION_FILE="$PLUGIN_PATH/package.json"
+    local TEMP_DIR="/tmp/${DISPLAY_NAME}_install"
+    local MIRRORS=(
+        "http://gh.ddlc.top/"
+        "http://ghproxy.net/"
+        "http://mirror.ghproxy.com/"
+        "https://github.com/"
+    )
+
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装/更新 ${DISPLAY_NAME} ════════════════${NC}"
+    echo ""
+
+    for cmd in curl sudo unzip python3; do
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
+            return 1
+        fi
+    done
+
+    echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
+    local releases_json=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases")
+    if [ -z "$releases_json" ]; then
+        echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
+        return 1
+    fi
+
+    local latest_version=$(echo "$releases_json" | $PYTHON_CMD -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    tags = [r.get('tag_name', '') for r in data if r.get('tag_name')]
+    if tags:
+        tags.sort(key=lambda t: [int(x) for x in t.replace('v', '').split('.') if x.isdigit()], reverse=True)
+        print(tags[0])
+except:
+    pass
+")
+    if [ -z "$latest_version" ]; then
+        echo -e "${RED}错误: 无法获取最新版本号。${NC}"
+        return 1
+    fi
+    echo -e "${CYAN}官网最新版本: ${latest_version}${NC}"
+
+    local local_version=""
+    if [ -f "$VERSION_FILE" ]; then
+        local_version=$(grep -o '"version": *"[^"]*"' "$VERSION_FILE" | head -1 | sed 's/.*"version": *"//; s/".*//')
+        if [ -n "$local_version" ]; then
+            echo -e "${CYAN}当前已安装版本: ${local_version}${NC}"
+        else
+            echo -e "${YELLOW}已安装但无法读取版本号。${NC}"
+        fi
+    else
+        echo -e "${YELLOW}未检测到已安装的 ${DISPLAY_NAME}。${NC}"
+    fi
+
+    local local_clean=$(echo "$local_version" | sed 's/^v//')
+    local latest_clean=$(echo "$latest_version" | sed 's/^v//')
+    local target_version=""
+
+    if [ -z "$local_version" ]; then
+        echo -e "${GREEN}将安装最新版本: ${latest_version}${NC}"
+        target_version="$latest_version"
+    elif [ "$local_clean" = "$latest_clean" ]; then
+        echo -e "${GREEN}已是最新版本 ${local_version}，无需更新。${NC}"
+        return 0
+    else
+        local higher=$(printf '%s\n' "$local_clean" "$latest_clean" | sort -V | tail -1)
+        if [ "$higher" = "$latest_clean" ]; then
+            echo -e "${YELLOW}检测到新版本：${latest_version}（当前 ${local_version}）。${NC}"
+            read -n1 -p "按回车键或 Y 键更新，其他键保持: " update_choice < /dev/tty
+            echo
+            if [[ -z "$update_choice" || "$update_choice" == "y" || "$update_choice" == "Y" ]]; then
+                target_version="$latest_version"
+                echo -e "${GREEN}将更新至: ${target_version}${NC}"
+            else
+                echo "保持当前版本。"
+                return 0
+            fi
+        else
+            echo -e "${GREEN}本地版本 ${local_version} 不低于官网最新版本 ${latest_version}，无需操作。${NC}"
+            return 0
+        fi
+    fi
+
+    if [ -z "$target_version" ]; then
+        echo -e "${RED}错误: 未确定目标版本。${NC}"
+        return 1
+    fi
+
+    local download_url=$(echo "$releases_json" | $PYTHON_CMD -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    target_tag = '$target_version'
+    for rel in data:
+        if rel.get('tag_name') == target_tag:
+            for asset in rel.get('assets', []):
+                name = asset.get('name', '')
+                if name.endswith('.zip'):
+                    print(asset.get('browser_download_url', ''))
+                    break
+            break
+except:
+    pass
+")
+    if [ -z "$download_url" ]; then
+        echo -e "${RED}错误: 无法获取 ${target_version} 的下载链接。${NC}"
+        return 1
+    fi
+
+    rm -rf "$TEMP_DIR"
+    mkdir -p "$TEMP_DIR"
+    cd "$TEMP_DIR" || return
+
+    local zip_filename="${DISPLAY_NAME}.zip"
+    local DOWNLOAD_SUCCESS=false
+
+    while true; do
+        clear
+        echo -e "${YELLOW}════════════════ 安装/更新 ${DISPLAY_NAME} ════════════════${NC}"
+        echo ""
+        echo -e "${GREEN}将安装版本: ${target_version}${NC}"
+        echo ""
+        echo "请选择下载镜像源（输入编号，0取消）："
+        for i in "${!MIRRORS[@]}"; do
+            echo "  $((i+1)). ${MIRRORS[$i]}"
+        done
+
+        read -p "请输入选择: " choice < /dev/tty
+
+        if [[ -z "$choice" ]]; then
+            echo -e "${RED}输入无效，请重新选择。${NC}"
+            sleep 1
+            continue
+        fi
+        if [[ "$choice" == "0" ]]; then
+            echo "操作已取消。"
+            return 0
+        fi
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
+            mirror="${MIRRORS[$((choice-1))]}"
+            FULL_URL="${mirror}${download_url}"
+            echo -e "尝试从 ${mirror} 下载..."
+
+            curl -L --progress-bar -f -o "$zip_filename" "$FULL_URL"
+            local curl_exit=$?
+
+            if [ $curl_exit -eq 0 ] && [ -f "$zip_filename" ]; then
+                if unzip -t "$zip_filename" &> /dev/null; then
+                    echo -e "${GREEN}下载成功，文件完整。${NC}"
+                    DOWNLOAD_SUCCESS=true
+                    break
+                else
+                    echo -e "${RED}下载文件不完整（zip 校验失败），请重新选择镜像源。${NC}"
+                    rm -f "$zip_filename"
+                    sleep 1
+                fi
+            else
+                echo -e "${RED}下载失败（curl 退出码: $curl_exit），请重新选择镜像源。${NC}"
+                rm -f "$zip_filename"
+                sleep 1
+            fi
+        else
+            echo -e "${RED}无效编号，请重新选择。${NC}"
+            sleep 1
+        fi
+    done
+
+    if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
+        echo -e "${RED}下载失败，安装中止。${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}正在解压并安装到 ${PLUGIN_PATH}...${NC}"
+
+    local EXTRACT_DIR="$TEMP_DIR/extract"
+    mkdir -p "$EXTRACT_DIR"
+
+    if ! sudo unzip -q "$zip_filename" -d "$EXTRACT_DIR"; then
+        echo -e "${RED}解压失败。${NC}"
+        rm -rf "$TEMP_DIR"
+        return 1
+    fi
+
+    local extracted_dir=""
+    extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 2 -type f -name "package.json" -exec dirname {} \; | head -1)
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 2 -type f -name "tomoon" -exec dirname {} \; | head -1)
+    fi
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 1 -type d ! -path "$EXTRACT_DIR" | head -1)
+    fi
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir="$EXTRACT_DIR"
+    fi
+
+    sudo rm -rf "$PLUGIN_PATH"
+    sudo mkdir -p /home/deck/homebrew/plugins
+    sudo mv "$extracted_dir" "$PLUGIN_PATH"
+    sudo chown -R deck:deck "$PLUGIN_PATH"
+
+    rm -rf "$TEMP_DIR"
+
+    echo -e "${GREEN}✅ ${DISPLAY_NAME} 插件 ${target_version} 安装完成！${NC}"
+    echo -e "${GREEN}安装目录: ${PLUGIN_PATH}${NC}"
+}
 install_decky_lsfg_vk_install() { install_decky_plugin "xXJSONDeruloXx/decky-lsfg-vk" "Decky-LSFG-VK" "LSFG-VK"; }
 install_decky_framegen_install() { install_decky_plugin "xXJSONDeruloXx/Decky-Framegen" "Decky-Framegen" "Framegen"; }
 
@@ -1902,11 +2170,24 @@ except:
 
     local options=()
     local labels=()
+    local show_prerelease=false
+    if [ -n "$latest_prerelease" ]; then
+        if [ -z "$latest_stable" ]; then
+            show_prerelease=true
+        else
+            local opt_stable_num=$(echo "$latest_stable" | sed 's/^v//')
+            local opt_pre_num=$(echo "$latest_prerelease" | sed 's/^v//')
+            local opt_higher=$(printf '%s\n' "$opt_stable_num" "$opt_pre_num" | sort -V | tail -1)
+            if [ "$opt_higher" = "$opt_pre_num" ]; then
+                show_prerelease=true
+            fi
+        fi
+    fi
     if [ -n "$latest_stable" ]; then
         options+=("$latest_stable")
         labels+=("正式版 $latest_stable")
     fi
-    if [ -n "$latest_prerelease" ]; then
+    if [ "$show_prerelease" = true ]; then
         options+=("$latest_prerelease")
         labels+=("预发布版 $latest_prerelease")
     fi
@@ -1959,7 +2240,50 @@ except:
         fi
 
         if [ "$is_prerelease" = true ]; then
-            if [ -n "$latest_stable" ]; then
+            local new_prerelease=""
+            if [ -n "$latest_prerelease" ]; then
+                local local_clean=$(echo "$installed_version" | sed 's/^v//')
+                local pre_clean=$(echo "$latest_prerelease" | sed 's/^v//')
+                local higher_pre=$(printf '%s\n' "$local_clean" "$pre_clean" | sort -V | tail -1)
+                if [ "$higher_pre" = "$pre_clean" ] && [ "$local_clean" != "$pre_clean" ]; then
+                    new_prerelease="$latest_prerelease"
+                fi
+            fi
+
+            if [ -n "$new_prerelease" ]; then
+                echo -e "${YELLOW}当前已安装预发布版 ${installed_version}。${NC}"
+                echo -e "${YELLOW}检测到更新：预发布版 ${new_prerelease}。${NC}"
+                echo "请选择操作："
+                echo "1) 更新到最新预发布版 ${new_prerelease}"
+                if [ -n "$latest_stable" ]; then
+                    echo "2) 切换到正式版 ${latest_stable}"
+                    echo "3) 保持当前版本"
+                else
+                    echo "2) 保持当前版本"
+                fi
+                while true; do
+                    read -p "请输入选择: " choice < /dev/tty
+                    if [ "$choice" = "1" ]; then
+                        target_version="$new_prerelease"
+                        echo -e "${GREEN}将更新至预发布版: ${target_version}${NC}"
+                        break
+                    elif [ "$choice" = "2" ]; then
+                        if [ -n "$latest_stable" ]; then
+                            target_version="$latest_stable"
+                            echo -e "${GREEN}将切换至正式版: ${target_version}${NC}"
+                            break
+                        else
+                            echo "保持当前版本。"
+                            return 0
+                        fi
+                    elif [ -n "$latest_stable" ] && [ "$choice" = "3" ]; then
+                        echo "保持当前版本。"
+                        return 0
+                    else
+                        echo -e "${RED}无效选择，请重新输入。${NC}"
+                    fi
+                done
+            elif [ -n "$latest_stable" ]; then
                 echo -e "${YELLOW}当前已安装预发布版 ${installed_version}。${NC}"
                 echo -e "${YELLOW}是否切换为正式版 ${latest_stable}？${NC}"
                 read -n1 -p "按回车键或 A 键切换，其他键保持: " switch_choice < /dev/tty
@@ -4537,8 +4861,6 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
             walk(items)
 
     def detect_system_type(self):
-        # 优先用免密 sudo 读取 efibootmgr（普通用户下裸命令可能无权限导致误判），
-        # 失败再降级尝试普通权限，都不行按单系统处理
         for cmd in (["sudo", "-n", "efibootmgr"], ["efibootmgr"]):
             try:
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
@@ -4586,7 +4908,8 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
                     self.func_store.append(parent_iter, [child[0]])
 
     def display_changelog(self):
-        changelog_content = """2026-08-05（v1.6.7） 修复了部分bug，并完善了部分功能的逻辑
+        changelog_content = """2026-08-07（v1.6.8） 调整了从github上安装的部分功能的版本对比逻辑
+2026-08-05（v1.6.7） 修复了部分bug，并完善了部分功能的逻辑
 2026-08-04（v1.6.6包含 v1.6.4-v1.6.5 的调整） 增加了安装第三方游戏平台的功能（目前包含育碧，Epic）
 2026-08-01（v1.6.3包含 v1.6.2 的调整） 完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
 2026-07-31（v1.6.1） 增加了GE-Proton 管理的功能，可以安装/卸载GE兼容层
