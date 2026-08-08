@@ -4910,7 +4910,7 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
     def display_changelog(self):
         changelog_content = """2026-08-07（v1.6.8） 调整了从github上安装的部分功能的版本对比逻辑
 2026-08-05（v1.6.7） 修复了部分bug，并完善了部分功能的逻辑
-2026-08-04（v1.6.6包含 v1.6.4-v1.6.5 的调整） 增加了安装第三方游戏平台的功能（目前包含育碧，Epic，战网）
+2026-08-04（v1.6.6包含 v1.6.4-v1.6.5 的调整） 增加了安装第三方游戏平台的功能（目前包含育碧，Epic）
 2026-08-01（v1.6.3包含 v1.6.2 的调整） 完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
 2026-07-31（v1.6.1） 增加了GE-Proton 管理的功能，可以安装/卸载GE兼容层
 2026-07-30（v1.6.0包含 v1.5.7-v1.5.9 的调整） 新增了安装Freedeck插件的功能，并修复了一些bug和优化完善了一些功能
@@ -5007,7 +5007,19 @@ def ensure_vte_installed():
     dialog.set_icon_name("input-gamepad-symbolic")
     response = dialog.run(); dialog.destroy()
     if response == Gtk.ResponseType.YES:
-        subprocess.Popen(["konsole", "-e", "bash", "-c", "sudo steamos-readonly disable 2>/dev/null; sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF && sudo pacman -S --noconfirm vte3; echo '安装完成，请手动重启本程序。'; read -n1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        install_cmd = (
+            "if command -v steamos-readonly >/dev/null 2>&1; then "
+            "sudo steamos-readonly disable || { echo '✗ 禁用只读模式失败，请手动执行: sudo steamos-readonly disable'; read -n1; exit 1; }; "
+            "fi; "
+            "echo '正在初始化 pacman keyring（可能需要一点时间）...'; "
+            "sudo pacman-key --init || { echo '✗ pacman keyring 初始化失败'; read -n1; exit 1; }; "
+            "sudo pacman-key --populate archlinux || { echo '✗ pacman keyring 填充失败'; read -n1; exit 1; }; "
+            "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || { echo '✗ 密钥签署失败'; read -n1; exit 1; }; "
+            "sudo pacman -S --noconfirm vte3 || { echo '✗ vte3 安装失败，请检查网络或软件源'; read -n1; exit 1; }; "
+            "pacman -Q vte3 >/dev/null 2>&1 || { echo '✗ vte3 安装后验证失败，请重启程序后重试'; read -n1; exit 1; }; "
+            "echo '✓ 安装完成，请手动重启本程序。'; read -n1"
+        )
+        subprocess.Popen(["konsole", "-e", "bash", "-c", install_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 def sync_emoji_icons():
     script_dir = os.path.dirname(os.path.abspath(__file__))
