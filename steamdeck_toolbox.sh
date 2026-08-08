@@ -20,11 +20,29 @@ else
     echo "未找到 vte3（终端组件），正在尝试安装..."
     if [ ! -f /etc/pacman.d/gnupg/pubring.gpg ]; then
         echo "正在初始化 Pacman 密钥..."
-        sudo pacman-key --init
-        sudo pacman-key --populate archlinux
+        sudo pacman-key --init || {
+            echo "❌ pacman keyring 初始化失败，无法安装 vte3。"
+            exit 1
+        }
+        echo "正在填充 Arch Linux 官方密钥..."
+        sudo pacman-key --populate archlinux || {
+            echo "❌ pacman keyring 填充失败。"
+            exit 1
+        }
     fi
     echo "正在信任 SteamOS 打包者密钥..."
-    sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF
+    if ! sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF; then
+        echo "⚠️ 密钥签署失败，正在修复 keyring 权限并重试..."
+        sudo chown -R root:root /etc/pacman.d/gnupg 2>/dev/null || true
+        sudo chmod 700 /etc/pacman.d/gnupg 2>/dev/null || true
+        sudo pacman-key --init
+        sudo pacman-key --populate archlinux
+        sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || {
+            echo "❌ 密钥签署仍失败，无法安装 vte3。"
+            echo "   可尝试手动执行: sudo pacman-key --init && sudo pacman-key --populate archlinux"
+            exit 1
+        }
+    fi
     if sudo pacman -S --noconfirm vte3; then
         echo "✅ vte3 安装成功！"
     else
