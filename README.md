@@ -1,17 +1,19 @@
 # SteamDeck 工具箱
 
-一个专为 Steam Deck 打造的一站式系统管理与增强工具，集成系统优化、引导管理、软件安装、网络加速、双系统支持、游戏增强等 30 余项实用功能，全面覆盖日常使用与进阶调校需求。
+一个专为 Steam Deck 打造的一站式系统管理与增强工具，集成系统优化、引导管理、软件安装、网络加速、双系统支持、游戏增强等 40 余项实用功能，全面覆盖日常使用与进阶调校需求。
 
 > **版本：v1.6.8** | 更新日期：2026-08-07
 > 制作人：薯条 & DeepSeek
 
-## 🚀 一键安装
+##  一键安装
 
 在 Konsole 中执行以下命令即可安装：
 
 curl -L https://shoturl.cn/n2eFhl | sh
 
-## 📝 更新日志
+也可以从仓库手动安装：先克隆 https://gitee.com/Zhucy2100/steamdeck_toolbox ，然后运行仓库内的 `install_gui.sh`（会自动安装 vte3 依赖、下载 emoji_icons 并创建桌面快捷方式）。
+
+##  更新日志
 2026-08-07（v1.6.8）
 调整了从github上安装的部分功能的版本对比逻辑
 
@@ -112,11 +114,12 @@ curl -L https://shoturl.cn/n2eFhl | sh
 - **图形化引导管理**：支持 Clover 引导的安装、重装，并附带“引导文件配置”工具箱（主题、超时、默认系统等）  
 - **双系统专属支持**：Clover 启动顺序修复、Windows–SteamOS 数据互通盘自动挂载  
 - **一键软件管理**：涵盖办公、通讯、浏览器、云盘、音乐等常用应用（Flatpak / 脚本安装）  
-- **深度性能优化**：虚拟内存调整（CryoByte33 方案 / 传统 Swap / ZRAM）、Steam 着色器与兼容数据缓存管理、Hosts 缓存清理  
-- **游戏增强组件**：摇杆与扳机校准、LSFG‑VK / Framegen 补帧插件、小黄鸭软件（Lossless Scaling）  
+- **深度性能优化**：虚拟内存调整（CryoByte33 方案 / 传统 Swap / ZRAM）、GE-Proton 兼容层管理、Steam 着色器与兼容数据缓存管理、Hosts 缓存清理  
+- **游戏增强组件**：摇杆与扳机校准、LSFG‑VK / Framegen / Freedeck 插件、小黄鸭软件（Lossless Scaling）  
+- **第三方游戏平台**：支持安装育碧（Ubisoft Connect）、Epic、战网（Battle.net）等游戏平台  
 - **持续更新**：启动时自动检测更新，支持一键升级，无需手动下载  
 
-## 📋 功能列表
+##  功能列表
 
 ### 系统优化与修复
 - 配置国内源（Flatpak 镜像加速）  
@@ -125,6 +128,7 @@ curl -L https://shoturl.cn/n2eFhl | sh
 - 清理 hosts 缓存   
 - 校准设备（摇杆 + 扳机）   
 - Steam 缓存管理器（图形界面，支持删除着色器缓存与 Proton 兼容数据）   
+- GE-Proton 管理（安装 / 卸载 GE 兼容层）  
 
 ### 引导管理（单 / 双系统通用）
 - 安装 / 重装 Clover 图形化引导管理器  
@@ -141,6 +145,7 @@ curl -L https://shoturl.cn/n2eFhl | sh
 - Watt Toolkit (Steam++)  
 - AnyDesk 远程协助  
 - ToDesk 远程协助  
+- AskLink 远程协助  
 
 ### 常用软件安装
 - WPS Office  
@@ -155,13 +160,19 @@ curl -L https://shoturl.cn/n2eFhl | sh
 ### 游戏增强与 Decky 插件  
 - 插件商店（Decky Loader）安装 / 卸载 
 - ToMoon 插件（安装 / 更新 / 卸载） 
+- Freedeck 插件（安装 / 更新 / 卸载）  
 - LSFG‑VK 插件（安装 / 更新 / 卸载）  
 - Framegen 插件（安装 / 更新 / 卸载）  
 - 小黄鸭软件（Lossless Scaling，帧生成工具） 
 
+### 第三方游戏平台（安装 / 卸载）
+- 育碧平台（Ubisoft Connect）  
+- Epic 平台  
+- 战网平台（Battle.net）  
+
 ### 应用管理与维护
 - 更新已安装应用（Flatpak 全局更新）
-- 卸载已安装应用（支持 WPS Office / QQ / 微信 / QQ音乐 / 百度网盘 / Edge / Chrome / Fcitx 5等）  
+- 卸载已安装应用（支持 WPS Office / QQ / 微信 / QQ音乐 / 百度网盘 / Edge / Chrome / Google / AnyDesk / Fcitx 5 及其他 Flatpak 应用）  
 
 ### 工具箱自身
 - 启动时自动检查更新，支持一键更新（无需手动下载）
