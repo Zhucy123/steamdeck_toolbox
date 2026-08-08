@@ -29,7 +29,6 @@ else
     echo "正在信任 SteamOS 打包者密钥..."
     if ! sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF; then
         echo "⚠️ 密钥签署失败，正在修复 keyring 权限并重试..."
-        # keyring 存在但权限损坏（read-only 系统常见）：修复权限后重新初始化
         sudo chown -R root:root /etc/pacman.d/gnupg 2>/dev/null || true
         sudo chmod 700 /etc/pacman.d/gnupg 2>/dev/null || true
         sudo pacman-key --init
