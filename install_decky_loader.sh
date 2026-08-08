@@ -3,9 +3,10 @@
 # Decky Loader (插件商店) 安装/更新脚本
 # 参考 steamdeck_gui 的 install_plugin_store 流程重写：
 #   - 版本逻辑：正式版/预发布版区分与选择、已安装版本智能切换
+#   - 下载：交互式镜像选择（与原程序 download_with_mirrors 一致）
 #   - 严格模式：set -uo pipefail（不用 set -e，避免 (( )) 算术值 0 触发意外退出）
 #   - 交互 read 统一 < /dev/tty
-#   - 镜像自动循环 + 重试 + 文件大小校验
+#   - 文件大小校验
 # ============================================================================
 
 set -uo pipefail
@@ -33,7 +34,6 @@ MIRRORS=(
     "github.com"
 )
 DOWNLOAD_TIMEOUT=60
-MAX_RETRY_PER_MIRROR=1
 
 for cmd in curl python3 systemctl sudo journalctl stat; do
     if ! command -v $cmd &> /dev/null; then
@@ -227,66 +227,54 @@ mkdir -p "$SERVICE_DIR" "$PLUGIN_DIR" 2>/dev/null || {
 }
 
 echo -e "${CYAN}开始下载 PluginLoader (${target_version}) ...${NC}"
-DOWNLOAD_SUCCESS=false
 TMP_FILE="${PLUGIN_LOADER}.tmp"
-DOWNLOAD_PATH="SteamDeckHomebrew/decky-loader/releases/download/${target_version}/PluginLoader"
+DOWNLOAD_URL="https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${target_version}/PluginLoader"
 
-for mirror in "${MIRRORS[@]}"; do
-    if [[ "$mirror" == "github.com" ]]; then
-        FULL_URL="https://github.com/${DOWNLOAD_PATH}"
-    else
-        FULL_URL="https://${mirror}/https://github.com/${DOWNLOAD_PATH}"
-    fi
-    echo -e "尝试从 ${mirror} 下载..."
-
-    retry_count=0
-    while [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; do
-        if [[ $retry_count -gt 0 ]]; then
-            echo -e "${YELLOW}重试下载 (第 ${retry_count} 次重试)...${NC}"
+DOWNLOAD_SUCCESS=false
+while [ "$DOWNLOAD_SUCCESS" != "true" ]; do
+    clear
+    echo -e "${CYAN}下载 PluginLoader${NC}\n"
+    echo "请选择下载镜像源（输入编号，0 取消）："
+    for i in "${!MIRRORS[@]}"; do
+        echo "  $((i+1)). ${MIRRORS[$i]}"
+    done
+    read -p "请输入选择: " mirror_choice < /dev/tty
+    [[ -z "$mirror_choice" ]] && echo -e "${RED}输入无效${NC}" && sleep 1 && continue
+    [[ "$mirror_choice" == "0" ]] && echo "操作已取消。" && read -p "按回车键退出..." < /dev/tty && exit 1
+    if [[ "$mirror_choice" =~ ^[0-9]+$ ]] && [ "$mirror_choice" -ge 1 ] && [ "$mirror_choice" -le ${#MIRRORS[@]} ]; then
+        mirror="${MIRRORS[$((mirror_choice-1))]}"
+        if [[ "$mirror" == "github.com" ]]; then
+            FULL_URL="https://github.com/${DOWNLOAD_URL#https://github.com/}"
+        else
+            FULL_URL="https://${mirror}/${DOWNLOAD_URL}"
         fi
-
-        curl -L --progress-bar --max-time "$DOWNLOAD_TIMEOUT" -o "$TMP_FILE" "$FULL_URL"
-        curl_exit=$?
-
-        if [[ $curl_exit -eq 0 ]] && [[ -f "$TMP_FILE" ]]; then
+        echo -e "尝试从 ${mirror} 下载..."
+        if curl -L --fail --progress-bar --max-time "$DOWNLOAD_TIMEOUT" -o "$TMP_FILE" "$FULL_URL" && [ -s "$TMP_FILE" ]; then
             FILE_SIZE=$(stat -c%s "$TMP_FILE" 2>/dev/null || stat -f%z "$TMP_FILE" 2>/dev/null)
             if [[ -n "$FILE_SIZE" ]] && [[ "$FILE_SIZE" -gt 1000000 ]]; then
                 echo -e "\n${GREEN}下载成功 (大小: $((FILE_SIZE/1024/1024)) MB)${NC}"
-                if [[ -f "$PLUGIN_LOADER" ]]; then
-                    sudo rm -f "$PLUGIN_LOADER"
-                fi
-                mv "$TMP_FILE" "$PLUGIN_LOADER"
-                chmod +x "$PLUGIN_LOADER"
                 DOWNLOAD_SUCCESS=true
-                break 2
             else
-                echo -e "\n${RED}下载文件无效 (${FILE_SIZE:-0} 字节)，尝试下一个镜像...${NC}"
+                echo -e "\n${RED}下载文件无效 (${FILE_SIZE:-0} 字节)，请重新选择镜像源。${NC}"
                 rm -f "$TMP_FILE"
-                break
+                sleep 1
             fi
         else
-            echo -e "\n${RED}下载失败 (退出码: $curl_exit)${NC}"
+            echo -e "\n${RED}下载失败，请重新选择镜像源。${NC}"
             rm -f "$TMP_FILE"
-            retry_count=$((retry_count + 1))
-            if [[ $retry_count -le $MAX_RETRY_PER_MIRROR ]]; then
-                echo "将进行重试..."
-                sleep 2
-            else
-                echo "该镜像重试次数用完，切换到下一个镜像。"
-            fi
+            sleep 1
         fi
-    done
-
-    if [[ "$DOWNLOAD_SUCCESS" == "true" ]]; then
-        break
+    else
+        echo -e "${RED}无效编号，请重新输入。${NC}"
+        sleep 1
     fi
 done
 
-if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
-    echo -e "${RED}所有镜像均下载失败，安装中止。${NC}"
-    read -p "按回车键退出..." < /dev/tty
-    exit 1
+if [[ -f "$PLUGIN_LOADER" ]]; then
+    sudo rm -f "$PLUGIN_LOADER"
 fi
+mv "$TMP_FILE" "$PLUGIN_LOADER"
+chmod +x "$PLUGIN_LOADER"
 
 echo -e "${CYAN}启用 Steam 远程调试...${NC}"
 touch "${HOME_DIR}/.steam/steam/.cef-enable-remote-debugging"
