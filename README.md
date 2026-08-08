@@ -5,7 +5,7 @@
 > **版本：v1.6.8** | 更新日期：2026-08-07
 > 制作人：薯条 & DeepSeek
 
-##  一键安装
+## 🚀 一键安装
 
 在 Konsole 中执行以下命令即可安装：
 
@@ -13,7 +13,7 @@ curl -L https://shoturl.cn/n2eFhl | sh
 
 也可以从仓库手动安装：先克隆 https://gitee.com/Zhucy2100/steamdeck_toolbox ，然后运行仓库内的 `install_gui.sh`（会自动安装 vte3 依赖、下载 emoji_icons 并创建桌面快捷方式）。
 
-##  更新日志
+## 📝 更新日志
 2026-08-07（v1.6.8）
 调整了从github上安装的部分功能的版本对比逻辑
 
@@ -119,7 +119,7 @@ curl -L https://shoturl.cn/n2eFhl | sh
 - **第三方游戏平台**：支持安装育碧（Ubisoft Connect）、Epic、战网（Battle.net）等游戏平台  
 - **持续更新**：启动时自动检测更新，支持一键升级，无需手动下载  
 
-##  功能列表
+## 📋 功能列表
 
 ### 系统优化与修复
 - 配置国内源（Flatpak 镜像加速）  
