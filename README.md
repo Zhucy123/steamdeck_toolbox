@@ -11,8 +11,6 @@
 
 curl -L https://shoturl.cn/n2eFhl | sh
 
-也可以从仓库手动安装：先克隆 https://gitee.com/Zhucy2100/steamdeck_toolbox ，然后运行仓库内的 `install_gui.sh`（会自动安装 vte3 依赖、下载 emoji_icons 并创建桌面快捷方式）。
-
 ## 📝 更新日志
 2026-08-07（v1.6.8）
 调整了从github上安装的部分功能的版本对比逻辑
