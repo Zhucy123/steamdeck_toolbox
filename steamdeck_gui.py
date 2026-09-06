@@ -10,7 +10,7 @@ try:
 except (ValueError, ImportError):
     VTE_AVAILABLE = False
 
-from gi.repository import Gtk, GLib, GdkPixbuf
+from gi.repository import Gtk, GLib, GdkPixbuf, Gdk, Pango
 import subprocess
 import os
 import sys
@@ -18,17 +18,126 @@ import re
 import tempfile
 import shutil
 import threading
+import time
 import urllib.request
 import atexit
+import base64
 import signal
 
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.6.8"
+VERSION = "1.7.0"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
+
+# ============================================================================
+# 内嵌图标（base64，脚本自包含，无需外部文件夹）
+# 图标数据来自仓库 emoji_icons/，运行时优先使用脚本旁 emoji_icons/ 的自定义文件
+# ============================================================================
+EMBEDDED_ICONS = {
+    "clipboard_twemoji.png": "iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAMAAABiM0N1AAAAPFBMVEVHcEzM1t3M1t3M1t3M1t3M1t2Zoqg9REgpLzPM1t3M1t3M1t3BaU/BaU/BaU/CcFjgtKf////M1dqZqrWLZiLOAAAADnRSTlMAIJ/v/zD///8QUN9Q360w504AAADiSURBVHgB7dhVgoUwEERRIIVrw/7XOoI7HRl9fRdwgKS+8J7yAwWowPcsCxX6VGjn+ApRnCRxBOVbQQGipC9CYAUpxAMUQ9k4KZCMAZ52WY6lBZrLM6aDVcunreNJOVYth70uZ57Luun6t90BRVn11WBUDZXFiVNNcaG+o1SaQeUBqsyg6s9ADRGBERE1txDxIfprELPfBgnUdie1BlB3mjPoxz6Nn+zovtbw+o99I2T/abKjv78j2ZHsSHYkUOvqsLvT3EPmnyY7aohdcwMZ9Beg0swpD1BhBhWnP1m0KxfnHV+T0IbfZ3ihAAAAAElFTkSuQmCC",
+    "game_controller.png": "iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAMAAABiM0N1AAAAwFBMVEVHcEwpLjQxNz0xNz0jJywjJywUFxoVGBsnLDEUFxorMTYwNjwbHyMmKzAUFxoxNz0VGBsUFxoxNz0UFxopLjMxNz0bHiAUFxpMVl0jKS4pLzMuNDoeIyY+Rk1fa3VndX9SXmZWYmtETVSImaY0O0EjO01OHSY8VjLwwUp0YC40YofdLkRfjUeBkZ13slVEiL3/zE1QpeY1HiHEn0BGZTijJzh1Ii5SeD++Kj1upE+KcjSniDpreYNygYwfMkBdUCo3DEEFAAAAFXRSTlMAgL+kMCCfv0HnXOhwEI/Pz2CPr++5YFXqAAAC8ElEQVR4Xu2W2ZKbMBBFBQZj8DYepyV2vG+z72uS//+rSAJstWUSM/MYnyfXpfpUq1uUIYITJ06csDpDlx3B2bBjk2oGZ6wGzqBC03JZTRzrkKfHvkBH9zTZl2hWe8D3/QmtFryvbldr3aSf62rKmVR61reC3xWnaykFU4FfKXqQogclUSfufkd0tvMY7HjRhxR9qNEANXSs6H7FPSvKDrXkoYKUe67CQ475ZjNnjK7f19yzeH5ebKeEVxZOBT9pyj2J/D1Gns0dZ1METxecxd7iijcMpoVpzD2ST9UT3EmC/IAXknsmcQoRQ6JpJnrTRfNcNJfBs/SULblE0sWiq3BG03+JFqgjhm8jFJ5EzEkXsRvhuckD+io8r0wTSUAQJHJO+W8k+sVNN2V0z6f9RLHIZqzGPWKP19dvjwxDcmqJlteCJcrcQuTWEV1K0SXKHHyPvi8K6ohepOgFZW0isQCl408OciPiN9EQVSMKxfohYDWgy8clRUkALSkyIGLfgUbgSVEDIDjwNElmMc7iWZJEuigEMKTIBICYYWZpJphQRe3LKN1XxQDQkCLgRBR7soLxzjMusxluHTh94emCZgqyLUmZTbZRGuMBCfKlaSZ/J0rLgmzHRDlX7gGbizyQqBNPlaoiDZVopMy5oCW3XxKVPWcKYbUoiKDEkEtTCKQrPUIUB6BwzkV9QFA8o6wchhL5clkIk4sAI1oKcZHr8myEmwwA0SbEBkyI1jYWDfaaoqUULS0CjNw+hiq3ZiQ8rm3L0Y6VmxXDHhbpgNaSIE5GIz8q/0d7Mpv5o1ESM70huX8DMNob3NQ/DGmoFRmkARo/XMXT0z8x3R9wQGRqWd+2t2VOixR4W3uza7U1kUm0rN/lZfag6ThDwyIKljF0nN5APO72ddF+0iDH0DU1UQ0PovH3o3nkaM6xCJnbHqmBh9/aluKxSC085TS20mLfIjXZXYOOclizS2pj98vrKGk1TLPhkS/hmbzWJv85J/4AvtAeEDjvcnoAAAAASUVORK5CYII=",
+    "globe.png": "iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAMAAABiM0N1AAAAM1BMVEVHcEw7iMM7iMM7iMM7iMM7iMM7iMM7iMM7iMM7iMM7iMM7iMM7iMM7iMM7iMM7iMM7iMMRH0i/AAAAEHRSTlMAgL8Q32AgQO+fj1CvzzBw4ZaNVwAAAg5JREFUeF7lmMtyhiAMhaPcUX59/6ftAOoBp6At6apZZQb4cggRAeqYVn6W+2Fy9krTL2xxFwMm3fIzivZ2b5j173WZde/aat6pcZUAt0Vnc5VE90LVVI6QShBFh0goWfKnJzmhDDwJohNEJKayLXRFLaUca4gAimaq5s4CHiGDTJwP3UH0SSR5yG5Oz+VI2wYOQCVp27I01+OEj7bgAFSSrP6ETGpznKA5Ooq+B5GKgJmEa5GmzDl6rtQC0XrEcd/nabkCyKhdtEEiTk5eU7itnbYnR+WATRB6ZJKt6ylkziFIUgeELpkU6gQN2FRNbMCKybkBTFkDZh80U1WGiSZzDbWTjRHzIQIjdPLhqi4IFZBTM8P1SR06iGeQSAEhySfXXjrJwe2Bsg4H114fh0KpTW9AE8pWnR+KS0QoNm9ApsiBLT5SVzf3QfeQLqvThzIIfgQhCdg4dLVQHrlug5BiXy2hhwq09kGICXU+odcCNL0DTRmEOq9WHOnqgZCYqhbyBAEy70AGoJxmDP4dCP7OYP8B9Jxsc7ctAkqfbfnZCpLtE2H7aNm2EbaNjWurZdv82X5HXD9Itl827yGCVkgK7481AYJWtoMW19GP7TDKdTxuH9hDf4eM+mV00qjAdoXgutRwXbO4Ln5cV1HGyzH/dZ3/AeH5ScPXTxpMjyxczz5cD1H8T2P8j3Vsz4dfTyiMV5arauoAAAAASUVORK5CYII=",
+    "hammer_wrench.png": "iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAMAAABiM0N1AAAAjVBMVEVHcEyImaaImaaImaaImaZmdX9mdX+ImaaImaZmdX/0kAyImab0kAyImaZmdX+ImaaImaaImab0kAxmdX9mdX9mdX9mdX9mdX9mdX+Imab0kAyImaaImaZmdX/0kAxmdX9mdX9mdX/0kAz0kAz0kAyTmJdmdX/0kAyImaZmdX/0kAzgkim/hjePmJzMk0bf6kn5AAAAKHRSTlMAQIDvz+8wnxCfECCfYL+P37+A32CAj0DPUM8wr1DvcBCvUGBwnyAguBawEwAAAiJJREFUeNrd1+uSmkAQhuFvQARBDp511dXd7CbD5nD/lxedStkjkPm2zb+8F/AUzTQ1BUKNV1XSXkuq1QZSmTbW2niHz7VctH7J+oxrWRTbP2UA7+iYu064ZBp7qwDt/NJjkmoMoLRSCtp46xOTzRkuvZN4TPUVrn911pCK+HFnCa/0cecEr+Jxp4JffXMapdNu4CcbVCudBf4yWYT7iizotC/wMwIdgM4h7EJOu4JfJFCcdRwbDzkcslFvKUJOu+5C0r7j2IDTPf2dD8V7cVwhp01yeO3tXVHmOw2ubcbi+P14ynvvQooPUd34qz5eXIYYdD4+RBJnsFJmGnJEIk5MHCdxx63DNuCIRJwmA4jjJOZYA4A4TnonTolL666xWK+2zpG+/+QOMLnfwRMuTQWhUuycnrQBdFJaAEPSBBqpqYXpSAk+I6X7XRRFRpS+tEVA4neISEcwyTlUWgJEcg6ROg7SX0NSCtKyqo7du6EvicMTZ0B6f8zpS0+53iGSyuESd4ikd7jEHS5xh0t6h0vckdJpQNI4QEBSOURSOERSOFziDpHUDpe4wyXuMEnjcIk7SqkOOBrJBByVNLOumDhUyuy1UYFiRBwimdsPTxZ7jkaaCjSTIfsOl77doBGujcTRSW/yjkoApThKae4NdIhScTSSQIadO5fe4KqJQ6XnHF2pBh6QvshXMnPMzEDV/Nk9z8WRMmNMBm3563z+muO/7je+6nfRvPo7kwAAAABJRU5ErkJggg==",
+    "inbox.png": "iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAMAAABiM0N1AAAAYFBMVEVHcEzBaU/BaU/BaU/ZnoLBaU/ZnoJ3slV3slV3slXZnoLBaU93slV3slV3slV3slV3slV3slV3slV3slV3slXBaU/ZnoJmIRNtKRrSlnuKSDaRUD21d1+nZ1GYWER3slVIZBYuAAAAFXRSTlMAv88g72Cfn2BAIO+AEN9Q778wr3AL/u/gAAABHklEQVR42u3R2U7DMBCF4ckKTZM2ZRnsLPX7vyWFSj0KtevY4wsQ+R/g0+gMPeytN7cOO4quNYteYp2uX0KvsdDO/GiDNmiDfiF0MqtqfU5n1nUiX0/roCOlkZ6JZBIcmQRHJsGRSXBkEhyZBEcmwZFJcGQSHJkERybBkUlwZBIcmQRHKMER1vbGHI6Uoo7+e01d8l0fD+K7yrq5OGDCIVAN1WxLuR3Ftmoq2dbghga2VRJbm93QzNYckHZDOgji0eWMHAZp5ZhaB0I82aGJQyE+25wzeyCPBCcG4kktGTVxHMR6XPxLczAEah7U9zHDDMYDedugDfpL0Hui0kFZGiejKg1UEeUpnJyIir3c2Rf0JeXiewq6VmWinSu69AktjxkykvjpqwAAAABJRU5ErkJggg==",
+    "package.png": "iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAMAAABiM0N1AAAAwFBMVEVHcEzBaU/ZnoLBaU/ZnoJmIRPZtKTSjnPZnoLYn4RmIRPZnoJmIRNmIRPZnoLZnoLBaU/BaU9mIRPBaU9mIRNmIRPZnoLBaU/X3+XT3OPZnoLBaU/X3+XX3+VmIRPZnoLBaU/M1t1mIRPh6O2ZqrXf5OnCbVTFd17EhW3Zo4jY4ObTlHnM0tfbrpnMy83RwbrYqJHfzcXR2uHPim+im553NCPdv7GhsbyuvMaDQC++joFtKRrUtKXg3Nuub1iXVkI382ntAAAAH3RSTlMA0iCmhDcwEMjv79/JEKJG70ZgaKuIYDBgGHCAn88gug289wAAAlFJREFUeF6t04la2zAQBGBjnMMkEJISSgutJN+5T47e7/9WDcTNJF25WsmdB/g/73jkGRN0hGj3vLpptcVbgppOsyPKtFt1nNtQHNJpujuBOMltzXqQK6fzmqEgafv2zl2czqgUWu/gId7liUC2O/jwKX7LjxEElx00VRqXEs5z2MGdUmpcSjjPfgcPSh1LK5zH2gHqUfusY5znsINeOFVlDkWlT/Y7+CjEcl46OC9dWe6gdSV2GS2UwnkuO/D/PK7vkA7nWeygh8c1Q1EWO0A9yAhF2e4gEKfRFTXTSAQCgaI4O/i7cV+QLDVFrYyQt4GAojTnLU+dCTntcSJoFqYdTDICRd8KALQo/Q42maRQFP0UrKKwg0JKLRT9EoyisINcVkFRdVF0B5NMVkPsotLVrp4KqJT0RZHzxlL+CzIUhR2slRmKvhiKGsfpWnGg6LGqKMQEsYp6eTZDjKKmL0nCh/RFjRY75znhQKaiFvMkKaGMCemLKpIDVPAgfVG5TOy/iBY1ySWgKa8jWtT+kQL6yoRoURspAU1Lhw2hqFweQfNC8iEU9epk8gjaZtIFil4heQThrBrQNtnm8n9AElfVhKQRunGDzgnUcIP6HsnABXoHAGlc2ELXfU+by64ddNbyqjJkQ+hZn8EFF7pGPdo0ujzo7L1nyOWNAUI9pgzN0D2DwQ4ohL/OzOcuhfj10KL00Dnq4WRAIPoo+EUBsqqHPhhA+OsuGQJiPArDgwFkeBSmBwNI/9f5Oygh/HXXDPfQvVc7jVCIsA/APX4Q+GbgN8dXd0WtHL/wAAAAAElFTkSuQmCC",
+    "pushpin.png": "iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAMAAABiM0N1AAAAllBMVEVHcEzdLkTdLkSZqrXdLkSZqrXdLkTdLkTdLkSZqrXdLkTdLkSZqrXdLkTdLkSZqrWZqrWZqrXdLkSZqrW+GTHFHjXdLkS+GTGZqrW+GTG+GTHdLkSZqrW+GTGZqrW+GTG+GTHdLkSqi5m+GTGZqrXaLEKZqrXdLkS+GTGZqrXVKT/KITjXKkDRJj3ZK0LAGjKdoq7QRVknDsMFAAAAJ3RSTlMAv+/vgBBwnxDP38+PMCAwUL9gYJ/fUDCf78+vcBDfUHBAQN8gr4BIwjJqAAAB4klEQVR42q3X2XLCMAxAUcVx9rAFChRogW62u9D2/3+u60RpgyOBcl+ZOTORIwNwWmkc5CZfVynI0sr8pGIJkwYGSwRQgoxIqhCRSbnpRxqgIJNi05OkjVRCSC4hJJcWF6YXaXtpD31IO2vtk5FLM/vVo1S6WtnvXp9l0uLWWkqKeWO2pKQ8N91w/2fMDKmCdtXafJYnQxwzLa3bS17UH+p6zLSUtxxlsPt6zLT0z0mVafZiuVLevpbPk4J/p2XMmVJM3IJcSaWdT8aXNPwtMOdJAXghWnps7Gzqv05pyT4dfk9+Dq3mhiFhF1rreADHUqdIlwviW5ArbaGjgC/toKu04EozwCTSCjCJdHsFcgkPTC5tAcQSHphcmgG7m/cOacV3ous3v4QHRpc555fu+c7SuS5Jc52Nc93SkOeMnSOkhOWMQkdJOevAMudIiQNNXKPrm+IotKedsulkEaTFedOeNp2ld1voQTedjXfv1uSgQ2TCsX+DK3oz6rKR/y4o6M2om0T+W0UN+IMuPf+v0eENegqtYoU/GKgrqB7zCI4110GQxEP+G51FIKnEt1DUGMcj6i78XdIRyMrw7eljQCUIG+NykdGrmt2BtAk+lqgpPpbwwfC0RD24cAN9VD5EvTgfMdE81SP5ZWQAAAAASUVORK5CYII=",
+    "refresh.png": "iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAMAAABiM0N1AAAARVBMVEVHcEw7iMM7iMM7iMM7iMM7iMP///9sptLO4fC20ulUl8udxOFgns7a6fQ7iMPz+PuFtdrC2uypy+VHj8eRvN3n8Ph4rdZhf4NlAAAABnRSTlMAv+9gIM+kpfmZAAAB20lEQVR4Xt3Y227DIAyA4XRtbXMmPb3/o04Lm1hmiK3C1f7r5FMkBAGWr86nONDpvJQu1zjY9bI5H3G4jy/pGid0XZZznNJ5Oc2BTkuclAa621HIZkNQSmSyfQ+ytyf86XmzGsj/ZpCgGaEMkakmQTfyIgQ/koPDnAAFKJIPIBT8IQSwSZhALKEEgcmgKvch2wLS6nDLrYlJHQg5Y3ZjjWYnoRoybGbY31TyHeghj8x+REMHcjvHxE6mSk4BPSKPf7lvQsQ+SJRIgCSpjh62oACSxB9dWxCAWvLwkxUgSTJ84JbuDCHKDGAPBw7h99urcxnxXgD5kyyD7uVtZS82d5f4XglKt1FohRKNQg5KqQlZxIfVQQjfMYgCbOEoBPA/oECjkM2ItrlCJjYNVXGIoLSOQjcopVEow3cvDcAnOl+PjPx2dm4lqmPTWbNt18hE8CfLIadcYvcd7ka8IAlQXNlCLEuhBaH671ijHcT/tQ9BEiCv30Q0/2s1p9vWyFAMuo1W7dGBfFJt/WrYgSIKm1E1FLN2e8x3I0xSlcvnxS6kP0IYAdIeajYpHEH6Y5YBEiDtwc8IkP4o6ucfjuXjelIf1+UqIEPjTbtkmXbtM+siatrV2LzLumnXh58fkO/Lo6a6oQAAAABJRU5ErkJggg==",
+    "trash.png": "iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAMAAABiM0N1AAAAP1BMVEVHcExndX9ndX9ndX+aqrSaqrSaqrSaqrSaqrSaqrSaqrSaqrSaqrSaqrSaqrSaqrSaqrSaqrSaqrSaqrRndX8VtlsmAAAAFXRSTlMAUN//v/9gQM+fMK+AIBDvcI/fUBDdJcf4AAADVElEQVR4AazRAQ0AMBCDQNr697xMw3MOCJDurIFMETpFmYRJvLRMEW//9xgto3VJQRgGc4EoKoD4/u+6Z/XHbc7Xi+3NGIcGJ4ll4vJT6blcF2oLitcXb4rT38sYnoIImJdZu+L8wH2xmM7jIzqfr8rPVW2y0uBWLS+4PJfnR9QffPGo30rFyfKCr+eqBwoh2ifByUrwJxq854fblIsq7IEEuS6IBs6I9kqyVPDDiybUQmdmh4MF4PXlY8MjgOFdwr8aGPU86gjhfkWrE49XtFeSe2IsHIYIahSazC1NjGjwglluYjTVp8p3o01cDLwQlXpvSJCoA/kFH2YfwRIjNKGSvArgZFJgMZpJkKgWdCW46T5gTDalv5gMg0XFVgWL+0q0cycr3uVdBTtEUSTg1wpGtFWxuC8u5F8h7ebFlvBlcdXxvyrR+a1Qouq4z35U10QM4cVrp0EUkc4DvOqCQ3nVfU3yrjfyL0mK8HLD9T97oqkk8Ir7KgGRE9xVkiFxBWuQZiV99KG8y6qvmsaIyF9kkEenVnipTBpZfgkNmpTxyo0krdMJb2+Itr+PWiVGNjbr7OQTvlphgG/yBhssCVJiEiLJTkdK8O+IxuQsNkbi/0kMMw1os21oxQbZHibBI8oyKrtxC/e6DMZkicT/KJOvmlyiapVJeuK+1vFuevmHgA59bL+ESPy3nbcElY7b8kZ1n+q8sJtGP8nQRzRSuyGk4/9Kp0ksojXgZXjp+FUFoyqdRUdqNst4syu/wQ0SnQx9jgtp2CaviZHWQNGo0yGJRFOkiPAs84JUjGncplNsK16MjIx8ECM0sZodEiOkc4JUQ9POc8JTeZsTIxkkSUcskqAGaUO0DQHcIN1RRyySIBq8iObHCP91xCLJFE1H7s6L7RM1Gc5IQhUd5VFjpP5TOFeROkbkrvK1676MiEZ8O5KkhGid0DchkhKnLzrGqsN/HfBfmglvkMhxtGxyHAE5juB0CkvkgISXTj0gXfcltUnzI0c2eUrfHm7x7f/8iQAEv4b7t6bwtKJvhtSvyO+WzkOzIX+0fPeZIMOyIgmi2d7Bw7t12mgkHfozhMlbq/VnjEzkDxwgANnjSJgmMZE7uIIGRJjJBDQyiHKvUR7YVI9+ALq4Sv5opt7bAAAAAElFTkSuQmCC",
+}
+
+# ============================================================================
+# 全局样式与工具函数
+# ============================================================================
+APP_CSS = b"""
+headerbar { min-height: 44px; padding: 0 8px; }
+headerbar .title { font-weight: bold; }
+treeview { font-size: 13px; }
+treeview.view { -GtkTreeView-vertical-separator: 6px; }
+treeview.view:selected { background-color: #3d7bfd; color: #ffffff; }
+button { min-height: 30px; padding: 2px 12px; }
+entry.search-entry { border-radius: 4px; }
+#status-label { font-size: 11px; color: alpha(@theme_fg_color, 0.7); }
+#task-timer { font-size: 11px; font-weight: bold; }
+"""
+
+def apply_app_css():
+    try:
+        provider = Gtk.CssProvider()
+        provider.load_from_data(APP_CSS)
+        screen = Gdk.Screen.get_default()
+        if screen is None:
+            return
+        Gtk.StyleContext.add_provider_for_screen(
+            screen, provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+    except Exception as e:
+        print(f"应用样式失败: {e}")
+
+def load_icon_pixbuf(name, size=24):
+    """优先加载脚本目录 emoji_icons/ 下的本地图标，其次使用内嵌图标。"""
+    if not name:
+        return None
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    icon_path = os.path.join(script_dir, "emoji_icons", name)
+    if os.path.exists(icon_path):
+        try:
+            return GdkPixbuf.Pixbuf.new_from_file_at_size(icon_path, size, size)
+        except Exception as e:
+            print(f"加载本地图标失败 {icon_path}: {e}")
+    data = EMBEDDED_ICONS.get(name)
+    if data:
+        try:
+            loader = GdkPixbuf.PixbufLoader.new_with_mime_type("image/png")
+            loader.write(base64.b64decode(data))
+            loader.close()
+            pb = loader.get_pixbuf()
+            if pb and (pb.get_width() != size or pb.get_height() != size):
+                pb = pb.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+            return pb
+        except Exception as e:
+            print(f"解码内嵌图标失败 {name}: {e}")
+    return None
+
+def version_tuple(v):
+    out = []
+    for part in str(v).split('.'):
+        digits = re.sub(r'\D', '', part)
+        out.append(int(digits) if digits else 0)
+    return tuple(out)
+
+def compare_versions(a, b):
+    ta, tb = version_tuple(a), version_tuple(b)
+    return (ta > tb) - (ta < tb)
+
+def find_terminal():
+    for t in ("konsole", "xterm", "gnome-terminal", "xfce4-terminal", "lxterminal"):
+        if shutil.which(t):
+            return t
+    return None
+
+def launch_terminal(command_str):
+    """在可用的终端模拟器中执行命令，返回是否成功启动。"""
+    term = find_terminal()
+    if not term:
+        return False
+    try:
+        if term == "gnome-terminal":
+            subprocess.Popen([term, "--", "bash", "-c", command_str],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             stdin=subprocess.DEVNULL, start_new_session=True)
+        else:
+            subprocess.Popen([term, "-e", "bash", "-c", command_str],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             stdin=subprocess.DEVNULL, start_new_session=True)
+        return True
+    except Exception:
+        return False
+
+# GUI 层二次确认的危险操作（对应 bash 内部提示较弱的系统级修改）
+DANGEROUS_FUNCS = {"fix_boot", "fix_shared_disk", "uninstall_plugin_store", "clear_hosts_cache"}
 
 # ============================================================================
 # 内嵌 Bash 脚本
@@ -37,13 +146,70 @@ BASH_SCRIPT = r'''#!/bin/bash
 set -uo pipefail
 TEMP_DIR="/tmp/steamdeck_toolbox"
 cleanup_temp() { rm -rf "$TEMP_DIR" 2>/dev/null; }
-trap 'cleanup_temp; exit 0' EXIT
+# SteamOS 只读模式：脚本退出时自动恢复（sudo -n 非交互，避免卡在密码提示）
+restore_readonly() {
+    command -v steamos-readonly &>/dev/null || return 0
+    if sudo -n steamos-readonly status 2>/dev/null | grep -q "disabled"; then
+        if sudo -n steamos-readonly enable 2>/dev/null; then
+            echo -e "${GREEN}✓ 已恢复只读模式${NC}"
+        else
+            echo -e "${YELLOW}⚠ 无法自动恢复只读模式，请手动执行: sudo steamos-readonly enable${NC}"
+        fi
+    fi
+    return 0
+}
+trap 'restore_readonly; cleanup_temp; exit 0' EXIT
 trap 'echo -e "\n${YELLOW}用户取消操作，关闭窗口。${NC}"; cleanup_temp; exit 0' INT TERM
 
 PYTHON_CMD="python3"
 command -v python3 &>/dev/null || PYTHON_CMD="python"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; PURPLE='\033[0;35m'; NC='\033[0m'
+
+# 全局下载镜像源
+MIRRORS=("http://gh.ddlc.top/" "http://ghproxy.net/" "http://mirror.ghproxy.com/" "https://github.com/")
+
+# 安全解析 lsblk -P 输出（避免 eval 注入），变量名与 lsblk 字段一致
+parse_line() {
+    local line="$1" key val
+    local pat='([A-Z]+)="([^"]*)"(.*)'
+    NAME=""; TYPE=""; LABEL=""; FSTYPE=""; MOUNTPOINT=""; UUID=""; PARTTYPE=""; SIZE=""
+    while [[ "$line" =~ $pat ]]; do
+        key="${BASH_REMATCH[1]}"; val="${BASH_REMATCH[2]}"; line="${BASH_REMATCH[3]}"
+        case "$key" in
+            NAME) NAME="$val";; TYPE) TYPE="$val";; LABEL) LABEL="$val";;
+            FSTYPE) FSTYPE="$val";; MOUNTPOINT) MOUNTPOINT="$val";; UUID) UUID="$val";;
+            PARTTYPE) PARTTYPE="$val";; SIZE) SIZE="$val";;
+        esac
+    done
+}
+
+# 带 zip 完整性校验的镜像下载（复用全局 MIRRORS）
+download_zip_with_mirrors() {
+    local url="$1" output="$2" desc="${3:-ZIP文件}"
+    while true; do
+        clear
+        echo -e "${CYAN}下载 ${desc}${NC}\n"
+        echo "请选择下载镜像源（输入编号，0取消）："
+        for i in "${!MIRRORS[@]}"; do echo "  $((i+1)). ${MIRRORS[$i]}"; done
+        read -p "请输入选择: " choice < /dev/tty
+        [[ -z "$choice" ]] && echo -e "${RED}输入无效${NC}" && sleep 1 && continue
+        [[ "$choice" == "0" ]] && echo "操作已取消。" && return 1
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
+            local mirror="${MIRRORS[$((choice-1))]}"
+            local full_url="${mirror}${url}"
+            echo -e "尝试从 ${mirror} 下载..."
+            if curl -L --progress-bar -f -o "$output" "$full_url" && [ -s "$output" ] && unzip -t "$output" &>/dev/null; then
+                echo -e "${GREEN}下载成功，文件完整。${NC}"
+                return 0
+            fi
+            echo -e "${RED}下载失败或文件不完整，请重新选择镜像源。${NC}"
+            rm -f "$output"; sleep 1
+        else
+            echo -e "${RED}无效编号。${NC}"; sleep 1
+        fi
+    done
+}
 
 mk_temp_dir() { mkdir -p "$TEMP_DIR"; }
 
@@ -67,17 +233,16 @@ disable_readonly() {
 
 download_with_mirrors() {
     local url="$1" output="$2" desc="${3:-文件}"
-    local mirrors=("http://gh.ddlc.top/" "http://ghproxy.net/" "http://mirror.ghproxy.com/" "https://github.com/")
     while true; do
         clear
         echo -e "${CYAN}下载 ${desc}${NC}\n"
         echo "请选择下载镜像源（输入编号，0取消）："
-        for i in "${!mirrors[@]}"; do echo "  $((i+1)). ${mirrors[$i]}"; done
+        for i in "${!MIRRORS[@]}"; do echo "  $((i+1)). ${MIRRORS[$i]}"; done
         read -p "请输入选择: " choice < /dev/tty
         [[ -z "$choice" ]] && echo -e "${RED}输入无效${NC}" && sleep 1 && continue
         [[ "$choice" == "0" ]] && echo "操作已取消。" && return 1
-        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#mirrors[@]} ]; then
-            local mirror="${mirrors[$((choice-1))]}"
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
+            local mirror="${MIRRORS[$((choice-1))]}"
             local full_url="${mirror}${url}"
             echo -e "尝试从 ${mirror} 下载..."
             if curl -L --progress-bar -f -o "$output" "$full_url" && [ -s "$output" ]; then
@@ -226,8 +391,20 @@ adjust_swap() {
             *) echo -e "${RED}无效选择，请重新输入。${NC}"; sleep 1; continue ;;
         esac
         echo ""
-        read -p "按回车键返回主菜单..." < /dev/tty
+        read -p "按回车键继续..." < /dev/tty
     done
+}
+
+# 检查 /home 剩余空间是否足够创建指定大小（GB）的交换文件
+check_swap_space() {
+    local need_gb="$1"
+    local avail_kb=$(df --block-size=1K --output=avail /home 2>/dev/null | tail -1 | tr -d ' ')
+    if [ -z "$avail_kb" ] || [ "$avail_kb" -lt $((need_gb * 1024 * 1024)) ]; then
+        echo -e "${RED}✗ /home 剩余空间不足：需要约 ${need_gb}GB，当前可用约 $((avail_kb / 1024 / 1024))GB。${NC}"
+        return 1
+    fi
+    echo -e "${CYAN}✓ /home 剩余空间充足（约 $((avail_kb / 1024 / 1024))GB）。${NC}"
+    return 0
 }
 
 apply_cryo_recommendation() {
@@ -235,11 +412,23 @@ apply_cryo_recommendation() {
     echo -e "${YELLOW}═══════════════ 应用CryoByte33推荐方案 ═══════════════${NC}"
     confirm_action || { echo "取消操作。"; return; }
     local swap_size_gb=16; local block_count=$((swap_size_gb*1024))
+    check_swap_space "$swap_size_gb" || return 1
     sudo swapoff /home/swapfile 2>/dev/null; sudo swapoff -a 2>/dev/null
     sudo rm -f /home/swapfile
     sudo touch /home/swapfile; sudo chattr +C /home/swapfile 2>/dev/null || true
-    sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$block_count conv=fsync status=progress 2>/dev/null
-    sudo chmod 600 /home/swapfile; sudo mkswap /home/swapfile; sudo swapon /home/swapfile
+    if ! sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$block_count conv=fsync status=progress 2>/dev/null; then
+        echo -e "${RED}✗ 创建交换文件失败（dd 出错，可能磁盘空间不足）。${NC}"
+        return 1
+    fi
+    sudo chmod 600 /home/swapfile
+    if ! sudo mkswap /home/swapfile 2>/dev/null; then
+        echo -e "${RED}✗ mkswap 格式化失败。${NC}"
+        return 1
+    fi
+    if ! sudo swapon /home/swapfile 2>/dev/null; then
+        echo -e "${RED}✗ swapon 启用失败。${NC}"
+        return 1
+    fi
     sudo sed -i '\\|/home/swapfile|d' /etc/fstab 2>/dev/null
     echo "/home/swapfile none swap defaults 0 0" | sudo tee -a /etc/fstab > /dev/null
     echo -e "${GREEN}✓ 16GB交换文件创建完成${NC}"
@@ -275,11 +464,23 @@ adjust_swapfile() {
         esac
         break
     done
+    check_swap_space "$swap_size_gb" || return 1
     sudo swapoff /home/swapfile 2>/dev/null; sudo rm -f /home/swapfile
     sudo touch /home/swapfile
     if mount | grep " /home " | grep -q btrfs; then sudo chattr +C /home/swapfile 2>/dev/null || echo -e "${YELLOW}⚠ chattr +C 失败，继续${NC}"; fi
-    sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$((swap_size_gb*1024)) status=progress conv=fsync 2>/dev/null
-    sudo chmod 600 /home/swapfile; sudo mkswap /home/swapfile; sudo swapon /home/swapfile
+    if ! sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$((swap_size_gb*1024)) status=progress conv=fsync 2>/dev/null; then
+        echo -e "${RED}✗ 创建交换文件失败（dd 出错，可能磁盘空间不足）。${NC}"
+        return 1
+    fi
+    sudo chmod 600 /home/swapfile
+    if ! sudo mkswap /home/swapfile 2>/dev/null; then
+        echo -e "${RED}✗ mkswap 格式化失败。${NC}"
+        return 1
+    fi
+    if ! sudo swapon /home/swapfile 2>/dev/null; then
+        echo -e "${RED}✗ swapon 启用失败。${NC}"
+        return 1
+    fi
     grep -q "/home/swapfile" /etc/fstab 2>/dev/null || echo "/home/swapfile none swap defaults 0 0" | sudo tee -a /etc/fstab > /dev/null
     echo -e "${GREEN}✅ Swap文件创建成功${NC}"
 }
@@ -388,8 +589,7 @@ fix_disk_write_error() {
     local ntfs_count=0
 
     while IFS= read -r line; do
-        unset NAME TYPE LABEL FSTYPE MOUNTPOINT UUID
-        eval "$line"
+        parse_line "$line"
 
         [ "$TYPE" != "part" ] && continue
         [[ "$FSTYPE" =~ ^(ntfs|fuseblk|ntfs3)$ ]] || continue
@@ -512,10 +712,14 @@ fix_disk_write_error() {
 
 clear_hosts_cache() {
     mk_temp_dir; clear
-    echo -e "${YELLOW}════════════════ 清理hosts缓存 ════════════════${NC}"
-    sudo cp /etc/hosts /etc/hosts.backup.$(date +%Y%m%d_%H%M%S)
-    sudo sh -c 'echo "" > /etc/hosts'
-    echo -e "${GREEN}✓ hosts缓存已清理完成${NC}"
+    echo -e "${YELLOW}════════════════ 清理 hosts 缓存 ════════════════${NC}"
+    echo -e "${CYAN}仅移除 Steam 相关 hosts 条目，保留系统条目，并自动备份。${NC}"
+    local backup="/etc/hosts.backup.$(date +%Y%m%d_%H%M%S)"
+    sudo cp /etc/hosts "$backup" 2>/dev/null && echo -e "${GREEN}✓ 已备份原 hosts 到 $backup${NC}"
+    sudo sed -i -E '/^\s*([0-9a-fA-F:.]+|\*)\s+(steamcommunity\.com|steamstatic\.com|steamcontent\.com|steamusercontent\.com|api\.steampowered\.com|store\.steampowered\.com|s\.team|steamcdn-a\.akamaihd\.net)(\s|$)/d' /etc/hosts 2>/dev/null
+    grep -qE '^\s*127\.0\.0\.1\s+localhost' /etc/hosts || echo "127.0.0.1 localhost" | sudo tee -a /etc/hosts > /dev/null
+    grep -qE '^\s*::1\s+localhost' /etc/hosts || echo "::1 localhost ip6-localhost ip6-loopback" | sudo tee -a /etc/hosts > /dev/null
+    echo -e "${GREEN}✓ hosts 已清理完成（备份: $backup）${NC}"
 }
 
 calibrate_joystick_stick() {
@@ -536,7 +740,7 @@ steamdeck_cache_manager() {
         return 1
     fi
 
-    local steamapps_dir="/home/deck/.local/share/Steam/steamapps"
+    local steamapps_dir="$HOME/.local/share/Steam/steamapps"
     if [ ! -d "$steamapps_dir" ]; then
         zenity --error --text="未找到 Steam 目录。"
         return 1
@@ -842,8 +1046,7 @@ fix_shared_disk() {
     fi
 
     while IFS= read -r line; do
-        unset NAME TYPE LABEL FSTYPE MOUNTPOINT UUID PARTTYPE SIZE
-        eval "$line"
+        parse_line "$line"
 
         name="$NAME"
         type="$TYPE"
@@ -1047,22 +1250,34 @@ fix_shared_disk() {
 install_uu_accelerator() {
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 安装UU加速器插件 ════════════════${NC}"
-    curl -s uudeck.com | sudo sh
-    echo -e "${GREEN}UU加速器插件安装完成。${NC}"
+    if curl -s uudeck.com | sudo sh; then
+        echo -e "${GREEN}✓ UU加速器插件安装完成。${NC}"
+    else
+        echo -e "${RED}✗ 安装失败（脚本返回错误码），请检查网络后重试。${NC}"
+        return 1
+    fi
 }
 
 install_xunyou_accelerator() {
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 安装迅游加速器插件 ════════════════${NC}"
-    curl -s sd.xunyou.com | sudo sh
-    echo -e "${GREEN}迅游加速器插件安装完成。${NC}"
+    if curl -s sd.xunyou.com | sudo sh; then
+        echo -e "${GREEN}✓ 迅游加速器插件安装完成。${NC}"
+    else
+        echo -e "${RED}✗ 安装失败（脚本返回错误码），请检查网络后重试。${NC}"
+        return 1
+    fi
 }
 
 install_qiyou_accelerator() {
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 安装奇游联机宝加速插件 ════════════════${NC}"
-    curl -s sd.qiyou.cn | sudo sh
-    echo -e "${GREEN}奇游联机宝加速插件安装完成。${NC}"
+    if curl -s sd.qiyou.cn | sudo sh; then
+        echo -e "${GREEN}✓ 奇游联机宝加速插件安装完成。${NC}"
+    else
+        echo -e "${RED}✗ 安装失败（脚本返回错误码），请检查网络后重试。${NC}"
+        return 1
+    fi
 }
 
 install_asklink() {
@@ -1174,8 +1389,8 @@ watt_toolkit_install() {
     echo -e "${YELLOW}═══════安装/更新 Watt Toolkit (Steam++) ═══════${NC}"
     echo ""
 
-    local INSTALL_DIR="/home/deck/Watt Toolkit"
-    local DESKTOP_DIR="/home/deck/Desktop"
+    local INSTALL_DIR="$HOME/Watt Toolkit"
+    local DESKTOP_DIR="$HOME/Desktop"
     local DOWNLOAD_URL="https://gitee.com/rmbgame/SteamTools/releases/download/3.1.0/Steam%20%20_v3.1.0_linux_x64.tgz"
     local VERSION="3.1.0"
 
@@ -1187,16 +1402,36 @@ watt_toolkit_install() {
     done
 
     local installed_version=""
-    if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/.version" ]; then
-        installed_version=$(cat "$INSTALL_DIR/.version")
-        echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
+    local has_install=false
+    if [ -d "$INSTALL_DIR" ]; then
+        has_install=true
+        if [ -f "$INSTALL_DIR/.version" ]; then
+            installed_version=$(cat "$INSTALL_DIR/.version")
+            echo -e "${CYAN}当前已安装版本: ${installed_version}${NC}"
+        else
+            echo -e "${YELLOW}检测到已安装目录，但无法读取版本号。${NC}"
+        fi
     else
         echo -e "${YELLOW}未检测到已安装的 Watt Toolkit。${NC}"
     fi
 
-    if [ -n "$installed_version" ] && [ "$installed_version" = "$VERSION" ]; then
-        echo -e "${GREEN}✅ 已是最新版本 ${installed_version}，无需操作。${NC}"
-        return 0
+    if $has_install; then
+        if [ -n "$installed_version" ] && [ "$installed_version" = "$VERSION" ]; then
+            echo -e "${GREEN}✅ 已是最新版本 ${installed_version}，无需操作。${NC}"
+            return 0
+        fi
+        # 已安装但版本不同或无法读取 → 先询问再下载，避免静默覆盖
+        if [ -n "$installed_version" ]; then
+            echo -e "${YELLOW}检测到新版本 ${VERSION}（当前已安装: ${installed_version}）。${NC}"
+        else
+            echo -e "${YELLOW}将重新下载安装版本 ${VERSION}。${NC}"
+        fi
+        read -n1 -p "按回车键或 A 键继续下载安装，其他键取消: " confirm < /dev/tty
+        echo
+        if [[ -n "$confirm" && ! "$confirm" =~ [Aa] ]]; then
+            echo "取消操作。"
+            return 0
+        fi
     fi
 
     echo -e "${GREEN}将安装版本: ${VERSION}${NC}"
@@ -1301,8 +1536,8 @@ watt_toolkit_uninstall() {
     mk_temp_dir
     clear
     echo -e "${YELLOW}══════════════ 卸载 Watt Toolkit ══════════════${NC}"
-    local INSTALL_DIR="/home/deck/Watt Toolkit"
-    local DESKTOP_DIR="/home/deck/Desktop"
+    local INSTALL_DIR="$HOME/Watt Toolkit"
+    local DESKTOP_DIR="$HOME/Desktop"
 
     if [ ! -d "$INSTALL_DIR" ]; then
         echo -e "${YELLOW}未检测到已安装的 Watt Toolkit。${NC}"
@@ -1339,20 +1574,13 @@ watt_toolkit_uninstall() {
     echo -e "${GREEN}✅ Watt Toolkit 已卸载完成。${NC}"
 }
 
-install_decky_plugin() {
+install_github_plugin() {
     local GITHUB_REPO="$1"
     local PLUGIN_DIR="$2"
     local DISPLAY_NAME="$3"
-    local PLUGIN_PATH="/home/deck/homebrew/plugins/${PLUGIN_DIR}"
+    local PLUGIN_PATH="$HOME/homebrew/plugins/${PLUGIN_DIR}"
     local VERSION_FILE="$PLUGIN_PATH/package.json"
     local TEMP_DIR="/tmp/${DISPLAY_NAME}_install"
-    local MIRRORS=(
-        "http://gh.ddlc.top/"
-        "http://ghproxy.net/"
-        "http://mirror.ghproxy.com/"
-        "https://github.com/"
-    )
-
     mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 安装/更新 ${DISPLAY_NAME} ════════════════${NC}"
@@ -1371,6 +1599,10 @@ install_decky_plugin() {
         echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
         return 1
     fi
+    if ! [[ "$releases_json" == \[* ]]; then
+        echo -e "${RED}错误: GitHub API 返回异常（仓库可能没有 Release，或网络被限）。${NC}"
+        return 1
+    fi
 
     local versions_info=$(echo "$releases_json" | $PYTHON_CMD -c "
 import sys, json
@@ -1380,7 +1612,7 @@ try:
     prerelease = []
     for rel in data:
         tag = rel.get('tag_name', '')
-        if tag:
+        if tag and rel.get('assets') and any(ch.isdigit() for ch in tag):
             if rel.get('prerelease', False):
                 prerelease.append(tag)
             else:
@@ -1401,14 +1633,13 @@ except:
 
     local latest_stable=""
     if [ -n "$stable_list" ]; then
-        latest_stable=$(echo "$stable_list" | tr ',' '\n' | sed 's/^v//' | sort -V | tail -1)
-        [ -n "$latest_stable" ] && latest_stable="v${latest_stable}"
+        # GitHub API 按发布时间倒序返回，第一个稳定版即最新
+        latest_stable=$(echo "$stable_list" | cut -d, -f1)
     fi
 
     local latest_prerelease=""
     if [ -n "$prerelease_list" ]; then
-        latest_prerelease=$(echo "$prerelease_list" | tr ',' '\n' | sed 's/^v//' | sort -V | tail -1)
-        [ -n "$latest_prerelease" ] && latest_prerelease="v${latest_prerelease}"
+        latest_prerelease=$(echo "$prerelease_list" | cut -d, -f1)
     fi
 
     local local_version=""
@@ -1557,8 +1788,22 @@ except:
                 return 0
             fi
         else
-            if [ -n "$latest_prerelease" ]; then
-                local stable_num=$(echo "$local_version" | sed 's/^v//')
+            # 先比较本地与最新正式版（无预发布时也必须检测正式版更新）
+            local stable_num=$(echo "$local_version" | sed 's/^v//')
+            local latest_stable_num=$(echo "$latest_stable" | sed 's/^v//')
+            local higher_stable=$(printf '%s\n' "$stable_num" "$latest_stable_num" | sort -V | tail -1)
+            if [ -n "$latest_stable" ] && [ "$higher_stable" = "$latest_stable_num" ] && [ "$stable_num" != "$latest_stable_num" ]; then
+                echo -e "${YELLOW}检测到新版本：正式版 ${latest_stable}（当前 ${local_version}）。${NC}"
+                read -n1 -p "按回车键或 A 键更新，其他键保持: " up_choice < /dev/tty
+                echo
+                if [[ -z "$up_choice" || "$up_choice" == "a" || "$up_choice" == "A" ]]; then
+                    target_version="$latest_stable"
+                    echo -e "${GREEN}将更新至: ${target_version}${NC}"
+                else
+                    echo "保持当前版本。"
+                    return 0
+                fi
+            elif [ -n "$latest_prerelease" ]; then
                 local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
                 local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
                 if [ "$higher" = "$prerelease_num" ]; then
@@ -1593,14 +1838,43 @@ except:
 import sys, json
 try:
     data = json.load(sys.stdin)
-    target_tag = '$target_version'
+    def norm(t):
+        t = str(t).strip()
+        while t[:1] in 'vV':
+            t = t[1:]
+        return t
+    target_tag = norm('$target_version')
+    plugin_dir = norm('$PLUGIN_DIR').lower()
+    display = norm('$DISPLAY_NAME').lower()
+    def is_source(name):
+        n = name.lower()
+        return any(k in n for k in ('source', 'yuanma', 'src', '\u6e90\u7801'))
+    def pick(assets):
+        # 1. 优先选名称含插件目录名且非源码包的
+        for a in assets:
+            n = a.get('name', '')
+            if plugin_dir in n.lower() and not is_source(n):
+                return a
+        # 2. 其次选名称含显示名的
+        for a in assets:
+            n = a.get('name', '')
+            if display in n.lower() and not is_source(n):
+                return a
+        # 3. 再其次选任意非源码 .zip
+        for a in assets:
+            n = a.get('name', '')
+            if n.endswith('.zip') and not is_source(n):
+                return a
+        # 4. 退路：第一个 .zip
+        for a in assets:
+            if a.get('name', '').endswith('.zip'):
+                return a
+        return None
     for rel in data:
-        if rel.get('tag_name') == target_tag:
-            for asset in rel.get('assets', []):
-                name = asset.get('name', '')
-                if name.endswith('.zip'):
-                    print(asset.get('browser_download_url', ''))
-                    break
+        if norm(rel.get('tag_name', '')) == target_tag:
+            asset = pick(rel.get('assets', []))
+            if asset:
+                print(asset.get('browser_download_url', ''))
             break
 except:
     pass
@@ -1615,60 +1889,8 @@ except:
     cd "$TEMP_DIR" || return
 
     local zip_filename="${DISPLAY_NAME}.zip"
-    local DOWNLOAD_SUCCESS=false
 
-    while true; do
-        clear
-        echo -e "${YELLOW}════════════════ 安装/更新 ${DISPLAY_NAME} ════════════════${NC}"
-        echo ""
-        echo -e "${GREEN}将安装版本: ${target_version}${NC}"
-        echo ""
-        echo "请选择下载镜像源（输入编号，0取消）："
-        for i in "${!MIRRORS[@]}"; do
-            echo "  $((i+1)). ${MIRRORS[$i]}"
-        done
-
-        read -p "请输入选择: " choice < /dev/tty
-
-        if [[ -z "$choice" ]]; then
-            echo -e "${RED}输入无效，请重新选择。${NC}"
-            sleep 1
-            continue
-        fi
-        if [[ "$choice" == "0" ]]; then
-            echo "操作已取消。"
-            return 0
-        fi
-        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
-            mirror="${MIRRORS[$((choice-1))]}"
-            FULL_URL="${mirror}${download_url}"
-            echo -e "尝试从 ${mirror} 下载..."
-
-            curl -L --progress-bar -f -o "$zip_filename" "$FULL_URL"
-            local curl_exit=$?
-
-            if [ $curl_exit -eq 0 ] && [ -f "$zip_filename" ]; then
-                if unzip -t "$zip_filename" &> /dev/null; then
-                    echo -e "${GREEN}下载成功，文件完整。${NC}"
-                    DOWNLOAD_SUCCESS=true
-                    break
-                else
-                    echo -e "${RED}下载文件不完整（zip 校验失败），请重新选择镜像源。${NC}"
-                    rm -f "$zip_filename"
-                    sleep 1
-                fi
-            else
-                echo -e "${RED}下载失败（curl 退出码: $curl_exit），请重新选择镜像源。${NC}"
-                rm -f "$zip_filename"
-                sleep 1
-            fi
-        else
-            echo -e "${RED}无效编号，请重新选择。${NC}"
-            sleep 1
-        fi
-    done
-
-    if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
+    if ! download_zip_with_mirrors "$download_url" "$zip_filename" "${DISPLAY_NAME} ${target_version}"; then
         echo -e "${RED}下载失败，安装中止。${NC}"
         return 1
     fi
@@ -1697,7 +1919,7 @@ except:
     fi
 
     sudo rm -rf "$PLUGIN_PATH"
-    sudo mkdir -p /home/deck/homebrew/plugins
+    sudo mkdir -p "$HOME/homebrew/plugins"
     sudo mv "$extracted_dir" "$PLUGIN_PATH"
     sudo chown -R deck:deck "$PLUGIN_PATH"
 
@@ -1707,387 +1929,14 @@ except:
     echo -e "${GREEN}安装目录: ${PLUGIN_PATH}${NC}"
 }
 
-install_tomoon_install() {
-    mk_temp_dir
-    clear
-    echo -e "${YELLOW}════════════════ 安装/更新 ToMoon 插件 ════════════════${NC}"
-    echo ""
-
-    local PLUGIN_DIR="/home/deck/homebrew/plugins/tomoon"
-    local VERSION_FILE="$PLUGIN_DIR/package.json"
-    local TEMP_DIR="/tmp/tomoon_install"
-    local MIRRORS=(
-        "http://gh.ddlc.top/"
-        "http://ghproxy.net/"
-        "http://mirror.ghproxy.com/"
-        "https://github.com/"
-    )
-
-    for cmd in curl sudo unzip; do
-        if ! command -v $cmd &> /dev/null; then
-            echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
-            return 1
-        fi
-    done
-
-    echo -e "${CYAN}正在从 GitHub 获取最新版本...${NC}"
-    local release_info=$(curl -s "https://api.github.com/repos/YukiCoco/ToMoon/releases/latest")
-    if [ -z "$release_info" ]; then
-        echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
-        return 1
-    fi
-
-    local latest_version=$(echo "$release_info" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"tag_name": *"//; s/".*//')
-    if [ -z "$latest_version" ]; then
-        echo -e "${RED}错误: 无法解析版本号，API 返回内容可能异常。${NC}"
-        echo -e "${YELLOW}返回内容（前200字符）: ${release_info:0:200}${NC}"
-        return 1
-    fi
-
-    local download_url=$(echo "$release_info" | grep -o '"browser_download_url": *"[^"]*tomoon-[^"]*\.zip"' | head -1 | sed 's/.*"browser_download_url": *"//; s/".*//')
-    if [ -z "$download_url" ]; then
-        echo -e "${RED}错误: 无法获取 ZIP 下载链接。${NC}"
-        echo -e "${YELLOW}请检查该 release 是否包含 tomoon-*.zip 资产。${NC}"
-        return 1
-    fi
-
-    local local_version=""
-    if [ -f "$VERSION_FILE" ]; then
-        local_version=$(grep -o '"version": *"[^"]*"' "$VERSION_FILE" | head -1 | sed 's/.*"version": *"//; s/".*//')
-        if [ -n "$local_version" ]; then
-            local_version="v${local_version}"
-            echo -e "${CYAN}当前已安装版本: ${local_version}${NC}"
-        else
-            echo -e "${YELLOW}已安装但无法读取版本号。${NC}"
-        fi
-    fi
-
-    if [ -n "$local_version" ] && [ "$local_version" = "$latest_version" ]; then
-        echo -e "${GREEN}已经是最新版本 ${local_version}，无需更新。${NC}"
-        return 0
-    fi
-
-    rm -rf "$TEMP_DIR"
-    mkdir -p "$TEMP_DIR"
-    cd "$TEMP_DIR" || return
-
-    local zip_filename="tomoon-${latest_version}.zip"
-    local DOWNLOAD_SUCCESS=false
-
-    while true; do
-        clear
-        echo -e "${YELLOW}════════════════ 安装/更新 ToMoon 插件 ════════════════${NC}"
-        echo ""
-        echo -e "${GREEN}最新版本: ${latest_version}${NC}"
-        if [ -n "$local_version" ]; then
-            echo -e "${CYAN}当前已安装版本: ${local_version}${NC}"
-        else
-            echo -e "${YELLOW}未检测到已安装的 ToMoon 插件。${NC}"
-        fi
-        echo -e "${GREEN}将安装版本: ${latest_version}${NC}"
-        echo ""
-        echo "请选择下载镜像源（输入编号，0取消）："
-        for i in "${!MIRRORS[@]}"; do
-            echo "  $((i+1)). ${MIRRORS[$i]}"
-        done
-
-        read -p "请输入选择: " choice < /dev/tty
-
-        if [[ -z "$choice" ]]; then
-            echo -e "${RED}输入无效，请重新选择。${NC}"
-            sleep 1
-            continue
-        fi
-        if [[ "$choice" == "0" ]]; then
-            echo "操作已取消。"
-            return 0
-        fi
-        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
-            mirror="${MIRRORS[$((choice-1))]}"
-            FULL_URL="${mirror}${download_url}"
-            echo -e "尝试从 ${mirror} 下载..."
-
-            curl -L --progress-bar -f -o "$zip_filename" "$FULL_URL"
-            local curl_exit=$?
-
-            if [ $curl_exit -eq 0 ] && [ -f "$zip_filename" ]; then
-                if unzip -t "$zip_filename" &> /dev/null; then
-                    echo -e "${GREEN}下载成功，文件完整。${NC}"
-                    DOWNLOAD_SUCCESS=true
-                    break
-                else
-                    echo -e "${RED}下载文件不完整（zip 校验失败），请重新选择镜像源。${NC}"
-                    rm -f "$zip_filename"
-                    sleep 1
-                fi
-            else
-                echo -e "${RED}下载失败（curl 退出码: $curl_exit），请重新选择镜像源。${NC}"
-                rm -f "$zip_filename"
-                sleep 1
-            fi
-        else
-            echo -e "${RED}无效编号，请重新选择。${NC}"
-            sleep 1
-        fi
-    done
-
-    if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
-        echo -e "${RED}下载失败，安装中止。${NC}"
-        return 1
-    fi
-
-    echo -e "${CYAN}正在解压并安装到 ${PLUGIN_DIR}...${NC}"
-
-    local EXTRACT_DIR="$TEMP_DIR/extract"
-    mkdir -p "$EXTRACT_DIR"
-
-    if ! sudo unzip -q "$zip_filename" -d "$EXTRACT_DIR"; then
-        echo -e "${RED}解压失败。${NC}"
-        rm -rf "$TEMP_DIR"
-        return 1
-    fi
-
-    local extracted_dir=""
-    extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 2 -type f -name "package.json" -exec dirname {} \; | head -1)
-    if [ -z "$extracted_dir" ]; then
-        extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 2 -type f -name "tomoon" -exec dirname {} \; | head -1)
-    fi
-    if [ -z "$extracted_dir" ]; then
-        extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 1 -type d ! -path "$EXTRACT_DIR" | head -1)
-    fi
-    if [ -z "$extracted_dir" ]; then
-        extracted_dir="$EXTRACT_DIR"
-    fi
-
-    sudo rm -rf "$PLUGIN_DIR"
-    sudo mkdir -p /home/deck/homebrew/plugins
-    sudo mv "$extracted_dir" "$PLUGIN_DIR"
-    sudo chown -R deck:deck "$PLUGIN_DIR"
-
-    rm -rf "$TEMP_DIR"
-
-    echo -e "${GREEN}✅ ToMoon 插件 ${latest_version} 安装完成！${NC}"
-    echo -e "${GREEN}安装目录: ${PLUGIN_DIR}${NC}"
-}
-install_freedeck_install() {
-    local GITHUB_REPO="panyiwei-home/Freedeck"
-    local PLUGIN_DIR="Freedeck"
-    local DISPLAY_NAME="Freedeck"
-    local PLUGIN_PATH="/home/deck/homebrew/plugins/${PLUGIN_DIR}"
-    local VERSION_FILE="$PLUGIN_PATH/package.json"
-    local TEMP_DIR="/tmp/${DISPLAY_NAME}_install"
-    local MIRRORS=(
-        "http://gh.ddlc.top/"
-        "http://ghproxy.net/"
-        "http://mirror.ghproxy.com/"
-        "https://github.com/"
-    )
-
-    mk_temp_dir
-    clear
-    echo -e "${YELLOW}════════════════ 安装/更新 ${DISPLAY_NAME} ════════════════${NC}"
-    echo ""
-
-    for cmd in curl sudo unzip python3; do
-        if ! command -v $cmd &> /dev/null; then
-            echo -e "${RED}错误: 未找到 $cmd 命令，请先安装。${NC}"
-            return 1
-        fi
-    done
-
-    echo -e "${CYAN}正在从 GitHub 获取版本信息...${NC}"
-    local releases_json=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases")
-    if [ -z "$releases_json" ]; then
-        echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
-        return 1
-    fi
-
-    local latest_version=$(echo "$releases_json" | $PYTHON_CMD -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    tags = [r.get('tag_name', '') for r in data if r.get('tag_name')]
-    if tags:
-        tags.sort(key=lambda t: [int(x) for x in t.replace('v', '').split('.') if x.isdigit()], reverse=True)
-        print(tags[0])
-except:
-    pass
-")
-    if [ -z "$latest_version" ]; then
-        echo -e "${RED}错误: 无法获取最新版本号。${NC}"
-        return 1
-    fi
-    echo -e "${CYAN}官网最新版本: ${latest_version}${NC}"
-
-    local local_version=""
-    if [ -f "$VERSION_FILE" ]; then
-        local_version=$(grep -o '"version": *"[^"]*"' "$VERSION_FILE" | head -1 | sed 's/.*"version": *"//; s/".*//')
-        if [ -n "$local_version" ]; then
-            echo -e "${CYAN}当前已安装版本: ${local_version}${NC}"
-        else
-            echo -e "${YELLOW}已安装但无法读取版本号。${NC}"
-        fi
-    else
-        echo -e "${YELLOW}未检测到已安装的 ${DISPLAY_NAME}。${NC}"
-    fi
-
-    local local_clean=$(echo "$local_version" | sed 's/^v//')
-    local latest_clean=$(echo "$latest_version" | sed 's/^v//')
-    local target_version=""
-
-    if [ -z "$local_version" ]; then
-        echo -e "${GREEN}将安装最新版本: ${latest_version}${NC}"
-        target_version="$latest_version"
-    elif [ "$local_clean" = "$latest_clean" ]; then
-        echo -e "${GREEN}已是最新版本 ${local_version}，无需更新。${NC}"
-        return 0
-    else
-        local higher=$(printf '%s\n' "$local_clean" "$latest_clean" | sort -V | tail -1)
-        if [ "$higher" = "$latest_clean" ]; then
-            echo -e "${YELLOW}检测到新版本：${latest_version}（当前 ${local_version}）。${NC}"
-            read -n1 -p "按回车键或 Y 键更新，其他键保持: " update_choice < /dev/tty
-            echo
-            if [[ -z "$update_choice" || "$update_choice" == "y" || "$update_choice" == "Y" ]]; then
-                target_version="$latest_version"
-                echo -e "${GREEN}将更新至: ${target_version}${NC}"
-            else
-                echo "保持当前版本。"
-                return 0
-            fi
-        else
-            echo -e "${GREEN}本地版本 ${local_version} 不低于官网最新版本 ${latest_version}，无需操作。${NC}"
-            return 0
-        fi
-    fi
-
-    if [ -z "$target_version" ]; then
-        echo -e "${RED}错误: 未确定目标版本。${NC}"
-        return 1
-    fi
-
-    local download_url=$(echo "$releases_json" | $PYTHON_CMD -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    target_tag = '$target_version'
-    for rel in data:
-        if rel.get('tag_name') == target_tag:
-            for asset in rel.get('assets', []):
-                name = asset.get('name', '')
-                if name.endswith('.zip'):
-                    print(asset.get('browser_download_url', ''))
-                    break
-            break
-except:
-    pass
-")
-    if [ -z "$download_url" ]; then
-        echo -e "${RED}错误: 无法获取 ${target_version} 的下载链接。${NC}"
-        return 1
-    fi
-
-    rm -rf "$TEMP_DIR"
-    mkdir -p "$TEMP_DIR"
-    cd "$TEMP_DIR" || return
-
-    local zip_filename="${DISPLAY_NAME}.zip"
-    local DOWNLOAD_SUCCESS=false
-
-    while true; do
-        clear
-        echo -e "${YELLOW}════════════════ 安装/更新 ${DISPLAY_NAME} ════════════════${NC}"
-        echo ""
-        echo -e "${GREEN}将安装版本: ${target_version}${NC}"
-        echo ""
-        echo "请选择下载镜像源（输入编号，0取消）："
-        for i in "${!MIRRORS[@]}"; do
-            echo "  $((i+1)). ${MIRRORS[$i]}"
-        done
-
-        read -p "请输入选择: " choice < /dev/tty
-
-        if [[ -z "$choice" ]]; then
-            echo -e "${RED}输入无效，请重新选择。${NC}"
-            sleep 1
-            continue
-        fi
-        if [[ "$choice" == "0" ]]; then
-            echo "操作已取消。"
-            return 0
-        fi
-        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
-            mirror="${MIRRORS[$((choice-1))]}"
-            FULL_URL="${mirror}${download_url}"
-            echo -e "尝试从 ${mirror} 下载..."
-
-            curl -L --progress-bar -f -o "$zip_filename" "$FULL_URL"
-            local curl_exit=$?
-
-            if [ $curl_exit -eq 0 ] && [ -f "$zip_filename" ]; then
-                if unzip -t "$zip_filename" &> /dev/null; then
-                    echo -e "${GREEN}下载成功，文件完整。${NC}"
-                    DOWNLOAD_SUCCESS=true
-                    break
-                else
-                    echo -e "${RED}下载文件不完整（zip 校验失败），请重新选择镜像源。${NC}"
-                    rm -f "$zip_filename"
-                    sleep 1
-                fi
-            else
-                echo -e "${RED}下载失败（curl 退出码: $curl_exit），请重新选择镜像源。${NC}"
-                rm -f "$zip_filename"
-                sleep 1
-            fi
-        else
-            echo -e "${RED}无效编号，请重新选择。${NC}"
-            sleep 1
-        fi
-    done
-
-    if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
-        echo -e "${RED}下载失败，安装中止。${NC}"
-        return 1
-    fi
-
-    echo -e "${CYAN}正在解压并安装到 ${PLUGIN_PATH}...${NC}"
-
-    local EXTRACT_DIR="$TEMP_DIR/extract"
-    mkdir -p "$EXTRACT_DIR"
-
-    if ! sudo unzip -q "$zip_filename" -d "$EXTRACT_DIR"; then
-        echo -e "${RED}解压失败。${NC}"
-        rm -rf "$TEMP_DIR"
-        return 1
-    fi
-
-    local extracted_dir=""
-    extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 2 -type f -name "package.json" -exec dirname {} \; | head -1)
-    if [ -z "$extracted_dir" ]; then
-        extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 2 -type f -name "tomoon" -exec dirname {} \; | head -1)
-    fi
-    if [ -z "$extracted_dir" ]; then
-        extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 1 -type d ! -path "$EXTRACT_DIR" | head -1)
-    fi
-    if [ -z "$extracted_dir" ]; then
-        extracted_dir="$EXTRACT_DIR"
-    fi
-
-    sudo rm -rf "$PLUGIN_PATH"
-    sudo mkdir -p /home/deck/homebrew/plugins
-    sudo mv "$extracted_dir" "$PLUGIN_PATH"
-    sudo chown -R deck:deck "$PLUGIN_PATH"
-
-    rm -rf "$TEMP_DIR"
-
-    echo -e "${GREEN}✅ ${DISPLAY_NAME} 插件 ${target_version} 安装完成！${NC}"
-    echo -e "${GREEN}安装目录: ${PLUGIN_PATH}${NC}"
-}
-install_decky_lsfg_vk_install() { install_decky_plugin "xXJSONDeruloXx/decky-lsfg-vk" "Decky-LSFG-VK" "LSFG-VK"; }
-install_decky_framegen_install() { install_decky_plugin "xXJSONDeruloXx/Decky-Framegen" "Decky-Framegen" "Framegen"; }
+install_decky_lsfg_vk_install() { install_github_plugin "xXJSONDeruloXx/decky-lsfg-vk" "Decky-LSFG-VK" "LSFG-VK"; }
+install_decky_framegen_install() { install_github_plugin "xXJSONDeruloXx/Decky-Framegen" "Decky-Framegen" "Framegen"; }
+install_tomoon_install() { install_github_plugin "YukiCoco/ToMoon" "tomoon" "ToMoon"; }
+install_freedeck_install() { install_github_plugin "panyiwei-home/Freedeck" "Freedeck" "Freedeck"; }
 
 uninstall_plugin_generic() {
     local plugin_dir="$1" display_name="$2"
-    local plugin_path="/home/deck/homebrew/plugins/${plugin_dir}"
+    local plugin_path="$HOME/homebrew/plugins/${plugin_dir}"
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 卸载 ${display_name} ════════════════${NC}"
     [ -d "$plugin_path" ] || { echo -e "${YELLOW}未检测到已安装的 ${display_name}。${NC}"; return 0; }
@@ -2111,6 +1960,10 @@ install_plugin_store() {
         echo -e "${RED}错误: 无法连接到 GitHub API，请检查网络。${NC}"
         return 1
     fi
+    if ! [[ "$releases_json" == \[* ]]; then
+        echo -e "${RED}错误: GitHub API 返回异常（仓库可能没有 Release，或网络被限）。${NC}"
+        return 1
+    fi
 
     local versions_info=$(echo "$releases_json" | $PYTHON_CMD -c "
 import sys, json
@@ -2120,7 +1973,7 @@ try:
     prerelease = []
     for rel in data:
         tag = rel.get('tag_name', '')
-        if tag:
+        if tag and rel.get('assets') and any(ch.isdigit() for ch in tag):
             if rel.get('prerelease', False):
                 prerelease.append(tag)
             else:
@@ -2141,17 +1994,16 @@ except:
 
     local latest_stable=""
     if [ -n "$stable_list" ]; then
-        latest_stable=$(echo "$stable_list" | tr ',' '\n' | sed 's/^v//' | sort -V | tail -1)
-        [ -n "$latest_stable" ] && latest_stable="v${latest_stable}"
+        # GitHub API 按发布时间倒序返回，第一个稳定版即最新
+        latest_stable=$(echo "$stable_list" | cut -d, -f1)
     fi
 
     local latest_prerelease=""
     if [ -n "$prerelease_list" ]; then
-        latest_prerelease=$(echo "$prerelease_list" | tr ',' '\n' | sed 's/^v//' | sort -V | tail -1)
-        [ -n "$latest_prerelease" ] && latest_prerelease="v${latest_prerelease}"
+        latest_prerelease=$(echo "$prerelease_list" | cut -d, -f1)
     fi
 
-    local PLUGIN_LOADER="/home/deck/homebrew/services/PluginLoader"
+    local PLUGIN_LOADER="$HOME/homebrew/services/PluginLoader"
     local installed_version=""
     if [[ -f "$PLUGIN_LOADER" && -x "$PLUGIN_LOADER" ]]; then
         installed_version=$(sudo journalctl -u plugin_loader --no-pager 2>/dev/null | grep -i "Starting Decky version" | tail -1 | grep -oP 'version v?\K[0-9.]+(-pre[0-9]+)?')
@@ -2300,8 +2152,22 @@ except:
                 return 0
             fi
         else
-            if [ -n "$latest_prerelease" ]; then
-                local stable_num=$(echo "$installed_version" | sed 's/^v//')
+            # 先比较本地与最新正式版（无预发布时也必须检测正式版更新）
+            local stable_num=$(echo "$installed_version" | sed 's/^v//')
+            local latest_stable_num=$(echo "$latest_stable" | sed 's/^v//')
+            local higher_stable=$(printf '%s\n' "$stable_num" "$latest_stable_num" | sort -V | tail -1)
+            if [ -n "$latest_stable" ] && [ "$higher_stable" = "$latest_stable_num" ] && [ "$stable_num" != "$latest_stable_num" ]; then
+                echo -e "${YELLOW}检测到新版本：正式版 ${latest_stable}（当前 ${installed_version}）。${NC}"
+                read -n1 -p "按回车键或 A 键更新，其他键保持: " up_choice < /dev/tty
+                echo
+                if [[ -z "$up_choice" || "$up_choice" == "a" || "$up_choice" == "A" ]]; then
+                    target_version="$latest_stable"
+                    echo -e "${GREEN}将更新至: ${target_version}${NC}"
+                else
+                    echo "保持当前版本。"
+                    return 0
+                fi
+            elif [ -n "$latest_prerelease" ]; then
                 local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
                 local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
                 if [ "$higher" = "$prerelease_num" ]; then
@@ -2332,7 +2198,7 @@ except:
         return 1
     fi
 
-    HOME_DIR="/home/deck"
+    HOME_DIR="$HOME"
     HOMEBREW_DIR="${HOME_DIR}/homebrew"
     SERVICE_DIR="${HOMEBREW_DIR}/services"
     PLUGIN_DIR="${HOMEBREW_DIR}/plugins"
@@ -2412,13 +2278,13 @@ uninstall_plugin_store() {
     mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 卸载插件商店 ════════════════${NC}"
-    if [ ! -d "/home/deck/homebrew" ]; then
+    if [ ! -d "$HOME/homebrew" ]; then
         echo -e "${YELLOW}未检测到已安装的插件商店。${NC}"
         return 0
     fi
 
     echo -e "${CYAN}检测到已安装插件商店。${NC}"
-    echo "警告：这将删除整个 /home/deck/homebrew 目录，包括所有插件。"
+    echo "警告：这将删除整个 $HOME/homebrew 目录，包括所有插件。"
     echo ""
     read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm < /dev/tty
     echo
@@ -2430,7 +2296,7 @@ uninstall_plugin_store() {
     fi
 
     echo "正在执行卸载..."
-    if sudo rm -rf /home/deck/homebrew; then
+    if sudo rm -rf "$HOME/homebrew"; then
         echo -e "${GREEN}✓ 插件商店卸载完成${NC}"
         echo "如需重新安装，请使用 '安装插件商店' 功能。"
     else
@@ -3470,8 +3336,19 @@ install_anydesk() {
         return 1
     }
 
-    tar -xzf anydesk.tar.gz -C "$ANYDESK_INSTALL_DIR" --strip-components=1
-    chmod +x "$ANYDESK_BIN"
+    if ! tar -xzf anydesk.tar.gz -C "$ANYDESK_INSTALL_DIR" --strip-components=1; then
+        echo -e "${RED}✗ 解压失败，安装中止。${NC}"
+        rm -rf "$ANYDESK_INSTALL_DIR"
+        rm -f anydesk.tar.gz
+        return 1
+    fi
+    chmod +x "$ANYDESK_BIN" 2>/dev/null
+    if [ ! -x "$ANYDESK_BIN" ]; then
+        echo -e "${RED}✗ 安装文件不完整（未找到可执行文件）。${NC}"
+        rm -rf "$ANYDESK_INSTALL_DIR"
+        rm -f anydesk.tar.gz
+        return 1
+    fi
     mkdir -p "$HOME/.local/bin"
     ln -sf "$ANYDESK_BIN" "$HOME/.local/bin/anydesk"
 
@@ -3573,8 +3450,12 @@ install_todesk() {
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 安装ToDesk ════════════════${NC}"
     sudo steamos-readonly disable
-    curl -L todesk.lanbai.top | sh
-    echo -e "${GREEN}✓ ToDesk安装脚本已执行${NC}"
+    if curl -L todesk.lanbai.top | sh; then
+        echo -e "${GREEN}✓ ToDesk安装脚本已执行${NC}"
+    else
+        echo -e "${RED}✗ ToDesk 安装脚本执行失败，请检查网络后重试。${NC}"
+        return 1
+    fi
 }
 
 install_wps_office() { install_flatpak_app "WPS Office" "WPS Office" "Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"; }
@@ -3605,7 +3486,12 @@ install_fcitx5() {
 update_installed_apps() {
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 更新全部应用 ════════════════${NC}"
-    flatpak update -y && echo -e "${GREEN}✓ 所有应用更新完成${NC}"
+    if flatpak update -y; then
+        echo -e "${GREEN}✓ 所有应用更新完成${NC}"
+    else
+        echo -e "${RED}✗ 更新失败，请检查网络或 flatpak 状态。${NC}"
+        return 1
+    fi
 }
 
 uninstall_wps_office() { uninstall_flatpak_app "WPS Office" "WPS Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"; }
@@ -3844,7 +3730,7 @@ install_yellow_duck_software() {
     clear
     echo -e "${YELLOW}════════════════ 安装小黄鸭软件 ════════════════${NC}"
     echo ""
-    local LOSS_DIR="/home/deck/.local/share/Steam/steamapps/common/Lossless Scaling"
+    local LOSS_DIR="$HOME/.local/share/Steam/steamapps/common/Lossless Scaling"
     if [[ -d "$LOSS_DIR" ]]; then
         echo -e "${CYAN}检测到已安装小黄鸭软件。${NC}"
         echo "   安装目录: $LOSS_DIR"
@@ -3891,14 +3777,14 @@ install_yellow_duck_software() {
 
     echo "合并分卷文件并解压..."
     cat "Lossless Scaling.zip".* > Lossless-Scaling-Combined.zip
-    unzip -o Lossless-Scaling-Combined.zip -d "/home/deck/.local/share/Steam/steamapps/common/"
+    unzip -o Lossless-Scaling-Combined.zip -d "$HOME/.local/share/Steam/steamapps/common/"
     if [ $? -ne 0 ]; then
         echo -e "${RED}解压失败。${NC}"
         rm -rf "$DOWNLOAD_DIR"
         return
     fi
 
-    sudo chown -R deck:deck "/home/deck/.local/share/Steam/steamapps/common/Lossless Scaling"
+    sudo chown -R deck:deck "$HOME/.local/share/Steam/steamapps/common/Lossless Scaling"
     rm -rf "$DOWNLOAD_DIR"
     echo -e "${GREEN}✅ 小黄鸭软件安装完成！${NC}"
 }
@@ -4072,9 +3958,9 @@ install_third_party_platform() {
         echo -e "${YELLOW}═══════════ 安装第三方游戏平台 ═══════════${NC}"
         echo ""
 
-        local UBISOFT_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
-        local EPIC_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
-        local BATTLE_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
+        local UBISOFT_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+        local EPIC_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+        local BATTLE_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
         local ubisoft_installed=false
         local epic_installed=false
         local battle_installed=false
@@ -4115,14 +4001,14 @@ install_third_party_platform() {
 }
 
 install_ubisoft() {
-    local UBISOFT_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+    local UBISOFT_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
     if [ -d "$UBISOFT_DIR" ]; then
         echo -e "${GREEN}✓ 育碧平台已安装，无需重复操作。${NC}"
         return 0
     fi
 
     echo -e "${CYAN}正在下载育碧安装程序...${NC}"
-    cd /home/deck || return
+    cd "$HOME" || return
     rm -f UbisoftConnectInstaller.exe
     curl -# -L -o UbisoftConnectInstaller.exe "https://ubistatic3-a.akamaihd.net/orbit/launcher_installer/UbisoftConnectInstaller.exe"
     if [ $? -ne 0 ] || [ ! -f "UbisoftConnectInstaller.exe" ]; then
@@ -4131,13 +4017,19 @@ install_ubisoft() {
     fi
 
     echo -e "${CYAN}正在通过 Proton Experimental 静默安装...${NC}"
-    mkdir -p /home/deck/Applications/third-party-game-platform
+    mkdir -p "$HOME/Applications/third-party-game-platform"
 
-    export STEAM_COMPAT_DATA_PATH="/home/deck/Applications/third-party-game-platform"
-    export STEAM_COMPAT_CLIENT_INSTALL_PATH="/home/deck/.local/share/Steam"
+    export STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform"
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
 
-    "$HOME/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun \
-        "/home/deck/UbisoftConnectInstaller.exe" /S
+    local PROTON_BIN="$HOME/.steam/root/steamapps/common/Proton - Experimental/proton"
+    if [ ! -x "$PROTON_BIN" ]; then
+        echo -e "${RED}✗ 未找到 Proton Experimental 兼容层。${NC}"
+        echo "   请先在 Steam 库 → 工具 中安装 Proton Experimental，然后重试。"
+        return 1
+    fi
+    "$PROTON_BIN" waitforexitandrun \
+        "$HOME/UbisoftConnectInstaller.exe" /S
 
     echo -e "${CYAN}等待安装完成...${NC}"
     local WAIT_TIME=0
@@ -4154,7 +4046,7 @@ install_ubisoft() {
 
     if [ -d "$UBISOFT_DIR" ]; then
         echo -e "${GREEN}✓ 育碧平台安装成功！${NC}"
-        local EXE_PATH="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe"
+        local EXE_PATH="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe"
 
         echo -e "${CYAN}正在添加到 Steam 库...${NC}"
         steamos-add-to-steam "$EXE_PATH"
@@ -4182,7 +4074,7 @@ install_ubisoft() {
 Type=Application
 Name=Ubisoft Connect
 Comment=Ubisoft Game Launcher
-Exec=env STEAM_COMPAT_DATA_PATH="/home/deck/Applications/third-party-game-platform" STEAM_COMPAT_CLIENT_INSTALL_PATH="/home/deck/.local/share/Steam" "/home/deck/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun "$EXE_PATH"
+Exec=env STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform" STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam" "$HOME/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun "$EXE_PATH"
 Icon=${ICON_PATH}
 Terminal=false
 Categories=Game;
@@ -4190,22 +4082,22 @@ EOF
         chmod +x "$DESKTOP_FILE"
         echo -e "${GREEN}✓ 桌面快捷方式已创建：~/Desktop/Ubisoft Connect.desktop${NC}"
 
-        rm -f /home/deck/UbisoftConnectInstaller.exe
+        rm -f "$HOME/UbisoftConnectInstaller.exe"
     else
         echo -e "${RED}✗ 安装失败（超时），请检查 Proton 环境或日志。${NC}"
-        echo -e "${YELLOW}安装程序保留在 /home/deck/UbisoftConnectInstaller.exe，可手动运行。${NC}"
+        echo -e "${YELLOW}安装程序保留在 $HOME/UbisoftConnectInstaller.exe，可手动运行。${NC}"
     fi
 }
 
 install_epic() {
-    local EPIC_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+    local EPIC_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
     if [ -d "$EPIC_DIR" ]; then
         echo -e "${GREEN}✓ Epic平台已安装，无需重复操作。${NC}"
         return 0
     fi
 
     echo -e "${CYAN}正在下载 Epic 安装程序...${NC}"
-    cd /home/deck || return
+    cd "$HOME" || return
     rm -f EpicGamesLauncherInstaller.msi
     wget -O EpicGamesLauncherInstaller.msi "https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/installer/download/EpicGamesLauncherInstaller.msi"
     if [ $? -ne 0 ] || [ ! -f "EpicGamesLauncherInstaller.msi" ]; then
@@ -4214,16 +4106,22 @@ install_epic() {
     fi
 
     echo -e "${CYAN}正在通过 Proton Experimental 静默安装...${NC}"
-    mkdir -p /home/deck/Applications/third-party-game-platform
+    mkdir -p "$HOME/Applications/third-party-game-platform"
 
-    export STEAM_COMPAT_DATA_PATH="/home/deck/Applications/third-party-game-platform"
-    export STEAM_COMPAT_CLIENT_INSTALL_PATH="/home/deck/.local/share/Steam"
+    export STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform"
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
 
     MSI_LOG="/tmp/epic_install_msi_$(date +%Y%m%d_%H%M%S).log"
     echo "安装日志将保存到: $MSI_LOG"
 
-    "$HOME/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun \
-        "/home/deck/EpicGamesLauncherInstaller.msi" /quiet /log "$MSI_LOG"
+    local PROTON_BIN="$HOME/.steam/root/steamapps/common/Proton - Experimental/proton"
+    if [ ! -x "$PROTON_BIN" ]; then
+        echo -e "${RED}✗ 未找到 Proton Experimental 兼容层。${NC}"
+        echo "   请先在 Steam 库 → 工具 中安装 Proton Experimental，然后重试。"
+        return 1
+    fi
+    "$PROTON_BIN" waitforexitandrun \
+        "$HOME/EpicGamesLauncherInstaller.msi" /quiet /log "$MSI_LOG"
 
     echo -e "${CYAN}等待安装完成...${NC}"
     local WAIT_TIME=0
@@ -4240,7 +4138,7 @@ install_epic() {
 
     if [ -d "$EPIC_DIR" ]; then
         echo -e "${GREEN}✓ Epic平台安装成功！${NC}"
-        local EXE_PATH="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
+        local EXE_PATH="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
 
         echo -e "${CYAN}正在添加到 Steam 库...${NC}"
         steamos-add-to-steam "$EXE_PATH"
@@ -4268,7 +4166,7 @@ install_epic() {
 Type=Application
 Name=Epic Games Launcher
 Comment=Epic Games Launcher
-Exec=env STEAM_COMPAT_DATA_PATH="/home/deck/Applications/third-party-game-platform" STEAM_COMPAT_CLIENT_INSTALL_PATH="/home/deck/.local/share/Steam" "/home/deck/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun "$EXE_PATH"
+Exec=env STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform" STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam" "$HOME/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun "$EXE_PATH"
 Icon=${ICON_PATH}
 Terminal=false
 Categories=Game;
@@ -4276,16 +4174,16 @@ EOF
         chmod +x "$DESKTOP_FILE"
         echo -e "${GREEN}✓ 桌面快捷方式已创建：~/Desktop/Epic Games Launcher.desktop${NC}"
 
-        rm -f /home/deck/EpicGamesLauncherInstaller.msi
+        rm -f "$HOME/EpicGamesLauncherInstaller.msi"
         rm -f "$MSI_LOG"
     else
         echo -e "${RED}✗ 安装失败（超时），请检查日志：${MSI_LOG}${NC}"
-        echo -e "${YELLOW}安装程序保留在 /home/deck/EpicGamesLauncherInstaller.msi，可手动运行。${NC}"
+        echo -e "${YELLOW}安装程序保留在 $HOME/EpicGamesLauncherInstaller.msi，可手动运行。${NC}"
     fi
 }
 
 install_battle_net() {
-    local BATTLE_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
+    local BATTLE_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
     if [ -d "$BATTLE_DIR" ]; then
         echo -e "${GREEN}✓ 战网平台已安装，无需重复操作。${NC}"
         return 0
@@ -4325,8 +4223,8 @@ install_battle_net() {
     cat Battle.net_backup.part_* > Battle.net_backup.tar.xz
 
     echo -e "${CYAN}正在解压到目标目录...${NC}"
-    mkdir -p "/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)"
-    if ! tar -xJf Battle.net_backup.tar.xz -C "/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/"; then
+    mkdir -p "$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)"
+    if ! tar -xJf Battle.net_backup.tar.xz -C "$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/"; then
         echo -e "${RED}解压失败。${NC}"
         rm -rf "$DOWNLOAD_DIR"
         return 1
@@ -4365,7 +4263,7 @@ install_battle_net() {
 Type=Application
 Name=Battle.net
 Comment=Blizzard Battle.net Launcher
-Exec=env STEAM_COMPAT_DATA_PATH="/home/deck/Applications/third-party-game-platform" STEAM_COMPAT_CLIENT_INSTALL_PATH="/home/deck/.local/share/Steam" "/home/deck/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun "$EXE_PATH"
+Exec=env STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform" STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam" "$HOME/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun "$EXE_PATH"
 Icon=${ICON_PATH}
 Terminal=false
 Categories=Game;
@@ -4384,9 +4282,9 @@ uninstall_third_party_platform() {
         echo -e "${YELLOW}═══════════ 卸载第三方游戏平台 ═══════════${NC}"
         echo ""
 
-        local UBISOFT_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
-        local EPIC_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
-        local BATTLE_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
+        local UBISOFT_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+        local EPIC_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+        local BATTLE_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
         local ubisoft_installed=false
         local epic_installed=false
         local battle_installed=false
@@ -4421,17 +4319,17 @@ uninstall_third_party_platform() {
 }
 
 uninstall_ubisoft() {
-    local UBISOFT_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+    local UBISOFT_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
     if [ ! -d "$UBISOFT_DIR" ]; then
         echo -e "${YELLOW}未检测到育碧平台，无需卸载。${NC}"
         return 0
     fi
 
     echo -e "${CYAN}正在执行育碧官方卸载程序...${NC}"
-    export STEAM_COMPAT_DATA_PATH="/home/deck/Applications/third-party-game-platform"
-    export STEAM_COMPAT_CLIENT_INSTALL_PATH="/home/deck/.local/share/Steam"
+    export STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform"
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
     ~/.steam/root/steamapps/common/Proton\ -\ Experimental/proton waitforexitandrun \
-        "/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/Uninstall.exe" /S
+        "$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/Uninstall.exe" /S
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ 卸载程序执行成功，正在删除残留目录...${NC}"
         rm -rf "$UBISOFT_DIR"
@@ -4457,8 +4355,8 @@ uninstall_ubisoft() {
 }
 
 uninstall_epic() {
-    local EPIC_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
-    local EPIC_DIR_X86="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Epic Games"
+    local EPIC_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+    local EPIC_DIR_X86="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Epic Games"
     if [ ! -d "$EPIC_DIR" ] && [ ! -d "$EPIC_DIR_X86" ]; then
         echo -e "${YELLOW}未检测到 Epic 平台，无需卸载。${NC}"
         return 0
@@ -4496,7 +4394,7 @@ uninstall_epic() {
 }
 
 uninstall_battle_net() {
-    local BATTLE_DIR="/home/deck/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
+    local BATTLE_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
     if [ ! -d "$BATTLE_DIR" ]; then
         echo -e "${YELLOW}未检测到战网平台，无需卸载。${NC}"
         return 0
@@ -4522,7 +4420,7 @@ uninstall_battle_net() {
     echo -e "${YELLOW}请手动在 Steam 库中删除对应的非 Steam 游戏快捷方式（右键→管理→从您的库中删除非 Steam 游戏）。${NC}"
 }
 
-if [ -n "$1" ] && declare -f "$1" > /dev/null; then
+if [ -n "${1:-}" ] && declare -f "$1" > /dev/null; then
     "$@"
 else
     echo "此脚本为内嵌库，请通过参数调用具体功能。"
@@ -4576,29 +4474,43 @@ class TaskWindow(Gtk.Window):
             self.terminal.set_vexpand(True)
             self.terminal.set_hexpand(True)
             self.terminal.set_scrollback_lines(10000)
+            try:
+                self.terminal.set_font(Pango.FontDescription("Monospace 11"))
+            except Exception:
+                pass
             vbox.pack_start(self.terminal, True, True, 0)
             button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
             button_box.set_margin_top(5)
             button_box.set_margin_bottom(5)
             button_box.set_margin_start(10)
             button_box.set_margin_end(10)
+            self.timer_label = Gtk.Label(label="已运行 0:00")
+            self.timer_label.set_name("task-timer")
+            button_box.pack_start(self.timer_label, False, False, 0)
             button_box.pack_start(Gtk.Label(), True, True, 0)
             self.action_btn = Gtk.Button(label="取消")
             self.action_btn.connect("clicked", self.on_action_button_clicked)
             button_box.pack_start(self.action_btn, False, False, 0)
             vbox.pack_start(button_box, False, False, 0)
             self.temp_script = create_temp_script()
+            self.start_time = time.time()
             self.connect("destroy", self.on_window_destroy)
             self.start_command(func_key)
             self.show_all()
+            GLib.timeout_add_seconds(1, self._tick)
 
     def run_external(self, func_key):
         tmp_path = create_temp_script()
-        cmd = ["konsole", "-e", "bash", "-c", f"bash {tmp_path} {func_key}; read -p '按回车键关闭...' -n1"]
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True)
+        cmd = f"bash {tmp_path} {func_key}; read -p '按回车键关闭...' -n1"
+        if not launch_terminal(cmd):
+            dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
+                                    type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK,
+                                    text="未找到可用的终端模拟器")
+            dlg.format_secondary_text("请安装 konsole 或 xterm 后重试。")
+            dlg.run(); dlg.destroy()
 
     def start_command(self, func_key):
-        self.child_pid = self.terminal.spawn_sync(
+        ok, self.child_pid = self.terminal.spawn_sync(
             Vte.PtyFlags.DEFAULT,
             os.path.expanduser("~"),
             ["/bin/bash", self.temp_script, func_key],
@@ -4608,6 +4520,10 @@ class TaskWindow(Gtk.Window):
             None,
             None
         )
+        if not ok or not self.child_pid:
+            self.action_btn.set_label("启动失败")
+            self.action_btn.set_sensitive(True)
+            return
         self.terminal.connect("child-exited", self.on_child_exited)
 
     def on_child_exited(self, terminal, status):
@@ -4618,36 +4534,47 @@ class TaskWindow(Gtk.Window):
         self.action_btn.set_sensitive(True)
         self.action_btn.set_label("完成")
 
+    def _tick(self):
+        if self.completed:
+            return False
+        elapsed = int(time.time() - self.start_time)
+        m, s = divmod(elapsed, 60)
+        self.timer_label.set_text(f"已运行 {m}:{s:02d}")
+        return True
+
+    def _kill_task(self):
+        pid = getattr(self, 'child_pid', None)
+        if not pid:
+            return
+        try:
+            os.killpg(os.getpgid(pid), signal.SIGTERM)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+
     def on_action_button_clicked(self, button):
         if self.completed:
             self.destroy()
             return
-        if hasattr(self, 'child_pid') and self.child_pid:
-            try:
-                os.kill(self.child_pid, signal.SIGTERM)
-            except:
-                pass
+        self._kill_task()
         self.action_btn.set_sensitive(False)
         self.action_btn.set_label("正在取消...")
         GLib.timeout_add(500, self.destroy)
 
     def force_kill(self):
-        if not self.completed and hasattr(self, 'child_pid') and self.child_pid:
-            try:
-                os.kill(self.child_pid, signal.SIGTERM)
-            except:
-                pass
+        if not self.completed:
+            self._kill_task()
         self.destroy()
         return False
 
     def on_window_destroy(self, widget):
         if self._force_closing:
             return
-        if not self.completed and hasattr(self, 'child_pid') and self.child_pid:
-            try:
-                os.kill(self.child_pid, signal.SIGTERM)
-            except:
-                pass
+        if not self.completed:
+            self._kill_task()
             GLib.timeout_add(500, self._force_close)
 
     def _force_close(self):
@@ -4659,10 +4586,23 @@ class MainWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title="Steam Deck 工具箱")
         self.set_icon_name("input-gamepad-symbolic")
-        self.set_default_size(950, 600)
+        self.set_default_size(950, 620)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.system_type = self.detect_system_type()
         self.task_window = None
+
+        header = Gtk.HeaderBar()
+        header.set_show_close_button(True)
+        header.props.title = "Steam Deck 工具箱"
+        header.props.subtitle = f"v{VERSION}"
+        self.set_titlebar(header)
+
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_placeholder_text("全局搜索功能...")
+        self.search_entry.set_width_chars(18)
+        self.search_entry.connect("search-changed", self.on_search_changed)
+        header.pack_end(self.search_entry)
+        self._current_page = "func"
 
         self.icon_map = {
             "支持和维护": "pushpin.png", "更新日志": "clipboard_twemoji.png",
@@ -4764,17 +4704,10 @@ class MainWindow(Gtk.Window):
         main_vbox.pack_start(hbox, True, True, 0)
 
         self.list_store = Gtk.ListStore(GdkPixbuf.Pixbuf, str)
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        icon_dir = os.path.join(script_dir, "emoji_icons")
         self.category_icons = {}
         for cat in self.category_tree.keys():
-            pixbuf = None
             icon_file = self.icon_map.get(cat)
-            if icon_file:
-                icon_path = os.path.join(icon_dir, icon_file)
-                if os.path.exists(icon_path):
-                    try: pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(icon_path, 24, 24)
-                    except Exception as e: print(f"加载图标失败 {icon_path}: {e}")
+            pixbuf = load_icon_pixbuf(icon_file) if icon_file else None
             self.list_store.append([pixbuf, cat])
             self.category_icons[cat] = pixbuf
 
@@ -4803,7 +4736,7 @@ steamdeck工具箱 v{VERSION}
 制作人：薯条 & DeepSeek
 发布日期：2026年1月1日
 工具箱介绍：这是一个专为 Steam Deck 设计的工具箱，集成了系统优化、软件安装、网络工具等多种功能。
-使用说明：点击左侧分类，右侧显示功能列表。点击功能将弹出独立任务窗口。
+使用说明：点击左侧分类查看功能；顶部搜索框可跨分类查找；点击功能将弹出独立任务窗口。
 https://gitee.com/Zhucy2100/steamdeck_toolbox
 """
         about_textview.get_buffer().set_text(about_text)
@@ -4837,15 +4770,37 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         func_page.pack_start(scrolled_func, True, True, 0)
         self.stack.add_named(func_page, "func")
 
+        # 全局搜索结果页
+        search_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
+        search_page.set_margin_top(20); search_page.set_margin_bottom(20); search_page.set_margin_start(20); search_page.set_margin_end(20)
+        search_page.set_vexpand(True); search_page.set_valign(Gtk.Align.FILL)
+        self.search_title = Gtk.Label(label=""); self.search_title.set_halign(Gtk.Align.START)
+        search_page.pack_start(self.search_title, False, False, 0)
+        self.search_store = Gtk.ListStore(str, str, str)
+        self.search_view = Gtk.TreeView(model=self.search_store)
+        col_name = Gtk.TreeViewColumn("功能"); r_name = Gtk.CellRendererText(); col_name.pack_start(r_name, True); col_name.add_attribute(r_name, "text", 0)
+        col_cat = Gtk.TreeViewColumn("分类"); r_cat = Gtk.CellRendererText(); col_cat.pack_start(r_cat, True); col_cat.add_attribute(r_cat, "text", 1)
+        self.search_view.append_column(col_name); self.search_view.append_column(col_cat)
+        self.search_view.set_headers_visible(True)
+        self.search_view.set_activate_on_single_click(True)
+        self.search_view.connect("row-activated", self.on_search_row_activated)
+        scrolled_search = Gtk.ScrolledWindow(); scrolled_search.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC); scrolled_search.set_vexpand(True); scrolled_search.set_valign(Gtk.Align.FILL); scrolled_search.add(self.search_view)
+        search_page.pack_start(scrolled_search, True, True, 0)
+        self.stack.add_named(search_page, "search")
+
         selection = self.cat_view.get_selection()
         first_path = Gtk.TreePath.new_first(); selection.select_path(first_path)
         self.on_category_activated(self.cat_view, first_path, None)
 
         bottom_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10); bottom_bar.set_margin_top(5); bottom_bar.set_margin_bottom(5); bottom_bar.set_margin_start(10); bottom_bar.set_margin_end(10)
-        help_btn = Gtk.Button(label="帮助"); help_btn.connect("clicked", self.on_help_clicked); bottom_bar.pack_start(help_btn, False, False, 0)
+        self.status_label = Gtk.Label(label="")
+        self.status_label.set_name("status-label")
+        bottom_bar.pack_start(self.status_label, False, False, 0)
         bottom_bar.pack_start(Gtk.Label(), True, True, 0)
+        help_btn = Gtk.Button(label="帮助"); help_btn.connect("clicked", self.on_help_clicked); bottom_bar.pack_start(help_btn, False, False, 0)
         quit_btn = Gtk.Button(label="退出"); quit_btn.connect("clicked", lambda b: self.destroy()); bottom_bar.pack_start(quit_btn, False, False, 0)
         main_vbox.pack_start(bottom_bar, False, False, 0)
+        self.update_status()
 
         self.func_map = {}
         self.build_func_map()
@@ -4861,6 +4816,8 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
             walk(items)
 
     def detect_system_type(self):
+        if not shutil.which("efibootmgr"):
+            return "单系统"
         for cmd in (["sudo", "-n", "efibootmgr"], ["efibootmgr"]):
             try:
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
@@ -4874,9 +4831,13 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
 
     def on_category_activated(self, treeview, path, column):
         model = treeview.get_model(); iter_ = model.get_iter(path); category = model.get_value(iter_, 1)
+        if self.search_entry.get_text().strip():
+            self.search_entry.set_text("")
         if category == "支持和维护":
+            self._current_page = "about"
             self.stack.set_visible_child_name("about"); self.title_icon.set_visible(False); self.category_title.set_visible(False); return
         if category == "更新日志":
+            self._current_page = "changelog"
             self.stack.set_visible_child_name("changelog")
             icon_pixbuf = self.category_icons.get(category)
             if icon_pixbuf: self.title_icon.set_from_pixbuf(icon_pixbuf); self.title_icon.set_visible(True)
@@ -4884,6 +4845,7 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
             self.category_title.set_markup(f"<big><b>{category}</b></big>"); self.category_title.set_visible(True)
             self.display_changelog(); return
 
+        self._current_page = "func"
         self.stack.set_visible_child_name("func")
         icon_pixbuf = self.category_icons.get(category)
         if icon_pixbuf: self.title_icon.set_from_pixbuf(icon_pixbuf); self.title_icon.set_visible(True)
@@ -4907,8 +4869,95 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
                 for child in item[1]:
                     self.func_store.append(parent_iter, [child[0]])
 
+    def on_search_changed(self, entry):
+        query = entry.get_text().strip().lower()
+        if not query:
+            self.stack.set_visible_child_name(self._current_page)
+            return
+        matches = []
+        for cat, items in self.category_tree.items():
+            def walk(items, cat):
+                for item in items:
+                    if isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], str):
+                        if query in item[0].lower():
+                            matches.append((item[0], cat, item[1]))
+                    elif isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], list):
+                        walk(item[1], cat)
+            walk(items, cat)
+        if self.system_type == "双系统":
+            for name, key in (("修复引导", "fix_boot"), ("修复互通盘", "fix_shared_disk")):
+                if query in name.lower():
+                    matches.append((name, "系统优化", key))
+        self.search_store.clear()
+        for name, cat, key in matches:
+            self.search_store.append([name, cat, key])
+        if matches:
+            self.search_title.set_markup(f"<big><b>搜索结果（{len(matches)} 项）</b></big>")
+        else:
+            self.search_title.set_markup("<big><b>搜索结果（无匹配）</b></big>")
+        self.stack.set_visible_child_name("search")
+
+    def on_search_row_activated(self, treeview, path, column):
+        model = treeview.get_model(); iter_ = model.get_iter(path)
+        func_name = model.get_value(iter_, 0)
+        func_key = model.get_value(iter_, 2)
+        self.run_function(func_name, func_key)
+
+    def run_function(self, func_name, func_key):
+        if func_key in DANGEROUS_FUNCS:
+            dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
+                                    type=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.YES_NO,
+                                    text=f"危险操作确认：{func_name}")
+            dlg.format_secondary_text("该功能会修改系统引导、挂载或系统文件，请确认已了解风险。")
+            response = dlg.run()
+            dlg.destroy()
+            if response != Gtk.ResponseType.YES:
+                return
+
+        if func_name in ("Steam缓存管理", "GE-Proton 管理", "卸载其他已安装应用"):
+            self._run_standalone_script(func_key); return
+        if func_name == "UU加速器插件":
+            self.run_external_terminal(func_key); return
+
+        if self.task_window: self.task_window.destroy()
+        self.task_window = TaskWindow(self, func_key, func_name)
+
+    def update_status(self):
+        term = "内嵌终端" if VTE_AVAILABLE else "外部终端"
+        self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
+
     def display_changelog(self):
-        changelog_content = """2026-08-07（v1.6.8） 调整了从github上安装的部分功能的版本对比逻辑
+        changelog_content = """2026-09-06（v1.7.0包含 v1.6.9 的调整）
+【界面优化】
+- 新增顶部标题栏（HeaderBar），显示版本号
+- 新增全局功能搜索：顶部搜索框跨分类查找功能，结果页显示所属分类
+- 任务窗口新增运行计时器，任务状态一目了然
+- 危险操作二次确认：修复引导/修复互通盘/卸载插件商店/清理hosts 执行前弹出确认
+- 底部状态栏显示系统类型、终端模式、版本
+- 全局样式优化：更舒适的列表间距与选中高亮
+
+【问题修复】
+- 修复取消任务无效：任务进程现在会被真正终止（此前点"取消"只是关窗口，进程仍在后台运行）
+- 修复 SteamOS 只读模式禁用后未恢复：所有功能执行完毕自动恢复，避免系统更新异常
+- 修复清理 hosts 误删系统条目：现在只移除 Steam 相关域名并自动备份
+- 修复自更新无内容校验：更新前校验下载内容，防止错误页覆盖脚本
+- 修复版本比较逻辑：数字逐段比较，本地版本更新时不再提示降级
+- 修复 ToMoon/Freedeck 等插件版本获取：排除 build 类无效标签、兼容无 v 前缀标签、智能选择下载资产（跳过源码包）、已装正式版时正确检测更新
+- 修复 GitHub API 检查在管道下误报异常
+- 修复 Watt Toolkit 已安装时静默重复下载：现在会先确认再覆盖
+
+【功能强化】
+- 交换文件创建增加空间预检与 dd/mkswap/swapon 逐级校验，失败时明确报错
+- 加速器/ToDesk/AnyDesk/应用更新增加失败提示
+- 安装育碧/Epic 前置检查 Proton Experimental 是否存在，缺失时给出指引
+- 插件安装器统一为通用逻辑，镜像源全局统一，zip 下载带完整性校验
+- 图标资源内嵌到脚本，离线自包含，无需外部文件夹
+
+【其他】
+- 全面改用 $HOME 变量，减少硬编码路径
+- 桌面快捷方式改用 sys.executable，兼容性更好
+- 终端模拟器缺失时自动回退（konsole → xterm 等）
+2026-08-07（v1.6.8） 调整了从github上安装的部分功能的版本对比逻辑
 2026-08-05（v1.6.7） 修复了部分bug，并完善了部分功能的逻辑
 2026-08-04（v1.6.6包含 v1.6.4-v1.6.5 的调整） 增加了安装第三方游戏平台的功能（目前包含育碧，Epic，战网）
 2026-08-01（v1.6.3包含 v1.6.2 的调整） 完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
@@ -4954,14 +5003,7 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
 
         func_key = self.func_map.get(func_name)
         if not func_key: return
-
-        if func_name in ("Steam缓存管理", "GE-Proton 管理", "卸载其他已安装应用"):
-            self._run_standalone_script(func_key); return
-        if func_name == "UU加速器插件":
-            self.run_external_terminal(func_key); return
-
-        if self.task_window: self.task_window.destroy()
-        self.task_window = TaskWindow(self, func_key, func_name)
+        self.run_function(func_name, func_key)
 
     def _run_standalone_script(self, func_key):
         tmp_path = create_temp_script()
@@ -4972,8 +5014,13 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
 
     def run_external_terminal(self, func_key):
         tmp_path = create_temp_script()
-        cmd = ["konsole", "-e", "bash", "-c", f"bash {tmp_path} {func_key}; read -p '按回车键关闭...' -n1"]
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True)
+        cmd = f"bash {tmp_path} {func_key}; read -p '按回车键关闭...' -n1"
+        if not launch_terminal(cmd):
+            dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
+                                    type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK,
+                                    text="未找到可用的终端模拟器")
+            dlg.format_secondary_text("请安装 konsole 或 xterm 后重试。")
+            dlg.run(); dlg.destroy()
 
     def on_help_clicked(self, button):
         help_dialog = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL, type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="Steam Deck 工具箱")
@@ -4988,7 +5035,7 @@ def ensure_desktop_shortcut():
     content = f"""[Desktop Entry]
 Type=Application
 Name=Deck工具箱
-Exec=python3 "{script_path}"
+Exec={sys.executable} "{script_path}"
 Icon=input-gamepad-symbolic
 Terminal=false
 StartupNotify=true
@@ -5017,23 +5064,29 @@ def ensure_vte_installed():
             "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || { echo '✗ 密钥签署失败'; read -n1; exit 1; }; "
             "sudo pacman -S --noconfirm vte3 || { echo '✗ vte3 安装失败，请检查网络或软件源'; read -n1; exit 1; }; "
             "pacman -Q vte3 >/dev/null 2>&1 || { echo '✗ vte3 安装后验证失败，请重启程序后重试'; read -n1; exit 1; }; "
+            "command -v steamos-readonly >/dev/null 2>&1 && sudo steamos-readonly enable 2>/dev/null || true; "
             "echo '✓ 安装完成，请手动重启本程序。'; read -n1"
         )
-        subprocess.Popen(["konsole", "-e", "bash", "-c", install_cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        if not launch_terminal(install_cmd):
+            err = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.ERROR, Gtk.ButtonsType.OK,
+                                    "未找到可用的终端模拟器")
+            err.format_secondary_text("请手动打开终端执行：sudo pacman -S --noconfirm vte3")
+            err.run(); err.destroy()
 
 def sync_emoji_icons():
+    """确保脚本目录下存在 emoji_icons 文件夹（从内嵌数据解出，离线可用，便于自定义图标）。"""
     script_dir = os.path.dirname(os.path.abspath(__file__))
     local_icon_dir = os.path.join(script_dir, "emoji_icons")
-    required_icons = set(["pushpin.png", "clipboard_twemoji.png", "hammer_wrench.png", "package.png", "globe.png", "game_controller.png", "refresh.png", "inbox.png", "trash.png"])
-    base_raw_url = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/emoji_icons"
     os.makedirs(local_icon_dir, exist_ok=True)
-    for icon_name in required_icons:
+    for icon_name, data in EMBEDDED_ICONS.items():
         local_path = os.path.join(local_icon_dir, icon_name)
-        if os.path.isfile(local_path): continue
+        if os.path.isfile(local_path):
+            continue
         try:
-            req = urllib.request.Request(f"{base_raw_url}/{icon_name}", headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=5) as resp, open(local_path, 'wb') as f: f.write(resp.read())
-        except Exception as e: print(f"下载图标 {icon_name} 失败: {e}")
+            with open(local_path, 'wb') as f:
+                f.write(base64.b64decode(data))
+        except Exception as e:
+            print(f"写入图标 {icon_name} 失败: {e}")
 
 def get_remote_version():
     try:
@@ -5053,6 +5106,9 @@ def _perform_update_in_dialog(dialog, remote_version):
             req = urllib.request.Request(REPO_RAW_URL, headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'})
             with urllib.request.urlopen(req, timeout=30) as response:
                 new_content = response.read().decode('utf-8')
+            if ('BASH_SCRIPT = ' not in new_content or 'VERSION = ' not in new_content
+                    or len(new_content) < 50000):
+                raise ValueError('下载内容校验失败（不是有效的脚本文件），已中止更新')
             current_path = os.path.abspath(sys.argv[0])
             backup_path = current_path + ".bak"
             try: shutil.copy2(current_path, backup_path)
@@ -5098,7 +5154,7 @@ class UpdateCheckWindow(Gtk.Window):
             if self.button is None:
                 self.button = Gtk.Button(label="进入主界面"); self.button.connect("clicked", self.on_button_clicked); self.vbox.pack_start(self.button, False, False, 0)
             self.button.show(); return
-        if remote_version == VERSION:
+        if compare_versions(remote_version, VERSION) <= 0:
             self.label.set_text(f"当前已是最新版本 (v{VERSION})")
             if self.button is not None: self.button.hide()
             GLib.timeout_add(300, self.auto_enter_main); return
@@ -5131,6 +5187,7 @@ def show_main_window():
     GLib.idle_add(ensure_desktop_shortcut); GLib.idle_add(ensure_vte_installed)
 
 def main():
+    apply_app_css()
     update_win = UpdateCheckWindow(); Gtk.main()
 
 if __name__ == "__main__":
