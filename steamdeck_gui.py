@@ -27,7 +27,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -51,22 +51,180 @@ EMBEDDED_ICONS = {
 # ============================================================================
 # 全局样式与工具函数
 # ============================================================================
-APP_CSS = b"""
-headerbar { min-height: 44px; padding: 0 8px; }
-headerbar .title { font-weight: bold; }
-treeview { font-size: 13px; }
-treeview.view { -GtkTreeView-vertical-separator: 6px; }
-treeview.view:selected { background-color: #3d7bfd; color: #ffffff; }
-button { min-height: 30px; padding: 2px 12px; }
-entry.search-entry { border-radius: 4px; }
-#status-label { font-size: 11px; color: alpha(@theme_fg_color, 0.7); }
-#task-timer { font-size: 11px; font-weight: bold; }
+APP_CSS = """
+/* =====================================================================
+   Steam Deck 风格主题：深蓝黑底 + Steam 蓝高亮 + 圆角卡片 + 触控友好行高
+   ===================================================================== */
+@define-color sd_bg #0d1219;
+@define-color sd_bg_alt #101720;
+@define-color sd_panel #151d26;
+@define-color sd_panel_hi #1b2531;
+@define-color sd_border #26313e;
+@define-color sd_accent #1a9fff;
+@define-color sd_accent_dark #0f6cbd;
+@define-color sd_text #e6edf4;
+@define-color sd_dim #8b98a6;
+
+window { background-color: @sd_bg; color: @sd_text; }
+.background { background-color: @sd_bg; }
+
+/* ---------- 顶部标题栏 ---------- */
+headerbar {
+    min-height: 46px;
+    padding: 0 10px;
+    background-image: linear-gradient(to bottom, #1c2733, #131a22);
+    border-bottom: 1px solid #070a0e;
+    color: @sd_text;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+headerbar:backdrop { background-image: linear-gradient(to bottom, #161e28, #11171e); }
+headerbar .title { font-weight: 700; font-size: 15px; color: #ffffff; }
+headerbar .subtitle { font-size: 11px; color: @sd_dim; }
+headerbar button {
+    background-image: none;
+    background-color: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 9px;
+    color: @sd_text;
+    min-height: 26px;
+    padding: 0 10px;
+    box-shadow: none;
+    text-shadow: none;
+}
+headerbar button:hover { background-color: alpha(@sd_accent, 0.30); border-color: @sd_accent; }
+headerbar button:active, headerbar button:checked { background-color: @sd_accent_dark; color: #ffffff; }
+headerbar button.titlebutton {
+    background-image: none;
+    background-color: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+    color: #ffffff;
+    -gtk-icon-shadow: none;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0;
+    box-shadow: none;
+}
+headerbar button.titlebutton:hover { background-color: rgba(255, 255, 255, 0.24); }
+headerbar button.titlebutton:active { background-color: @sd_accent_dark; }
+headerbar button.titlebutton.close:hover { background-color: #c0392b; border-color: #e05a4a; }
+headerbar button.titlebutton image { color: #ffffff; }
+
+/* ---------- 搜索框 ---------- */
+entry.search-entry, searchentry {
+    background-image: none;
+    background-color: #0a0f15;
+    border: 1px solid @sd_border;
+    border-radius: 10px;
+    color: @sd_text;
+    min-height: 30px;
+    padding: 0 10px;
+    box-shadow: none;
+    caret-color: @sd_accent;
+}
+entry.search-entry:focus, searchentry:focus { border-color: @sd_accent; }
+entry.search-entry image, searchentry image { color: @sd_dim; }
+
+/* ---------- 左侧分类栏 ---------- */
+#sidebar { background-color: @sd_bg_alt; border-right: 1px solid @sd_border; }
+#sidebar.view { background-color: transparent; color: @sd_text; -GtkTreeView-vertical-separator: 3px; }
+#sidebar.view:hover { background-color: rgba(255, 255, 255, 0.06); }
+#sidebar.view:selected {
+    background-image: linear-gradient(to right, @sd_accent, @sd_accent_dark);
+    color: #ffffff;
+}
+#sidebar-header {
+    background-image: linear-gradient(to bottom, #16202a, #111820);
+    border-bottom: 1px solid @sd_border;
+    padding: 10px 12px;
+}
+#sidebar-header label { font-weight: 700; color: #ffffff; font-size: 14px; }
+
+/* ---------- 功能列表 / 搜索结果列表 ---------- */
+#func-list { background-color: transparent; color: @sd_text; -GtkTreeView-vertical-separator: 2px; }
+#func-list.view:hover { background-color: alpha(@sd_accent, 0.14); }
+#func-list.view:selected {
+    background-image: linear-gradient(to right, @sd_accent, @sd_accent_dark);
+    color: #ffffff;
+}
+treeview button {
+    background-image: none;
+    background-color: @sd_panel_hi;
+    border: none;
+    border-bottom: 1px solid @sd_border;
+    border-radius: 0;
+    color: @sd_dim;
+    min-height: 26px;
+    box-shadow: none;
+    text-shadow: none;
+    font-weight: 600;
+}
+
+/* ---------- 圆角卡片容器 ---------- */
+.card {
+    background-color: @sd_panel;
+    border: 1px solid @sd_border;
+    border-radius: 12px;
+}
+
+/* ---------- 页面标题 ---------- */
+#page-title { color: #ffffff; }
+
+/* ---------- 底部状态栏 ---------- */
+#bottom-bar {
+    background-image: linear-gradient(to bottom, #131a22, #0e141b);
+    border-top: 1px solid @sd_border;
+    padding: 6px 10px;
+}
+#status-label { font-size: 11px; color: @sd_dim; }
+#task-timer { font-size: 11px; font-weight: bold; color: @sd_accent; }
+
+/* ---------- 普通按钮 ---------- */
+button {
+    background-image: none;
+    background-color: @sd_panel_hi;
+    border: 1px solid @sd_border;
+    border-radius: 9px;
+    color: @sd_text;
+    min-height: 30px;
+    padding: 2px 14px;
+    box-shadow: none;
+    text-shadow: none;
+}
+button:hover { background-color: alpha(@sd_accent, 0.28); border-color: @sd_accent; }
+button:active { background-color: @sd_accent_dark; color: #ffffff; }
+button:disabled { color: @sd_dim; background-color: @sd_panel; border-color: @sd_border; }
+button.suggested-action {
+    background-image: linear-gradient(to bottom, @sd_accent, @sd_accent_dark);
+    border-color: @sd_accent;
+    color: #ffffff;
+}
+button.suggested-action:hover { background-image: linear-gradient(to bottom, #3aaeff, @sd_accent_dark); }
+button.destructive-action { background-color: #a63d3c; border-color: #c95352; color: #ffffff; }
+button.destructive-action:hover { background-color: #c14948; border-color: #e06766; }
+
+/* ---------- 文本框 ---------- */
+textview, textview text { background-color: @sd_panel; color: @sd_text; caret-color: @sd_accent; }
+textview { border-radius: 10px; }
+
+/* ---------- 滚动条 ---------- */
+scrollbar { background-color: transparent; border: none; }
+scrollbar slider {
+    background-color: rgba(255, 255, 255, 0.16);
+    border-radius: 6px;
+    min-width: 8px;
+    min-height: 8px;
+}
+scrollbar slider:hover { background-color: alpha(@sd_accent, 0.6); }
+
+/* ---------- 终端 ---------- */
+vte-terminal { padding: 6px; }
 """
 
 def apply_app_css():
     try:
         provider = Gtk.CssProvider()
-        provider.load_from_data(APP_CSS)
+        provider.load_from_data(APP_CSS.encode('utf-8'))
         screen = Gdk.Screen.get_default()
         if screen is None:
             return
@@ -4443,7 +4601,13 @@ def create_temp_script(extra_content=''):
 class TaskWindow(Gtk.Window):
     def __init__(self, parent, func_key, display_name):
         super().__init__(title=f"执行任务: {display_name}")
-        self.set_default_size(700, 500)
+        self.set_default_size(760, 520)
+        task_header = Gtk.HeaderBar()
+        task_header.set_show_close_button(True)
+        task_header.props.title = display_name
+        task_header.props.subtitle = "任务运行中"
+        self.set_titlebar(task_header)
+        self._task_header = task_header
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
         self.set_transient_for(parent)
         self.set_modal(True)
@@ -4478,7 +4642,23 @@ class TaskWindow(Gtk.Window):
                 self.terminal.set_font(Pango.FontDescription("Monospace 11"))
             except Exception:
                 pass
-            vbox.pack_start(self.terminal, True, True, 0)
+            try:
+                fg = Gdk.RGBA(); fg.parse("#e6edf4")
+                bg = Gdk.RGBA(); bg.parse("#0b1016")
+                palette = []
+                for hex_color in ("#1b2531", "#e05c5c", "#5cd07a", "#e0c05c",
+                                  "#1a9fff", "#b48cff", "#5cc8d0", "#c7d5e0",
+                                  "#3a4a5a", "#ff7a7a", "#7be89a", "#ffd97a",
+                                  "#4fb8ff", "#c9a8ff", "#7fe0e8", "#ffffff"):
+                    c = Gdk.RGBA(); c.parse(hex_color); palette.append(c)
+                self.terminal.set_colors(fg, bg, palette)
+            except Exception:
+                pass
+            term_frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+            term_frame.get_style_context().add_class("card")
+            term_frame.set_margin_top(10); term_frame.set_margin_bottom(0); term_frame.set_margin_start(10); term_frame.set_margin_end(10)
+            term_frame.pack_start(self.terminal, True, True, 0)
+            vbox.pack_start(term_frame, True, True, 0)
             button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
             button_box.set_margin_top(5)
             button_box.set_margin_bottom(5)
@@ -4533,6 +4713,10 @@ class TaskWindow(Gtk.Window):
         self.completed = True
         self.action_btn.set_sensitive(True)
         self.action_btn.set_label("完成")
+        try:
+            self._task_header.props.subtitle = "任务已完成"
+        except Exception:
+            pass
 
     def _tick(self):
         if self.completed:
@@ -4594,12 +4778,12 @@ class MainWindow(Gtk.Window):
         header = Gtk.HeaderBar()
         header.set_show_close_button(True)
         header.props.title = "Steam Deck 工具箱"
-        header.props.subtitle = f"v{VERSION}"
+        header.props.subtitle = f"v{VERSION}  ·  {self.system_type}"
         self.set_titlebar(header)
 
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_placeholder_text("全局搜索功能...")
-        self.search_entry.set_width_chars(18)
+        self.search_entry.set_width_chars(20)
         self.search_entry.connect("search-changed", self.on_search_changed)
         header.pack_end(self.search_entry)
         self._current_page = "func"
@@ -4707,20 +4891,33 @@ class MainWindow(Gtk.Window):
         self.category_icons = {}
         for cat in self.category_tree.keys():
             icon_file = self.icon_map.get(cat)
-            pixbuf = load_icon_pixbuf(icon_file) if icon_file else None
+            pixbuf = load_icon_pixbuf(icon_file, 28) if icon_file else None
             self.list_store.append([pixbuf, cat])
             self.category_icons[cat] = pixbuf
 
         self.cat_view = Gtk.TreeView(model=self.list_store)
+        self.cat_view.set_name("sidebar")
         col = Gtk.TreeViewColumn()
-        col.set_spacing(6)
+        col.set_spacing(10)
         renderer_icon = Gtk.CellRendererPixbuf(); col.pack_start(renderer_icon, False); col.add_attribute(renderer_icon, "pixbuf", 0)
-        renderer_text = Gtk.CellRendererText(); col.pack_start(renderer_text, True); col.add_attribute(renderer_text, "text", 1)
+        renderer_text = Gtk.CellRendererText(); renderer_text.set_property("ypad", 9); col.pack_start(renderer_text, True); col.add_attribute(renderer_text, "text", 1)
         self.cat_view.append_column(col)
         self.cat_view.set_activate_on_single_click(True)
         self.cat_view.connect("row-activated", self.on_category_activated)
-        scrolled_left = Gtk.ScrolledWindow(); scrolled_left.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC); scrolled_left.set_vexpand(True); scrolled_left.set_valign(Gtk.Align.FILL); scrolled_left.add(self.cat_view); scrolled_left.set_size_request(250, -1)
-        hbox.pack_start(scrolled_left, False, True, 0)
+        scrolled_left = Gtk.ScrolledWindow(); scrolled_left.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC); scrolled_left.set_vexpand(True); scrolled_left.set_valign(Gtk.Align.FILL); scrolled_left.add(self.cat_view)
+
+        sidebar_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        sidebar_header.set_name("sidebar-header")
+        sidebar_icon = Gtk.Image.new_from_icon_name("input-gamepad-symbolic", Gtk.IconSize.BUTTON)
+        sidebar_title = Gtk.Label(label="功能分类"); sidebar_title.set_halign(Gtk.Align.START)
+        sidebar_header.pack_start(sidebar_icon, False, False, 0)
+        sidebar_header.pack_start(sidebar_title, False, False, 0)
+
+        left_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        left_panel.set_size_request(258, -1)
+        left_panel.pack_start(sidebar_header, False, False, 0)
+        left_panel.pack_start(scrolled_left, True, True, 0)
+        hbox.pack_start(left_panel, False, True, 0)
 
         self.stack = Gtk.Stack(); self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE); self.stack.set_vexpand(True); self.stack.set_valign(Gtk.Align.FILL)
         hbox.pack_start(self.stack, True, True, 0)
@@ -4728,9 +4925,11 @@ class MainWindow(Gtk.Window):
         # About page
         about_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         about_box.set_margin_top(20); about_box.set_margin_bottom(20); about_box.set_margin_start(20); about_box.set_margin_end(20)
-        about_title = Gtk.Label(); about_title.set_markup("<big><b>关于本工具</b></big>")
+        about_title = Gtk.Label(); about_title.set_name("page-title"); about_title.set_markup("<big><b>关于本工具</b></big>"); about_title.set_halign(Gtk.Align.START)
         about_box.pack_start(about_title, False, False, 0)
         about_textview = Gtk.TextView(); about_textview.set_editable(False); about_textview.set_wrap_mode(Gtk.WrapMode.WORD)
+        about_textview.set_left_margin(16); about_textview.set_right_margin(16); about_textview.set_top_margin(14); about_textview.set_bottom_margin(14)
+        about_textview.get_style_context().add_class("card")
         about_text = f"""
 steamdeck工具箱 v{VERSION}
 制作人：薯条 & DeepSeek
@@ -4746,8 +4945,12 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
 
         changelog_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         changelog_box.set_margin_top(20); changelog_box.set_margin_bottom(20); changelog_box.set_margin_start(20); changelog_box.set_margin_end(20)
+        changelog_title = Gtk.Label(); changelog_title.set_name("page-title"); changelog_title.set_markup("<big><b>更新日志</b></big>"); changelog_title.set_halign(Gtk.Align.START)
+        changelog_box.pack_start(changelog_title, False, False, 0)
         self.changelog_textview = Gtk.TextView(); self.changelog_textview.set_editable(False); self.changelog_textview.set_wrap_mode(Gtk.WrapMode.WORD)
         self.changelog_textview.set_cursor_visible(False)
+        self.changelog_textview.set_left_margin(16); self.changelog_textview.set_right_margin(16); self.changelog_textview.set_top_margin(14); self.changelog_textview.set_bottom_margin(14)
+        self.changelog_textview.get_style_context().add_class("card")
         css_provider = Gtk.CssProvider(); css_provider.load_from_data(b'textview { font: 10pt Monospace; }')
         self.changelog_textview.get_style_context().add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         scrolled_changelog = Gtk.ScrolledWindow(); scrolled_changelog.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC); scrolled_changelog.set_vexpand(True); scrolled_changelog.add(self.changelog_textview)
@@ -4759,14 +4962,16 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         func_page.set_vexpand(True); func_page.set_valign(Gtk.Align.FILL)
         title_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8); title_box.set_halign(Gtk.Align.START)
         self.title_icon = Gtk.Image(); self.title_icon.set_visible(False); title_box.pack_start(self.title_icon, False, False, 0)
-        self.category_title = Gtk.Label(); self.category_title.set_visible(False); title_box.pack_start(self.category_title, False, False, 0)
+        self.category_title = Gtk.Label(); self.category_title.set_name("page-title"); self.category_title.set_visible(False); title_box.pack_start(self.category_title, False, False, 0)
         func_page.pack_start(title_box, False, False, 0)
 
         self.func_store = Gtk.TreeStore(str)
         self.func_view = Gtk.TreeView(model=self.func_store)
-        func_col = Gtk.TreeViewColumn(); renderer_func = Gtk.CellRendererText(); func_col.pack_start(renderer_func, True); func_col.add_attribute(renderer_func, "text", 0)
+        self.func_view.set_name("func-list")
+        func_col = Gtk.TreeViewColumn(); renderer_func = Gtk.CellRendererText(); renderer_func.set_property("ypad", 10); func_col.pack_start(renderer_func, True); func_col.add_attribute(renderer_func, "text", 0)
         self.func_view.append_column(func_col); self.func_view.set_headers_visible(False); self.func_view.set_activate_on_single_click(True); self.func_view.connect("row-activated", self.on_func_row_activated); self.func_view.set_expander_column(func_col)
         scrolled_func = Gtk.ScrolledWindow(); scrolled_func.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC); scrolled_func.set_vexpand(True); scrolled_func.set_valign(Gtk.Align.FILL); scrolled_func.add(self.func_view)
+        scrolled_func.get_style_context().add_class("card")
         func_page.pack_start(scrolled_func, True, True, 0)
         self.stack.add_named(func_page, "func")
 
@@ -4774,17 +4979,19 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         search_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
         search_page.set_margin_top(20); search_page.set_margin_bottom(20); search_page.set_margin_start(20); search_page.set_margin_end(20)
         search_page.set_vexpand(True); search_page.set_valign(Gtk.Align.FILL)
-        self.search_title = Gtk.Label(label=""); self.search_title.set_halign(Gtk.Align.START)
+        self.search_title = Gtk.Label(label=""); self.search_title.set_name("page-title"); self.search_title.set_halign(Gtk.Align.START)
         search_page.pack_start(self.search_title, False, False, 0)
         self.search_store = Gtk.ListStore(str, str, str)
         self.search_view = Gtk.TreeView(model=self.search_store)
-        col_name = Gtk.TreeViewColumn("功能"); r_name = Gtk.CellRendererText(); col_name.pack_start(r_name, True); col_name.add_attribute(r_name, "text", 0)
-        col_cat = Gtk.TreeViewColumn("分类"); r_cat = Gtk.CellRendererText(); col_cat.pack_start(r_cat, True); col_cat.add_attribute(r_cat, "text", 1)
+        self.search_view.set_name("func-list")
+        col_name = Gtk.TreeViewColumn("功能"); r_name = Gtk.CellRendererText(); r_name.set_property("ypad", 9); col_name.pack_start(r_name, True); col_name.add_attribute(r_name, "text", 0)
+        col_cat = Gtk.TreeViewColumn("分类"); r_cat = Gtk.CellRendererText(); r_cat.set_property("ypad", 9); col_cat.pack_start(r_cat, True); col_cat.add_attribute(r_cat, "text", 1)
         self.search_view.append_column(col_name); self.search_view.append_column(col_cat)
         self.search_view.set_headers_visible(True)
         self.search_view.set_activate_on_single_click(True)
         self.search_view.connect("row-activated", self.on_search_row_activated)
         scrolled_search = Gtk.ScrolledWindow(); scrolled_search.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC); scrolled_search.set_vexpand(True); scrolled_search.set_valign(Gtk.Align.FILL); scrolled_search.add(self.search_view)
+        scrolled_search.get_style_context().add_class("card")
         search_page.pack_start(scrolled_search, True, True, 0)
         self.stack.add_named(search_page, "search")
 
@@ -4792,13 +4999,13 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         first_path = Gtk.TreePath.new_first(); selection.select_path(first_path)
         self.on_category_activated(self.cat_view, first_path, None)
 
-        bottom_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10); bottom_bar.set_margin_top(5); bottom_bar.set_margin_bottom(5); bottom_bar.set_margin_start(10); bottom_bar.set_margin_end(10)
+        bottom_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10); bottom_bar.set_name("bottom-bar")
         self.status_label = Gtk.Label(label="")
         self.status_label.set_name("status-label")
         bottom_bar.pack_start(self.status_label, False, False, 0)
         bottom_bar.pack_start(Gtk.Label(), True, True, 0)
-        help_btn = Gtk.Button(label="帮助"); help_btn.connect("clicked", self.on_help_clicked); bottom_bar.pack_start(help_btn, False, False, 0)
-        quit_btn = Gtk.Button(label="退出"); quit_btn.connect("clicked", lambda b: self.destroy()); bottom_bar.pack_start(quit_btn, False, False, 0)
+        help_btn = Gtk.Button(label="帮助"); help_btn.get_style_context().add_class("suggested-action"); help_btn.connect("clicked", self.on_help_clicked); bottom_bar.pack_start(help_btn, False, False, 0)
+        quit_btn = Gtk.Button(label="退出"); quit_btn.get_style_context().add_class("destructive-action"); quit_btn.connect("clicked", lambda b: self.destroy()); bottom_bar.pack_start(quit_btn, False, False, 0)
         main_vbox.pack_start(bottom_bar, False, False, 0)
         self.update_status()
 
@@ -4927,7 +5134,15 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-09-06（v1.7.0包含 v1.6.9 的调整）
+        changelog_content = """2026-09-09（v1.7.1）
+【界面优化】
+- 全新 Steam Deck 风格主题：深蓝黑底 + Steam 蓝高亮，圆角卡片与加高的触控友好列表行
+- 左侧分类栏新增面板标题，功能列表与搜索结果改为圆角卡片容器，帮助/退出按钮使用强调色
+- 顶部标题栏副标题显示系统类型，窗口按钮与搜索框统一为圆角样式
+- 任务窗口新增标题栏与深色终端配色，运行时显示计时、完成后显示"任务已完成"
+- 更新日志页补充页面标题，关于/更新日志正文改为圆角卡片
+
+2026-09-06（v1.7.0包含 v1.6.9 的调整）
 【界面优化】
 - 新增顶部标题栏（HeaderBar），显示版本号
 - 新增全局功能搜索：顶部搜索框跨分类查找功能，结果页显示所属分类
