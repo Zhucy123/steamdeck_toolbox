@@ -9,7 +9,7 @@
 
 在 Konsole 中执行以下命令即可安装：
 
-curl -L https://shoturl.cn/n2eFhl | sh
+curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh | sh
 
 ## 🔄 更新方式
 
