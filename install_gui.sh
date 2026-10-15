@@ -56,7 +56,7 @@ else
     fi
 fi
 
-echo "正在从 Gitee 下载 Steam Deck GUI 工具箱..."
+echo "正在从 Gihub 下载 Steam Deck GUI 工具箱..."
 
 if curl -L --progress-bar "$TOOLBOX_URL" -o "$TOOLBOX_NAME"; then
     # 下载内容校验，防止拿到错误页/不完整文件
