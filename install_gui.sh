@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TOOLBOX_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
+TOOLBOX_URL="https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/steamdeck_gui.py"
 TOOLBOX_NAME="$HOME/steamdeck_gui.py"
 
 # 脚本退出（含出错）时自动恢复 SteamOS 只读模式，避免系统更新受影响
