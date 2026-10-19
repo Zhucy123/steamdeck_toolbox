@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.7.7"
+VERSION = "1.8.0"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -554,7 +554,7 @@ def launch_terminal(command_str):
 # clover_install_or_reinstall 会往 EFI 分区写文件、替换 BOOTX64.EFI、改 efibootmgr
 # 启动项，一旦出错可能导致机器无法启动，必须走确认框。
 DANGEROUS_FUNCS = {"fix_boot", "fix_shared_disk", "uninstall_plugin_store", "clear_hosts_cache",
-                   "clover_install_or_reinstall"}
+                   "clover_install_or_reinstall", "health_check"}
 
 # 每个危险功能的额外风险说明（缺省用通用文案）
 DANGEROUS_HINTS = {
@@ -565,6 +565,8 @@ DANGEROUS_HINTS = {
     "fix_shared_disk": "该功能会修改 /etc/fstab 与 UDisks2 策略文件，用于自动挂载 Windows 分区。",
     "uninstall_plugin_store": "该功能会删除已安装的插件商店及其插件数据。",
     "clear_hosts_cache": "该功能会修改系统 /etc/hosts 文件（会自动备份）。",
+    "health_check": "该功能会检查 ESP 分区、UEFI 启动项、Clover 引导文件与 /etc/fstab。\n"
+                    "检查过程为只读，仅在你确认修复后才会修改系统（fstab 修改前会自动备份）。",
 }
 DEFAULT_DANGEROUS_HINT = "该功能会修改系统引导、挂载或系统文件，请确认已了解风险。"
 
@@ -2166,6 +2168,547 @@ fix_shared_disk() {
     else
         echo -e "${GREEN}════════════════ 全部完成 ════════════════${NC}"
     fi
+}
+
+# ============================================================================
+# 系统体检：SteamOS 更新后可排查「掉盘 / 掉引导 / 挂载失效」
+# 只读检查，除非用户明确选择修复项，否则不修改任何系统配置
+# ============================================================================
+# 动态探测 ESP 分区（不能硬编码 /dev/nvme0n1p1：eMMC 是 mmcblk0，分区号也可能不是 1）
+detect_esp_partition() {
+    local dev="" line
+    ESP_DEV=""; ESP_DISK=""; ESP_PARTN=""; ESP_MOUNT=""
+    # 1) 已挂载的 /esp（SteamOS）或 /boot/efi（Bazzite）
+    #    注意：findmnt -M 也会返回 systemd autofs 的 "systemd-1"，必须过滤出 /dev/ 开头的真实设备
+    for mp in /esp /boot/efi; do
+        dev=$(findmnt -n -o SOURCE -M "$mp" 2>/dev/null | grep '^/dev/' | head -1 || true)
+        if [ -z "$dev" ]; then
+            # 兜底：从 mount 输出里找该挂载点对应的设备
+            dev=$(mount 2>/dev/null | awk -v m="$mp" '$3 == m {print $1; exit}')
+        fi
+        if [ -n "$dev" ] && [ -b "$dev" ]; then
+            ESP_DEV="$dev"; ESP_MOUNT="$mp"; break
+        fi
+    done
+    # 2) 按 EFI 分区类型 GUID 查找（c12a7328-f81f-11d2-ba4b-00a0c93ec93b）
+    if [ -z "$ESP_DEV" ]; then
+        dev=$(lsblk -P -n -o PATH,PARTTYPE 2>/dev/null \
+            | awk -F'"' '/PARTTYPE="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"/{print $2; exit}' || true)
+        [ -n "$dev" ] && [ -b "$dev" ] && ESP_DEV="$dev"
+    fi
+    [ -n "$ESP_DEV" ] || return 1
+    # 注意：lsblk 输出可能带前后空格，必须清理，否则 efibootmgr -p " 1" 会失败
+    ESP_DISK="/dev/$(lsblk -n -o PKNAME "$ESP_DEV" 2>/dev/null | head -1 | tr -d '[:space:]')"
+    ESP_PARTN=$(lsblk -n -o PARTN "$ESP_DEV" 2>/dev/null | head -1 | tr -d '[:space:]')
+    [ -n "$ESP_PARTN" ] || ESP_PARTN=1
+    return 0
+}
+
+# 检查结果累加器
+HC_TOTAL=0; HC_OK=0; HC_WARN=0; HC_FAIL=0
+HC_FIXABLE=()      # 可自动修复的问题编号
+hc_result() {
+    # $1=状态 ok/warn/fail  $2=标题  $3=说明  $4=可修复(1/0)  $5=修复函数名
+    HC_TOTAL=$((HC_TOTAL + 1))
+    case "$1" in
+        ok)   HC_OK=$((HC_OK + 1));   echo -e "  ${GREEN}[正常]${NC} $2";;
+        warn) HC_WARN=$((HC_WARN + 1)); echo -e "  ${YELLOW}[注意]${NC} $2";;
+        fail) HC_FAIL=$((HC_FAIL + 1)); echo -e "  ${RED}[异常]${NC} $2";;
+    esac
+    [ -n "$3" ] && echo -e "         $3"
+    if [ "${4:-0}" -eq 1 ] && [ -n "${5:-}" ]; then
+        HC_FIXABLE+=("$1|$2|$5")
+        echo -e "         ${CYAN}→ 可通过下方「修复」选项处理${NC}"
+    fi
+}
+
+# ---------- 单项检查 ----------
+hc_check_esp() {
+    echo -e "${CYAN}【1/6】ESP（EFI 系统分区）${NC}"
+    if detect_esp_partition; then
+        hc_result ok "ESP 分区已识别" "$ESP_DEV 挂载于 $ESP_MOUNT"
+        # 剩余空间检查（Clover 需要约 15MB）
+        local avail
+        avail=$(df --output=avail "$ESP_DEV" 2>/dev/null | tail -1 | tr -d ' ')
+        if [[ "$avail" =~ ^[0-9]+$ ]]; then
+            if [ "$avail" -ge 15000 ]; then
+                hc_result ok "ESP 剩余空间充足" "约 $((avail / 1024))MB 可用"
+            else
+                hc_result warn "ESP 剩余空间偏小" "仅约 $((avail / 1024))MB，安装 Clover 需要约 15MB"
+            fi
+        fi
+        # EFI 目录可读性（需 root 才能列 /esp/efi/EFI）
+        if sudo -n ls "$ESP_MOUNT/efi/EFI" &>/dev/null || sudo -n ls "$ESP_MOUNT/EFI" &>/dev/null; then
+            hc_result ok "ESP 可正常读取" ""
+        else
+            hc_result warn "无法读取 ESP 内容（需要 sudo）" "请确认 sudo 可用后重试"
+        fi
+    else
+        hc_result fail "无法识别 ESP 分区" "未找到已挂载的 /esp，也未能按 EFI 分区类型定位"
+    fi
+    echo ""
+}
+
+hc_check_efi_entries() {
+    echo -e "${CYAN}【2/6】UEFI 启动项${NC}"
+    if ! command -v efibootmgr &>/dev/null; then
+        hc_result fail "未找到 efibootmgr" "请安装：sudo pacman -S efibootmgr"
+        echo ""; return
+    fi
+    local efi_out
+    efi_out=$(sudo -n efibootmgr 2>/dev/null || efibootmgr 2>/dev/null || true)
+    if [ -z "$efi_out" ]; then
+        hc_result fail "无法读取 UEFI 启动项" "efibootmgr 执行失败"
+        echo ""; return
+    fi
+    # Clover 启动项
+    if echo "$efi_out" | grep -qi "clover"; then
+        local cl_num
+        cl_num=$(echo "$efi_out" | grep -i "clover" | head -1 | grep -o 'Boot[0-9A-Fa-f]\{4\}' | head -1)
+        hc_result ok "Clover 启动项存在" "$cl_num"
+    else
+        hc_result fail "Clover 启动项缺失" "SteamOS 更新或固件重置后常见，将从 ESP 重新注册" 1 "hc_fix_clover_entry"
+    fi
+    # SteamOS 启动项
+    if echo "$efi_out" | grep -qi "steamos\|steamcl"; then
+        hc_result ok "SteamOS 启动项存在" ""
+    else
+        hc_result fail "SteamOS 启动项缺失" "将从 ESP 重新注册" 1 "hc_fix_steamos_entry"
+    fi
+    # Windows 启动项（不是必需：Clover 会接管）
+    if echo "$efi_out" | grep -qi "windows"; then
+        hc_result ok "Windows 启动项存在" ""
+    else
+        hc_result warn "Windows 启动项缺失（Clover 会接管，通常正常）" "若要在固件菜单直接启动 Windows 才需要"
+    fi
+    # 启动顺序
+    local order first
+    order=$(echo "$efi_out" | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
+    first=$(echo "$order" | cut -d, -f1)
+    if [ -n "$first" ] && echo "$efi_out" | grep -i "clover" | grep -q "Boot$first"; then
+        hc_result ok "Clover 为第一启动项" "BootOrder: $order"
+    else
+        hc_result warn "Clover 不是第一启动项" "当前顺序: ${order:-未知}" 1 "hc_fix_boot_order"
+    fi
+    echo ""
+}
+
+hc_check_clover_files() {
+    echo -e "${CYAN}【3/6】Clover 引导文件完整性${NC}"
+    if [ -z "${ESP_DEV:-}" ]; then
+        hc_result warn "跳过：ESP 未识别" ""
+        echo ""; return
+    fi
+    # 若 ESP 未挂载，临时挂到一个只读目录来检查内容
+    local tmp_mount="" efi_root=""
+    if [ -z "${ESP_MOUNT:-}" ]; then
+        tmp_mount=$(mktemp -d 2>/dev/null) || tmp_mount=""
+        if [ -n "$tmp_mount" ] && sudo -n mount -o ro "$ESP_DEV" "$tmp_mount" 2>/dev/null; then
+            ESP_MOUNT="$tmp_mount"
+        else
+            rmdir "$tmp_mount" 2>/dev/null
+            hc_result warn "ESP 未挂载，且无法临时挂载检查" "请先挂载：sudo mount $ESP_DEV /mnt"
+            echo ""; return
+        fi
+    fi
+    efi_root="$ESP_MOUNT/efi/EFI"
+    [ -d "$ESP_MOUNT/EFI" ] && efi_root="$ESP_MOUNT/EFI"
+
+    # 关键：必须区分「文件真的不存在」和「没有 sudo 权限看不到」，
+    # 否则 sudo -n 失效时会把每个文件都误报成缺失。
+    # 用 sudo -n ls 探测一次读权限，成功才继续逐文件判断。
+    if ! sudo -n ls "$efi_root" &>/dev/null; then
+        hc_result warn "无法读取 ESP 上的 EFI 目录（需要 sudo 密码）" \
+            "本次跳过 Clover 文件检查；请在体检时输入密码，或手动执行：sudo ls $efi_root"
+        [ -n "$tmp_mount" ] && { sudo -n umount "$tmp_mount" 2>/dev/null; rmdir "$tmp_mount" 2>/dev/null; }
+        echo ""; return
+    fi
+
+    # 列出实际内容，用于更准确的判断
+    local efi_list
+    efi_list=$(sudo -n ls "$efi_root" 2>/dev/null || true)
+
+    # Clover 主程序
+    if sudo -n test -f "$efi_root/clover/cloverx64.efi" 2>/dev/null; then
+        hc_result ok "Clover EFI 主程序存在" "$efi_root/clover/cloverx64.efi"
+    elif echo "$efi_list" | grep -qx "clover"; then
+        hc_result fail "Clover 目录存在但缺少 cloverx64.efi" "引导文件不完整，需要重装 Clover"
+    else
+        hc_result fail "Clover EFI 主程序缺失" "需要重装 Clover（引导管理 → 安装/重装 Clover）"
+    fi
+    # Clover 配置
+    if sudo -n test -f "$efi_root/clover/config.plist" 2>/dev/null; then
+        hc_result ok "Clover 配置文件存在" ""
+    elif echo "$efi_list" | grep -qx "clover"; then
+        hc_result warn "Clover 配置文件缺失" "重装 Clover 可恢复默认配置"
+    fi
+    # BOOTX64.EFI 是否为 Clover（原始文件应已备份为 .orig）
+    local boot_dir=""
+    for cand in BOOT boot; do
+        if echo "$efi_list" | grep -qx "$cand"; then boot_dir="$cand"; break; fi
+    done
+    if [ -n "$boot_dir" ]; then
+        if sudo -n test -f "$efi_root/$boot_dir/BOOTX64.EFI" 2>/dev/null \
+            || sudo -n test -f "$efi_root/$boot_dir/bootx64.efi" 2>/dev/null; then
+            if sudo -n test -f "$efi_root/$boot_dir/BOOTX64.EFI.orig" 2>/dev/null \
+                || sudo -n test -f "$efi_root/$boot_dir/bootx64.efi.orig" 2>/dev/null; then
+                hc_result ok "BOOTX64.EFI 已被 Clover 接管" "原文件已备份为 .orig"
+            else
+                hc_result warn "未找到 BOOTX64.EFI 备份（.orig）" "若 Clover 仍能启动则通常无妨"
+            fi
+        else
+            hc_result warn "BOOT 目录下未找到 bootx64.efi" ""
+        fi
+    fi
+    # 卸载临时挂载点
+    if [ -n "$tmp_mount" ]; then
+        sudo -n umount "$tmp_mount" 2>/dev/null
+        rmdir "$tmp_mount" 2>/dev/null
+    fi
+    echo ""
+}
+
+hc_check_windows_partition() {
+    echo -e "${CYAN}【4/6】Windows 分区${NC}"
+    local found=0 win_dev="" win_mp=""
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local nm fs lb mp
+        nm=$(echo "$line" | sed -n 's/.*NAME="\([^"]*\)".*/\1/p')
+        fs=$(echo "$line" | sed -n 's/.*FSTYPE="\([^"]*\)".*/\1/p')
+        lb=$(echo "$line" | sed -n 's/.*LABEL="\([^"]*\)".*/\1/p')
+        mp=$(echo "$line" | sed -n 's/.*MOUNTPOINT="\([^"]*\)".*/\1/p')
+        case "$fs" in
+            ntfs|fuseblk|ntfs3)
+                found=1
+                if [ "$lb" = "Windows" ]; then
+                    win_dev="/dev/$nm"; win_mp="$mp"
+                fi
+                ;;
+        esac
+    done < <(lsblk -P -n -o NAME,FSTYPE,LABEL,MOUNTPOINT 2>/dev/null)
+
+    if [ "$found" -eq 0 ]; then
+        hc_result warn "未发现 NTFS 分区" "若确为 Windows 双系统，请检查硬盘是否松动或分区表异常"
+        echo ""; return
+    fi
+    if [ -n "$win_dev" ]; then
+        hc_result ok "Windows 分区存在" "$win_dev${win_mp:+ 挂载于 $win_mp}"
+        if [ -n "$win_mp" ] && [ -d "$win_mp" ]; then
+            hc_result ok "Windows 分区已挂载" "$win_mp"
+        else
+            hc_result warn "Windows 分区未挂载" "可通过「修复互通盘」设置自动挂载" 1 "fix_shared_disk"
+        fi
+        # 检查 Windows 实际文件结构（确认不是空分区）
+        local check_mp="$win_mp"
+        if [ -z "$check_mp" ] || [ ! -d "$check_mp" ]; then
+            for base in /run/media/*/"$nm" /media/*/"$nm"; do
+                [ -d "$base" ] && check_mp="$base" && break
+            done
+        fi
+        if [ -n "$check_mp" ] && [ -d "$check_mp" ]; then
+            if [ -d "$check_mp/Windows" ] && { [ -d "$check_mp/Program Files" ] || [ -d "$check_mp/Users" ]; }; then
+                hc_result ok "Windows 系统文件完整" "检测到 Windows/Program Files/Users"
+            else
+                hc_result warn "分区内未见 Windows 系统文件" "可能是纯数据盘，或 Windows 已被删除"
+            fi
+        fi
+    else
+        hc_result warn "未找到标签为 Windows 的 NTFS 分区" "可能是纯数据盘；如确认有 Windows 请检查分区标签"
+    fi
+    echo ""
+}
+
+hc_check_fstab() {
+    echo -e "${CYAN}【5/6】/etc/fstab 挂载配置${NC}"
+    if [ ! -f /etc/fstab ]; then
+        hc_result fail "找不到 /etc/fstab" ""
+        echo ""; return
+    fi
+    local bad=0 total=0
+    while IFS= read -r line; do
+        # 跳过注释与空行
+        case "$line" in ''|\#*) continue;; esac
+        local dev mp rest uuid
+        dev=$(echo "$line" | awk '{print $1}')
+        mp=$(echo "$line" | awk '{print $2}')
+        [ -z "$dev" ] && continue
+        total=$((total + 1))
+        # UUID= 形式：验证能否在 blkid 中找到
+        case "$dev" in
+            UUID=*)
+                uuid="${dev#UUID=}"
+                if ! lsblk -P -n -o UUID 2>/dev/null | grep -q "UUID=\"$uuid\""; then
+                    # /home/swapfile 这类不是分区，单独判断
+                    if [ "$dev" = "/home/swapfile" ] || echo "$dev" | grep -q "/"; then
+                        :
+                    else
+                        echo -e "  ${RED}[异常]${NC} fstab 条目指向不存在的分区: $dev → $mp"
+                        bad=$((bad + 1))
+                    fi
+                fi
+                ;;
+            /home/swapfile)
+                if [ ! -f /home/swapfile ]; then
+                    echo -e "  ${RED}[异常]${NC} fstab 引用 /home/swapfile 但文件不存在"
+                    bad=$((bad + 1))
+                fi
+                ;;
+        esac
+    done < /etc/fstab
+    if [ "$bad" -eq 0 ]; then
+        hc_result ok "fstab 条目有效" "共 $total 条有效配置"
+    else
+        hc_result fail "fstab 有 $bad 条失效条目" "失效条目可能导致开机变慢或进入救援模式" 1 "hc_fix_fstab_invalid"
+    fi
+    # 检查 systemd 是否报告挂载失败
+    local failed_units
+    failed_units=$(systemctl list-units --state=failed --no-legend --plain 2>/dev/null | grep -cE '\.mount|\.swap' || true)
+    if [ "${failed_units:-0}" -gt 0 ]; then
+        hc_result fail "有 $failed_units 个挂载单元失败" "systemctl --failed 可查看详情"
+    else
+        hc_result ok "无失败的挂载单元" ""
+    fi
+    echo ""
+}
+
+hc_check_system() {
+    echo -e "${CYAN}【6/6】系统与引导服务${NC}"
+    # SteamOS 只读模式
+    if command -v steamos-readonly &>/dev/null; then
+        local ro
+        ro=$(steamos-readonly status 2>/dev/null || true)
+        if echo "$ro" | grep -q "enabled"; then
+            hc_result ok "SteamOS 只读模式正常（enabled）" ""
+        else
+            hc_result warn "SteamOS 只读模式为 disabled" "通常不改文件时会自动恢复；长期保持可写有被更新覆盖的风险"
+        fi
+    fi
+    # clover-bootmanager 服务（这是掉引导后能自愈的关键）
+    local has_clover_svc=0
+    if systemctl list-unit-files --no-legend --plain 2>/dev/null \
+        | awk '$1 == "clover-bootmanager.service" {found=1} END {exit !found}'; then
+        has_clover_svc=1
+    fi
+    if [ "$has_clover_svc" -eq 1 ]; then
+        if systemctl is-enabled clover-bootmanager.service &>/dev/null; then
+            hc_result ok "Clover 引导守护服务已启用" "开机自动重建丢失的启动项"
+        else
+            hc_result fail "Clover 引导守护服务未启用" "启用后可在更新后自动重建启动项" 1 "hc_fix_enable_service"
+        fi
+        if systemctl is-active clover-bootmanager.service &>/dev/null; then
+            hc_result ok "Clover 引导守护服务运行中" ""
+        else
+            hc_result warn "Clover 引导守护服务未运行" "可手动启动"
+        fi
+    else
+        hc_result warn "未安装 Clover 引导守护服务" "安装 Clover 时会一并安装"
+    fi
+    # 内核与系统版本（供排查更新是否刚发生）
+    hc_result ok "当前内核版本: $(uname -r)" ""
+    local os_pretty
+    os_pretty=$(grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"')
+    hc_result ok "系统版本: ${os_pretty:-未知}" ""
+    echo ""
+}
+
+# ---------- 修复动作 ----------
+hc_fix_clover_entry() {
+    detect_esp_partition || { echo -e "${RED}✗ 无法识别 ESP，修复中止${NC}"; return 1; }
+    echo -e "${CYAN}正在重新注册 Clover 启动项（$ESP_DISK 分区 $ESP_PARTN）...${NC}"
+    # 先删旧的同名条目，避免重复
+    local old
+    old=$(efibootmgr 2>/dev/null | grep -i "clover" | grep -o 'Boot[0-9A-Fa-f]\{4\}' | sed 's/Boot//' | head -1)
+    [ -n "$old" ] && sudo efibootmgr -b "$old" -B &>/dev/null
+    if sudo efibootmgr -c -d "$ESP_DISK" -p "$ESP_PARTN" \
+        -L "Clover - GUI Boot Manager" -l '\EFI\clover\cloverx64.efi'; then
+        echo -e "${GREEN}✓ Clover 启动项已重新注册${NC}"
+        return 0
+    fi
+    echo -e "${RED}✗ 注册失败。ESP 上可能缺少 cloverx64.efi，请重装 Clover。${NC}"
+    return 1
+}
+
+hc_fix_steamos_entry() {
+    detect_esp_partition || { echo -e "${RED}✗ 无法识别 ESP，修复中止${NC}"; return 1; }
+    echo -e "${CYAN}正在重新注册 SteamOS 启动项...${NC}"
+    local old
+    old=$(efibootmgr 2>/dev/null | grep -i "steamos" | grep -o 'Boot[0-9A-Fa-f]\{4\}' | sed 's/Boot//' | head -1)
+    [ -n "$old" ] && sudo efibootmgr -b "$old" -B &>/dev/null
+    if sudo efibootmgr -c -d "$ESP_DISK" -p "$ESP_PARTN" \
+        -L "SteamOS" -l '\EFI\steamos\steamcl.efi'; then
+        echo -e "${GREEN}✓ SteamOS 启动项已重新注册${NC}"
+        return 0
+    fi
+    echo -e "${RED}✗ 注册失败，ESP 上可能缺少 steamcl.efi${NC}"
+    return 1
+}
+
+hc_fix_boot_order() {
+    local cl
+    cl=$(efibootmgr 2>/dev/null | grep -i "clover" | grep -o 'Boot[0-9A-Fa-f]\{4\}' | head -1 | sed 's/Boot//')
+    if [ -z "$cl" ]; then
+        echo -e "${RED}✗ 未找到 Clover 启动项，请先修复启动项${NC}"
+        return 1
+    fi
+    local cur new
+    cur=$(efibootmgr 2>/dev/null | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
+    new="$cl"
+    if [ -n "$cur" ]; then
+        new="$cl,$(echo "$cur" | tr ',' '\n' | grep -vx "$cl" | tr '\n' ',' | sed 's/,$//')"
+    fi
+    echo -e "${CYAN}启动顺序: ${cur:-空} → $new${NC}"
+    if sudo efibootmgr -o "$new"; then
+        echo -e "${GREEN}✓ Clover 已设为第一启动项${NC}"
+        return 0
+    fi
+    echo -e "${RED}✗ 设置启动顺序失败${NC}"
+    return 1
+}
+
+hc_fix_enable_service() {
+    if sudo systemctl enable --now clover-bootmanager.service 2>/dev/null; then
+        echo -e "${GREEN}✓ Clover 引导守护服务已启用${NC}"
+        return 0
+    fi
+    echo -e "${RED}✗ 启用失败，请手动执行: sudo systemctl enable --now clover-bootmanager.service${NC}"
+    return 1
+}
+
+hc_fix_fstab_invalid() {
+    echo -e "${CYAN}备份 /etc/fstab 并注释掉失效条目...${NC}"
+    local backup="/etc/fstab.backup.$(date +%Y%m%d_%H%M%S)"
+    if ! sudo cp /etc/fstab "$backup" 2>/dev/null; then
+        echo -e "${RED}✗ 备份失败，为保证安全已中止${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ 已备份到 $backup${NC}"
+    local tmp="${TEMP_DIR}/fstab.hc.$$"
+    local changed=0
+    while IFS= read -r line; do
+        case "$line" in
+            ''|\#*) echo "$line"; continue;;
+        esac
+        local dev
+        dev=$(echo "$line" | awk '{print $1}')
+        case "$dev" in
+            UUID=*)
+                local uuid="${dev#UUID=}"
+                if lsblk -P -n -o UUID 2>/dev/null | grep -q "UUID=\"$uuid\""; then
+                    echo "$line"
+                elif [ "$dev" = "UUID=/home/swapfile" ]; then
+                    echo "$line"
+                else
+                    echo "# [体检] 分区不存在，已注释: $line"
+                    changed=$((changed + 1))
+                fi
+                ;;
+            *)
+                echo "$line"
+                ;;
+        esac
+    done < /etc/fstab > "$tmp" 2>/dev/null
+    if [ "$changed" -eq 0 ]; then
+        rm -f "$tmp"
+        echo -e "${YELLOW}未发现需要注释的条目${NC}"
+        return 0
+    fi
+    if sudo cp "$tmp" /etc/fstab; then
+        rm -f "$tmp"
+        sudo systemctl daemon-reload 2>/dev/null
+        echo -e "${GREEN}✓ 已注释 $changed 条失效条目（原文件备份在 $backup）${NC}"
+        return 0
+    fi
+    rm -f "$tmp"
+    echo -e "${RED}✗ 写入失败，/etc/fstab 未被修改${NC}"
+    return 1
+}
+
+# 交互式修复入口
+hc_run_fixes() {
+    if [ ${#HC_FIXABLE[@]} -eq 0 ]; then
+        echo -e "${GREEN}没有发现可自动修复的问题。${NC}"
+        return 0
+    fi
+    if ! sudo -v 2>/dev/null; then
+        echo -e "${RED}✗ 修复需要 sudo 权限，已跳过${NC}"
+        return 1
+    fi
+    echo -e "${YELLOW}════════════════ 开始修复 ════════════════${NC}"
+    local item state title fn
+    for item in "${HC_FIXABLE[@]}"; do
+        state="${item%%|*}"
+        title="${item#*|}"; title="${title%%|*}"
+        fn="${item##*|}"
+        echo ""
+        echo -e "${CYAN}修复: $title${NC}"
+        if declare -f "$fn" >/dev/null; then
+            "$fn"
+            if [ $? -ne 0 ]; then
+                echo -e "${YELLOW}该项修复未成功，请查看上方提示${NC}"
+            fi
+        else
+            echo -e "${RED}内部错误：修复函数 $fn 不存在${NC}"
+        fi
+    done
+    echo ""
+    echo -e "${YELLOW}提示：建议修复后重新运行一次体检确认结果。${NC}"
+}
+
+health_check() {
+    mk_temp_dir
+    clear
+    echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║         SteamOS 系统体检（更新后排障）        ║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo "用于排查 SteamOS 更新后常见的：掉盘、掉引导、挂载失效。"
+    echo "检查过程为只读，仅在您确认后才执行修复。"
+    echo ""
+    echo "正在检查，需要 sudo 权限读取 EFI 分区内容..."
+    if ! sudo -v 2>/dev/null; then
+        echo -e "${YELLOW}⚠ 未获取 sudo 权限：部分检查（ESP 内容、启动项）将无法完成${NC}"
+    fi
+    echo ""
+    echo -e "${CYAN}──────────────── 检查结果 ────────────────${NC}"
+    echo ""
+    hc_check_esp
+    hc_check_efi_entries
+    hc_check_clover_files
+    hc_check_windows_partition
+    hc_check_fstab
+    hc_check_system
+    echo -e "${CYAN}──────────────── 汇总 ────────────────${NC}"
+    echo -e "  共检查 $HC_TOTAL 项：${GREEN}正常 $HC_OK${NC} ｜ ${YELLOW}注意 $HC_WARN${NC} ｜ ${RED}异常 $HC_FAIL${NC}"
+    echo ""
+
+    if [ "$HC_FAIL" -eq 0 ] && [ "$HC_WARN" -eq 0 ]; then
+        echo -e "${GREEN}✅ 系统状态良好，未发现问题。${NC}"
+        return 0
+    fi
+    if [ ${#HC_FIXABLE[@]} -gt 0 ]; then
+        echo -e "${YELLOW}发现 ${#HC_FIXABLE[@]} 个可自动修复的问题。${NC}"
+        local ans
+        if read -p "是否现在修复？(y/N): " -n 1 -r ans < /dev/tty 2>/dev/null; then
+            echo ""
+            if [[ "$ans" =~ ^[Yy]$ ]]; then
+                hc_run_fixes
+            else
+                echo "已跳过修复。可稍后重新运行体检并选择修复。"
+            fi
+        else
+            echo -e "${YELLOW}无法读取输入（非交互环境），已跳过修复。${NC}"
+            echo "如需修复，请按上方「可自动修复」提示手动处理。"
+        fi
+    else
+        echo -e "${YELLOW}以上问题需要手动处理，请按提示操作。${NC}"
+    fi
+    echo ""
+    echo -e "${CYAN}常见原因与建议：${NC}"
+    echo "  · SteamOS 更新后 Clover 启动项消失 → 用本功能「修复」重建，或重装 Clover"
+    echo "  · Windows 分区不再自动挂载 → 运行「修复互通盘」"
+    echo "  · ESP 上 Clover 文件被覆盖 → 需要重装 Clover（引导管理 → 安装/重装 Clover）"
+    echo "  · 完全无法开机 / 进不了系统 → 需要用 SteamOS 恢复 U 盘救援，本工具无法覆盖"
 }
 
 install_uu_accelerator() {
@@ -6526,7 +7069,10 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.func_store.clear()
         items = list(self.category_tree.get(category, []))
         if category == "系统优化" and self.system_type == "双系统":
-            items = items[:] + [("修复引导", "fix_boot"), ("修复互通盘", "fix_shared_disk")]
+            items = items[:] + [("系统体检", "health_check"),
+                                ("修复引导", "fix_boot"),
+                                ("修复互通盘", "fix_shared_disk")]
+            self.func_map["系统体检"] = "health_check"
             self.func_map["修复引导"] = "fix_boot"
             self.func_map["修复互通盘"] = "fix_shared_disk"
 
@@ -6554,7 +7100,9 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
                         walk(item[1], cat)
             walk(items, cat)
         if self.system_type == "双系统":
-            for name, key in (("修复引导", "fix_boot"), ("修复互通盘", "fix_shared_disk")):
+            for name, key in (("系统体检", "health_check"),
+                              ("修复引导", "fix_boot"),
+                              ("修复互通盘", "fix_shared_disk")):
                 if query in name.lower():
                     matches.append((name, "系统优化", key))
         self.search_store.clear()
@@ -6601,7 +7149,23 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-19（v1.7.7）
+        changelog_content = """2026-10-19（v1.8.0）
+【新增功能】
+- 新增「系统体检」功能（双系统用户可见）：专用于 SteamOS 更新后排查掉盘、掉引导、挂载失效，覆盖 6 大类共 18 项检查
+  · ESP 分区：是否识别、挂载状态、剩余空间（Clover 需约 15MB）
+  · UEFI 启动项：Clover / SteamOS / Windows 启动项是否存在，Clover 是否为第一启动项
+  · Clover 引导文件：cloverx64.efi、config.plist、BOOTX64.EFI 及其 .orig 备份是否完整
+  · Windows 分区：是否存在、是否挂载、Windows 系统文件结构是否完整
+  · /etc/fstab：条目是否指向仍存在的分区，有无失败的挂载单元
+  · 系统与引导服务：SteamOS 只读模式、Clover 引导守护服务（clover-bootmanager）启用与运行状态
+- 体检为只读检查，发现问题后列出「可自动修复」项，经确认才执行修复
+- 可一键修复：重建丢失的 Clover / SteamOS 启动项、把 Clover 设为第一启动项、启用 Clover 引导守护服务、注释掉 fstab 中的失效条目（修改前自动备份）
+
+【问题修复】
+- 体检中的 ESP 探测不再硬编码 /dev/nvme0n1p1：改用 findmnt + EFI 分区类型 GUID 动态定位，兼容 eMMC/SATA 机型与不同分区号
+- 区分「文件确实缺失」与「无 sudo 权限无法读取」：无权限时明确提示跳过，不再把每个文件都误报为缺失
+
+2026-10-19（v1.7.7）
 【问题修复】
 - 修复双系统被误判为单系统：Clover 安装后会移除/隐藏 Windows 的 EFI 启动项，只看 efibootmgr 里有没有 "Windows" 字样会漏判，导致「修复引导」「修复互通盘」等双系统功能不显示
 - 系统类型检测改为多重判据：① EFI 启动项含 Windows ② 存在标签为 Windows 的 NTFS 分区 ③ NTFS 分区内存在 Windows\\Program Files 或 Windows\\Users 目录结构（即使分区标签被改也能识别）；任一成立即判定为双系统
