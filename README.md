@@ -2,7 +2,7 @@
 
 一个专为 Steam Deck 打造的一站式系统管理与增强工具，集成系统优化、引导管理、软件安装、网络加速、双系统支持、游戏增强等 40 余项实用功能，全面覆盖日常使用与进阶调校需求。
 
-> **版本：v1.7.4** | 更新日期：2026-10-19
+> **版本：v1.7.5** | 更新日期：2026-10-19
 > 制作人：薯条 & DeepSeek
 
 ## 🚀 一键安装
@@ -16,6 +16,17 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - 打开工具箱后启动时自动检查更新（内置自更新）
 
 ## 📝 更新日志
+
+2026-10-19（v1.7.5）
+【问题修复】
+- 统一全部 GitHub 下载镜像源：原 3 个镜像中 `gh.ddlc.top` 已 429 限流、`mirror.ghproxy.com` 域名失效，仅 `ghproxy.net` 仍可用但很慢，导致插件 / GE-Proton / Clover 下载经常失败
+- 新镜像列表（均经 5 轮稳定性 + 33MB 文件 sha256 完整性 + 实速实测）：`gh-proxy.com`（速度快）、`gh.3w.pm`（稳定）、`cors.isteed.cc`（稳定）、`ghproxy.net`（慢速备用）、GitHub 官方源
+- 修复下载镜像选择菜单显示空条目：官方源内部用空前缀（避免 URL 拼成 `https://github.com/https://github.com/...`），菜单改为显示可读名称
+- 修复 Clover 克隆镜像选择：实测 `gh-proxy.com` / `cors.isteed.cc` / `ghproxy.net` 均不支持 `git clone`，改为仅提供 `gh.3w.pm` 与官方源
+- 修复 Flatpak 国内源：原配置的 `mirror.sjtu.edu.cn/flathub` 已改为 301 跳回官方、实际无效；改用 `mirrors.ustc.edu.cn/flathub`（实测可正常查询与安装），并自动导入 flathub 签名公钥、切换后验证可用性、失败自动回滚
+- 修复 Flatpak 源配置使用不存在的 `flatpak remote-get-url` 命令获取原地址，改为从 remotes 列表解析
+- 修复 Flatpak 源验证因未指定分支必然失败，以及系统级 `remote-modify` 缺少 sudo 会卡在密码提示的问题
+- 修复「安装国内源」多余的禁用 SteamOS 只读模式操作：flatpak 配置位于可写的 `/var` 分区，与只读根分区无关
 
 2026-10-19（v1.7.4）
 【问题修复】

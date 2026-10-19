@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.7.4"
+VERSION = "1.7.5"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -604,8 +604,29 @@ CURRENT_GROUP="$(id -gn "$CURRENT_USER" 2>/dev/null || echo "$CURRENT_USER")"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; PURPLE='\033[0;35m'; NC='\033[0m'
 
-# 全局下载镜像源
-MIRRORS=("http://gh.ddlc.top/" "http://ghproxy.net/" "http://mirror.ghproxy.com/" "https://github.com/")
+# 全局下载镜像源（GitHub 加速）
+# 2026-10 实测：各跑 5 轮小文件 + 33MB 二进制（sha256 校验）+ 大文件 range，
+#   旧列表里的 gh.ddlc.top 已 429 限流、mirror.ghproxy.com 域名失效，仅 ghproxy.net 仍可用但很慢。
+# 顺序按「速度 + 稳定性」排列。
+# 用法：${镜像前缀}${完整 GitHub URL}，例如 https://gh-proxy.com/https://github.com/a/b/releases/download/v1/x.zip
+# 官方源的前缀是空串（完整 URL 本身就能直接用），不能写成 https://github.com/ 否则会拼成
+# https://github.com/https://github.com/...
+MIRRORS=(
+    "https://gh-proxy.com/"     # 国内镜像，速度快
+    "https://gh.3w.pm/"         # 国内镜像，稳定
+    "https://cors.isteed.cc/"   # 国内镜像，稳定
+    "https://ghproxy.net/"      # 国内镜像，慢速备用
+    ""                          # 官方源（空前缀 = 直接用原始 GitHub URL）
+)
+# 给用户选择菜单用的人类可读名称，与 MIRRORS 一一对应
+MIRROR_LABELS=(
+    "gh-proxy.com (国内镜像，速度快)"
+    "gh.3w.pm (国内镜像，稳定)"
+    "cors.isteed.cc (国内镜像，稳定)"
+    "ghproxy.net (国内镜像，慢速备用)"
+    "GitHub (官方源)"
+)
+
 
 # 安全解析 lsblk -P 输出（避免 eval 注入），变量名与 lsblk 字段一致
 parse_line() {
@@ -629,14 +650,16 @@ download_zip_with_mirrors() {
         clear
         echo -e "${CYAN}下载 ${desc}${NC}\n"
         echo "请选择下载镜像源（输入编号，0取消）："
-        for i in "${!MIRRORS[@]}"; do echo "  $((i+1)). ${MIRRORS[$i]}"; done
+        for i in "${!MIRRORS[@]}"; do
+            echo "  $((i+1)). ${MIRROR_LABELS[$i]:-${MIRRORS[$i]}}"
+        done
         read -p "请输入选择: " choice < /dev/tty
         [[ -z "$choice" ]] && echo -e "${RED}输入无效${NC}" && sleep 1 && continue
         [[ "$choice" == "0" ]] && echo "操作已取消。" && return 1
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
             local mirror="${MIRRORS[$((choice-1))]}"
             local full_url="${mirror}${url}"
-            echo -e "尝试从 ${mirror} 下载..."
+            echo -e "尝试从 ${MIRROR_LABELS[$((choice-1))]:-${mirror}} 下载..."
             if curl -L --progress-bar -f -o "$output" "$full_url" && [ -s "$output" ] && unzip -t "$output" &>/dev/null; then
                 echo -e "${GREEN}下载成功，文件完整。${NC}"
                 return 0
@@ -677,14 +700,16 @@ download_with_mirrors() {
         clear
         echo -e "${CYAN}下载 ${desc}${NC}\n"
         echo "请选择下载镜像源（输入编号，0取消）："
-        for i in "${!MIRRORS[@]}"; do echo "  $((i+1)). ${MIRRORS[$i]}"; done
+        for i in "${!MIRRORS[@]}"; do
+            echo "  $((i+1)). ${MIRROR_LABELS[$i]:-${MIRRORS[$i]}}"
+        done
         read -p "请输入选择: " choice < /dev/tty
         [[ -z "$choice" ]] && echo -e "${RED}输入无效${NC}" && sleep 1 && continue
         [[ "$choice" == "0" ]] && echo "操作已取消。" && return 1
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
             local mirror="${MIRRORS[$((choice-1))]}"
             local full_url="${mirror}${url}"
-            echo -e "尝试从 ${mirror} 下载..."
+            echo -e "尝试从 ${MIRROR_LABELS[$((choice-1))]:-${mirror}} 下载..."
             if curl -L --progress-bar -f -o "$output" "$full_url" && [ -s "$output" ]; then
                 echo -e "${GREEN}下载成功。${NC}"
                 return 0
@@ -793,18 +818,82 @@ install_chinese_source() {
     echo -e "${YELLOW}════════════════ 安装国内源 ════════════════${NC}"
     echo "正在配置国内源..."
     echo ""
-    echo -e "${CYAN}步骤1: 禁用SteamOS只读模式${NC}"
-    disable_readonly || return 1
+    # 不需要禁用 SteamOS 只读模式：flatpak remote 配置在 /var/lib/flatpak（可写分区），
+    # 与只读的根分区无关。原实现先 disable_readonly 属于多余操作，还会顺手改掉系统只读状态。
+    echo -e "${CYAN}步骤1: 检查 flatpak 环境${NC}"
+    if ! command -v flatpak &>/dev/null; then
+        echo -e "${RED}✗ 未找到 flatpak 命令，无法配置镜像源。${NC}"
+        return 1
+    fi
+    if ! flatpak remotes --columns=name 2>/dev/null | grep -qx "flathub"; then
+        echo -e "${YELLOW}⚠ 未检测到 flathub 远程仓库，正在按官方地址添加...${NC}"
+        if ! sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null; then
+            echo -e "${RED}✗ 添加 flathub 失败，已中止。${NC}"
+            return 1
+        fi
+    fi
+    echo -e "${GREEN}✓ flatpak 环境正常${NC}"
     echo ""
     echo -e "${CYAN}步骤2: 配置Flatpak国内源${NC}"
-    if flatpak remote-modify flathub --url=https://mirror.sjtu.edu.cn/flathub 2>/dev/null; then
-        echo -e "${GREEN}✓ Flatpak国内源配置完成${NC}"
+
+    # 实测（2026-10）：
+    #   mirror.sjtu.edu.cn/flathub  → 已改为 301 跳回官方 dl.flathub.org，等于没加速
+    #   mirrors.tuna / nju / bfsu / iscas / aliyun 的 flathub → 404，没有这个镜像
+    #   mirrors.ustc.edu.cn/flathub → 真实镜像（yadex 增量方案），实测可正常查询与安装，
+    #                                 且需要先导入 flathub 公钥才能校验签名
+    local FP_MIRROR="https://mirrors.ustc.edu.cn/flathub/"
+    local FP_KEY_TMP="${TEMP_DIR}/flathub.gpg"
+    local FP_OLD_URL
+    # 注意：flatpak 没有 remote-get-url 这个子命令，要从 remotes 列表里取
+    FP_OLD_URL=$(flatpak remotes --columns=name,url 2>/dev/null | awk '$1 == "flathub" {print $2; exit}')
+
+    # 先确认 sudo 可用：系统级 flatpak remote 配置需要 root，
+    # 若这里不先验证，后面 remote-modify 会卡在密码提示上（输出被 2>/dev/null 吞掉，看起来像无响应）
+    if ! sudo -v 2>/dev/null; then
+        echo -e "${RED}✗ 需要 sudo 权限才能修改 Flatpak 源，已中止。${NC}"
+        return 1
+    fi
+
+    # 1) 导入 flathub 官方公钥（UESTC 镜像的摘要带 flathub 签名，缺公钥会被拒绝）
+    echo "正在获取 flathub 签名公钥..."
+    if curl -fsSL --connect-timeout 15 --max-time 60 -o "$FP_KEY_TMP" \
+        https://dl.flathub.org/repo/flathub.gpg 2>/dev/null && [ -s "$FP_KEY_TMP" ]; then
+        if sudo flatpak remote-modify --gpg-import="$FP_KEY_TMP" flathub 2>/dev/null; then
+            echo -e "${GREEN}✓ 已导入 flathub 签名公钥${NC}"
+        else
+            echo -e "${YELLOW}⚠ 导入公钥失败（源可能已存在该公钥，继续）${NC}"
+        fi
     else
+        echo -e "${YELLOW}⚠ 无法下载 flathub 公钥，跳过导入（若安装报签名错误，请先联网执行一次官方安装）${NC}"
+    fi
+    rm -f "$FP_KEY_TMP"
+
+    # 2) 切换 flathub 地址到镜像
+    if ! sudo flatpak remote-modify flathub --url="$FP_MIRROR" 2>/dev/null; then
         echo -e "${RED}✗ Flatpak国内源配置失败${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Flatpak 源已切换为 $FP_MIRROR${NC}"
+
+    # 3) 实际拉一次元数据验证，不只看命令返回值
+    #    remote-info 必须指定分支，否则会因"多个可用分支"直接报错，被误判为镜像不可用
+    echo "正在验证镜像可用性..."
+    if timeout 90 flatpak remote-info flathub org.freedesktop.Platform/x86_64/24.08 >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ 镜像验证通过（可正常查询软件包）${NC}"
+    else
+        echo -e "${RED}✗ 镜像验证失败，正在回滚到官方源...${NC}"
+        if [ -n "$FP_OLD_URL" ]; then
+            sudo flatpak remote-modify flathub --url="$FP_OLD_URL" 2>/dev/null \
+                && echo -e "${YELLOW}已回滚到原地址: $FP_OLD_URL${NC}" \
+                || echo -e "${RED}回滚失败，请手动执行: sudo flatpak remote-modify flathub --url=$FP_OLD_URL${NC}"
+        else
+            echo -e "${RED}未获取到原地址，请手动恢复: sudo flatpak remote-modify flathub --url=https://dl.flathub.org/repo/${NC}"
+        fi
         return 1
     fi
     echo ""
     echo -e "${GREEN}✓ 国内源配置已生效。${NC}"
+    echo -e "${CYAN}  如需恢复官方源：flatpak remote-modify flathub --url=https://dl.flathub.org/repo/${NC}"
 }
 
 adjust_swap() {
@@ -3269,19 +3358,23 @@ ge_proton_do_install() {
         --title="选择下载镜像源" \
         --text="所有版本将使用同一镜像源" \
         --column="选择" --column="镜像源" \
-        FALSE "gh.ddlc.top (国内镜像)" \
-        FALSE "ghproxy.net (国内镜像)" \
-        FALSE "mirror.ghproxy.com (国内镜像)" \
+        FALSE "gh-proxy.com (国内镜像，速度快)" \
+        FALSE "gh.3w.pm (国内镜像，稳定)" \
+        FALSE "cors.isteed.cc (国内镜像，稳定)" \
+        FALSE "ghproxy.net (国内镜像，慢速备用)" \
         FALSE "GitHub (官方源)" \
-        --width=500 --height=250 2>/dev/null)
+        --width=560 --height=280 2>/dev/null)
     [ -z "$mirror_choice" ] && return 0
 
     local mirror=""
     case "$mirror_choice" in
-        "gh.ddlc.top (国内镜像)") mirror="http://gh.ddlc.top/" ;;
-        "ghproxy.net (国内镜像)") mirror="http://ghproxy.net/" ;;
-        "mirror.ghproxy.com (国内镜像)") mirror="http://mirror.ghproxy.com/" ;;
-        "GitHub (官方源)") mirror="https://github.com/" ;;
+        "gh-proxy.com (国内镜像，速度快)") mirror="https://gh-proxy.com/" ;;
+        "gh.3w.pm (国内镜像，稳定)") mirror="https://gh.3w.pm/" ;;
+        "cors.isteed.cc (国内镜像，稳定)") mirror="https://cors.isteed.cc/" ;;
+        "ghproxy.net (国内镜像，慢速备用)") mirror="https://ghproxy.net/" ;;
+        # 官方源用空前缀：download_url 本身已是完整的 https://github.com/... 地址，
+        # 若这里也写 https://github.com/ 会拼成 .../https://github.com/... 导致 404
+        "GitHub (官方源)") mirror="" ;;
     esac
 
     local pipe="/tmp/zenity_pipe_$$"
@@ -3499,14 +3592,17 @@ clover_install_or_reinstall() {
     echo "========================================="
     echo "   Steam Deck Clover 安装助手"
     echo "========================================="
+    # 注意：这里克隆走的是 git 协议，不是普通 HTTP 下载。
+    # 2026-10 实测：gh-proxy.com / cors.isteed.cc / ghproxy.net 都**不支持** git clone
+    # （只有 gh.3w.pm 和官方源可用），所以克隆镜像单独列，不套用下载镜像列表。
     echo "请选择克隆镜像源："
-    echo "1) GitHub 官方"
-    echo "2) ghproxy.net 镜像"
+    echo "  1) gh.3w.pm        （国内镜像，推荐）"
+    echo "  2) GitHub 官方     （国内可能较慢）"
     read -p "请输入数字 [1-2]: " choice < /dev/tty
 
     case "$choice" in
-        1) BASE_URL="https://github.com" ;;
-        2) BASE_URL="https://ghproxy.net/https://github.com" ;;
+        1) BASE_URL="https://gh.3w.pm/https://github.com" ;;
+        2) BASE_URL="https://github.com" ;;
         *) echo "操作已取消。"; return 0 ;;
     esac
 
@@ -3752,10 +3848,23 @@ fi
 CLOVER_FILE="Clover-${CLOVER_VERSION}-X64.iso.7z"
 CLOVER_BASE=$(basename -s .7z "${CLOVER_FILE}")
 
+# Clover ISO 是普通 HTTP 下载（非 git），可用全部下载镜像。
+# 前缀只到「镜像主机/」，后面接完整的 GitHub URL；官方源前缀为空。
+# 注意：此处覆盖了全局 MIRRORS 变量（仅在此内层脚本作用域内）。
+CLOVER_GH_BASE="https://github.com/CloverHackyColor/CloverBootloader"
 MIRRORS=(
-    "http://gh.ddlc.top/https://github.com"
-    "http://ghproxy.net/https://github.com"
-    "https://github.com"
+    "https://gh-proxy.com/"
+    "https://gh.3w.pm/"
+    "https://cors.isteed.cc/"
+    "https://ghproxy.net/"
+    ""                            # 官方源：前缀为空，直接用完整 GitHub URL
+)
+MIRROR_LABELS=(
+    "gh-proxy.com (国内镜像，速度快)"
+    "gh.3w.pm (国内镜像，稳定)"
+    "cors.isteed.cc (国内镜像，稳定)"
+    "ghproxy.net (国内镜像，慢速备用)"
+    "GitHub (官方源)"
 )
 
 DOWNLOAD_SUCCESS=0
@@ -3763,7 +3872,7 @@ while true; do
     echo ""
     echo "请选择下载镜像源（输入编号，0取消）："
     for i in "${!MIRRORS[@]}"; do
-        echo "  $((i+1)). ${MIRRORS[$i]}"
+        echo "  $((i+1)). ${MIRROR_LABELS[$i]:-${MIRRORS[$i]}}"
     done
     read -p "请输入选择: " choice < /dev/tty
 
@@ -3777,8 +3886,8 @@ while true; do
     fi
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
         mirror="${MIRRORS[$((choice-1))]}"
-        CLOVER_URL="${mirror}/CloverHackyColor/CloverBootloader/releases/download/${CLOVER_VERSION}/${CLOVER_FILE}"
-        echo "尝试从 ${mirror} 下载..."
+        CLOVER_URL="${mirror}${CLOVER_GH_BASE}/releases/download/${CLOVER_VERSION}/${CLOVER_FILE}"
+        echo "尝试从 ${MIRROR_LABELS[$((choice-1))]:-${mirror}} 下载..."
         if curl -# -L --fail --connect-timeout 10 --max-time 120 -o "${CLOVER_FILE}" "${CLOVER_URL}"; then
             echo "✅ 下载成功！"
             DOWNLOAD_SUCCESS=1
@@ -6228,7 +6337,18 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-19（v1.7.4）
+        changelog_content = """2026-10-19（v1.7.5）
+【问题修复】
+- 统一全部 GitHub 下载镜像源：原 3 个镜像中 gh.ddlc.top 已 429 限流、mirror.ghproxy.com 域名失效，仅 ghproxy.net 仍可用但很慢，导致插件 / GE-Proton / Clover 下载经常失败
+- 新镜像列表（均经 5 轮稳定性 + 33MB 文件 sha256 完整性 + 实速实测）：gh-proxy.com（速度快）、gh.3w.pm（稳定）、cors.isteed.cc（稳定）、ghproxy.net（慢速备用）、GitHub 官方源
+- 修复下载镜像选择菜单显示空条目：官方源在内部用空前缀（避免 URL 拼成 https://github.com/https://github.com/...），菜单改为显示可读名称
+- 修复 Clover 克隆镜像选择：实测 gh-proxy.com / cors.isteed.cc / ghproxy.net 均不支持 git clone，改为仅提供 gh.3w.pm 与官方源
+- 修复 Flatpak 国内源：原配置的 mirror.sjtu.edu.cn/flathub 已改为 301 跳回官方、实际无效；改用 mirrors.ustc.edu.cn/flathub（实测可正常查询与安装），并自动导入 flathub 签名公钥、切换后验证可用性、失败自动回滚
+- 修复 Flatpak 源配置使用不存在的 `flatpak remote-get-url` 命令获取原地址，改为从 remotes 列表解析
+- 修复 Flatpak 源验证因未指定分支必然失败，以及系统级 remote-modify 缺少 sudo 会卡在密码提示的问题
+- 修复「安装国内源」多余的禁用 SteamOS 只读模式操作：flatpak 配置位于可写的 /var 分区，与只读根分区无关
+
+2026-10-19（v1.7.4）
 【问题修复】
 - 修复「一键应用 CryoByte33 推荐方案」重复执行会在 /etc/fstab 写入重复 swap 条目的问题（sed 分隔符转义错误导致删除失败）
 - 修复退出时无条件把 SteamOS 只读模式改回 enabled：现在只有脚本自己解除过只读才会恢复，不再覆盖用户手动设置的可写状态
