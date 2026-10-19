@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.7.5"
+VERSION = "1.7.6"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -893,7 +893,8 @@ install_chinese_source() {
     fi
     echo ""
     echo -e "${GREEN}✓ 国内源配置已生效。${NC}"
-    echo -e "${CYAN}  如需恢复官方源：flatpak remote-modify flathub --url=https://dl.flathub.org/repo/${NC}"
+    echo -e "${CYAN}  如需恢复官方源，请在 Konsole 中执行（需要 sudo）：${NC}"
+    echo -e "${CYAN}    sudo flatpak remote-modify flathub --url=https://dl.flathub.org/repo/${NC}"
 }
 
 adjust_swap() {
@@ -5700,11 +5701,25 @@ class TaskWindow(Gtk.Window):
         task_header.set_show_close_button(True)
         task_header.props.title = display_name
         task_header.props.subtitle = "任务运行中"
+        # HeaderBar 默认只画「关闭」一个按钮，最小化/最大化按钮要自己加
+        # （gtk-decoration-layout 只对系统原生装饰生效，对自定义 HeaderBar 无效）
+        self._max_btn = Gtk.Button()
+        self._max_btn.set_relief(Gtk.ReliefStyle.NONE)
+        self._max_btn.set_tooltip_text("最大化 / 还原")
+        self._max_btn_image = Gtk.Image.new_from_icon_name(
+            "window-maximize-symbolic", Gtk.IconSize.BUTTON)
+        self._max_btn.add(self._max_btn_image)
+        self._max_btn.connect("clicked", self._on_maximize_clicked)
+        task_header.pack_end(self._max_btn)
         self.set_titlebar(task_header)
         self._task_header = task_header
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
         self.set_transient_for(parent)
-        self.set_modal(True)
+        # 不再设 modal：模态窗口在部分窗口管理器下会被限制尺寸/无法最大化，
+        # 而任务窗口本质是独立终端，用户需要能自由缩放、切到别的窗口复制内容。
+        self.set_modal(False)
+        self.set_resizable(True)
+        self.set_type_hint(Gdk.WindowTypeHint.NORMAL)
         self.terminal = None
         self.completed = False
         self.temp_script = None
@@ -5753,6 +5768,13 @@ class TaskWindow(Gtk.Window):
             term_frame.set_margin_top(10); term_frame.set_margin_bottom(0); term_frame.set_margin_start(10); term_frame.set_margin_end(10)
             term_frame.pack_start(self.terminal, True, True, 0)
             vbox.pack_start(term_frame, True, True, 0)
+
+            # 终端右键菜单：复制选中 / 复制全部输出 / 粘贴 / 全选
+            self.terminal.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+            self.terminal.connect("button-press-event", self._on_terminal_button_press)
+            # 键盘快捷键：Ctrl+Shift+C 复制、Ctrl+Shift+V 粘贴、Ctrl+Shift+A 全选
+            self.terminal.connect("key-press-event", self._on_terminal_key_press)
+
             button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
             button_box.set_margin_top(5)
             button_box.set_margin_bottom(5)
@@ -5762,6 +5784,13 @@ class TaskWindow(Gtk.Window):
             self.timer_label.set_name("task-timer")
             button_box.pack_start(self.timer_label, False, False, 0)
             button_box.pack_start(Gtk.Label(), True, True, 0)
+
+            # 复制按钮：有选中内容时复制选中，否则复制全部输出
+            self.copy_btn = Gtk.Button(label="复制")
+            self.copy_btn.set_tooltip_text("复制选中的终端内容；未选中时复制全部输出")
+            self.copy_btn.connect("clicked", self.on_copy_clicked)
+            button_box.pack_start(self.copy_btn, False, False, 0)
+
             self.action_btn = Gtk.Button(label="取消")
             self.action_btn.connect("clicked", self.on_action_button_clicked)
             button_box.pack_start(self.action_btn, False, False, 0)
@@ -5772,6 +5801,189 @@ class TaskWindow(Gtk.Window):
             self.start_command(func_key)
             self.show_all()
             GLib.timeout_add_seconds(1, self._tick)
+
+    # ------------------------------------------------------------------
+    # 复制按钮 / 右键菜单入口
+    # ------------------------------------------------------------------
+    def _on_terminal_button_press(self, widget, event):
+        # 右键（button 3）弹菜单
+        if event.button == 3:
+            return self._show_terminal_menu(widget, event)
+        return False
+
+    def on_copy_clicked(self, button):
+        """有选中内容时复制选中，否则复制全部输出，并给出短时反馈。"""
+        if self._terminal_has_selection():
+            ok = self._copy_selection()
+            msg = "已复制选中内容" if ok else "复制失败"
+        else:
+            ok = self._copy_all_output()
+            msg = "已复制全部输出" if ok else "没有可复制的内容"
+        self._flash_copy_button(msg)
+
+    def _on_terminal_key_press(self, widget, event):
+        """终端键盘快捷键。Ctrl+C 留给中断进程，复制用 Ctrl+Shift+C。"""
+        try:
+            state = event.state & Gtk.accelerator_get_default_mod_mask()
+            ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
+            shift = bool(state & Gdk.ModifierType.SHIFT_MASK)
+            if not ctrl:
+                return False
+            key = Gdk.keyval_name(event.keyval) or ""
+            key = key.lower()
+            if shift and key == "c":
+                self.on_copy_clicked(self.copy_btn)
+                return True
+            if shift and key == "v":
+                self._paste_to_terminal()
+                return True
+            if shift and key == "a":
+                if self.terminal:
+                    self.terminal.select_all()
+                return True
+        except Exception as e:
+            print(f"快捷键处理失败: {e}")
+        return False
+
+    def _flash_copy_button(self, msg):
+        try:
+            old = self.copy_btn.get_label()
+            self.copy_btn.set_label(msg)
+            def restore():
+                try:
+                    self.copy_btn.set_label(old if old else "复制")
+                except Exception:
+                    pass
+                return False
+            GLib.timeout_add(1500, restore)
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
+    # 窗口最大化 / 还原
+    # ------------------------------------------------------------------
+    def _on_maximize_clicked(self, button):
+        self.toggle_maximize()
+
+    def toggle_maximize(self):
+        """最大化 / 还原窗口，并同步按钮图标。"""
+        try:
+            if self.is_maximized():
+                self.unmaximize()
+                icon = "window-maximize-symbolic"
+            else:
+                self.maximize()
+                icon = "window-restore-symbolic"
+            self._max_btn_image.set_from_icon_name(icon, Gtk.IconSize.BUTTON)
+        except Exception as e:
+            print(f"窗口最大化切换失败: {e}")
+
+    # ------------------------------------------------------------------
+    # 终端复制 / 粘贴
+    # ------------------------------------------------------------------
+    def _terminal_has_selection(self):
+        try:
+            return bool(self.terminal and self.terminal.get_has_selection())
+        except Exception:
+            return False
+
+    def _copy_selection(self):
+        """复制终端中选中的文本到剪贴板。"""
+        if not self.terminal:
+            return False
+        try:
+            if not self.terminal.get_has_selection():
+                return False
+            self.terminal.copy_clipboard_format(Vte.Format.TEXT)
+            return True
+        except Exception:
+            try:
+                self.terminal.copy_clipboard()
+                return True
+            except Exception as e:
+                print(f"复制失败: {e}")
+                return False
+
+    def _copy_all_output(self):
+        """复制终端全部内容（含滚动回看）到剪贴板。"""
+        if not self.terminal:
+            return False
+        text = ""
+        # get_text_range_format 返回 (文本, 属性数组) 元组，不是字符串，要取第 0 项
+        try:
+            if hasattr(self.terminal, "get_text_range_format"):
+                result = self.terminal.get_text_range_format(Vte.Format.TEXT, 0, 0, -1, -1)
+                if isinstance(result, (tuple, list)) and result:
+                    text = result[0] or ""
+                elif isinstance(result, str):
+                    text = result
+        except Exception as e:
+            print(f"get_text_range_format 失败: {e}")
+            text = ""
+        if not text:
+            # 兜底：全选后取选中文本
+            try:
+                self.terminal.select_all()
+                text = self.terminal.get_text_selected(Vte.Format.TEXT) or ""
+            except Exception as e:
+                print(f"读取终端内容失败: {e}")
+                text = ""
+        if not text:
+            return False
+        try:
+            clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+            clipboard.set_text(text, -1)
+            clipboard.store()
+            return True
+        except Exception as e:
+            print(f"写入剪贴板失败: {e}")
+            return False
+
+    def _paste_to_terminal(self):
+        if not self.terminal:
+            return
+        try:
+            self.terminal.paste_clipboard()
+        except Exception as e:
+            print(f"粘贴失败: {e}")
+
+    def _show_terminal_menu(self, terminal, event):
+        """终端右键菜单：复制选中 / 复制全部输出 / 粘贴 / 全选。"""
+        menu = Gtk.Menu()
+        has_sel = self._terminal_has_selection()
+
+        item_copy = Gtk.MenuItem(label="复制选中内容")
+        item_copy.set_sensitive(has_sel)
+        item_copy.connect("activate", lambda *_: self._copy_selection())
+        menu.append(item_copy)
+
+        item_copy_all = Gtk.MenuItem(label="复制全部输出")
+        item_copy_all.connect("activate", lambda *_: self._copy_all_output())
+        menu.append(item_copy_all)
+
+        item_paste = Gtk.MenuItem(label="粘贴")
+        item_paste.connect("activate", lambda *_: self._paste_to_terminal())
+        menu.append(item_paste)
+
+        menu.append(Gtk.SeparatorMenuItem())
+
+        item_sel_all = Gtk.MenuItem(label="全选")
+        item_sel_all.connect("activate", lambda *_: self.terminal.select_all())
+        menu.append(item_sel_all)
+
+        menu.show_all()
+        # popup_at_pointer 需要真实的事件窗口；用 GTK3.22+ 时优先用它，
+        # 失败则退回传统 popup（部分 WM/合成事件下事件窗口为空会触发断言）
+        try:
+            menu.popup_at_pointer(event)
+        except Exception:
+            try:
+                menu.popup(None, None, None, None, event.button if event else 0,
+                           Gtk.get_current_event_time())
+            except Exception as e:
+                print(f"右键菜单弹出失败: {e}")
+                return False
+        return True
 
     def run_external(self, func_key):
         tmp_path = create_temp_script()
@@ -6337,7 +6549,17 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-19（v1.7.5）
+        changelog_content = """2026-10-19（v1.7.6）
+【界面优化】
+- 内嵌终端窗口新增「复制」按钮：有选中内容时复制选中，未选中时复制全部输出，并有短时状态反馈
+- 内嵌终端新增右键菜单：复制选中内容 / 复制全部输出 / 粘贴 / 全选
+- 内嵌终端新增键盘快捷键：Ctrl+Shift+C 复制、Ctrl+Shift+V 粘贴、Ctrl+Shift+A 全选（Ctrl+C 仍保留用于中断进程）
+- 任务窗口标题栏新增「最大化 / 还原」按钮，可把终端铺满屏幕；窗口不再强制模态，可自由缩放并切换到其他窗口
+
+【问题修复】
+- 修复「安装国内源」完成后提示的恢复官方源命令缺少 sudo、直接复制执行会失败的问题，并注明需在 Konsole 中执行
+
+2026-10-19（v1.7.5）
 【问题修复】
 - 统一全部 GitHub 下载镜像源：原 3 个镜像中 gh.ddlc.top 已 429 限流、mirror.ghproxy.com 域名失效，仅 ghproxy.net 仍可用但很慢，导致插件 / GE-Proton / Clover 下载经常失败
 - 新镜像列表（均经 5 轮稳定性 + 33MB 文件 sha256 完整性 + 实速实测）：gh-proxy.com（速度快）、gh.3w.pm（稳定）、cors.isteed.cc（稳定）、ghproxy.net（慢速备用）、GitHub 官方源
