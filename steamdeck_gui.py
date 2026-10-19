@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.8.0"
+VERSION = "1.8.1"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -2311,18 +2311,33 @@ hc_check_clover_files() {
             echo ""; return
         fi
     fi
-    efi_root="$ESP_MOUNT/efi/EFI"
-    [ -d "$ESP_MOUNT/EFI" ] && efi_root="$ESP_MOUNT/EFI"
+    # 定位 EFI 目录：不同机型/系统上 EFI 可能在 ESP 根下，也可能在 efi 子目录下
+    # （SteamOS 的 Clover 安装脚本用 /esp/efi，但 efibootmgr 记录的引导路径是 \EFI\...
+    #  相对 ESP 根，两种布局都可能存在）。不能只用普通用户的 [ -d ] 判断——
+    # /esp 权限是 700 root，普通用户永远看不到，会误判成目录不存在。
+    efi_root=""
+    local cand
+    for cand in "$ESP_MOUNT/EFI" "$ESP_MOUNT/efi/EFI"; do
+        if sudo -n ls "$cand" &>/dev/null; then
+            efi_root="$cand"; break
+        fi
+    done
 
-    # 关键：必须区分「文件真的不存在」和「没有 sudo 权限看不到」，
-    # 否则 sudo -n 失效时会把每个文件都误报成缺失。
-    # 用 sudo -n ls 探测一次读权限，成功才继续逐文件判断。
-    if ! sudo -n ls "$efi_root" &>/dev/null; then
-        hc_result warn "无法读取 ESP 上的 EFI 目录（需要 sudo 密码）" \
-            "本次跳过 Clover 文件检查；请在体检时输入密码，或手动执行：sudo ls $efi_root"
+    if [ -z "$efi_root" ]; then
+        # 再尝试上层目录，判断到底是「没权限」还是「真的没有这个目录」
+        if sudo -n ls "$ESP_MOUNT" &>/dev/null; then
+            local top_list
+            top_list=$(sudo -n ls "$ESP_MOUNT" 2>/dev/null || true)
+            hc_result fail "ESP 上没有找到 EFI 引导目录" \
+                "ESP 根目录内容: $(echo "$top_list" | tr '\n' ' ')。引导文件可能已被 SteamOS 更新清除，需要重装 Clover"
+        else
+            hc_result warn "无法读取 ESP 上的 EFI 目录（需要 sudo 密码）" \
+                "本次跳过 Clover 文件检查；请在体检时输入密码，或手动执行：sudo ls $ESP_MOUNT"
+        fi
         [ -n "$tmp_mount" ] && { sudo -n umount "$tmp_mount" 2>/dev/null; rmdir "$tmp_mount" 2>/dev/null; }
         echo ""; return
     fi
+    hc_result ok "已定位 EFI 目录" "$efi_root"
 
     # 列出实际内容，用于更准确的判断
     local efi_list
@@ -2682,12 +2697,44 @@ health_check() {
     echo -e "  共检查 $HC_TOTAL 项：${GREEN}正常 $HC_OK${NC} ｜ ${YELLOW}注意 $HC_WARN${NC} ｜ ${RED}异常 $HC_FAIL${NC}"
     echo ""
 
-    if [ "$HC_FAIL" -eq 0 ] && [ "$HC_WARN" -eq 0 ]; then
-        echo -e "${GREEN}✅ 系统状态良好，未发现问题。${NC}"
+    # 结论按「异常」数量判定，而不是「注意」：
+    # 「注意」项多为环境差异（如 Windows 启动项被 Clover 接管、ESP 剩余空间偏小），
+    # 并不代表引导或挂载坏了，不该让用户以为系统有毛病。
+    if [ "$HC_FAIL" -eq 0 ]; then
+        if [ "$HC_WARN" -eq 0 ]; then
+            echo -e "${GREEN}✅ 结论：系统状态良好，未发现问题。${NC}"
+        else
+            echo -e "${GREEN}✅ 结论：未发现异常，引导与挂载均正常。${NC}"
+            echo -e "${CYAN}   另有 $HC_WARN 项提示，属于环境差异或可优化项，不影响使用（详见上方 [注意] 条目）。${NC}"
+        fi
+        if [ ${#HC_FIXABLE[@]} -gt 0 ]; then
+            echo ""
+            echo -e "${YELLOW}其中 ${#HC_FIXABLE[@]} 项可以自动优化，是否现在处理？${NC}"
+            local ans
+            if read -p "输入 y 处理，其他键跳过: " -n 1 -r ans < /dev/tty 2>/dev/null; then
+                echo ""
+                if [[ "$ans" =~ ^[Yy]$ ]]; then
+                    hc_run_fixes
+                else
+                    echo "已跳过。可稍后重新运行体检再处理。"
+                fi
+            else
+                echo -e "${YELLOW}无法读取输入（非交互环境），已跳过。${NC}"
+            fi
+        fi
+        echo ""
         return 0
     fi
+
+    # 到这里说明确实有「异常」，才提示需要处理
+    echo -e "${RED}❌ 结论：发现 $HC_FAIL 项异常，需要处理。${NC}"
     if [ ${#HC_FIXABLE[@]} -gt 0 ]; then
-        echo -e "${YELLOW}发现 ${#HC_FIXABLE[@]} 个可自动修复的问题。${NC}"
+        echo -e "${YELLOW}其中 ${#HC_FIXABLE[@]} 项可以自动修复：${NC}"
+        local item title
+        for item in "${HC_FIXABLE[@]}"; do
+            title="${item#*|}"; title="${title%%|*}"
+            echo "   · $title"
+        done
         local ans
         if read -p "是否现在修复？(y/N): " -n 1 -r ans < /dev/tty 2>/dev/null; then
             echo ""
@@ -2701,7 +2748,7 @@ health_check() {
             echo "如需修复，请按上方「可自动修复」提示手动处理。"
         fi
     else
-        echo -e "${YELLOW}以上问题需要手动处理，请按提示操作。${NC}"
+        echo -e "${YELLOW}以上异常需要手动处理，请按上方 [异常] 条目的提示操作。${NC}"
     fi
     echo ""
     echo -e "${CYAN}常见原因与建议：${NC}"
@@ -7149,7 +7196,13 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-19（v1.8.0）
+        changelog_content = """2026-10-19（v1.8.1）
+【问题修复】
+- 修复系统体检的结论误导：即使只有「注意」项（如 Windows 启动项被 Clover 接管、ESP 剩余空间偏小等环境差异），也会输出「以上问题需要手动处理」，让人误以为系统有故障；现改为按「异常」数量判定，无异常时明确显示「✅ 结论：未发现异常，引导与挂载均正常」，并说明提示项不影响使用
+- 修复系统体检第 3 项「Clover 引导文件完整性」在已输入 sudo 密码的情况下仍提示「无法读取 EFI 目录」：原代码用普通用户的 [ -d ] 判断 EFI 目录位置，而 /esp 权限为 700 root，普通用户永远看不到，导致路径判断错误后 sudo 探测也失败
+- EFI 目录定位改为依次用 sudo 探测 /esp/EFI 与 /esp/efi/EFI 两个候选路径，兼容不同机型与系统布局；两者都不存在时再区分「目录确实缺失」与「无 sudo 权限」，并给出 ESP 根目录的实际内容供排查
+
+2026-10-19（v1.8.0）
 【新增功能】
 - 新增「系统体检」功能（双系统用户可见）：专用于 SteamOS 更新后排查掉盘、掉引导、挂载失效，覆盖 6 大类共 18 项检查
   · ESP 分区：是否识别、挂载状态、剩余空间（Clover 需约 15MB）
