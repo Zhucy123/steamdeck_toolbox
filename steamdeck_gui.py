@@ -15,6 +15,7 @@ import subprocess
 import os
 import sys
 import re
+import json
 import tempfile
 import shutil
 import threading
@@ -27,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.7.1"
+VERSION = "1.7.2"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -51,69 +52,121 @@ EMBEDDED_ICONS = {
 # ============================================================================
 # 全局样式与工具函数
 # ============================================================================
-APP_CSS = """
-/* =====================================================================
-   Steam Deck 风格主题：深蓝黑底 + Steam 蓝高亮 + 圆角卡片 + 触控友好行高
-   ===================================================================== */
-@define-color sd_bg #0d1219;
-@define-color sd_bg_alt #101720;
-@define-color sd_panel #151d26;
-@define-color sd_panel_hi #1b2531;
-@define-color sd_border #26313e;
-@define-color sd_accent #1a9fff;
-@define-color sd_accent_dark #0f6cbd;
-@define-color sd_text #e6edf4;
-@define-color sd_dim #8b98a6;
+# ============================================================================
+# 主题（深色 / 浅色）
+# ============================================================================
+# 配色表：键名相同，两套值不同，CSS 模板通过 {key} 占位符注入。
+THEME_DARK = {
+    "bg": "#0d1219", "bg_alt": "#101720", "panel": "#151d26", "panel_hi": "#1b2531",
+    "border": "#26313e", "accent": "#1a9fff", "accent_dark": "#0f6cbd",
+    "text": "#e6edf4", "dim": "#8b98a6",
+    "header_top": "#1c2733", "header_bottom": "#131a22", "header_border": "#070a0e",
+    "header_backdrop_top": "#161e28", "header_backdrop_bottom": "#11171e",
+    "title": "#ffffff", "search_bg": "#0a0f15",
+    "sidebar_header_top": "#16202a", "sidebar_header_bottom": "#111820",
+    "bottom_top": "#131a22", "bottom_bottom": "#0e141b",
+    "hover": "rgba(255, 255, 255, 0.06)",
+    "scrollbar": "rgba(255, 255, 255, 0.16)",
+    "btn_ghost": "rgba(255, 255, 255, 0.07)", "btn_ghost_border": "rgba(255, 255, 255, 0.09)",
+    "titlebtn": "rgba(255, 255, 255, 0.10)", "titlebtn_border": "rgba(255, 255, 255, 0.16)",
+    "titlebtn_hover": "rgba(255, 255, 255, 0.24)",
+    "shadow": "rgba(0, 0, 0, 0.45)",
+    "sel_text": "#ffffff",
+    "suggested_hover": "#3aaeff",
+    "destructive": "#a63d3c", "destructive_border": "#c95352",
+    "destructive_hover": "#c14948", "destructive_hover_border": "#e06766",
+    "close_hover": "#c0392b", "close_hover_border": "#e05a4a",
+    "alpha_accent_hover": "0.14", "alpha_accent_btn": "0.28", "alpha_accent_head": "0.30",
+}
 
-window { background-color: @sd_bg; color: @sd_text; }
-.background { background-color: @sd_bg; }
+THEME_LIGHT = {
+    "bg": "#f2f5f9", "bg_alt": "#e8eef5", "panel": "#ffffff", "panel_hi": "#eef3f9",
+    "border": "#c9d5e3", "accent": "#0a7ddb", "accent_dark": "#085fa8",
+    "text": "#1a2531", "dim": "#5d6b7a",
+    "header_top": "#ffffff", "header_bottom": "#e9eff6", "header_border": "#c2cfdd",
+    "header_backdrop_top": "#f7fafd", "header_backdrop_bottom": "#eef4fa",
+    "title": "#10202e", "search_bg": "#ffffff",
+    "sidebar_header_top": "#eef4fa", "sidebar_header_bottom": "#e3ebf4",
+    "bottom_top": "#e9eff6", "bottom_bottom": "#dde6ef",
+    "hover": "rgba(10, 125, 219, 0.10)",
+    "scrollbar": "rgba(26, 37, 49, 0.22)",
+    "btn_ghost": "rgba(0, 0, 0, 0.05)", "btn_ghost_border": "rgba(0, 0, 0, 0.10)",
+    "titlebtn": "rgba(0, 0, 0, 0.06)", "titlebtn_border": "rgba(0, 0, 0, 0.12)",
+    "titlebtn_hover": "rgba(0, 0, 0, 0.14)",
+    "shadow": "rgba(30, 50, 70, 0.18)",
+    "sel_text": "#ffffff",
+    "suggested_hover": "#1a8fe8",
+    "destructive": "#c0392b", "destructive_border": "#a93226",
+    "destructive_hover": "#d0453a", "destructive_hover_border": "#c0392b",
+    "close_hover": "#c0392b", "close_hover_border": "#e05a4a",
+    "alpha_accent_hover": "0.12", "alpha_accent_btn": "0.20", "alpha_accent_head": "0.22",
+}
+
+# CSS 模板：所有颜色来自上面的主题字典，深浅模式共用同一份样式结构
+APP_CSS_TEMPLATE = """
+/* =====================================================================
+   Steam Deck 风格主题（深色 / 浅色可切换）
+   圆角卡片 + 触控友好行高
+   ===================================================================== */
+@define-color sd_bg {bg};
+@define-color sd_bg_alt {bg_alt};
+@define-color sd_panel {panel};
+@define-color sd_panel_hi {panel_hi};
+@define-color sd_border {border};
+@define-color sd_accent {accent};
+@define-color sd_accent_dark {accent_dark};
+@define-color sd_text {text};
+@define-color sd_dim {dim};
+
+window {{ background-color: @sd_bg; color: @sd_text; }}
+.background {{ background-color: @sd_bg; }}
 
 /* ---------- 顶部标题栏 ---------- */
-headerbar {
+headerbar {{
     min-height: 46px;
     padding: 0 10px;
-    background-image: linear-gradient(to bottom, #1c2733, #131a22);
-    border-bottom: 1px solid #070a0e;
+    background-image: linear-gradient(to bottom, {header_top}, {header_bottom});
+    border-bottom: 1px solid {header_border};
     color: @sd_text;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
-}
-headerbar:backdrop { background-image: linear-gradient(to bottom, #161e28, #11171e); }
-headerbar .title { font-weight: 700; font-size: 15px; color: #ffffff; }
-headerbar .subtitle { font-size: 11px; color: @sd_dim; }
-headerbar button {
+    box-shadow: 0 2px 6px {shadow};
+}}
+headerbar:backdrop {{ background-image: linear-gradient(to bottom, {header_backdrop_top}, {header_backdrop_bottom}); }}
+headerbar .title {{ font-weight: 700; font-size: 15px; color: {title}; }}
+headerbar .subtitle {{ font-size: 11px; color: @sd_dim; }}
+headerbar button {{
     background-image: none;
-    background-color: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    background-color: {btn_ghost};
+    border: 1px solid {btn_ghost_border};
     border-radius: 9px;
     color: @sd_text;
     min-height: 26px;
     padding: 0 10px;
     box-shadow: none;
     text-shadow: none;
-}
-headerbar button:hover { background-color: alpha(@sd_accent, 0.30); border-color: @sd_accent; }
-headerbar button:active, headerbar button:checked { background-color: @sd_accent_dark; color: #ffffff; }
-headerbar button.titlebutton {
+}}
+headerbar button:hover {{ background-color: alpha(@sd_accent, {alpha_accent_head}); border-color: @sd_accent; }}
+headerbar button:active, headerbar button:checked {{ background-color: @sd_accent_dark; color: {sel_text}; }}
+headerbar button.titlebutton {{
     background-image: none;
-    background-color: rgba(255, 255, 255, 0.10);
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    background-color: {titlebtn};
+    border: 1px solid {titlebtn_border};
     border-radius: 8px;
-    color: #ffffff;
+    color: {title};
     -gtk-icon-shadow: none;
     min-width: 24px;
     min-height: 24px;
     padding: 0;
     box-shadow: none;
-}
-headerbar button.titlebutton:hover { background-color: rgba(255, 255, 255, 0.24); }
-headerbar button.titlebutton:active { background-color: @sd_accent_dark; }
-headerbar button.titlebutton.close:hover { background-color: #c0392b; border-color: #e05a4a; }
-headerbar button.titlebutton image { color: #ffffff; }
+}}
+headerbar button.titlebutton:hover {{ background-color: {titlebtn_hover}; }}
+headerbar button.titlebutton:active {{ background-color: @sd_accent_dark; }}
+headerbar button.titlebutton.close:hover {{ background-color: {close_hover}; border-color: {close_hover_border}; }}
+headerbar button.titlebutton image {{ color: {title}; }}
 
 /* ---------- 搜索框 ---------- */
-entry.search-entry, searchentry {
+entry.search, entry.search-entry, searchentry {{
     background-image: none;
-    background-color: #0a0f15;
+    background-color: {search_bg};
     border: 1px solid @sd_border;
     border-radius: 10px;
     color: @sd_text;
@@ -121,33 +174,39 @@ entry.search-entry, searchentry {
     padding: 0 10px;
     box-shadow: none;
     caret-color: @sd_accent;
-}
-entry.search-entry:focus, searchentry:focus { border-color: @sd_accent; }
-entry.search-entry image, searchentry image { color: @sd_dim; }
+}}
+entry.search:focus, entry.search-entry:focus, searchentry:focus {{ border-color: @sd_accent; }}
+entry.search image, entry.search-entry image, searchentry image {{ color: @sd_dim; }}
+/* 深色模式下防止默认主题把搜索框画成白底 */
+headerbar entry, headerbar entry.search {{ color: @sd_text; }}
+headerbar entry text, headerbar entry.search text {{
+    background-color: transparent;
+    color: @sd_text;
+}}
 
 /* ---------- 左侧分类栏 ---------- */
-#sidebar { background-color: @sd_bg_alt; border-right: 1px solid @sd_border; }
-#sidebar.view { background-color: transparent; color: @sd_text; -GtkTreeView-vertical-separator: 3px; }
-#sidebar.view:hover { background-color: rgba(255, 255, 255, 0.06); }
-#sidebar.view:selected {
+#sidebar {{ background-color: @sd_bg_alt; border-right: 1px solid @sd_border; }}
+#sidebar.view {{ background-color: transparent; color: @sd_text; -GtkTreeView-vertical-separator: 3px; }}
+#sidebar.view:hover {{ background-color: {hover}; }}
+#sidebar.view:selected {{
     background-image: linear-gradient(to right, @sd_accent, @sd_accent_dark);
-    color: #ffffff;
-}
-#sidebar-header {
-    background-image: linear-gradient(to bottom, #16202a, #111820);
+    color: {sel_text};
+}}
+#sidebar-header {{
+    background-image: linear-gradient(to bottom, {sidebar_header_top}, {sidebar_header_bottom});
     border-bottom: 1px solid @sd_border;
     padding: 10px 12px;
-}
-#sidebar-header label { font-weight: 700; color: #ffffff; font-size: 14px; }
+}}
+#sidebar-header label {{ font-weight: 700; color: {title}; font-size: 14px; }}
 
 /* ---------- 功能列表 / 搜索结果列表 ---------- */
-#func-list { background-color: transparent; color: @sd_text; -GtkTreeView-vertical-separator: 2px; }
-#func-list.view:hover { background-color: alpha(@sd_accent, 0.14); }
-#func-list.view:selected {
+#func-list {{ background-color: transparent; color: @sd_text; -GtkTreeView-vertical-separator: 2px; }}
+#func-list.view:hover {{ background-color: alpha(@sd_accent, {alpha_accent_hover}); }}
+#func-list.view:selected {{
     background-image: linear-gradient(to right, @sd_accent, @sd_accent_dark);
-    color: #ffffff;
-}
-treeview button {
+    color: {sel_text};
+}}
+treeview button {{
     background-image: none;
     background-color: @sd_panel_hi;
     border: none;
@@ -158,29 +217,29 @@ treeview button {
     box-shadow: none;
     text-shadow: none;
     font-weight: 600;
-}
+}}
 
 /* ---------- 圆角卡片容器 ---------- */
-.card {
+.card {{
     background-color: @sd_panel;
     border: 1px solid @sd_border;
     border-radius: 12px;
-}
+}}
 
 /* ---------- 页面标题 ---------- */
-#page-title { color: #ffffff; }
+#page-title {{ color: {title}; }}
 
 /* ---------- 底部状态栏 ---------- */
-#bottom-bar {
-    background-image: linear-gradient(to bottom, #131a22, #0e141b);
+#bottom-bar {{
+    background-image: linear-gradient(to bottom, {bottom_top}, {bottom_bottom});
     border-top: 1px solid @sd_border;
     padding: 6px 10px;
-}
-#status-label { font-size: 11px; color: @sd_dim; }
-#task-timer { font-size: 11px; font-weight: bold; color: @sd_accent; }
+}}
+#status-label {{ font-size: 11px; color: @sd_dim; }}
+#task-timer {{ font-size: 11px; font-weight: bold; color: @sd_accent; }}
 
 /* ---------- 普通按钮 ---------- */
-button {
+button {{
     background-image: none;
     background-color: @sd_panel_hi;
     border: 1px solid @sd_border;
@@ -190,47 +249,201 @@ button {
     padding: 2px 14px;
     box-shadow: none;
     text-shadow: none;
-}
-button:hover { background-color: alpha(@sd_accent, 0.28); border-color: @sd_accent; }
-button:active { background-color: @sd_accent_dark; color: #ffffff; }
-button:disabled { color: @sd_dim; background-color: @sd_panel; border-color: @sd_border; }
-button.suggested-action {
+}}
+button:hover {{ background-color: alpha(@sd_accent, {alpha_accent_btn}); border-color: @sd_accent; }}
+button:active {{ background-color: @sd_accent_dark; color: {sel_text}; }}
+button:disabled {{ color: @sd_dim; background-color: @sd_panel; border-color: @sd_border; }}
+button.suggested-action {{
     background-image: linear-gradient(to bottom, @sd_accent, @sd_accent_dark);
     border-color: @sd_accent;
-    color: #ffffff;
-}
-button.suggested-action:hover { background-image: linear-gradient(to bottom, #3aaeff, @sd_accent_dark); }
-button.destructive-action { background-color: #a63d3c; border-color: #c95352; color: #ffffff; }
-button.destructive-action:hover { background-color: #c14948; border-color: #e06766; }
+    color: {sel_text};
+}}
+button.suggested-action:hover {{ background-image: linear-gradient(to bottom, {suggested_hover}, @sd_accent_dark); }}
+button.destructive-action {{ background-color: {destructive}; border-color: {destructive_border}; color: #ffffff; }}
+button.destructive-action:hover {{ background-color: {destructive_hover}; border-color: {destructive_hover_border}; }}
 
 /* ---------- 文本框 ---------- */
-textview, textview text { background-color: @sd_panel; color: @sd_text; caret-color: @sd_accent; }
-textview { border-radius: 10px; }
+textview, textview text {{ background-color: @sd_panel; color: @sd_text; caret-color: @sd_accent; }}
+textview {{ border-radius: 10px; }}
 
 /* ---------- 滚动条 ---------- */
-scrollbar { background-color: transparent; border: none; }
-scrollbar slider {
-    background-color: rgba(255, 255, 255, 0.16);
+scrollbar {{ background-color: transparent; border: none; }}
+scrollbar slider {{
+    background-color: {scrollbar};
     border-radius: 6px;
     min-width: 8px;
     min-height: 8px;
-}
-scrollbar slider:hover { background-color: alpha(@sd_accent, 0.6); }
+}}
+scrollbar slider:hover {{ background-color: alpha(@sd_accent, 0.6); }}
+
+/* ---------- 主题切换弹出菜单（Popover 才能跟随主题着色） ---------- */
+popover, popover.background {{
+    background-color: @sd_panel;
+    border: 1px solid @sd_border;
+    border-radius: 10px;
+    box-shadow: 0 6px 18px {shadow};
+}}
+popover > box, popover.background > box {{ background-color: transparent; }}
+/* 主题行按钮 */
+.theme-row, button.theme-row {{
+    background-image: none;
+    background-color: transparent;
+    border: none;
+    border-radius: 7px;
+    box-shadow: none;
+    padding: 8px 14px;
+    min-height: 24px;
+    color: @sd_text;
+}}
+.theme-row:hover, button.theme-row:hover {{
+    background-image: none;
+    background-color: alpha(@sd_accent, {alpha_accent_btn});
+    border: none;
+    color: @sd_text;
+}}
+.theme-row:active, button.theme-row:active {{
+    background-image: none;
+    background-color: alpha(@sd_accent, {alpha_accent_btn});
+    color: @sd_text;
+}}
+.theme-row label {{ color: @sd_text; }}
+.theme-row image {{ color: @sd_accent; }}
 
 /* ---------- 终端 ---------- */
-vte-terminal { padding: 6px; }
+vte-terminal {{ padding: 6px; }}
 """
 
-def apply_app_css():
+def build_css(theme_name):
+    """根据主题名生成对应的 CSS 文本。"""
+    palette = THEME_LIGHT if theme_name == "light" else THEME_DARK
+    return APP_CSS_TEMPLATE.format(**palette)
+
+# 向后兼容：旧代码中若有引用 APP_CSS 的地方，默认使用深色
+APP_CSS = build_css("dark")
+
+# ---------------------------------------------------------------------------
+# 主题配置：深色 / 浅色 / 跟随系统，持久化到 ~/.config/steamdeck_toolbox/config.json
+# ---------------------------------------------------------------------------
+THEME_MODES = ("dark", "light", "system")
+THEME_LABELS = {"dark": "深色", "light": "浅色", "system": "跟随系统"}
+
+_css_provider = None
+
+def _config_path():
+    return os.path.join(os.path.expanduser("~"), ".config", "steamdeck_toolbox", "config.json")
+
+def load_theme_pref():
+    """读取用户偏好，默认跟随系统。"""
     try:
+        with open(_config_path(), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        mode = data.get("theme", "system")
+        return mode if mode in THEME_MODES else "system"
+    except Exception:
+        return "system"
+
+def save_theme_pref(mode):
+    """保存主题偏好，失败不影响使用。"""
+    if mode not in THEME_MODES:
+        return False
+    try:
+        path = _config_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        data = {}
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f) or {}
+            except Exception:
+                data = {}
+        data["theme"] = mode
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"保存主题设置失败: {e}")
+        return False
+
+# 系统真实配色方案的快照。
+# 注意：apply_app_css 会去改 GTK 的 prefer-dark 让原生控件跟着变，
+# 如果不先记录系统原始值，选“跟随系统”时读到的就是自己被改写过的值（自我污染）。
+_system_theme = None
+
+def _detect_system_theme():
+    """探测系统真实配色，返回 dark 或 light。只应在程序启动、修改 GTK 之前调用一次。"""
+    # 1) 优先读桌面环境的颜色方案设置（这是用户真正设置的“系统主题”）
+    for cmd, key, dark_pat in (
+        (["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"], None, "dark"),
+        (["gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"], None, None),
+    ):
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            val = (out.stdout or "").strip().lower()
+            if not val or out.returncode != 0:
+                continue
+            if dark_pat is not None:
+                # color-scheme 为 'prefer-dark' / 'default' 等
+                return "dark" if dark_pat in val else "light"
+            # gtk-theme 名称里含 dark 视为深色主题
+            return "dark" if "dark" in val else "light"
+        except Exception:
+            continue
+    # 2) 退化：读 GTK 的 prefer-dark
+    try:
+        settings = Gtk.Settings.get_default()
+        if settings is not None:
+            return "dark" if settings.get_property("gtk-application-prefer-dark-theme") else "light"
+    except Exception:
+        pass
+    return "light"
+
+def reset_system_theme_cache():
+    """重新探测系统配色（用户可能在系统里改了主题）。"""
+    global _system_theme
+    _system_theme = _detect_system_theme()
+    return _system_theme
+
+def resolve_theme_mode(mode):
+    """把 system 解析成实际生效的 dark/light。使用启动时记录的系统快照，避免自我污染。"""
+    if mode in ("dark", "light"):
+        return mode
+    global _system_theme
+    if _system_theme is None:
+        reset_system_theme_cache()
+    return _system_theme or "light"
+
+def apply_app_css(mode=None):
+    """应用主题样式；mode 为 dark/light/system，None 表示使用已保存的偏好。"""
+    global _css_provider
+    try:
+        if mode is None:
+            mode = load_theme_pref()
+        resolved = resolve_theme_mode(mode)
+        css = build_css(resolved)
+
+        # 同步 GTK 自身的深色偏好，让对话框、下拉菜单等原生控件配色一致
+        try:
+            settings = Gtk.Settings.get_default()
+            if settings is not None:
+                settings.set_property("gtk-application-prefer-dark-theme", resolved == "dark")
+        except Exception:
+            pass
+
         provider = Gtk.CssProvider()
-        provider.load_from_data(APP_CSS.encode('utf-8'))
+        provider.load_from_data(css.encode('utf-8'))
         screen = Gdk.Screen.get_default()
         if screen is None:
             return
+        # 先移除旧 provider，避免重复叠加导致样式错乱
+        if _css_provider is not None:
+            try:
+                Gtk.StyleContext.remove_provider_for_screen(screen, _css_provider)
+            except Exception:
+                pass
         Gtk.StyleContext.add_provider_for_screen(
             screen, provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        _css_provider = provider
     except Exception as e:
         print(f"应用样式失败: {e}")
 
@@ -704,42 +917,12 @@ fix_disk_write_error() {
     echo -e "${YELLOW}════════════════ 修复磁盘写入错误 ════════════════${NC}"
     echo -e "${CYAN}正在扫描 NTFS 分区并检查是否存在错误...${NC}"
 
+    # ------------------------------------------------------------------
+    # 先扫描，再决定是否需要 sudo：
+    # 单系统 SteamOS 通常没有任何 NTFS 分区，此时不应打扰用户输密码。
+    # ------------------------------------------------------------------
     echo ""
-    echo -e "${CYAN}请输入您的 sudo 密码以继续操作（输入时不会显示）${NC}"
-    if ! sudo -v 2>/dev/null; then
-        echo -e "${RED}密码验证失败或已取消，操作终止。${NC}"
-        return 1
-    fi
-    echo -e "${GREEN}密码已验证，继续执行。${NC}"
-
-    if ! command -v ntfsfix &> /dev/null; then
-        echo -e "${RED}错误: 未安装 ntfsfix 工具。${NC}"
-        echo "请安装 ntfs-3g 包："
-        echo "  sudo pacman -S ntfs-3g   (Arch/SteamOS)"
-        echo "  sudo apt install ntfs-3g (Debian/Ubuntu)"
-        return 1
-    fi
-
-    if command -v steamos-readonly &> /dev/null; then
-        echo ""
-        echo "步骤1: 检查并禁用 SteamOS 只读模式"
-        if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
-            sudo steamos-readonly disable 2>/dev/null
-            if [ $? -eq 0 ]; then
-                echo -e "${GREEN}✓ 已禁用只读模式${NC}"
-            else
-                echo -e "${YELLOW}⚠️  禁用只读模式失败，尝试继续...${NC}"
-            fi
-        else
-            echo -e "${GREEN}✓ 系统已处于读写模式${NC}"
-        fi
-    else
-        echo ""
-        echo "步骤1: 跳过 SteamOS 只读检查（非 SteamOS）"
-    fi
-
-    echo ""
-    echo "步骤2: 扫描 NTFS 分区..."
+    echo "步骤1: 扫描 NTFS 分区..."
     local ntfs_devices=()
     local ntfs_labels=()
     local ntfs_mountpoints=()
@@ -765,52 +948,177 @@ fix_disk_write_error() {
         ((ntfs_count++))
     done < <(lsblk -P -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID --noheadings 2>/dev/null)
 
-    if [ $ntfs_count -eq 0 ]; then
+    # lsblk 没有任何 NTFS 时，blkid 也几乎不可能有，但保留兜底探测
+    # （注意：blkid 需要 root 才能读到全部信息，所以这里用 sudo -n，拿不到就跳过）
+    if [ $ntfs_count -eq 0 ] && sudo -n true 2>/dev/null; then
         echo -e "${YELLOW}⚠️  lsblk 未找到 NTFS 分区，尝试使用 blkid ...${NC}"
         while IFS= read -r line; do
+            [ -z "$line" ] && continue
             dev=$(echo "$line" | cut -d: -f1)
             fstype=$(echo "$line" | sed -n 's/.* TYPE="\([^"]*\)".*/\1/p')
             label=$(echo "$line" | sed -n 's/.* LABEL="\([^"]*\)".*/\1/p')
             uuid=$(echo "$line" | sed -n 's/.* UUID="\([^"]*\)".*/\1/p')
 
-            if [[ "$fstype" == "ntfs" || "$fstype" == "fuseblk" ]]; then
+            if [[ "$fstype" == "ntfs" || "$fstype" == "fuseblk" || "$fstype" == "ntfs3" ]]; then
                 ntfs_devices+=("$dev")
                 ntfs_labels+=("${label:-无标签}")
                 ntfs_uuids+=("${uuid:-}")
                 ntfs_mountpoints+=("")
                 ((ntfs_count++))
             fi
-        done < <(sudo blkid 2>/dev/null)
+        done < <(sudo -n blkid 2>/dev/null)
     fi
 
+    # 没有 NTFS 分区：直接给出明确结论，不索要密码、不改动只读模式
     if [ $ntfs_count -eq 0 ]; then
-        echo -e "${YELLOW}⚠️  未找到任何 NTFS 分区。${NC}"
+        echo ""
+        echo -e "${GREEN}✅ 未检测到 NTFS 分区，无需修复。${NC}"
+        echo -e "${CYAN}   本功能用于修复「Windows 双系统 / NTFS 存储卡」在卸载或断电后"
+        echo -e "${CYAN}   残留的脏标志（Volume dirty），单系统 SteamOS 不会出现该问题。${NC}"
+        echo ""
+        echo -e "${CYAN}   如果您确实遇到了磁盘写入错误，可能属于以下情况：${NC}"
+        echo "     · 文件系统错误（btrfs/ext4）→ 运行 sudo btrfs check 或 sudo fsck"
+        echo "     · 空间不足          → 运行 df -h 检查可用空间"
+        echo "     · 硬件/IO 报错      → 运行 sudo dmesg | grep -i error 查看"
+        echo ""
+        echo -e "${YELLOW}   提示：如已插入 NTFS 存储卡或移动硬盘，请确认已插紧后重试。${NC}"
         return 0
     fi
 
-    echo -e "${CYAN}找到 $ntfs_count 个 NTFS 分区，正在检查错误状态...${NC}"
+    # ------------------------------------------------------------------
+    # 确认存在 NTFS 分区后，才需要 root 权限
+    # ------------------------------------------------------------------
+    if ! command -v ntfsfix &> /dev/null; then
+        echo ""
+        echo -e "${RED}错误: 未安装 ntfsfix 工具。${NC}"
+        echo "请安装 ntfs-3g 包："
+        echo "  sudo pacman -S ntfs-3g   (Arch/SteamOS)"
+        echo "  sudo apt install ntfs-3g (Debian/Ubuntu)"
+        return 1
+    fi
+
+    echo ""
+    echo -e "${CYAN}发现 $ntfs_count 个 NTFS 分区，需要 root 权限进行检查。${NC}"
+    echo -e "${CYAN}请输入您的 sudo 密码以继续操作（输入时不会显示）${NC}"
+    if ! sudo -v 2>/dev/null; then
+        echo -e "${RED}密码验证失败或已取消，操作终止。${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}密码已验证，继续执行。${NC}"
+
+    # 记录进入时的只读状态，退出时按需恢复，避免把系统永久留在可写状态
+    local readonly_was_enabled=0
+    if command -v steamos-readonly &> /dev/null; then
+        echo ""
+        echo "步骤2: 检查并禁用 SteamOS 只读模式"
+        if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
+            readonly_was_enabled=1
+            if sudo steamos-readonly disable 2>/dev/null; then
+                echo -e "${GREEN}✓ 已禁用只读模式${NC}"
+            else
+                echo -e "${YELLOW}⚠️  禁用只读模式失败，尝试继续...${NC}"
+            fi
+        else
+            echo -e "${GREEN}✓ 系统已处于读写模式${NC}"
+        fi
+    else
+        echo ""
+        echo "步骤2: 跳过 SteamOS 只读检查（非 SteamOS）"
+    fi
+
+    echo ""
+    echo -e "${CYAN}正在检查 $ntfs_count 个 NTFS 分区的错误状态...${NC}"
     local dirty_indices=()
+    local skipped_count=0
     for ((i=0; i<ntfs_count; i++)); do
         echo -n "  检查 ${ntfs_devices[$i]} ... "
-        if sudo ntfsfix -n "${ntfs_devices[$i]}" 2>&1 | grep -qi "Volume is dirty"; then
+        # 注意：ntfsinfo / ntfsfix 都需要独占打开设备，已挂载的卷会报
+        #      “Access is denied because the NTFS volume is already exclusively opened”。
+        #      而用户真正关心的 Windows 分区通常正挂载着，所以必须先临时卸载再检查，
+        #      检查完立即按原挂载点挂回。
+        local dev="${ntfs_devices[$i]}"
+        local mp="${ntfs_mountpoints[$i]}"
+        local was_mounted=0
+        if [ -n "$mp" ] && mountpoint -q "$mp" 2>/dev/null; then
+            was_mounted=1
+            # 卸载/挂载的输出全部丢弃，避免打断 “检查 xxx ...” 这一行的显示
+            if ! sudo umount "$dev" >/dev/null 2>&1 && ! sudo umount -f "$dev" >/dev/null 2>&1; then
+                echo -e "${YELLOW}跳过（分区正被占用，无法卸载）${NC}"
+                skipped_count=$((skipped_count + 1))
+                continue
+            fi
+        fi
+
+        # 读取 $Volume 的 Volume Flags 判断 DIRTY 位（0x0001）。
+        # 不能靠 `ntfsfix -n` 输出里找 "Volume is dirty" —— ntfsfix 并不打印这句话。
+        local vol_out dirty=0 check_err=""
+        vol_out=$(sudo ntfsinfo -m "$dev" 2>&1)
+        local rc=$?
+        if echo "$vol_out" | grep -q "DIRTY"; then
+            dirty=1
+        else
+            local flags_hex
+            flags_hex=$(echo "$vol_out" | sed -n 's/.*Volume Flags:[[:space:]]*0x\([0-9a-fA-F]\+\).*/\1/p' | head -1)
+            if [ -n "$flags_hex" ]; then
+                local flags_dec=$((16#$flags_hex))
+                [ $((flags_dec & 1)) -eq 1 ] && dirty=1
+            elif [ $rc -ne 0 ]; then
+                check_err="读取失败"
+            fi
+        fi
+
+        # 无论检查结果如何，先把卷挂回原位，避免影响用户正常使用
+        if [ "$was_mounted" -eq 1 ] && [ -n "$mp" ]; then
+            if ! sudo mount "$mp" >/dev/null 2>&1 && ! sudo mount "$dev" "$mp" >/dev/null 2>&1; then
+                echo -e "${YELLOW}⚠ 检查后无法自动挂回 $mp，请手动挂载${NC}"
+            fi
+        fi
+
+        if [ "$dirty" -eq 1 ]; then
             echo -e "${RED}有错误（脏）${NC}"
             dirty_indices+=("$i")
+        elif [ -n "$check_err" ]; then
+            echo -e "${YELLOW}跳过（$check_err）${NC}"
+            skipped_count=$((skipped_count + 1))
         else
             echo -e "${GREEN}正常${NC}"
         fi
     done
 
+    # 无论走哪条分支，退出前都尝试恢复只读
+    _restore_readonly_after_fix() {
+        if [ "$readonly_was_enabled" -eq 1 ] && command -v steamos-readonly &> /dev/null; then
+            echo ""
+            echo "正在恢复 SteamOS 只读模式..."
+            if sudo -n steamos-readonly enable 2>/dev/null; then
+                echo -e "${GREEN}✓ 只读模式已恢复${NC}"
+            else
+                echo -e "${YELLOW}⚠️  无法自动恢复只读模式，请手动执行: sudo steamos-readonly enable${NC}"
+            fi
+        fi
+    }
+
     if [ ${#dirty_indices[@]} -eq 0 ]; then
         echo ""
-        echo -e "${GREEN}✅ 所有 NTFS 分区状态正常，无磁盘写入错误。${NC}"
+        if [ "$skipped_count" -gt 0 ]; then
+            # 有分区没能检查，就不能声称“全部正常”
+            echo -e "${YELLOW}⚠️  ${skipped_count} 个分区未能检查（被占用或读取失败），其余 $((ntfs_count - skipped_count)) 个分区状态正常。${NC}"
+            echo -e "${CYAN}   建议关闭正在使用这些分区的程序（Steam 库、文件管理器）后重试。${NC}"
+        else
+            echo -e "${GREEN}✅ 所有 NTFS 分区状态正常，无磁盘写入错误。${NC}"
+        fi
+        _restore_readonly_after_fix
         return 0
     fi
 
     echo ""
     echo -e "${YELLOW}发现 ${#dirty_indices[@]} 个分区存在写入错误（脏标志）：${NC}"
+    # 编号采用“脏分区列表内的连续序号”（1,2,3...），与下方选项 2 的输入一致
+    local n=0
     for idx in "${dirty_indices[@]}"; do
+        n=$((n + 1))
         local mp_display="${ntfs_mountpoints[$idx]:-未挂载}"
-        echo "  $(($idx+1)). ${ntfs_devices[$idx]}  标签:${ntfs_labels[$idx]}  挂载点:${mp_display}"
+        echo "  ${n}. ${ntfs_devices[$idx]}  标签:${ntfs_labels[$idx]}  挂载点:${mp_display}"
     done
 
     echo ""
@@ -821,7 +1129,12 @@ fix_disk_write_error() {
 
     local fix_choice
     while true; do
-        read -p "请输入选项 [1-3]: " fix_choice < /dev/tty
+        # 读取失败（无 tty / EOF）时退出循环，避免无限重试刷屏
+        if ! read -p "请输入选项 [1-3]: " fix_choice < /dev/tty; then
+            echo -e "${YELLOW}无法读取输入，操作取消。${NC}"
+            _restore_readonly_after_fix
+            return 1
+        fi
         case $fix_choice in
             1|2|3) break ;;
             *) echo -e "${RED}无效选项，请重新选择。${NC}" ;;
@@ -837,26 +1150,28 @@ fix_disk_write_error() {
         2)
             echo "请输入要修复的分区编号（多个编号用空格分隔，如 1 3）："
             while true; do
-                read -p "编号: " -a indices < /dev/tty
+                if ! read -p "编号: " -a indices < /dev/tty; then
+                    echo -e "${YELLOW}无法读取输入，操作取消。${NC}"
+                    _restore_readonly_after_fix
+                    return 1
+                fi
                 local valid=true
                 for num in "${indices[@]}"; do
-                    if [[ ! "$num" =~ ^[0-9]+$ ]] || [ "$num" -lt 1 ] || [ "$num" -gt $ntfs_count ]; then
+                    # 编号范围 1..脏分区个数
+                    if [[ ! "$num" =~ ^[0-9]+$ ]] || [ "$num" -lt 1 ] || [ "$num" -gt ${#dirty_indices[@]} ]; then
                         valid=false; break
                     fi
-                    local found=0
-                    for d in "${dirty_indices[@]}"; do
-                        [ "$d" -eq "$((num-1))" ] && found=1 && break
-                    done
-                    [ $found -eq 0 ] && valid=false && break
                 done
                 if $valid; then
                     break
                 else
-                    echo -e "${RED}无效编号或分区未脏，请重新输入。${NC}"
+                    echo -e "${RED}无效编号，请输入 1 到 ${#dirty_indices[@]} 之间的数字。${NC}"
                 fi
             done
             for num in "${indices[@]}"; do
-                fix_single_ntfs "${ntfs_devices[$((num-1))]}" "${ntfs_mountpoints[$((num-1))]}"
+                # 由“脏分区列表序号”映射回真实分区下标
+                local target_idx="${dirty_indices[$((num-1))]}"
+                fix_single_ntfs "${ntfs_devices[$target_idx]}" "${ntfs_mountpoints[$target_idx]}"
             done
             ;;
         3|*)
@@ -864,6 +1179,7 @@ fix_disk_write_error() {
             ;;
     esac
 
+    _restore_readonly_after_fix
     echo ""
     echo -e "${GREEN}✅ 修复流程完成。${NC}"
 }
@@ -1149,15 +1465,42 @@ EOF
     "$TEMP_DIR/fix_boot.sh"
 }
 
+# 安全地从 fstab 移除指定条目（按第一字段精确比对，不用正则，避免特殊字符/前缀误伤）
+fstab_remove_entry() {
+    local key="$1"
+    [ -z "$key" ] && return 1
+    [ -f /etc/fstab ] || return 1
+    # 先比对该 key 是否存在，避免无谓写入
+    awk -v k="$key" '$1 == k {found=1} END {exit !found}' /etc/fstab 2>/dev/null || return 1
+    # 备份后用 awk 过滤写回（临时文件放在 /tmp 并显式给读权限，避免权限问题）
+    local tmp="${TEMP_DIR:-/tmp}/fstab.$$"
+    mkdir -p "$(dirname "$tmp")" 2>/dev/null
+    awk -v k="$key" '$1 != k' /etc/fstab > "$tmp" 2>/dev/null || { rm -f "$tmp"; return 1; }
+    chmod 644 "$tmp" 2>/dev/null
+    sudo cp "$tmp" /etc/fstab && rm -f "$tmp"
+}
+
 fix_shared_disk() {
     mk_temp_dir
     clear
     echo -e "${YELLOW}════════════════ 自动挂载 Windows 分区 ════════════════${NC}"
     echo ""
 
-    echo "步骤1: 禁用 SteamOS 只读模式"
-    sudo steamos-readonly disable 2>/dev/null
-    echo -e "${GREEN}✓ 已处理${NC}"
+    echo "步骤1: 检查 SteamOS 只读模式"
+    if command -v steamos-readonly &>/dev/null; then
+        # 记录进入时状态，退出时由全局 trap 统一恢复
+        if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
+            if sudo steamos-readonly disable 2>/dev/null; then
+                echo -e "${GREEN}✓ 已临时禁用只读模式${NC}"
+            else
+                echo -e "${YELLOW}⚠️  禁用只读模式失败，后续写入 fstab 可能失败${NC}"
+            fi
+        else
+            echo -e "${GREEN}✓ 系统已处于可写模式${NC}"
+        fi
+    else
+        echo -e "${GREEN}✓ 非 SteamOS 系统，跳过${NC}"
+    fi
     echo ""
 
     echo "步骤2: 修改 UDisks2 权限文件"
@@ -1167,7 +1510,12 @@ fix_shared_disk() {
         sudo sed -i '/<action id="org.freedesktop.udisks2.filesystem-mount-system">/,/<\/action>/ {
             s|<allow_active>[^<]*</allow_active>|<allow_active>yes</allow_active>|
         }' "$UDISKS2_FILE" 2>/dev/null
-        echo -e "${GREEN}✓ 已修改${NC}"
+        # 校验是否真的改成功，而不是无条件报“已修改”
+        if awk '/<action id="org.freedesktop.udisks2.filesystem-mount-system">/,/<\/action>/' "$UDISKS2_FILE" 2>/dev/null | grep -q '<allow_active>yes</allow_active>'; then
+            echo -e "${GREEN}✓ 已修改${NC}"
+        else
+            echo -e "${YELLOW}⚠️  未能确认修改结果，请检查 $UDISKS2_FILE${NC}"
+        fi
     else
         echo -e "${YELLOW}⚠️  未找到 UDisks2 文件，跳过${NC}"
     fi
@@ -1183,7 +1531,11 @@ fix_shared_disk() {
     local part_uuids=()
     local part_sizes=()
     local part_count=0
-    local all_mounted=true
+    # 互通盘的核心目标是“重启后依然自动挂载”，靠的是 fstab 持久化。
+    # 因此不能只看分区当前是否已挂载——udisks 自动挂载的分区重启后就会消失。
+    # 这里改为：只有当「已挂载 且 fstab 中已有对应条目 且 挂载点一致」才算真正就绪。
+    local all_ready=true
+    local fail_count=0
 
     echo "  清理无效的 fstab 条目..."
     local bad_entries=()
@@ -1197,8 +1549,10 @@ fix_shared_disk() {
     done < /etc/fstab
     if [ ${#bad_entries[@]} -gt 0 ]; then
         echo "  检测到 ${#bad_entries[@]} 条无效条目，正在删除..."
+        sudo cp /etc/fstab "/etc/fstab.toolbox.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null
         for entry in "${bad_entries[@]}"; do
-            sudo sed -i "\|^$(echo "$entry" | sed 's/[.[\*^$]/\\&/g')$|d" /etc/fstab
+            # 按第一字段精确删除，不用正则，避免特殊字符导致误删
+            fstab_remove_entry "$(echo "$entry" | awk '{print $1}')"
         done
         echo -e "${GREEN}✓ 无效条目已清除${NC}"
     fi
@@ -1252,9 +1606,14 @@ fix_shared_disk() {
         ((part_count++))
 
         if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint" 2>/dev/null; then
-            :
+            # 已挂载，还要确认 fstab 里有精确匹配该 UUID 的条目（子串匹配会误判，用锚定正则）
+            if [ -n "$uuid" ] && grep -qE "^[[:space:]]*UUID=${uuid}[[:space:]]" /etc/fstab 2>/dev/null; then
+                :
+            else
+                all_ready=false
+            fi
         else
-            all_mounted=false
+            all_ready=false
         fi
     done < <(lsblk -P -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,PARTTYPE,SIZE --noheadings 2>/dev/null)
 
@@ -1290,36 +1649,39 @@ fix_shared_disk() {
     echo "步骤4: 清理 /run/media/deck/ 下非 Windows 分区的挂载和 fstab 条目..."
     local cleaned=0
 
+    # 注意：这里曾经会强制卸载 /run/media/deck/ 下所有非 NTFS 分区并删除其 fstab 条目，
+    # 会误伤用户的 ext4 移动硬盘 / U 盘 / Btrfs 外置盘。互通盘功能没有理由动它们，
+    # 因此改为：只清理「fstab 中引用了已不存在设备」的残留条目，绝不主动卸载任何分区。
     while IFS= read -r mp; do
         [ -z "$mp" ] && continue
         dev=$(findmnt -n -o SOURCE "$mp" 2>/dev/null)
         fstype=$(findmnt -n -o FSTYPE "$mp" 2>/dev/null)
         if [[ ! "$fstype" =~ ^(ntfs|fuseblk|ntfs3|ntfs-3g)$ ]]; then
-            echo "  发现非 Windows 分区挂载: $mp (类型: $fstype)"
-            if mountpoint -q "$mp" 2>/dev/null; then
-                sudo umount "$mp" 2>/dev/null && echo "    已卸载" && ((cleaned++))
-            fi
-            if [ -n "$dev" ]; then
-                uuid=$(lsblk -n -o UUID "$dev" 2>/dev/null)
-                if [ -n "$uuid" ] && grep -q "UUID=$uuid" /etc/fstab 2>/dev/null; then
-                    sudo sed -i "\|^UUID=$uuid|d" /etc/fstab
-                    echo "    已从 fstab 移除 UUID=$uuid"
-                elif grep -q "$dev" /etc/fstab 2>/dev/null; then
-                    sudo sed -i "\|^$dev|d" /etc/fstab
-                    echo "    已从 fstab 移除设备条目 $dev"
+            if [ -n "$dev" ] && [ ! -b "$dev" ]; then
+                echo "  清理失效的挂载记录: $mp ($fstype)"
+                if [ -n "$dev" ]; then
+                    local _u
+                    _u=$(lsblk -n -o UUID "$dev" 2>/dev/null)
+                    [ -n "$_u" ] && fstab_remove_entry "UUID=$_u"
+                    fstab_remove_entry "$dev"
                 fi
-            fi
-            if [ -d "$mp" ] && [ -z "$(ls -A "$mp" 2>/dev/null)" ]; then
-                sudo rmdir "$mp" 2>/dev/null && echo "    已删除空目录 $mp"
+                ((cleaned++))
+            else
+                echo -e "${YELLOW}  保留挂载中的非 NTFS 分区: $mp ($fstype)${NC}"
             fi
         fi
     done < <(findmnt -o TARGET -n -l 2>/dev/null | grep '^/run/media/deck/')
 
+    # 只删除「fstab 中已无引用」的残留空目录，避免误删用户自建的空文件夹
     for d in /run/media/deck/*; do
-        if [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && [ -z "$(ls -A "$d" 2>/dev/null)" ]; then
-            echo "  删除空目录 $d"
-            sudo rmdir "$d" 2>/dev/null && ((cleaned++))
+        [ -d "$d" ] || continue
+        mountpoint -q "$d" 2>/dev/null && continue
+        [ -z "$(ls -A "$d" 2>/dev/null)" ] || continue
+        if grep -qE "^[[:space:]]*(UUID=|/dev/)[^[:space:]]+[[:space:]]+${d}[[:space:]]" /etc/fstab 2>/dev/null; then
+            continue
         fi
+        echo "  删除残留空目录 $d"
+        sudo rmdir "$d" 2>/dev/null && ((cleaned++))
     done
 
     while IFS= read -r line; do
@@ -1327,14 +1689,26 @@ fix_shared_disk() {
             mp=$(echo "$line" | awk '{print $2}')
             fs=$(echo "$line" | awk '{print $3}')
             if [[ ! "$fs" =~ ^(ntfs|fuseblk|ntfs3|ntfs-3g)$ ]]; then
-                echo "  清理 fstab 中的非 NTFS 条目: $mp ($fs)"
-                sudo sed -i "\|^$(echo "$line" | sed 's/[.[\*^$]/\\&/g')$|d" /etc/fstab
-                ((cleaned++))
-                if mountpoint -q "$mp" 2>/dev/null; then
-                    sudo umount "$mp" 2>/dev/null
+                # 安全限制：这里只处理「设备已不存在」的残留条目。
+                # 绝不主动卸载/删除仍真实存在的非 NTFS 分区（如用户的 ext4 移动硬盘、
+                # U 盘、Btrfs 外置盘），否则会误伤用户数据盘。
+                local src
+                src=$(echo "$line" | awk '{print $1}')
+                local dev_exists=1
+                if [[ "$src" =~ ^UUID= ]]; then
+                    if [ -e "/dev/disk/by-uuid/${src#UUID=}" ]; then dev_exists=0; fi
+                elif [[ "$src" =~ ^/dev/ ]]; then
+                    if [ -b "$src" ]; then dev_exists=0; fi
                 fi
-                if [ -d "$mp" ] && [ -z "$(ls -A "$mp" 2>/dev/null)" ]; then
-                    sudo rmdir "$mp" 2>/dev/null
+                if [ $dev_exists -eq 1 ]; then
+                    echo "  清理失效的设备条目: $mp ($fs)"
+                    fstab_remove_entry "$src"
+                    ((cleaned++))
+                    if [ -d "$mp" ] && [ -z "$(ls -A "$mp" 2>/dev/null)" ]; then
+                        sudo rmdir "$mp" 2>/dev/null
+                    fi
+                else
+                    echo -e "${YELLOW}  保留非 NTFS 分区条目（设备仍存在）: $mp ($fs)${NC}"
                 fi
             fi
         fi
@@ -1347,8 +1721,8 @@ fix_shared_disk() {
     fi
     echo ""
 
-    if $all_mounted; then
-        echo -e "${GREEN}✅ 所有 Windows 分区均已挂载，无需操作。${NC}"
+    if $all_ready; then
+        echo -e "${GREEN}✅ 所有 Windows 分区均已挂载且已写入 fstab，重启后仍会自动挂载，无需操作。${NC}"
         return
     fi
 
@@ -1361,48 +1735,94 @@ fix_shared_disk() {
 
         echo -e "\n${CYAN}处理分区 $device${NC}"
 
-        if [ -n "$mountpoint" ]; then
+        # 关键：先确定这个分区最终应该用哪个挂载点，再处理 fstab。
+        # 优先沿用 fstab 里已有的挂载点（避免同一分区出现两个挂载点），
+        # 其次沿用当前实际挂载点，最后才按标签/设备名新建。
+        local fstab_mp=""
+        if [ -n "$uuid" ] && grep -qE "^[[:space:]]*UUID=${uuid}[[:space:]]" /etc/fstab 2>/dev/null; then
+            fstab_mp=$(awk -v u="UUID=$uuid" '$1==u {print $2; exit}' /etc/fstab)
+        fi
+
+        if [ -n "$fstab_mp" ]; then
+            mount_point="$fstab_mp"
+            echo "  fstab 中已有条目，挂载点: $mount_point"
+        elif [ -n "$mountpoint" ]; then
             mount_point="$mountpoint"
             echo "  当前已挂载到 $mount_point"
         else
             if [ -n "$label" ] && [ "$label" != "None" ]; then
-                clean_label=$(echo "$label" | sed 's/ /_/g')
+                clean_label=$(echo "$label" | sed 's/ /_/g; s|[/\\]|_|g')
                 mount_point="/run/media/deck/$clean_label"
             else
                 devname=$(basename "$device")
                 mount_point="/run/media/deck/$devname"
             fi
-            if [ -d "$mount_point" ] && [ -n "$(ls -A "$mount_point" 2>/dev/null)" ]; then
-                local suffix=1
-                while [ -d "${mount_point}_$suffix" ]; do ((suffix++)); done
-                mount_point="${mount_point}_$suffix"
-            fi
-            sudo mkdir -p "$mount_point"
-            sudo chown deck:deck "$mount_point" 2>/dev/null
-            echo "  创建挂载点: $mount_point"
+            local suffix=1
+            while [ -d "$mount_point" ] && [ -n "$(ls -A "$mount_point" 2>/dev/null)" ]; do
+                mount_point="${mount_point%%_*}_$suffix"
+                ((suffix++))
+            done
+            echo "  计划挂载点: $mount_point"
         fi
+        sudo mkdir -p "$mount_point"
+        sudo chown deck:deck "$mount_point" 2>/dev/null
 
-        if grep -q "UUID=$uuid" /etc/fstab 2>/dev/null; then
-            echo "  fstab 中已存在该 UUID，跳过添加。"
+        # 写入/更新 fstab：使用锚定正则精确匹配 UUID，避免子串误判
+        if [ -n "$fstab_mp" ]; then
+            if [ "$fstab_mp" != "$mount_point" ]; then
+                # 已存在但挂载点不同（例如旧路径无效）。
+                # 注意：不能「先删除再追加」，万一大写入失败会让条目彻底丢失。
+                # 这里用一次性生成完整新文件 + mv 原子替换，保证 fstab 不会出现中间态。
+                sudo cp /etc/fstab "/etc/fstab.toolbox.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null
+                local _tmp="${TEMP_DIR:-/tmp}/fstab_upd.$$"
+                mkdir -p "$(dirname "$_tmp")" 2>/dev/null
+                {
+                    awk -v k="UUID=$uuid" '$1 != k' /etc/fstab 2>/dev/null
+                    printf '%s\n' "UUID=$uuid $mount_point ntfs-3g rw,exec,uid=1000,gid=1000,windows_names,nofail 0 0"
+                } > "$_tmp" 2>/dev/null && chmod 644 "$_tmp" 2>/dev/null \
+                    && sudo cp "$_tmp" /etc/fstab && rm -f "$_tmp" \
+                    && echo "  已更新 fstab 挂载点 → $mount_point" \
+                    || { rm -f "$_tmp"; echo -e "${RED}  ✗ 更新 fstab 失败（原条目未改动）${NC}"; ((fail_count++)); continue; }
+            else
+                echo "  fstab 条目已正确，无需修改。"
+            fi
         else
-            echo "UUID=$uuid $mount_point ntfs-3g rw,exec,uid=1000,gid=1000,windows_names,nofail 0 0" | sudo tee -a /etc/fstab > /dev/null
-            echo "  已添加 fstab 条目。"
+            if [ -z "$uuid" ]; then
+                echo -e "${YELLOW}  ⚠ 该分区没有 UUID，跳过 fstab 写入（重启后可能不会自动挂载）${NC}"
+            else
+                sudo cp /etc/fstab "/etc/fstab.toolbox.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null
+                local _tmp2="${TEMP_DIR:-/tmp}/fstab_add.$$"
+                mkdir -p "$(dirname "$_tmp2")" 2>/dev/null
+                {
+                    cat /etc/fstab 2>/dev/null
+                    printf '%s\n' "UUID=$uuid $mount_point ntfs-3g rw,exec,uid=1000,gid=1000,windows_names,nofail 0 0"
+                } > "$_tmp2" 2>/dev/null && chmod 644 "$_tmp2" 2>/dev/null \
+                    && sudo cp "$_tmp2" /etc/fstab && rm -f "$_tmp2" \
+                    && echo "  已添加 fstab 条目。" \
+                    || { rm -f "$_tmp2"; echo -e "${RED}  ✗ 写入 fstab 失败${NC}"; ((fail_count++)); }
+            fi
         fi
 
         if mountpoint -q "$mount_point" 2>/dev/null; then
             echo "  分区已挂载到 $mount_point"
         else
-            if sudo mount -U "$uuid" "$mount_point" 2>/dev/null; then
+            if sudo systemctl daemon-reload 2>/dev/null; then :; fi
+            if sudo mount "$mount_point" 2>/dev/null || sudo mount -U "$uuid" "$mount_point" 2>/dev/null; then
                 echo -e "${GREEN}  ✓ 挂载成功到 $mount_point${NC}"
             else
                 echo -e "${RED}  ✗ 挂载失败，请检查 dmesg 输出。${NC}"
                 echo "  最近的 dmesg NTFS 相关错误："
-                sudo dmesg | grep -i ntfs | tail -5
+                sudo dmesg 2>/dev/null | grep -i ntfs | tail -5
+                ((fail_count++))
             fi
         fi
     done
     echo ""
-    echo -e "${GREEN}════════════════ 全部完成 ════════════════${NC}"
+    if [ $fail_count -gt 0 ]; then
+        echo -e "${YELLOW}⚠️  完成，但有 $fail_count 个分区挂载失败，请查看上面的错误信息。${NC}"
+    else
+        echo -e "${GREEN}════════════════ 全部完成 ════════════════${NC}"
+    fi
 }
 
 install_uu_accelerator() {
@@ -4786,6 +5206,17 @@ class MainWindow(Gtk.Window):
         self.search_entry.set_width_chars(20)
         self.search_entry.connect("search-changed", self.on_search_changed)
         header.pack_end(self.search_entry)
+
+        # 主题切换按钮（深色 / 浅色 / 跟随系统）
+        self.theme_button = Gtk.MenuButton()
+        self.theme_button.set_tooltip_text("切换深色 / 浅色模式")
+        self.theme_button.set_relief(Gtk.ReliefStyle.NONE)
+        self._theme_icon = Gtk.Image.new_from_icon_name("weather-clear-night-symbolic",
+                                                        Gtk.IconSize.BUTTON)
+        self.theme_button.add(self._theme_icon)
+        header.pack_end(self.theme_button)
+        self._build_theme_menu()
+
         self._current_page = "func"
 
         self.icon_map = {
@@ -5012,6 +5443,92 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.func_map = {}
         self.build_func_map()
 
+    # ------------------------------------------------------------------
+    # 主题切换
+    # ------------------------------------------------------------------
+    def _build_theme_menu(self):
+        """构建主题下拉菜单（用 Popover，这样能跟随深色/浅色样式，原生 Gtk.Menu 无法着色）。"""
+        current = load_theme_pref()
+        popover = Gtk.Popover()
+        popover.set_relative_to(self.theme_button)
+        popover.set_position(Gtk.PositionType.BOTTOM)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        box.set_border_width(6)
+        box.get_style_context().add_class("theme-popover")
+        self._theme_items = {}
+        # 不用 RadioMenuItem：原生单选圆点会和文字重叠。
+        # 改为「图标 + 文字」的普通按钮行，选中项加 check 图标，样式完全可控。
+        for mode in THEME_MODES:
+            row = Gtk.Button()
+            row.set_relief(Gtk.ReliefStyle.NONE)
+            row.get_style_context().add_class("theme-row")
+            hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            check = Gtk.Image.new_from_icon_name("object-select-symbolic", Gtk.IconSize.MENU)
+            check.set_opacity(1.0 if mode == current else 0.0)
+            hbox.pack_start(check, False, False, 0)
+            lbl = Gtk.Label(label=THEME_LABELS[mode])
+            hbox.pack_start(lbl, False, False, 0)
+            row.add(hbox)
+            row.connect("clicked", self.on_theme_row_clicked, mode)
+            self._theme_items[mode] = (row, check)
+            box.pack_start(row, False, False, 0)
+        popover.add(box)
+        box.show_all()
+        self.theme_button.set_popover(popover)
+        self._theme_menu = popover
+        self._refresh_theme_icon(current)
+
+    def _refresh_theme_icon(self, mode):
+        """根据当前模式切换按钮图标。
+        图标反映“点击后切换到的目标”更符合直觉，这里显示当前生效主题的图标。
+        """
+        resolved = resolve_theme_mode(mode)
+        icons = {
+            "dark": "weather-clear-night-symbolic",   # 深色 → 月亮
+            "light": "weather-clear-symbolic",        # 浅色 → 太阳
+        }
+        name = icons.get(resolved, "weather-clear-night-symbolic")
+        try:
+            if self._theme_icon is not None:
+                self._theme_icon.set_from_icon_name(name, Gtk.IconSize.BUTTON)
+        except Exception:
+            pass
+
+    def on_theme_row_clicked(self, button, mode):
+        """用户点击主题行：立即应用并保存。"""
+        apply_app_css(mode)
+        save_theme_pref(mode)
+        self._refresh_theme_icon(mode)
+        # 更新选中标记
+        for m, (_row, chk) in self._theme_items.items():
+            try:
+                chk.set_opacity(1.0 if m == mode else 0.0)
+            except Exception:
+                pass
+        # 收起弹出菜单
+        try:
+            popover = self.theme_button.get_popover()
+            if popover is not None:
+                popover.popdown()
+        except Exception:
+            pass
+
+    def on_theme_selected(self, item, mode):
+        """兼容旧接口：用户选择主题。"""
+        if not item.get_active():
+            return
+        apply_app_css(mode)
+        save_theme_pref(mode)
+        self._refresh_theme_icon(mode)
+        # 收起弹出菜单
+        try:
+            popover = self.theme_button.get_popover()
+            if popover is not None:
+                popover.popdown()
+        except Exception:
+            pass
+
     def build_func_map(self):
         for items in self.category_tree.values():
             def walk(items):
@@ -5134,7 +5651,28 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-09-09（v1.7.1）
+        changelog_content = """2026-10-19（v1.7.2）
+【新增功能】
+- 新增深色 / 浅色主题切换：标题栏图标按钮可切换深色、浅色、跟随系统三种模式，选择自动保存，重启后保持
+- 浅色主题为独立配色的完整主题，并同步 GTK 原生控件（对话框、菜单）配色
+
+【问题修复】
+- 修复 vte3 安装失败（"889B5EBD… 无法在本地签署"）：SteamOS 的 holo 密钥环与 Arch 官方钥匙环相互独立，只执行 pacman-key --populate archlinux 时该密钥不会被导入，导致后续签名必然失败；现同时导入 archlinux 与 holo 两个钥匙环
+- 修复「修复磁盘写入错误」功能检测失效：原逻辑靠 ntfsfix 输出中的 "Volume is dirty" 判断，但 ntfsfix 并不打印该文字，导致所有分区恒显示"正常"；现改为读取 $Volume 的 Volume Flags 脏标志位
+- 修复已挂载 NTFS 分区无法检测：ntfsinfo/ntfsfix 需要独占打开设备，挂载中的分区会报占用；现检查前临时卸载、检查后自动挂回原处
+- 修复「修复磁盘写入错误」的无意义密码提示：单系统无 NTFS 分区时不再索要 sudo 密码，直接给出结论与排查建议
+- 修复有分区被跳过时仍显示"所有 NTFS 分区状态正常"的误导性结论，改为明确提示未检查数量
+- 修复 NTFS 分区编号与实际输入不一致的问题
+- 修复「修复互通盘」重启后失效：原逻辑只要分区当前已挂载就跳过，但 udisks 自动挂载重启后不会保留；现要求"已挂载且已写入 fstab"才算就绪，确保重启后仍自动挂载
+- 修复「修复互通盘」误删用户数据盘：不再强制卸载并删除 /run/media/deck/ 下非 NTFS 分区（ext4/U盘/Btrfs 外置盘）的 fstab 条目
+- 修复 fstab 条目匹配使用子串导致误判（UUID 前缀相同会被当成已存在），改为锚定精确匹配
+- 修复 fstab 写入可能丢失条目：改为原子替换，失败时保留原条目
+- 修复 fstab 删除使用 sed 正则转义不全导致删不掉条目，改用按字段精确比对
+- 修复「修复互通盘」挂载失败时仍显示"全部完成"，现改为显示失败数量
+- 修复「修复互通盘」、UDisks2 修改的假成功提示，改为真实结果反馈
+- 修复主题"跟随系统"读取的是被自己改写过的值（自我污染），现改为启动时记录系统真实配色快照
+
+2026-09-09（v1.7.1）
 【界面优化】
 - 全新 Steam Deck 风格主题：深蓝黑底 + Steam 蓝高亮，圆角卡片与加高的触控友好列表行
 - 左侧分类栏新增面板标题，功能列表与搜索结果改为圆角卡片容器，帮助/退出按钮使用强调色
@@ -5275,9 +5813,23 @@ def ensure_vte_installed():
             "fi; "
             "echo '正在初始化 pacman keyring（可能需要一点时间）...'; "
             "sudo pacman-key --init || { echo '✗ pacman keyring 初始化失败'; read -n1; exit 1; }; "
-            "sudo pacman-key --populate archlinux || { echo '✗ pacman keyring 填充失败'; read -n1; exit 1; }; "
-            "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || { echo '✗ 密钥签署失败'; read -n1; exit 1; }; "
-            "sudo pacman -S --noconfirm vte3 || { echo '✗ vte3 安装失败，请检查网络或软件源'; read -n1; exit 1; }; "
+            "sudo chown -R root:root /etc/pacman.d/gnupg 2>/dev/null; sudo chmod 700 /etc/pacman.d/gnupg 2>/dev/null; "
+            # 关键：889B5EBD... 属于 holo-keyring，必须同时导入 holo 钥匙环，
+            # 否则该密钥不在本地钥匙环中，--lsign-key 会报“无法在本地签署”。
+            "echo '正在导入 Arch 官方与 SteamOS Holo 密钥...'; "
+            "sudo pacman-key --populate archlinux || { echo '✗ archlinux 钥匙环填充失败'; read -n1; exit 1; }; "
+            "if [ -f /usr/share/pacman/keyrings/holo.gpg ]; then "
+            "sudo pacman-key --populate holo || { echo '✗ holo 钥匙环填充失败'; read -n1; exit 1; }; "
+            "fi; "
+            "echo '正在信任 SteamOS 打包者密钥...'; "
+            "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || { "
+            "echo '⚠ 签名失败，刷新钥匙环后重试...'; "
+            "sudo pacman-key --refresh-keys 2>/dev/null; "
+            "sudo pacman-key --populate archlinux holo 2>/dev/null; "
+            "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || "
+            "{ echo '✗ 密钥签署失败'; read -n1; exit 1; }; }; "
+            "sudo pacman -Sy --noconfirm >/dev/null 2>&1; "
+            "sudo pacman -S --needed --noconfirm vte3 || { echo '✗ vte3 安装失败，请检查网络或软件源'; read -n1; exit 1; }; "
             "pacman -Q vte3 >/dev/null 2>&1 || { echo '✗ vte3 安装后验证失败，请重启程序后重试'; read -n1; exit 1; }; "
             "command -v steamos-readonly >/dev/null 2>&1 && sudo steamos-readonly enable 2>/dev/null || true; "
             "echo '✓ 安装完成，请手动重启本程序。'; read -n1"
@@ -5402,7 +5954,11 @@ def show_main_window():
     GLib.idle_add(ensure_desktop_shortcut); GLib.idle_add(ensure_vte_installed)
 
 def main():
-    apply_app_css()
+    # 关键顺序：必须在 apply_app_css 改写 GTK prefer-dark 之前，
+    # 先记录系统真实的配色方案，否则“跟随系统”会读到被自己改过的值。
+    reset_system_theme_cache()
+    # 启动时应用用户上次选择的主题（默认跟随系统）
+    apply_app_css(load_theme_pref())
     update_win = UpdateCheckWindow(); Gtk.main()
 
 if __name__ == "__main__":
