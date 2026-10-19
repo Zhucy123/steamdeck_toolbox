@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.7.6"
+VERSION = "1.7.7"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -6428,22 +6428,74 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
     def detect_system_type(self):
         """探测当前是否为「SteamOS + Windows」双系统。
 
-        注意：不能把存在的 Clover 启动项当作双系统依据 —— Clover 是工具箱自己
-        装上去的，单系统 Steam Deck 装了 Clover 之后也会命中，结果会误显示「双系统」，
-        进而把「修复引导 / 修复互通盘」这类危险功能暴露出来。
-        真正的判据是：EFI 启动项里出现 Windows。
+        为什么需要多层判据：
+        1) EFI 启动项里有 Windows —— 最直接，但 Clover 安装时会移除/改名 Windows
+           的 EFI 启动项（改为从 Clover 菜单引导），装了 Clover 的双系统机器上
+           这里往往看不到 Windows 字样，只看这一项会误判成「单系统」。
+        2) 存在 NTFS 分区且标签为 Windows —— 无需 root，稳定可靠。
+        3) NTFS 分区里存在 Windows 目录结构（Windows/Program Files/Users）——
+           即使标签被改也能识别。
+        4) 已挂载的 NTFS 分区里有上述结构同上。
+        注意：不能只凭「Clover 启动项」判断双系统 —— 单系统装了 Clover 也会命中。
+        只要 2/3/4 任一成立即可判定为双系统。
         """
-        if not shutil.which("efibootmgr"):
-            return "单系统"
-        for cmd in (["sudo", "-n", "efibootmgr"], ["efibootmgr"]):
-            try:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
-                if result.returncode == 0:
-                    if re.search(r'(?i)windows', result.stdout):
+        # ---- 判据 1：EFI 启动项里有 Windows ----
+        if shutil.which("efibootmgr"):
+            for cmd in (["sudo", "-n", "efibootmgr"], ["efibootmgr"]):
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+                    if result.returncode == 0:
+                        if re.search(r'(?i)windows', result.stdout):
+                            return "双系统"
+                        break  # 拿到有效输出即可，不必再试下一种方式
+                except Exception:
+                    continue
+
+        # ---- 判据 2/3：扫描 NTFS 分区（lsblk 无需 root）----
+        try:
+            result = subprocess.run(
+                ["lsblk", "-P", "-n", "-o", "NAME,TYPE,FSTYPE,LABEL,MOUNTPOINT"],
+                capture_output=True, text=True, timeout=3)
+            if result.returncode == 0:
+                ntfs_entries = []
+                for line in result.stdout.splitlines():
+                    fields = dict(re.findall(r'([A-Z]+)="([^"]*)"', line))
+                    fstype = (fields.get("FSTYPE") or "").lower()
+                    if fstype not in ("ntfs", "fuseblk", "ntfs3"):
+                        continue
+                    label = (fields.get("LABEL") or "").strip()
+                    # 判据 2：分区标签直接就是 Windows
+                    if label.lower() == "windows":
                         return "双系统"
-                    return "单系统"
-            except Exception:
-                continue
+                    ntfs_entries.append(fields)
+
+                # 判据 3/4：看分区内容里有没有 Windows 目录结构
+                for fields in ntfs_entries:
+                    name = fields.get("NAME") or ""
+                    mountpoint = (fields.get("MOUNTPOINT") or "").strip()
+                    candidates = []
+                    if mountpoint and os.path.isdir(mountpoint):
+                        candidates.append(mountpoint)
+                    # 未挂载的尝试常见 udisks 挂载路径
+                    if name:
+                        for base in ("/run/media", "/media"):
+                            try:
+                                for user_dir in os.listdir(base):
+                                    p = os.path.join(base, user_dir, name)
+                                    if os.path.isdir(p):
+                                        candidates.append(p)
+                            except OSError:
+                                pass
+                    for path in candidates:
+                        # Windows 根目录下有 Windows/ 且（Program Files 或 Users）
+                        has_win_dir = os.path.isdir(os.path.join(path, "Windows"))
+                        has_pf = os.path.isdir(os.path.join(path, "Program Files"))
+                        has_users = os.path.isdir(os.path.join(path, "Users"))
+                        if has_win_dir and (has_pf or has_users):
+                            return "双系统"
+        except Exception:
+            pass
+
         return "单系统"
 
     def on_category_activated(self, treeview, path, column):
@@ -6549,7 +6601,13 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-19（v1.7.6）
+        changelog_content = """2026-10-19（v1.7.7）
+【问题修复】
+- 修复双系统被误判为单系统：Clover 安装后会移除/隐藏 Windows 的 EFI 启动项，只看 efibootmgr 里有没有 "Windows" 字样会漏判，导致「修复引导」「修复互通盘」等双系统功能不显示
+- 系统类型检测改为多重判据：① EFI 启动项含 Windows ② 存在标签为 Windows 的 NTFS 分区 ③ NTFS 分区内存在 Windows\\Program Files 或 Windows\\Users 目录结构（即使分区标签被改也能识别）；任一成立即判定为双系统
+- 确保只有 Clover 启动项、没有 Windows 的单系统机器仍正确显示为「单系统」，不会误暴露双系统危险功能
+
+2026-10-19（v1.7.6）
 【界面优化】
 - 内嵌终端窗口新增「复制」按钮：有选中内容时复制选中，未选中时复制全部输出，并有短时状态反馈
 - 内嵌终端新增右键菜单：复制选中内容 / 复制全部输出 / 粘贴 / 全选
