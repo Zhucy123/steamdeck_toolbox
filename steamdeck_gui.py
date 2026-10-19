@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.7.3"
+VERSION = "1.7.4"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -512,10 +512,18 @@ def version_tuple(v):
     for part in str(v).split('.'):
         digits = re.sub(r'\D', '', part)
         out.append(int(digits) if digits else 0)
+    # 去掉末尾的 0，让 "1.7" 与 "1.7.0" 视为同一版本
+    # （未对齐时 (1,7) < (1,7,0) 会把同版本误判为"有新版本"，反复提示更新/降级）
+    while len(out) > 1 and out[-1] == 0:
+        out.pop()
     return tuple(out)
 
 def compare_versions(a, b):
     ta, tb = version_tuple(a), version_tuple(b)
+    # 补零对齐后再比较，避免元组长度不同导致的误判
+    width = max(len(ta), len(tb))
+    ta = ta + (0,) * (width - len(ta))
+    tb = tb + (0,) * (width - len(tb))
     return (ta > tb) - (ta < tb)
 
 def find_terminal():
@@ -543,7 +551,22 @@ def launch_terminal(command_str):
         return False
 
 # GUI 层二次确认的危险操作（对应 bash 内部提示较弱的系统级修改）
-DANGEROUS_FUNCS = {"fix_boot", "fix_shared_disk", "uninstall_plugin_store", "clear_hosts_cache"}
+# clover_install_or_reinstall 会往 EFI 分区写文件、替换 BOOTX64.EFI、改 efibootmgr
+# 启动项，一旦出错可能导致机器无法启动，必须走确认框。
+DANGEROUS_FUNCS = {"fix_boot", "fix_shared_disk", "uninstall_plugin_store", "clear_hosts_cache",
+                   "clover_install_or_reinstall"}
+
+# 每个危险功能的额外风险说明（缺省用通用文案）
+DANGEROUS_HINTS = {
+    "clover_install_or_reinstall": "该功能会向 EFI 系统分区写入 Clover 引导文件，"
+                                   "替换 BOOTX64.EFI 并修改 EFI 启动项。\n"
+                                   "操作不当可能导致设备无法开机，请确认已了解风险并做好备份。",
+    "fix_boot": "该功能会修改 EFI 启动顺序，把 Clover 设为第一启动项。",
+    "fix_shared_disk": "该功能会修改 /etc/fstab 与 UDisks2 策略文件，用于自动挂载 Windows 分区。",
+    "uninstall_plugin_store": "该功能会删除已安装的插件商店及其插件数据。",
+    "clear_hosts_cache": "该功能会修改系统 /etc/hosts 文件（会自动备份）。",
+}
+DEFAULT_DANGEROUS_HINT = "该功能会修改系统引导、挂载或系统文件，请确认已了解风险。"
 
 # ============================================================================
 # 内嵌 Bash 脚本
@@ -553,8 +576,14 @@ set -uo pipefail
 TEMP_DIR="/tmp/steamdeck_toolbox"
 cleanup_temp() { rm -rf "$TEMP_DIR" 2>/dev/null; }
 # SteamOS 只读模式：脚本退出时自动恢复（sudo -n 非交互，避免卡在密码提示）
+# 关键：只有脚本自己 disable 过只读，退出时才恢复。
+# 否则用户手动把系统设为可写（disabled）时，跑任何功能都会在退出时被强行改回
+# enabled，覆盖掉用户自己的设置。
+RO_READONLY_DISABLED_BY_US=0
 restore_readonly() {
     command -v steamos-readonly &>/dev/null || return 0
+    # 脚本没动过只读开关 → 保持用户原状，绝不擅自 enable
+    [ "${RO_READONLY_DISABLED_BY_US:-0}" -eq 1 ] || return 0
     if sudo -n steamos-readonly status 2>/dev/null | grep -q "disabled"; then
         if sudo -n steamos-readonly enable 2>/dev/null; then
             echo -e "${GREEN}✓ 已恢复只读模式${NC}"
@@ -569,6 +598,9 @@ trap 'echo -e "\n${YELLOW}用户取消操作，关闭窗口。${NC}"; cleanup_te
 
 PYTHON_CMD="python3"
 command -v python3 &>/dev/null || PYTHON_CMD="python"
+# 当前用户名/组：不能硬编码 deck，非 deck 用户名的设备会把文件属主改错
+CURRENT_USER="${USER:-$(id -un)}"
+CURRENT_GROUP="$(id -gn "$CURRENT_USER" 2>/dev/null || echo "$CURRENT_USER")"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; PURPLE='\033[0;35m'; NC='\033[0m'
 
@@ -628,6 +660,8 @@ confirm_action() {
 disable_readonly() {
     if command -v steamos-readonly &>/dev/null; then
         if sudo steamos-readonly disable 2>/dev/null; then
+            # 记下“只读是脚本关掉的”，退出时 trap 才会恢复，避免覆盖用户自己的设置
+            RO_READONLY_DISABLED_BY_US=1
             echo -e "${GREEN}✓ 已禁用只读模式${NC}"
         else
             echo -e "${RED}✗ 禁用只读模式失败，操作中止。${NC}"
@@ -725,8 +759,16 @@ uninstall_flatpak_app() {
         if [ -d "$desktop_dir" ]; then
             local deleted_any=false
             for f in "$desktop_dir"/*.desktop; do
+                # Desktop 目录为空时 glob 不展开，跳过字面量，避免 basename 得到 "*.desktop"
+                [ -e "$f" ] || continue
                 local base=$(basename "$f")
-                if [ "$base" = "${desktop_name}.desktop" ] || [ "$base" = "${installed}.desktop" ] || [[ "$base" == *"${installed//./_}"* ]]; then
+                # 只认两件事：①与显示名/应用 ID 完全同名的 .desktop
+                #           ②文件名里带完整应用 ID（点或下划线写法都算，如 com_qq_QQ.desktop）
+                # 不能只用 ${installed//./_} 做子串匹配：com.qq.QQ 会把
+                # com_qq_QQ_something.desktop 这类无关快捷方式一起删掉。
+                local id_us="${installed//./_}"
+                if [ "$base" = "${desktop_name}.desktop" ] || [ "$base" = "${installed}.desktop" ] \
+                   || [ "$base" = "${id_us}.desktop" ] || [ "$base" = "${installed//./-}.desktop" ]; then
                     rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ 桌面快捷方式已删除: $base${NC}" && deleted_any=true
                 fi
             done
@@ -835,7 +877,7 @@ apply_cryo_recommendation() {
         echo -e "${RED}✗ swapon 启用失败。${NC}"
         return 1
     fi
-    sudo sed -i '\\|/home/swapfile|d' /etc/fstab 2>/dev/null
+    sudo sed -i '\|/home/swapfile|d' /etc/fstab 2>/dev/null
     echo "/home/swapfile none swap defaults 0 0" | sudo tee -a /etc/fstab > /dev/null
     echo -e "${GREEN}✓ 16GB交换文件创建完成${NC}"
     sudo tee /etc/sysctl.d/99-cryo-optimizations.conf > /dev/null <<'EOF'
@@ -846,9 +888,21 @@ vm.dirty_background_ratio=3
 vm.dirty_ratio=50
 EOF
     sudo sysctl --system --load=/etc/sysctl.d/99-cryo-optimizations.conf >/dev/null 2>&1
-    echo -e "${GREEN}✓ 内核参数优化完成${NC}"
-    sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null; sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null
-    echo -e "${GREEN}✓ ZRAM已停用${NC}"
+    if [ -f /etc/sysctl.d/99-cryo-optimizations.conf ]; then
+        echo -e "${GREEN}✓ 内核参数优化完成${NC}"
+    else
+        echo -e "${YELLOW}⚠ 内核参数配置文件写入失败，本次优化未持久化${NC}"
+    fi
+    # 停用 ZRAM 要以实际结果为准，不能无条件打印成功
+    sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
+    sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null
+    if ! systemctl is-active systemd-zram-setup@zram0 &>/dev/null \
+       && ! systemctl is-enabled systemd-zram-setup@zram0 &>/dev/null 2>&1; then
+        echo -e "${GREEN}✓ ZRAM已停用${NC}"
+    else
+        echo -e "${YELLOW}⚠ ZRAM 未能完全停用，如需彻底禁用请手动执行:"
+        echo -e "   sudo systemctl disable --now systemd-zram-setup@zram0${NC}"
+    fi
     echo -e "${GREEN}✅ CryoByte33推荐方案已成功应用！${NC}"
 }
 
@@ -858,7 +912,7 @@ adjust_swapfile() {
         clear; echo -e "${YELLOW}调整传统Swap文件大小${NC}"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         [ -f "/home/swapfile" ] && echo -e "现有文件大小: ${GREEN}$(sudo du -h /home/swapfile 2>/dev/null | cut -f1)${NC}" || echo -e "现有文件: ${YELLOW}未找到${NC}"
-        df -h / | tail -1
+        echo -n "/home 剩余空间: "; df -h /home | tail -1
         echo "选择新的大小: 1)1G 2)4G 3)8G 4)16G 5)32G 6)自定义"
         local swap_size_gb=""
         read -p "请选择 [1-6]: " size_choice < /dev/tty
@@ -871,7 +925,21 @@ adjust_swapfile() {
         break
     done
     check_swap_space "$swap_size_gb" || return 1
-    sudo swapoff /home/swapfile 2>/dev/null; sudo rm -f /home/swapfile
+    # 替换前必须先停用旧 swapfile，否则 rm/mkswap 会碰到 device busy，
+    # 而且在内存吃紧时直接删掉唯一交换分区有 OOM 风险。
+    if swapon --show=NAME --noheadings 2>/dev/null | awk '$1 == "/home/swapfile" {found=1} END {exit !found}'; then
+        echo -e "${CYAN}正在停用旧的 /home/swapfile ...${NC}"
+        if ! sudo swapoff /home/swapfile 2>/dev/null; then
+            echo -e "${RED}✗ 无法停用正在使用的 /home/swapfile，已中止（请检查内存占用后重试）。${NC}"
+            return 1
+        fi
+        # 二次确认确实已释放，避免残留在 swap 表里继续 rm 出错
+        if swapon --show=NAME --noheadings 2>/dev/null | awk '$1 == "/home/swapfile" {found=1} END {exit !found}'; then
+            echo -e "${RED}✗ /home/swapfile 仍在使用中，已中止，未做任何修改。${NC}"
+            return 1
+        fi
+    fi
+    sudo rm -f /home/swapfile
     sudo touch /home/swapfile
     if mount | grep " /home " | grep -q btrfs; then sudo chattr +C /home/swapfile 2>/dev/null || echo -e "${YELLOW}⚠ chattr +C 失败，继续${NC}"; fi
     if ! sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$((swap_size_gb*1024)) status=progress conv=fsync 2>/dev/null; then
@@ -887,7 +955,11 @@ adjust_swapfile() {
         echo -e "${RED}✗ swapon 启用失败。${NC}"
         return 1
     fi
-    grep -q "/home/swapfile" /etc/fstab 2>/dev/null || echo "/home/swapfile none swap defaults 0 0" | sudo tee -a /etc/fstab > /dev/null
+    # 按第一字段精确匹配才判断"已存在"：原来的 grep -q "/home/swapfile" 会命中
+    # 注释行（#/home/swapfile ...）或 /home/swapfile2，导致该加的条目没加上/加重复。
+    if ! awk '$1 == "/home/swapfile" {found=1} END {exit !found}' /etc/fstab 2>/dev/null; then
+        echo "/home/swapfile none swap defaults 0 0" | sudo tee -a /etc/fstab > /dev/null
+    fi
     echo -e "${GREEN}✅ Swap文件创建成功${NC}"
 }
 
@@ -895,39 +967,116 @@ configure_zram() {
     mk_temp_dir
     while true; do
         clear; echo -e "${YELLOW}配置ZRAM (内存压缩交换)${NC}"
+        echo -e "${CYAN}设置会写入持久化配置，重启后依然生效。${NC}"
         echo "选择ZRAM大小: 1)2G 2)4G 3)8G"
         local zram_size_gb=""
         read -p "请选择 [1-3]: " zram_choice < /dev/tty
         case $zram_choice in 1) zram_size_gb=2;; 2) zram_size_gb=4;; 3) zram_size_gb=8;; *) echo -e "${RED}无效选项。${NC}"; sleep 1; continue;; esac
         break
     done
-    sudo modprobe zram
-    sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null; sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null; sudo systemctl daemon-reload 2>/dev/null
-    if swapon --show | grep -q /dev/zram0; then sudo swapoff /dev/zram0 2>/dev/null; fi
-    sudo zramctl /dev/zram0 --reset 2>/dev/null
-    sudo zramctl /dev/zram0 --size ${zram_size_gb}G --algorithm lz4 2>/dev/null
-    if [ $? -ne 0 ]; then
-        local zram_dev=$(sudo zramctl --find --size ${zram_size_gb}G --algorithm lz4)
-        [ -z "$zram_dev" ] && echo -e "${RED}❌ 无法创建 ZRAM 设备。${NC}" && return 1
-        sudo mkswap $zram_dev; sudo swapon $zram_dev -p 100
-        swapon --show | grep -q "$zram_dev" && echo -e "${GREEN}✅ ZRAM 已成功启用！设备: $zram_dev${NC}" || echo -e "${RED}❌ ZRAM 启用失败。${NC}"
-    else
-        sudo mkswap /dev/zram0; sudo swapon /dev/zram0 -p 100
-        swapon --show | grep -q /dev/zram0 && echo -e "${GREEN}✅ ZRAM 已成功启用！${NC}" || echo -e "${RED}❌ ZRAM 启用失败。${NC}"
+    if ! command -v zramctl &>/dev/null; then
+        echo -e "${RED}❌ 未找到 zramctl，无法配置 ZRAM。${NC}"
+        return 1
     fi
-    sudo rm -f /etc/systemd/zram-generator.conf 2>/dev/null
-    echo "完成。"
+    sudo modprobe zram 2>/dev/null
+
+    # 持久化：写 zram-generator 的覆盖配置。/etc/systemd/zram-generator.conf 的优先级
+    # 高于 SteamOS 自带的 /usr/lib/systemd/zram-generator.conf（默认 ram/2 + zstd）；
+    # 不写这个文件，重启后 zram-generator 会按厂商默认重建，本次选择必然丢失。
+    # 原代码结尾还 rm -f 了同一个文件，等于把设置又删掉，这里一并修正。
+    local zram_conf_tmp="${TEMP_DIR}/zram-generator.conf.$$"
+    cat > "$zram_conf_tmp" <<EOF
+[zram0]
+zram-size = ${zram_size_gb}G
+compression-algorithm = lz4
+swap-priority = 100
+fs-type = swap
+EOF
+    local persist_ok=1
+    if sudo install -D -m 644 "$zram_conf_tmp" /etc/systemd/zram-generator.conf 2>/dev/null; then
+        sudo systemctl daemon-reload 2>/dev/null
+        echo -e "${GREEN}✓ 已写入持久化配置 /etc/systemd/zram-generator.conf（重启后仍生效）${NC}"
+    else
+        persist_ok=0
+        echo -e "${RED}❌ 写入持久化配置失败：本次设置重启后会丢失。${NC}"
+    fi
+    rm -f "$zram_conf_tmp"
+
+    # 立即生效：先停用旧 zram 交换区，再按所选大小重建
+    if swapon --show=NAME --noheadings 2>/dev/null | awk '$1 == "/dev/zram0" {found=1} END {exit !found}'; then
+        sudo swapoff /dev/zram0 2>/dev/null || echo -e "${YELLOW}⚠️ 无法停用现有 /dev/zram0，将尝试直接调整大小。${NC}"
+    fi
+    sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
+    sudo zramctl /dev/zram0 --reset 2>/dev/null
+    local zram_dev="/dev/zram0" applied=0
+    if sudo zramctl /dev/zram0 --size ${zram_size_gb}G --algorithm lz4 2>/dev/null; then
+        applied=1
+    else
+        zram_dev=$(sudo zramctl --find --size ${zram_size_gb}G --algorithm lz4 2>/dev/null)
+        [ -n "$zram_dev" ] && applied=1
+    fi
+    if [ "$applied" -ne 1 ] || [ -z "$zram_dev" ]; then
+        echo -e "${RED}❌ 无法创建 ZRAM 设备。${NC}"
+        [ "$persist_ok" -eq 1 ] && echo -e "${CYAN}   持久化配置已写入，重启后会按 ${zram_size_gb}G 自动创建。${NC}"
+        return 1
+    fi
+    sudo mkswap "$zram_dev" >/dev/null 2>&1
+    if ! sudo swapon "$zram_dev" -p 100 2>/dev/null; then
+        echo -e "${RED}❌ ZRAM 启用失败（swapon 出错）。${NC}"
+        return 1
+    fi
+    # 以实际结果为准，不按命令返回值猜成功
+    if swapon --show=NAME --noheadings 2>/dev/null | awk -v d="$zram_dev" '$1 == d {found=1} END {exit !found}'; then
+        local real_size=$(zramctl "$zram_dev" --noheadings --output DISKSIZE 2>/dev/null | tr -d ' ')
+        echo -e "${GREEN}✅ ZRAM 已成功启用：$zram_dev（设定 ${zram_size_gb}G，实际 ${real_size:-未知}，lz4，优先级 100）${NC}"
+        [ "$zram_dev" != "/dev/zram0" ] && echo -e "${YELLOW}⚠️ 本次实际设备为 $zram_dev；持久化配置使用 zram0，重启后以 zram0 为准。${NC}"
+        [ "$persist_ok" -eq 1 ] && echo -e "${GREEN}✓ 重启后会自动恢复该配置。${NC}" \
+            || echo -e "${YELLOW}⚠️ 持久化配置写入失败，重启后将恢复厂商默认 ZRAM。${NC}"
+    else
+        echo -e "${RED}❌ ZRAM 启用后未出现在 swap 列表中。${NC}"
+        return 1
+    fi
 }
 
 cleanup_swap() {
     mk_temp_dir
     confirm_action || { echo "操作已取消。"; return; }
     sudo swapoff -a 2>/dev/null
-    [ -b /dev/zram0 ] && sudo zramctl /dev/zram0 --reset 2>/dev/null || echo -e "${YELLOW}⚠️ ZRAM 重置失败。${NC}"
+    # 只有在真正存在 /dev/zram0 时才重置它；不存在属于"当前没启用 ZRAM"，不是失败。
+    # 原写法 `[ -b ... ] && reset || echo 失败` 在设备不存在时会误报"ZRAM 重置失败"。
+    if [ -b /dev/zram0 ]; then
+        if sudo zramctl /dev/zram0 --reset 2>/dev/null; then
+            echo -e "${GREEN}✓ ZRAM 已重置${NC}"
+        else
+            echo -e "${YELLOW}⚠️ ZRAM 重置失败（设备可能仍被占用），可重启后再试。${NC}"
+        fi
+    else
+        echo -e "${CYAN}ℹ 未发现 ZRAM 设备，跳过重置。${NC}"
+    fi
     sudo rm -f /home/swapfile 2>/dev/null
-    sudo sed -i '/\/home\/swapfile/d' /etc/fstab 2>/dev/null
-    sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null; sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null; sudo rm -f /etc/systemd/zram-generator.conf 2>/dev/null; sudo systemctl daemon-reload
-    echo -e "${GREEN}✅ 所有虚拟内存配置已清理完成。${NC}"
+    # 按第一字段精确匹配删除，避免把注释行/前缀相近的条目一起删掉
+    if awk '$1 == "/home/swapfile" {found=1} END {exit !found}' /etc/fstab 2>/dev/null; then
+        local fstab_tmp="${TEMP_DIR}/fstab.$$"
+        if awk '$1 != "/home/swapfile"' /etc/fstab > "$fstab_tmp" 2>/dev/null; then
+            sudo cp "$fstab_tmp" /etc/fstab && echo -e "${GREEN}✓ 已移除 fstab 中的 swapfile 条目${NC}"
+        else
+            echo -e "${YELLOW}⚠️ 写入临时 fstab 失败，/etc/fstab 中的 swapfile 条目未删除。${NC}"
+        fi
+        rm -f "$fstab_tmp"
+    fi
+    sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
+    sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null
+    # 清理 swap 后不应再让 zram-generator 按上次选择的尺寸重建 ZRAM，
+    # 所以这里删掉「配置ZRAM」写入的持久化文件才是正确行为。
+    if [ -f /etc/systemd/zram-generator.conf ]; then
+        if sudo rm -f /etc/systemd/zram-generator.conf 2>/dev/null; then
+            echo -e "${GREEN}✓ 已移除 ZRAM 持久化配置${NC}"
+        else
+            echo -e "${YELLOW}⚠️ 无法删除 /etc/systemd/zram-generator.conf，重启后 ZRAM 可能仍会按旧配置重建。${NC}"
+        fi
+    fi
+    sudo systemctl daemon-reload
+    echo -e "${GREEN}✅ 所有虚拟内存配置已清理完成（重启后生效）。${NC}"
 }
 
 fix_single_ntfs() {
@@ -1049,6 +1198,7 @@ fix_disk_write_error() {
         if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
             readonly_was_enabled=1
             if sudo steamos-readonly disable 2>/dev/null; then
+                RO_READONLY_DISABLED_BY_US=1
                 echo -e "${GREEN}✓ 已禁用只读模式${NC}"
             else
                 echo -e "${YELLOW}⚠️  禁用只读模式失败，尝试继续...${NC}"
@@ -1223,11 +1373,38 @@ clear_hosts_cache() {
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 清理 hosts 缓存 ════════════════${NC}"
     echo -e "${CYAN}仅移除 Steam 相关 hosts 条目，保留系统条目，并自动备份。${NC}"
+    # /etc/hosts 位于 SteamOS 只读根分区：只读模式下 sudo sed 会静默失败，
+    # 原代码不检查返回值、照样打印"清理完成"。这里先确保可写，失败就明确中止。
+    if command -v steamos-readonly &>/dev/null; then
+        if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
+            echo -e "${CYAN}正在临时禁用只读模式以修改 /etc/hosts（退出时自动恢复）...${NC}"
+            disable_readonly || { echo -e "${RED}✗ 无法禁用只读模式，/etc/hosts 未做任何修改。${NC}"; return 1; }
+        fi
+    fi
     local backup="/etc/hosts.backup.$(date +%Y%m%d_%H%M%S)"
-    sudo cp /etc/hosts "$backup" 2>/dev/null && echo -e "${GREEN}✓ 已备份原 hosts 到 $backup${NC}"
-    sudo sed -i -E '/^\s*([0-9a-fA-F:.]+|\*)\s+(steamcommunity\.com|steamstatic\.com|steamcontent\.com|steamusercontent\.com|api\.steampowered\.com|store\.steampowered\.com|s\.team|steamcdn-a\.akamaihd\.net)(\s|$)/d' /etc/hosts 2>/dev/null
-    grep -qE '^\s*127\.0\.0\.1\s+localhost' /etc/hosts || echo "127.0.0.1 localhost" | sudo tee -a /etc/hosts > /dev/null
-    grep -qE '^\s*::1\s+localhost' /etc/hosts || echo "::1 localhost ip6-localhost ip6-loopback" | sudo tee -a /etc/hosts > /dev/null
+    if ! sudo cp /etc/hosts "$backup" 2>/dev/null; then
+        echo -e "${RED}✗ 备份 /etc/hosts 失败（或目标只读），已中止，未做任何修改。${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ 已备份原 hosts 到 $backup${NC}"
+    local steam_hosts_re='^\s*([0-9a-fA-F:.]+|\*)\s+(steamcommunity\.com|steamstatic\.com|steamcontent\.com|steamusercontent\.com|api\.steampowered\.com|store\.steampowered\.com|s\.team|steamcdn-a\.akamaihd\.net)(\s|$)'
+    if ! sudo sed -i -E "/${steam_hosts_re}/d" /etc/hosts 2>/dev/null; then
+        echo -e "${RED}✗ 写入 /etc/hosts 失败（磁盘只读或权限不足），原文件未被修改。${NC}"
+        echo -e "${YELLOW}   如需回滚：sudo cp $backup /etc/hosts${NC}"
+        return 1
+    fi
+    # 以实际内容校验结果，不能只依赖命令返回值
+    if grep -qE "$steam_hosts_re" /etc/hosts 2>/dev/null; then
+        echo -e "${RED}✗ 仍有 Steam 相关条目未能移除，请检查 /etc/hosts。${NC}"
+        echo -e "${YELLOW}   备份文件：$backup（可用 sudo cp $backup /etc/hosts 回滚）${NC}"
+        return 1
+    fi
+    # localhost 判断要锚定到完整主机名，否则 127.0.0.1 localhost.localdomain
+    # 会被误判为"已有 localhost 条目"，真正的 localhost 条目就补不上了
+    grep -qE '^\s*127\.0\.0\.1\s+localhost([[:space:]]|$)' /etc/hosts 2>/dev/null \
+        || echo "127.0.0.1 localhost" | sudo tee -a /etc/hosts > /dev/null
+    grep -qE '^\s*::1\s+localhost([[:space:]]|$)' /etc/hosts 2>/dev/null \
+        || echo "::1 localhost ip6-localhost ip6-loopback" | sudo tee -a /etc/hosts > /dev/null
     echo -e "${GREEN}✓ hosts 已清理完成（备份: $backup）${NC}"
 }
 
@@ -1244,121 +1421,161 @@ calibrate_joystick_trigger() {
 }
 
 steamdeck_cache_manager() {
+    # 没有 zenity 时原来还去调 zenity 报错，等于什么都不显示；改为写到标准输出
     if ! command -v zenity &>/dev/null; then
-        zenity --error --text="未找到 zenity，请安装。"
+        echo -e "${RED}✗ 未找到 zenity，无法打开缓存管理器。请先安装：sudo pacman -S zenity${NC}"
+        return 1
+    fi
+    mk_temp_dir
+
+    # 收集所有 Steam 库的 steamapps 目录：默认库 + libraryfolders.vdf 里的其它库。
+    # 原实现只写死 $HOME/.local/share/Steam/steamapps，装在 SD 卡/第二块盘的库
+    # 根本不会出现在列表里（实测本机 VDF 就有 /run/media/deck/Game/SteamLibrary）。
+    local steam_root="$HOME/.local/share/Steam"
+    local -a steamapps_dirs=()
+    [ -d "$steam_root/steamapps" ] && steamapps_dirs+=("$steam_root/steamapps")
+    local vdf="$steam_root/steamapps/libraryfolders.vdf"
+    if [ -f "$vdf" ]; then
+        local lib_path
+        while IFS= read -r lib_path; do
+            [ -n "$lib_path" ] || continue
+            [ -d "$lib_path/steamapps" ] || continue
+            local dup=0 d
+            for d in "${steamapps_dirs[@]}"; do
+                [ "$d" = "$lib_path/steamapps" ] && { dup=1; break; }
+            done
+            [ "$dup" -eq 0 ] && steamapps_dirs+=("$lib_path/steamapps")
+        done < <(awk -F'"' '/"path"/ {print $4}' "$vdf" 2>/dev/null)
+    fi
+    if [ ${#steamapps_dirs[@]} -eq 0 ]; then
+        zenity --error --text="未找到 Steam 库目录，请确认 Steam 已安装并至少登录过一次。"
         return 1
     fi
 
-    local steamapps_dir="$HOME/.local/share/Steam/steamapps"
-    if [ ! -d "$steamapps_dir" ]; then
-        zenity --error --text="未找到 Steam 目录。"
-        return 1
+    # 删除 compatdata/着色器缓存前提醒退出 Steam，否则可能损坏正在使用的数据
+    local steam_running=0
+    if pgrep -x steam >/dev/null 2>&1 || pgrep -x steamwebhelper >/dev/null 2>&1; then
+        steam_running=1
+        if ! zenity --question --title="Steam 正在运行" \
+            --text="检测到 Steam 正在运行。删除兼容数据时可能损坏正在使用的 Proton 前缀。建议先退出 Steam 再清理。仍要继续吗？" \
+            --ok-label="继续" --cancel-label="取消"; then
+            return 0
+        fi
     fi
 
     while true; do
-        local choice=$(zenity --list --radiolist \
+        local choice
+        # 单选列表第一列必须有一个 TRUE，否则直接点确定返回空、用户以为没反应
+        choice=$(zenity --list --radiolist \
             --title="Steam 缓存管理器" \
             --text="请选择要清理的缓存类型" \
-            --column="选择" --column="类型" \
-            FALSE "着色器缓存" \
-            FALSE "兼容数据 (Proton前缀)" \
-            --width=400 --height=200)
+            --column="选择" --column="类型" --column="说明" \
+            TRUE  "着色器缓存" "shadercache，删掉后会自动重建" \
+            FALSE "兼容数据" "compatdata，含各游戏的 Proton 前缀" \
+            --width=600 --height=240) || break
+        [ -z "$choice" ] && break
 
-        if [ -z "$choice" ]; then
-            break
-        fi
-
+        local cache_type title
         if [ "$choice" = "着色器缓存" ]; then
-            cache_type="shadercache"
-            title="着色器缓存"
+            cache_type="shadercache"; title="着色器缓存"
         else
-            cache_type="compatdata"
-            title="兼容数据"
+            cache_type="compatdata"; title="兼容数据"
         fi
 
-        local cache_dir="$steamapps_dir/$cache_type"
-        if [ ! -d "$cache_dir" ]; then
-            zenity --info --text="未找到 $title 目录。"
-            continue
-        fi
-
-        local apps=()
-        for dir in "$cache_dir"/*; do
-            if [ -d "$dir" ]; then
-                local app_id=$(basename "$dir")
-                if [[ "$app_id" =~ ^[0-9]+$ ]]; then
-                    local size=$(du -sm "$dir" 2>/dev/null | cut -f1)
-                    if [ -n "$size" ] && [ "$size" -gt 0 ]; then
-                        local manifest="$steamapps_dir/appmanifest_${app_id}.acf"
-                        if [ -f "$manifest" ]; then
-                            game_name=$(grep '"name"' "$manifest" | cut -d'"' -f4)
-                        else
-                            game_name="Unknown"
-                        fi
-                        apps+=("$app_id|$game_name|$size|$dir")
-                    fi
+        # 用平行数组保存，避免把游戏名拼进 | 分隔字符串（名字里带 | 会解析错位）
+        local -a app_ids=() app_names=() app_sizes=() app_dirs=()
+        local sa dir app_id size manifest game_name
+        for sa in "${steamapps_dirs[@]}"; do
+            [ -d "$sa/$cache_type" ] || continue
+            for dir in "$sa/$cache_type"/*; do
+                [ -d "$dir" ] || continue
+                app_id=$(basename "$dir")
+                [[ "$app_id" =~ ^[0-9]+$ ]] || continue
+                size=$(du -sm "$dir" 2>/dev/null | cut -f1)
+                if [ -z "$size" ] || [ "$size" -le 0 ] 2>/dev/null; then
+                    continue
                 fi
-            fi
-        done
-
-        if [ ${#apps[@]} -eq 0 ]; then
-            zenity --info --text="没有找到可清理的 $title。"
-            continue
-        fi
-
-        local list_data=()
-        for entry in "${apps[@]}"; do
-            IFS='|' read -r app_id game_name size dir <<< "$entry"
-            list_data+=("FALSE" "$game_name (ID: $app_id)" "${size}MB")
-        done
-
-        local selections=$(zenity --list --checklist \
-            --title="选择要删除的 $title" \
-            --text="请勾选要删除的缓存项" \
-            --column="选择" --column="游戏名" --column="大小" \
-            "${list_data[@]}" \
-            --width=600 --height=400 \
-            --multiple)
-
-        if [ -z "$selections" ]; then
-            continue
-        fi
-
-        IFS='|' read -r -a selected_names <<< "$selections"
-        local selected_dirs=()
-        for selected in "${selected_names[@]}"; do
-            for entry in "${apps[@]}"; do
-                IFS='|' read -r app_id game_name size dir <<< "$entry"
-                local display_name="$game_name (ID: $app_id)"
-                if [ "$display_name" = "$selected" ]; then
-                    selected_dirs+=("$dir")
-                    break
-                fi
+                game_name=""
+                manifest="$sa/appmanifest_${app_id}.acf"
+                [ -f "$manifest" ] && game_name=$(grep -m1 '"name"' "$manifest" 2>/dev/null | cut -d'"' -f4)
+                [ -z "$game_name" ] && game_name="未知应用"
+                app_ids+=("$app_id"); app_names+=("$game_name")
+                app_sizes+=("$size"); app_dirs+=("$dir")
             done
         done
 
-        if [ ${#selected_dirs[@]} -eq 0 ]; then
+        if [ ${#app_ids[@]} -eq 0 ]; then
+            zenity --info --text="没有找到可清理的$title。"
+            continue
+        fi
+
+        local -a list_data=()
+        local i
+        for i in "${!app_ids[@]}"; do
+            list_data+=("FALSE" "${app_ids[$i]}" "${app_names[$i]}" "${app_sizes[$i]}MB")
+        done
+
+        local selections
+        # ID 列隐藏但用它回传匹配：避免按"显示名"匹配（重名/名字带 | 时都会错）
+        selections=$(zenity --list --checklist \
+            --title="选择要删除的$title" \
+            --text="共 ${#app_ids[@]} 项，可勾选多项后点确定。" \
+            --column="选择" --column="ID" --column="应用名" --column="大小" \
+            --hide-column=2 --print-column=2 --separator=$'\n' \
+            "${list_data[@]}" \
+            --width=720 --height=460) || continue
+        [ -z "$selections" ] && continue
+
+        local -a sel_dirs=() sel_labels=()
+        local sel_line
+        while IFS= read -r sel_line; do
+            [ -n "$sel_line" ] || continue
+            for i in "${!app_ids[@]}"; do
+                if [ "${app_ids[$i]}" = "$sel_line" ]; then
+                    sel_dirs+=("${app_dirs[$i]}")
+                    sel_labels+=("${app_names[$i]} (${app_sizes[$i]}MB)")
+                    break
+                fi
+            done
+        done <<< "$selections"
+
+        if [ ${#sel_dirs[@]} -eq 0 ]; then
             zenity --info --text="未选择任何有效项目。"
             continue
         fi
 
-        zenity --question \
-            --text="确定要删除选中的 $title 吗？\n共 ${#selected_dirs[@]} 项。" \
-            --ok-label="删除" --cancel-label="取消"
-        if [ $? -ne 0 ]; then
-            continue
-        fi
+        # 确认框里列出具体条目和总大小，删除前让用户看清楚删的是什么
+        local total_mb=0 label one_mb
+        for i in "${!sel_dirs[@]}"; do
+            label="${sel_labels[$i]}"
+            # du 失败时输出为空，直接参与 $(( )) 会算术语法报错，先兜底成 0
+            one_mb=$(du -sm "${sel_dirs[$i]}" 2>/dev/null | cut -f1)
+            [[ "$one_mb" =~ ^[0-9]+$ ]] || one_mb=0
+            total_mb=$((total_mb + one_mb))
+        done
+        local confirm_text="将永久删除以下 $title："
+        for label in "${sel_labels[@]}"; do
+            confirm_text+=$'\n'"  • $label"
+        done
+        confirm_text+=$'\n\n'"共 ${#sel_dirs[@]} 项，约 ${total_mb}MB，删除后无法恢复。"
+        zenity --question --title="确认删除" --text="$confirm_text" \
+            --ok-label="删除" --cancel-label="取消" || continue
 
         local deleted=0 failed=0
-        for d in "${selected_dirs[@]}"; do
-            if rm -rf "$d"; then
-                ((deleted++))
+        for i in "${!sel_dirs[@]}"; do
+            if rm -rf -- "${sel_dirs[$i]}" 2>/dev/null; then
+                deleted=$((deleted + 1))
             else
-                ((failed++))
+                failed=$((failed + 1))
             fi
         done
 
-        zenity --info --text="删除完成！\n成功: $deleted 项\n失败: $failed 项"
+        local result_text="删除完成。"
+        result_text+=$'\n'"成功: $deleted 项"
+        result_text+=$'\n'"失败: $failed 项"
+        [ "$failed" -gt 0 ] && result_text+=$'\n\n'"失败项可能正被占用，请退出 Steam 后重试。"
+        [ "$steam_running" -eq 1 ] && result_text+=$'\n'"建议重启 Steam 让缓存重新生成。"
+        zenity --info --text="$result_text"
     done
 }
 
@@ -1523,9 +1740,10 @@ fix_shared_disk() {
 
     echo "步骤1: 检查 SteamOS 只读模式"
     if command -v steamos-readonly &>/dev/null; then
-        # 记录进入时状态，退出时由全局 trap 统一恢复
+        # 记录进入时状态，退出时由全局 trap 统一恢复（仅当是脚本关掉的）
         if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
             if sudo steamos-readonly disable 2>/dev/null; then
+                RO_READONLY_DISABLED_BY_US=1
                 echo -e "${GREEN}✓ 已临时禁用只读模式${NC}"
             else
                 echo -e "${YELLOW}⚠️  禁用只读模式失败，后续写入 fstab 可能失败${NC}"
@@ -1800,7 +2018,7 @@ fix_shared_disk() {
             echo "  计划挂载点: $mount_point"
         fi
         sudo mkdir -p "$mount_point"
-        sudo chown deck:deck "$mount_point" 2>/dev/null
+        sudo chown "${CURRENT_USER}:${CURRENT_GROUP}" "$mount_point" 2>/dev/null
 
         # 写入/更新 fstab：使用锚定正则精确匹配 UUID，避免子串误判
         if [ -n "$fstab_mp" ]; then
@@ -1924,11 +2142,11 @@ install_asklink() {
     if command -v steamos-readonly &>/dev/null; then
         if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
             echo -e "${CYAN}正在禁用只读模式...${NC}"
-            sudo steamos-readonly disable
-            if [ $? -ne 0 ]; then
+            if ! sudo steamos-readonly disable; then
                 echo -e "${RED}禁用只读模式失败，请手动执行 sudo steamos-readonly disable${NC}"
                 return 1
             fi
+            RO_READONLY_DISABLED_BY_US=1
         else
             echo -e "${GREEN}只读模式已禁用${NC}"
         fi
@@ -2534,7 +2752,7 @@ except:
     sudo rm -rf "$PLUGIN_PATH"
     sudo mkdir -p "$HOME/homebrew/plugins"
     sudo mv "$extracted_dir" "$PLUGIN_PATH"
-    sudo chown -R deck:deck "$PLUGIN_PATH"
+    sudo chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "$PLUGIN_PATH"
 
     rm -rf "$TEMP_DIR"
 
@@ -2555,6 +2773,12 @@ uninstall_plugin_generic() {
     [ -d "$plugin_path" ] || { echo -e "${YELLOW}未检测到已安装的 ${display_name}。${NC}"; return 0; }
     confirm_action || { echo "取消卸载。"; return 0; }
     sudo rm -rf "$plugin_path"
+    # 删除结果要以目录是否真的消失为准，不能无条件报成功
+    if [ -d "$plugin_path" ]; then
+        echo -e "${RED}✗ ${display_name} 卸载失败，目录仍存在: $plugin_path${NC}"
+        echo -e "${YELLOW}  请手动删除：sudo rm -rf \"$plugin_path\"${NC}"
+        return 1
+    fi
     echo -e "${GREEN}✅ ${display_name} 已卸载。${NC}"
 }
 install_tomoon_uninstall() { uninstall_plugin_generic "tomoon" "ToMoon"; }
@@ -2909,12 +3133,15 @@ uninstall_plugin_store() {
     fi
 
     echo "正在执行卸载..."
-    if sudo rm -rf "$HOME/homebrew"; then
-        echo -e "${GREEN}✓ 插件商店卸载完成${NC}"
-        echo "如需重新安装，请使用 '安装插件商店' 功能。"
-    else
-        echo -e "${RED}✗ 插件商店卸载失败${NC}"
+    sudo rm -rf "$HOME/homebrew"
+    # 以目录是否真的消失为准（rm 在部分失败时也可能返回 0）
+    if [ -d "$HOME/homebrew" ]; then
+        echo -e "${RED}✗ 插件商店卸载失败，目录仍存在: $HOME/homebrew${NC}"
+        echo -e "${YELLOW}  请手动删除：sudo rm -rf \"$HOME/homebrew\"${NC}"
+        return 1
     fi
+    echo -e "${GREEN}✓ 插件商店卸载完成${NC}"
+    echo "如需重新安装，请使用 '安装插件商店' 功能。"
 }
 
 get_ge_proton_versions() {
@@ -3114,20 +3341,53 @@ except:
         fi
         rm -f /tmp/curl_err_$$.log
 
+        # 先解压到临时目录校验完整性，成功后再移入 compatibilitytools.d。
+        # 直接解到 install_dir 的问题是：下载包被截断/损坏时，tar 会留下
+        # 半套目录，而 Steam 会把这个残缺版本当成可用的兼容层加载。
         echo "# 正在处理第 $idx/$total 个: $version (解压中...)" >&3
-        tar -xzf "$filename" -C "$install_dir"
+        local STAGE_DIR
+        STAGE_DIR=$(mktemp -d "$install_dir/.stage.XXXXXX" 2>/dev/null) || STAGE_DIR=""
+        if [ -z "$STAGE_DIR" ]; then
+            echo "# 第 $idx/$total 个: $version 安装失败（无法创建临时目录）" >&3
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (无法创建临时目录)"
+            rm -f "$filename"
+            cd /tmp && rm -rf "$temp_dir"
+            continue
+        fi
+        tar -xzf "$filename" -C "$STAGE_DIR"
         local tar_ret=$?
 
         rm -f "$filename"
         cd /tmp && rm -rf "$temp_dir"
 
-        if [ $tar_ret -eq 0 ] && [ -d "$install_dir/$version" ]; then
+        if [ $tar_ret -ne 0 ] || [ ! -d "$STAGE_DIR/$version" ]; then
+            # 解压失败：清掉半成品，绝不留到 compatibilitytools.d
+            rm -rf "$STAGE_DIR"
+            echo "# 第 $idx/$total 个: $version 安装失败（压缩包损坏或解压中断）" >&3
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (解压失败)"
+            continue
+        fi
+
+        # 解压成功：删旧版本目录后原子移入，避免残留上一次的混合内容
+        rm -rf "${install_dir:?}/$version"
+        if ! mv "$STAGE_DIR/$version" "$install_dir/$version"; then
+            rm -rf "$STAGE_DIR"
+            echo "# 第 $idx/$total 个: $version 安装失败（移动到目标目录失败）" >&3
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (移动失败)"
+            continue
+        fi
+        rm -rf "$STAGE_DIR"
+
+        if [ -d "$install_dir/$version" ]; then
             echo "# 第 $idx/$total 个: $version 安装成功" >&3
             ((success_count++))
         else
             echo "# 第 $idx/$total 个: $version 安装失败" >&3
             ((failed_count++))
-            failed_list="${failed_list}\n  $version (解压失败)"
+            failed_list="${failed_list}\n  $version (安装校验失败)"
         fi
     done
 
@@ -3281,6 +3541,11 @@ clover_install_or_reinstall() {
     echo -e "${CYAN}正在生成优化版 install-Clover.sh...${NC}"
     cat > install-Clover.sh << 'CLOVER_SCRIPT_EOF'
 #!/bin/bash
+# 失败即中止：原脚本没有 set -e，中间任何一步失败（cp/挂载/efibootmgr）都会继续
+# 往下执行，可能在 ESP 上写出半套 Clover，最后还打印“安装完成”。
+# 这里加 -euo pipefail，并对“允许失败”的命令（grep 探测、efibootmgr -B、umount）
+# 显式写 `|| true` 或放进 if 里，见下方逐处注释。
+set -euo pipefail
 
 clear
 
@@ -3289,9 +3554,83 @@ echo "项目地址: https://github.com/ryanrudolfoba/SteamDeck-Clover-dualboot"
 echo "作者 YT: 10MinuteSteamDeckGamer"
 echo "正在进行初步检查..."
 
-CLOVER=$(efibootmgr | grep -i Clover | colrm 9 | colrm 1 4)
-REFIND=$(efibootmgr | grep -i rEFInd | colrm 9 | colrm 1 4)
-ESP=$(df /dev/nvme0n1p1 --output=avail | tail -n1)
+CLOVER=$(efibootmgr | grep -i Clover | colrm 9 | colrm 1 4 || true)
+REFIND=$(efibootmgr | grep -i rEFInd | colrm 9 | colrm 1 4 || true)
+
+# 动态识别 ESP，替代硬编码 /dev/nvme0n1p1：
+#   Steam Deck 有 NVMe / eMMC(/dev/mmcblk0) / SATA(/dev/sda) 多种型号，
+#   分区号也不保证是 1（Windows 装在 SteamOS 之前的机器 ESP 可能是 p2/p3）。
+# 顺序：① 已挂载的 /esp（SteamOS）或 /boot/efi（Bazzite）→ ② 按 EFI 分区类型 GUID 找。
+detect_esp() {
+    local dev=""
+    dev=$(findmnt -n -o SOURCE -M /esp 2>/dev/null | grep '^/dev/' | head -1 || true)
+    [ -n "$dev" ] || dev=$(findmnt -n -o SOURCE -M /boot/efi 2>/dev/null | grep '^/dev/' | head -1 || true)
+    if [ -z "$dev" ] || [ ! -b "$dev" ]; then
+        dev=$(lsblk -P -n -o PATH,PARTTYPE 2>/dev/null \
+            | awk -F'"' '/PARTTYPE="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"/{print $2; exit}' || true)
+    fi
+    [ -n "$dev" ] && [ -b "$dev" ] || return 1
+    ESP_DEV="$dev"
+    ESP_PARENT=$(lsblk -n -o PKNAME "$dev" 2>/dev/null | head -1 || true)
+    ESP_DISK="/dev/${ESP_PARENT}"
+    ESP_PARTN=$(lsblk -n -o PARTN "$dev" 2>/dev/null | head -1 || true)
+    [ -n "$ESP_PARTN" ] || ESP_PARTN=1
+    return 0
+}
+
+if ! detect_esp; then
+    echo "❌ 无法识别 EFI 系统分区（ESP），已中止，未对系统做任何修改。"
+    exit 1
+fi
+echo "检测到 ESP 分区: $ESP_DEV （磁盘 $ESP_DISK，分区号 $ESP_PARTN）"
+
+# 用已识别的 ESP 设备计算剩余空间；ESP 变量单位是 KB
+ESP=$(df --output=avail "$ESP_DEV" 2>/dev/null | tail -n1 | tr -d ' ' || true)
+if ! [[ "$ESP" =~ ^[0-9]+$ ]]; then
+    echo "❌ 无法读取 ESP 分区剩余空间，已中止。"
+    exit 1
+fi
+
+# ===== SteamOS 只读模式守护 =====
+# 原脚本在 rEFInd 分支里 disable 后若中途 exit，系统会一直停在可写状态。
+# 用 EXIT trap 统一恢复：只有本脚本确实 disable 成功过才恢复。
+# 注意：trap 必须在任何 disable 之前就装好（rEFInd 分支比原来的安装点更早）。
+RO_DISABLED_BY_US=0
+restore_readonly() {
+    if [ "${RO_DISABLED_BY_US:-0}" -eq 1 ]; then
+        if sudo -n steamos-readonly enable 2>/dev/null; then
+            echo "已恢复 SteamOS 只读模式。"
+        else
+            echo "⚠️ 无法自动恢复只读模式，请手动执行: sudo steamos-readonly enable"
+        fi
+        RO_DISABLED_BY_US=0
+    fi
+    return 0
+}
+enable_readonly_mode() {
+    sudo -n steamos-readonly enable 2>/dev/null || true
+    RO_DISABLED_BY_US=0
+}
+# ISO/临时目录清理标志，与只读恢复合并在同一个 EXIT 钩子里
+# （两者各自 trap EXIT 会互相覆盖，只保留最后装的那个）。
+ISO_CLEANED=0
+cleanup_iso() {
+    [ "${ISO_CLEANED:-0}" -eq 1 ] && return 0
+    ISO_CLEANED=1
+    if [ "${ISO_MOUNTED:-0}" -eq 1 ]; then
+        sudo -n umount ~/temp-clover &> /dev/null || true
+        rmdir ~/temp-clover 2>/dev/null || true
+        ISO_MOUNTED=0
+    fi
+    rm -f "${CLOVER_FILE:-}" "${CLOVER_BASE:-}"
+}
+clover_exit_hook() {
+    local rc=$?
+    cleanup_iso
+    restore_readonly
+    exit "$rc"
+}
+trap clover_exit_hook EXIT
 CLOVER_VERSION=5172
 CLOVER_EFI=\\EFI\\clover\\cloverx64.efi
 BOARD_NAME=$(cat /sys/class/dmi/id/board_name)
@@ -3334,65 +3673,76 @@ else
     echo "检测到操作系统: SteamOS"
 fi
 
-if blkid /dev/nvme0n1p1 | grep -qi microsoft; then
+if blkid "$ESP_DEV" 2>/dev/null | grep -qi microsoft; then
     echo "检测到不支持的双系统配置（Windows 安装在 SteamOS 之前）。请确保 SteamOS 安装在 Windows 之前！"
-    exit
+    exit 1
 else
     echo "双系统配置检查通过。"
 fi
 
-if [ "$(passwd --status $(whoami) | tr -s " " | cut -d " " -f 2)" == "P" ]; then
-    read -s -p "请输入当前 sudo 密码: " current_password ; echo < /dev/tty
+# 密码处理：
+#  - 原写法把密码经 `echo -e "$pw\n"` 放进管道。密码是 shell 变量而非外部命令参数，
+#    实测 ps 里看不到明文；但 `echo -e` 会解释反斜杠，密码里含 `\` 时会被改写/截断
+#    （实测 'p\cw' → 'p'），导致 sudo 认证失败。改用 printf '%s\n' 原样输出。
+#  - 验证成功后立刻 `sudo -v` 取到时间戳，后续统一 `sudo -n`，不再反复喂密码。
+if [ "$(passwd --status "$(whoami)" | tr -s " " | cut -d " " -f 2)" == "P" ]; then
+    read -s -p "请输入当前 sudo 密码: " current_password < /dev/tty; echo
     echo "正在验证 sudo 密码..."
-    if ! echo -e "$current_password\n" | sudo -S ls &> /dev/null; then
+    if ! printf '%s\n' "$current_password" | sudo -S -v &> /dev/null; then
         echo "sudo 密码错误！请重新运行脚本并输入正确密码。"
-        exit
+        exit 1
     fi
     echo "sudo 密码正确。"
 else
     echo "未设置 sudo 密码！请先设置密码再运行脚本。"
-    passwd
-    exit
+    passwd || true
+    exit 1
 fi
 
+# 后续统一走 sudo -n（密码已由上面的 sudo -v 缓存）；失败直接中止而不是继续写 EFI。
 mkdir -p ~/temp-ESP
-if ! echo -e "$current_password\n" | sudo -S mount /dev/nvme0n1p1 ~/temp-ESP; then
-    echo "挂载 ESP 分区失败！"
-    rmdir ~/temp-ESP
-    exit
+if ! sudo -n mount "$ESP_DEV" ~/temp-ESP; then
+    echo "挂载 ESP 分区失败！已中止，未修改系统。"
+    rmdir ~/temp-ESP 2>/dev/null || true
+    exit 1
 fi
 echo "ESP 分区已挂载。"
-if [ $ESP -ge 15000 ]; then
+if [ "$ESP" -ge 15000 ]; then
     echo "ESP 分区剩余空间: $ESP KB，空间充足。"
-    echo -e "$current_password\n" | sudo -S umount ~/temp-ESP
-    rmdir ~/temp-ESP
+    sudo -n umount ~/temp-ESP || true
+    rmdir ~/temp-ESP 2>/dev/null || true
 else
     echo "ESP 分区剩余空间: $ESP KB，空间不足！请清理后重试。"
-    echo -e "$current_password\n" | sudo -S du -hd2 /esp
-    echo -e "$current_password\n" | sudo -S umount ~/temp-ESP
-    rmdir ~/temp-ESP
-    exit
+    # 注意：这里输出“空间不足”，外层成功判定已同步匹配该关键字
+    sudo -n du -hd2 /esp || true
+    sudo -n umount ~/temp-ESP || true
+    rmdir ~/temp-ESP 2>/dev/null || true
+    exit 1
 fi
 
 if efibootmgr | grep -qi refind; then
     echo "检测到 rEFInd，正在尽力卸载..."
     for rEFInd_boot in $REFIND; do
-        echo -e "$current_password\n" | sudo -S efibootmgr -b $rEFInd_boot -B &> /dev/null
+        sudo -n efibootmgr -b "$rEFInd_boot" -B &> /dev/null || true
     done
-    echo -e "$current_password\n" | sudo -S systemctl disable bootnext-refind.service &> /dev/null
-    echo -e "$current_password\n" | sudo -S systemctl disable rEFInd_bg_randomizer.service
-    echo -e "$current_password\n" | sudo -S rm -rf $EFI_PATH/refind &> /dev/null
-    echo -e "$current_password\n" | sudo -S steamos-readonly disable
-    echo -e "$current_password\n" | sudo -S rm /etc/systemd/system/bootnext-refind.service &> /dev/null
-    echo -e "$current_password\n" | sudo -S rm -f /etc/systemd/system/rEFInd_bg_randomizer.service
-    echo -e "$current_password\n" | sudo -S pacman-key --init
-    echo -e "$current_password\n" | sudo -S pacman-key --populate archlinux
-    echo -e "$current_password\n" | sudo -S pacman -R --noconfirm SteamDeck_rEFInd
-    echo -e "$current_password\n" | sudo -S steamos-readonly enable
+    sudo -n systemctl disable bootnext-refind.service &> /dev/null || true
+    sudo -n systemctl disable rEFInd_bg_randomizer.service &> /dev/null || true
+    sudo -n rm -rf "$EFI_PATH/refind" &> /dev/null || true
+    if sudo -n steamos-readonly disable; then
+        RO_DISABLED_BY_US=1
+    else
+        echo "⚠️ 无法禁用只读模式，rEFInd 卸载可能失败。"
+    fi
+    sudo -n rm -f /etc/systemd/system/bootnext-refind.service &> /dev/null || true
+    sudo -n rm -f /etc/systemd/system/rEFInd_bg_randomizer.service &> /dev/null || true
+    sudo -n pacman-key --init || true
+    sudo -n pacman-key --populate archlinux || true
+    sudo -n pacman -R --noconfirm SteamDeck_rEFInd || true
+    enable_readonly_mode
     rm -rf ~/.local/SteamDeck_rEFInd ~/.SteamDeck_rEFInd ~/Desktop/SteamDeck_rEFInd.desktop
     if efibootmgr | grep -qi refind; then
         echo "rEFInd 卸载失败，请手动卸载后重试。"
-        exit
+        exit 1
     fi
     echo "rEFInd 已成功卸载。"
 else
@@ -3447,104 +3797,160 @@ if [ ${DOWNLOAD_SUCCESS} -eq 0 ]; then
     exit 1
 fi
 
+# 解压失败时清理下载的 7z 与可能残留的 ISO，避免占满 /home
 if ! 7z x "${CLOVER_FILE}" -aoa "${CLOVER_BASE}" &> /dev/null; then
     echo "解压 Clover ISO 失败！"
-    exit
+    rm -f "${CLOVER_FILE}" "${CLOVER_BASE}"
+    exit 1
+fi
+if [ ! -f "${CLOVER_BASE}" ]; then
+    echo "解压后未找到 ISO 文件 ${CLOVER_BASE}，已中止。"
+    rm -f "${CLOVER_FILE}"
+    exit 1
 fi
 echo "Clover ISO 解压成功。"
 
+# 挂载失败时把临时目录、ISO、7z 一并清理干净
 mkdir -p ~/temp-clover
-if ! echo -e "$current_password\n" | sudo -S mount "${CLOVER_BASE}" ~/temp-clover &> /dev/null; then
-    echo "挂载 Clover ISO 失败！"
-    echo -e "$current_password\n" | sudo -S umount ~/temp-clover
-    rmdir ~/temp-clover
-    exit
+if ! sudo -n mount "${CLOVER_BASE}" ~/temp-clover &> /dev/null; then
+    echo "挂载 Clover ISO 失败！已清理临时文件。"
+    sudo -n umount ~/temp-clover &> /dev/null || true
+    rmdir ~/temp-clover 2>/dev/null || true
+    rm -f "${CLOVER_FILE}" "${CLOVER_BASE}"
+    exit 1
 fi
+ISO_MOUNTED=1
 echo "Clover ISO 已挂载。"
 
-echo -e "$current_password\n" | sudo -S cp -Rf ~/temp-clover/efi/clover $EFI_PATH
-echo -e "$current_password\n" | sudo -S cp custom/config.plist $EFI_PATH/clover/config.plist
-echo -e "$current_password\n" | sudo -S cp -Rf custom/themes/* $EFI_PATH/clover/themes
-echo -e "$current_password\n" | sudo -S rm -rf $EFI_PATH/clover/themes/{bgm,cesium,christmas,glass,purple_swirl,theme-sample.plist}
+# 安装中途任何一步失败都要卸载 ISO、清理临时文件，不留半套环境。
+# 注意：trap ... ERR 在脚本里 `exit 1` 触发的路径上**不会**执行（实测残留 ISO），
+# 所以清理挂在上面已装好的 EXIT 钩子里，用 ISO_MOUNTED 标志决定是否卸载。
+if ! sudo -n cp -Rf ~/temp-clover/efi/clover "$EFI_PATH"; then
+    echo "❌ 复制 Clover EFI 文件到 ESP 失败（可能是 ESP 空间不足）。已中止。"
+    exit 1
+fi
+sudo -n cp custom/config.plist "$EFI_PATH/clover/config.plist"
+sudo -n cp -Rf custom/themes/. "$EFI_PATH/clover/themes/" \
+    || { echo "❌ 复制主题文件失败，已中止。"; exit 1; }
+sudo -n rm -rf "$EFI_PATH/clover/themes/bgm" "$EFI_PATH/clover/themes/cesium" \
+    "$EFI_PATH/clover/themes/christmas" "$EFI_PATH/clover/themes/glass" \
+    "$EFI_PATH/clover/themes/purple_swirl" "$EFI_PATH/clover/themes/theme-sample.plist" \
+    || true
 
 if [ "$PRODUCT_NAME" = "83N6" ] || [ "$PRODUCT_NAME" = "83L3" ] || [ "$PRODUCT_NAME" = "83Q2" ] || [ "$PRODUCT_NAME" = "83Q3" ] || [ "$PRODUCT_NAME" = "83E1" ] || [ "$BOARD_NAME" = "RC71L" ] || [ "$BOARD_NAME" = "RC72LA" ] || [ "$PRODUCT_NAME" = "ONEXPLAYER 2 PRO ARP23P" ]; then
     echo "非 Steam Deck 设备，正在安装 Xbox 360 UEFI 驱动..."
-    if echo -e "$current_password\n" | sudo -S cp custom/UsbXbox360Dxe.efi $EFI_PATH/clover/drivers/uefi; then
+    if sudo -n cp custom/UsbXbox360Dxe.efi "$EFI_PATH/clover/drivers/uefi"; then
         echo "Xbox 360 驱动安装成功。"
     else
         echo "Xbox 360 驱动安装失败！"
-        exit
+        exit 1
     fi
 else
     echo "Steam Deck 无需安装 Xbox 360 驱动。"
 fi
 
-echo -e "$current_password\n" | sudo -S umount ~/temp-clover
-rmdir ~/temp-clover
-rm -f "Clover-${CLOVER_VERSION}-X64.iso"*
+cleanup_iso
+echo "临时文件已清理。"
 
 for entry in $CLOVER; do
-    echo -e "$current_password\n" | sudo -S efibootmgr -b $entry -B &> /dev/null
+    sudo -n efibootmgr -b "$entry" -B &> /dev/null || true
 done
 
-echo -e "$current_password\n" | sudo -S efibootmgr -c -d /dev/nvme0n1 -p 1 -L "Clover - GUI Boot Manager" -l "$CLOVER_EFI" &> /dev/null
+# 修复：原来 efibootmgr -c 硬编码 /dev/nvme0n1 -p 1。eMMC 机型是 /dev/mmcblk0，
+# SATA 机型是 /dev/sda，且 ESP 分区号不一定是 1。改用上面动态探测的 ESP_DISK/ESP_PARTN，
+# 并且把输出留出来（不再 &>/dev/null 丢弃），失败时能中止并回滚。
+if ! sudo -n efibootmgr -c -d "$ESP_DISK" -p "$ESP_PARTN" -L "Clover - GUI Boot Manager" -l "$CLOVER_EFI"; then
+    echo "❌ 创建 Clover EFI 启动项失败（磁盘 $ESP_DISK 分区 $ESP_PARTN）。安装中止。"
+    exit 1
+fi
+CLOVER=$(efibootmgr | grep -i "Clover - GUI" | colrm 9 | colrm 1 4 || true)
+if [ -z "$CLOVER" ]; then
+    echo "❌ 写入 EFI 后仍找不到 Clover 启动项，安装中止。"
+    exit 1
+fi
+echo "已创建 Clover 启动项: $CLOVER"
 
+# BOOTX64 替换：必须先备份成功再覆盖；任何一步失败立刻回滚到备份。
+if [ ! -e "$BOOTX64" ]; then
+    echo "❌ 未找到 $BOOTX64，无法备份/替换。已中止（EFI 启动项将回滚）。"
+    sudo -n efibootmgr -b "$CLOVER" -B &> /dev/null || true
+    exit 1
+fi
 if [ -e "$BOOTX64.orig" ]; then
     echo "$BOOTX64.orig 已存在，无需备份。"
 else
     echo "备份 $BOOTX64 为 $BOOTX64.orig"
-    echo -e "$current_password\n" | sudo -S cp "$BOOTX64" "$BOOTX64.orig"
-    echo -e "$current_password\n" | sudo -S cp "$EFI_PATH/clover/cloverx64.efi" "$BOOTX64"
-    echo "已替换 bootx64.efi 为 Clover EFI。"
+    if ! sudo -n cp "$BOOTX64" "$BOOTX64.orig"; then
+        echo "❌ 备份 $BOOTX64 失败，已中止，未覆盖原文件。"
+        sudo -n efibootmgr -b "$CLOVER" -B &> /dev/null || true
+        exit 1
+    fi
 fi
+if ! sudo -n cp "$EFI_PATH/clover/cloverx64.efi" "$BOOTX64"; then
+    echo "❌ 替换 bootx64.efi 为 Clover EFI 失败！正在回滚..."
+    if sudo -n cp "$BOOTX64.orig" "$BOOTX64"; then
+        echo "已回滚 BOOTX64.EFI 到原始版本。"
+    else
+        echo "⚠️ 回滚也失败了！请手动执行: sudo cp $BOOTX64.orig $BOOTX64"
+    fi
+    sudo -n efibootmgr -b "$CLOVER" -B &> /dev/null || true
+    exit 1
+fi
+echo "已替换 bootx64.efi 为 Clover EFI。"
 
 if [ -e "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig" ]; then
     if [ -e "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" ]; then
-        echo -e "$current_password\n" | sudo -S mv "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" "$EFI_PATH/Microsoft/bootmgfw.efi"
+        sudo -n mv "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" "$EFI_PATH/Microsoft/bootmgfw.efi"
         echo "已禁用 Windows EFI 直接启动。"
     else
         echo "Windows EFI 已禁用。"
     fi
 else
-    echo -e "$current_password\n" | sudo -S cp "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig"
-    echo -e "$current_password\n" | sudo -S mv "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" "$EFI_PATH/Microsoft/bootmgfw.efi"
+    sudo -n cp "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig"
+    sudo -n mv "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" "$EFI_PATH/Microsoft/bootmgfw.efi"
     echo "已禁用 Windows EFI 直接启动。"
 fi
 
-echo -e "$current_password\n" | sudo -S efibootmgr -n $CLOVER &> /dev/null
-echo -e "$current_password\n" | sudo -S efibootmgr -o $CLOVER &> /dev/null
+sudo -n efibootmgr -n "$CLOVER" || true
+sudo -n efibootmgr -o "$CLOVER" || true
 
 if efibootmgr | grep -q "Clover - GUI"; then
     echo "Clover 已成功安装到 EFI 系统分区！"
 else
     echo "哎呀，出错了，Clover 未安装成功。"
-    exit
+    exit 1
 fi
 
+# 以下属于“EFI 已经写好之后”的附加组件。失败时只警告不中止：
+# 此时 Clover 已可引导，若因工具/SYSTEMD 失败而整体报错，反而会让用户以为没装上。
 mkdir -p ~/1Clover-tools
-rm -f ~/1Clover-tools/*
-cp custom/Clover-Toolbox.sh ~/1Clover-tools
-echo -e "$current_password\n" | sudo -S cp custom/clover-bootmanager.service custom/clover-bootmanager.sh /etc/systemd/system
-cp -R custom/logos ~/1Clover-tools
-cp -R custom/efi ~/1Clover-tools
+rm -f ~/1Clover-tools/* 2>/dev/null || true
+cp custom/Clover-Toolbox.sh ~/1Clover-tools || echo "⚠️ 复制 Clover-Toolbox.sh 失败，桌面工具箱可能不可用。"
+sudo -n cp custom/clover-bootmanager.service custom/clover-bootmanager.sh /etc/systemd/system \
+    || echo "⚠️ 安装 clover-bootmanager 服务文件失败。"
+cp -R custom/logos ~/1Clover-tools 2>/dev/null || true
+cp -R custom/efi ~/1Clover-tools 2>/dev/null || true
 
-chmod +x ~/1Clover-tools/Clover-Toolbox.sh
-echo -e "$current_password\n" | sudo -S chmod +x /etc/systemd/system/clover-bootmanager.sh
+chmod +x ~/1Clover-tools/Clover-Toolbox.sh 2>/dev/null || true
+sudo -n chmod +x /etc/systemd/system/clover-bootmanager.sh 2>/dev/null || true
 
-echo -e "$current_password\n" | sudo -S systemctl daemon-reload
-echo -e "$current_password\n" | sudo -S systemctl enable --now clover-bootmanager.service
-echo -e "$current_password\n" | sudo -S /etc/systemd/system/clover-bootmanager.sh
+sudo -n systemctl daemon-reload || echo "⚠️ systemctl daemon-reload 失败。"
+sudo -n systemctl enable --now clover-bootmanager.service \
+    || echo "⚠️ 启用 clover-bootmanager.service 失败，下次开机会直接进 Clover 而不是上次系统。"
+sudo -n /etc/systemd/system/clover-bootmanager.sh \
+    || echo "⚠️ 执行 clover-bootmanager.sh 失败，BootNext 可能未设置。"
 
 if [ "$OS" = "SteamOS" ]; then
     mkdir -p ~/.local/share/kservices5/ServiceMenus
-    cp custom/open_as_root.desktop ~/.local/share/kservices5/ServiceMenus
-    echo -e "$current_password\n" | sudo -S cp custom/clover-whitelist.conf /etc/atomic-update.conf.d
+    cp custom/open_as_root.desktop ~/.local/share/kservices5/ServiceMenus 2>/dev/null || true
+    sudo -n cp custom/clover-whitelist.conf /etc/atomic-update.conf.d \
+        || echo "⚠️ 安装 clover-whitelist.conf 失败，系统更新后 Clover 配置可能被还原。"
 else
-    if ! blkid /dev/nvme0n1p1 | grep -qi esp; then
-        echo -e "$current_password\n" | sudo -S fatlabel /dev/nvme0n1p1 esp
+    if ! blkid "$ESP_DEV" 2>/dev/null | grep -qi esp; then
+        sudo -n fatlabel "$ESP_DEV" esp || true
         echo "ESP 分区标签已设置。"
     fi
-    echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\efi\\fedora\\shimx64\.efi<\/string>' $EFI_PATH/clover/config.plist
+    sudo -n sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\efi\\fedora\\shimx64\.efi<\/string>' $EFI_PATH/clover/config.plist
 fi
 
 echo "Clover 安装完成于 $OS！"
@@ -3560,10 +3966,17 @@ CLOVER_SCRIPT_EOF
     sleep 1
 
     LOG_FILE="/tmp/clover_install.log"
+    # 修复：管道后直接取 $? 拿到的是 tee 的退出码，不是 install-Clover.sh 的
+    # （实测 `false | tee x.log; echo $?` 输出 0）。这里显式取 PIPESTATUS[0]，
+    # 并临时打开 pipefail 兜底，避免将来外层 set 选项被改动后判定静默失效。
+    set -o pipefail
     ./install-Clover.sh 2>&1 | tee "$LOG_FILE"
-    INSTALL_EXIT=$?
+    INSTALL_EXIT=${PIPESTATUS[0]}
 
-    if grep -q "Not enough space on the ESP partition!" "$LOG_FILE"; then
+    # 修复：原判定 grep 的 "Not enough space on the ESP partition!" 在本脚本里
+    # 根本不存在（内层实际输出的是中文“空间不足”），属于永远不命中的死代码。
+    if grep -q "Not enough space on the ESP partition" "$LOG_FILE" \
+        || grep -q "空间不足" "$LOG_FILE"; then
         echo -e "${RED}安装失败：ESP分区空间不足，请清理后重试。${NC}"
         read -p "按回车键返回主菜单..." < /dev/tty
         return 1
@@ -3579,11 +3992,14 @@ CLOVER_SCRIPT_EOF
     if [ -f "$SHORTCUT" ]; then
         echo -e "${GREEN}桌面快捷方式“引导文件配置”已存在，无需创建。${NC}"
     else
-        cat > "$SHORTCUT" << 'EOF'
+        # 修复：原 heredoc 带引号（<< 'EOF'）不会展开变量，Exec 里写死 /home/deck，
+        # 用户名不是 deck 的机器上快捷方式直接失效。这里去掉引号让 $HOME 展开；
+        # 已确认该 heredoc 除路径外没有其它 $ 或反引号。
+        cat > "$SHORTCUT" << EOF
 [Desktop Entry]
 Type=Application
 Name=引导文件配置
-Exec=konsole -e bash -c '/home/deck/1Clover-tools/Clover-Toolbox.sh; read -p "按回车键关闭..." -n1'
+Exec=konsole -e bash -c '$HOME/1Clover-tools/Clover-Toolbox.sh; read -p "按回车键关闭..." -n1'
 Icon=kdiamond
 Terminal=false
 Categories=Utility;
@@ -3614,7 +4030,7 @@ else
 fi
 
 current_password=$(zenity --password --title "sudo 密码验证")
-echo -e "$current_password\n" | sudo -S ls &> /dev/null
+printf '%s\n' "$current_password" | sudo -S ls &> /dev/null
 if [ $? -ne 0 ]
 then
 	echo "sudo 密码错误！" | \
@@ -3665,13 +4081,13 @@ Batocera_Choice=$(zenity --width 550 --height 220 --list --radiolist --multiple 
 
 	elif [ "$Batocera_Choice" == "v39" ]
 	then
-		echo -e "$current_password\n" | sudo -S sed -i '/<string>os_batocera<\/string>/!b;n;n;c\\t\t\t\t\t<string>\\efi\\batocera\\grubx64\.efi<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<string>os_batocera<\/string>/!b;n;n;c\\t\t\t\t\t<string>\\efi\\batocera\\grubx64\.efi<\/string>' $EFI_PATH/clover/config.plist
 
 		zenity --warning --title "Clover 工具箱" --text "已为 Batocera v39 及更新版本更新 Clover 配置！" --width 450 --height 75
 
 	elif [ "$Batocera_Choice" == "v38" ]
 	then
-		echo -e "$current_password\n" | sudo -S sed -i '/<string>os_batocera<\/string>/!b;n;n;c\\t\t\t\t\t<string>\\efi\\boot\\bootx64\.efi<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<string>os_batocera<\/string>/!b;n;n;c\\t\t\t\t\t<string>\\efi\\boot\\bootx64\.efi<\/string>' $EFI_PATH/clover/config.plist
 
 		zenity --warning --title "Clover 工具箱" --text "已为 Batocera v38 及更旧版本更新 Clover 配置！" --width 450 --height 75
 
@@ -3680,13 +4096,13 @@ Batocera_Choice=$(zenity --width 550 --height 220 --list --radiolist --multiple 
 elif [ "$Choice" == "主题" ]
 then
 Theme_Choice=$(zenity --title "Clover 工具箱"	--width 200 --height 325 --list \
-	--column "主题名称" $(echo -e "$current_password\n" | sudo -S ls $EFI_PATH/clover/themes) )
+	--column "主题名称" $(printf '%s\n' "$current_password" | sudo -S ls $EFI_PATH/clover/themes) )
 
 	if [ $? -eq 1 ]
 	then
 		echo "用户按了取消。返回主菜单。"
 	else
-		echo -e "$current_password\n" | sudo -S sed -i '/<key>Theme<\/key>/!b;n;c\\t\t<string>'$Theme_Choice'<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>Theme<\/key>/!b;n;c\\t\t<string>'$Theme_Choice'<\/string>' $EFI_PATH/clover/config.plist
 		zenity --warning --title "Clover 工具箱" --text "主题已更改为 $Theme_Choice！" --width 400 --height 75
 	fi
 
@@ -3705,7 +4121,7 @@ Timeout_Choice=$(zenity --width 500 --height 300 --list --radiolist --multiple \
 	then
 		echo "用户按了取消。返回主菜单。"
 	else
-		echo -e "$current_password\n" | sudo -S sed -i '/<key>Timeout<\/key>/!b;n;c\\t\t<integer>'$Timeout_Choice'<\/integer>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>Timeout<\/key>/!b;n;c\\t\t<integer>'$Timeout_Choice'<\/integer>' $EFI_PATH/clover/config.plist
 		zenity --warning --title "Clover 工具箱" --text "默认超时时间已设置为 $Timeout_Choice 秒！" --width 400 --height 75
 	fi
 
@@ -3723,18 +4139,18 @@ Service_Choice=$(zenity --width 650 --height 250 --list --radiolist --multiple -
 
 	elif [ "$Service_Choice" == "禁用" ]
 	then
-		echo -e "$current_password\n" | sudo -S cp $EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig $EFI_PATH/Microsoft/Boot/bootmgfw.efi
+		printf '%s\n' "$current_password" | sudo -S cp $EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig $EFI_PATH/Microsoft/Boot/bootmgfw.efi
 
 		Windows=$(efibootmgr | grep -i Windows | colrm 9 | colrm 1 4)
-		echo -e "$current_password\n" | sudo -S efibootmgr -n $Windows &> /dev/null
+		printf '%s\n' "$current_password" | sudo -S efibootmgr -n $Windows &> /dev/null
 
-		echo -e "$current_password\n" | sudo -S systemctl disable --now clover-bootmanager
+		printf '%s\n' "$current_password" | sudo -S systemctl disable --now clover-bootmanager
 		zenity --warning --title "Clover 工具箱" --text "Clover systemd 服务已禁用。Windows 现已激活！" --width 500 --height 75
 
 	elif [ "$Service_Choice" == "启用" ]
 	then
 		sudo systemctl enable --now clover-bootmanager
-		echo -e "$current_password\n" | sudo -S /etc/systemd/system/clover-bootmanager.sh
+		printf '%s\n' "$current_password" | sudo -S /etc/systemd/system/clover-bootmanager.sh
 		zenity --warning --title "Clover 工具箱" --text "Clover systemd 服务已启用。Windows 已禁用！" --width 500 --height 75
 	fi
 
@@ -3754,26 +4170,26 @@ Boot_Choice=$(zenity --width 550 --height 300 --list --radiolist --multiple --ti
 
 	elif [ "$Boot_Choice" == "Windows" ]
 	then
-		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\efi\\microsoft\\bootmgfw\.efi<\/string>' $EFI_PATH/clover/config.plist
-		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>esp<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\efi\\microsoft\\bootmgfw\.efi<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>esp<\/string>' $EFI_PATH/clover/config.plist
 
 		zenity --warning --title "Clover 工具箱" --text "Windows 现在是 Clover 中的默认启动项！" --width 400 --height 75
 
 	elif [ "$Boot_Choice" == "SteamOS" ]
 	then
-		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\efi\\steamos\\steamcl\.efi<\/string>' $EFI_PATH/clover/config.plist
-		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>esp<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\efi\\steamos\\steamcl\.efi<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>esp<\/string>' $EFI_PATH/clover/config.plist
 		zenity --warning --title "Clover 工具箱" --text "SteamOS 现在是 Clover 中的默认启动项！" --width 400 --height 75
 
 	elif [ "$Boot_Choice" == "Bazzite" ]
 	then
-		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\EFI\\FEDORA\\shimx64\.efi<\/string>' $EFI_PATH/clover/config.plist
-		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>esp<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\EFI\\FEDORA\\shimx64\.efi<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>esp<\/string>' $EFI_PATH/clover/config.plist
 		zenity --warning --title "Clover 工具箱" --text "Bazzite 现在是 Clover 中的默认启动项！" --width 400 --height 75
 
 	elif [ "$Boot_Choice" == "上次系统" ]
 	then
-		echo -e "$current_password\n" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>LastBootedVolume<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>LastBootedVolume<\/string>' $EFI_PATH/clover/config.plist
 		zenity --warning --title "Clover 工具箱" --text "上一次使用的系统现在是 Clover 中的默认启动项！" --width 425 --height 75
 	fi
 
@@ -3785,13 +4201,13 @@ Logo_Choice=$(zenity --title "Clover 工具箱" --width 200 --height 350 --list 
 	then
 		echo "用户按了取消。返回主菜单。"
 	else
-		echo -e "$current_password\n" | sudo -S cp ~/1Clover-tools/logos/$Logo_Choice $EFI_PATH/steamos/steamos.png
+		printf '%s\n' "$current_password" | sudo -S cp ~/1Clover-tools/logos/$Logo_Choice $EFI_PATH/steamos/steamos.png
 		zenity --warning --title "Clover 工具箱" --text "BGRT 标志已更改为 $Logo_Choice！" --width 400 --height 75
 	fi
 
 elif [ "$Choice" == "恢复Logo" ]
 then
-	echo -e "$current_password\n" | sudo -S rm $EFI_PATH/steamos/steamos.png &> /dev/null
+	printf '%s\n' "$current_password" | sudo -S rm $EFI_PATH/steamos/steamos.png &> /dev/null
 	zenity --warning --title "Clover 工具箱" --text "BGRT 标志已恢复为默认！" --width 400 --height 75
 
 elif [ "$Choice" == "分辨率" ]
@@ -3809,57 +4225,88 @@ Resolution_Choice=$(zenity --width 550 --height 250 --list --radiolist --multipl
 
 	elif [ "$Resolution_Choice" == "默认" ]
 	then
-		echo -e "$current_password\n" | sudo -S sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1280x800<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1280x800<\/string>' $EFI_PATH/clover/config.plist
 		zenity --warning --title "Clover 工具箱" --text "屏幕分辨率已设置为 1280x800。" --width 400 --height 75
 
 	elif [ "$Resolution_Choice" == "DeckHD" ]
 	then
-		echo -e "$current_password\n" | sudo -S sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1200<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1200<\/string>' $EFI_PATH/clover/config.plist
 		zenity --warning --title "Clover 工具箱" --text "屏幕分辨率已设置为 1920x1200。" --width 400 --height 75
 
 	elif [ "$Resolution_Choice" == "DeckSight" ]
 	then
-		echo -e "$current_password\n" | sudo -S sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1080<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1080<\/string>' $EFI_PATH/clover/config.plist
 		zenity --warning --title "Clover 工具箱" --text "屏幕分辨率已设置为 1920x1080。" --width 400 --height 75
 
 	fi
 
 elif [ "$Choice" == "自定义" ]
 then
-	echo -e "$current_password\n" | sudo -S cp ~/1Clover-tools/efi/custom_clover_5157.efi $EFI_PATH/clover/cloverx64.efi
+	printf '%s\n' "$current_password" | sudo -S cp ~/1Clover-tools/efi/custom_clover_5157.efi $EFI_PATH/clover/cloverx64.efi
 	zenity --warning --title "Clover 工具箱" --text "自定义 Clover EFI 已安装！" --width 400 --height 75
 
 elif [ "$Choice" == "卸载" ]
 then
-	echo -e "$current_password\n" | sudo -S mv $EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig $EFI_PATH/Microsoft/Boot/bootmgfw.efi
-	if [ $? -eq 0 ]
-	then
-		echo -e "$current_password\n" | sudo -S rm $EFI_PATH/Microsoft/bootmgfw.efi
-	else
-		echo -e "$current_password\n" | sudo -S mv $EFI_PATH/Microsoft/bootmgfw.efi $EFI_PATH/Microsoft/Boot/bootmgfw.efi
+	# 修复：卸载前先确认要恢复的文件都存在。原来 .orig 不存在时 mv 失败后
+	# 不做任何检查就继续 rm -rf $EFI_PATH/clover，会留下“Clover 文件删了、
+	# Windows/BOOTX64 又没恢复”的半卸载状态，可能直接无法开机。
+	UNINSTALL_OK=1
+	if [ ! -e "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig" ] \
+		&& [ -e "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" ]; then
+		echo "⚠️ 未找到 bootmgfw.efi.orig，跳过 Windows EFI 恢复（保持现状）。"
+	elif [ -e "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig" ]; then
+		if ! sudo -n mv -f "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig" "$EFI_PATH/Microsoft/Boot/bootmgfw.efi"; then
+			echo "❌ 恢复 Windows bootmgfw.efi 失败，卸载中止，未做其它修改。"
+			UNINSTALL_OK=0
+		fi
 	fi
-	echo -e "$current_password\n" | sudo -S mv $BOOTX64.orig $BOOTX64
+	if [ "$UNINSTALL_OK" -eq 1 ] && [ ! -e "$BOOTX64.orig" ]; then
+		echo "⚠️ 未找到 $BOOTX64.orig，跳过 BOOTX64.EFI 恢复（保持现状）。"
+	elif [ "$UNINSTALL_OK" -eq 1 ]; then
+		if ! sudo -n mv -f "$BOOTX64.orig" "$BOOTX64"; then
+			echo "❌ 恢复 BOOTX64.EFI 失败，卸载中止，未做其它修改。"
+			UNINSTALL_OK=0
+		fi
+	fi
+	if [ "$UNINSTALL_OK" -ne 1 ]; then
+		zenity --error --title "Clover 工具箱" --text "卸载中止：关键引导文件恢复失败。\n请手动检查 EFI 分区后再试。" --width 500 --height 100
+		exit 1
+	fi
 
-	echo -e "$current_password\n" | sudo -S rm -rf $EFI_PATH/clover
+	printf '%s\n' "$current_password" | sudo -S rm -rf $EFI_PATH/clover
 
 	for entry in $(efibootmgr | grep "Clover - GUI" | colrm 9 | colrm 1 4)
 	do
-		echo -e "$current_password\n" | sudo -S efibootmgr -b $entry -B &> /dev/null
+		printf '%s\n' "$current_password" | sudo -S efibootmgr -b $entry -B &> /dev/null
 	done
 
-	echo -e "$current_password\n" | sudo -S rm $EFI_PATH/steamos/steamos.png &> /dev/null
+	printf '%s\n' "$current_password" | sudo -S rm $EFI_PATH/steamos/steamos.png &> /dev/null
 
-	echo -e "$current_password\n" | sudo -S steamos-readonly disable
+	# 修复：原逻辑 disable 后若中间任一步失败退出，系统会一直停在可写状态。
+	# 这里用 EXIT trap 保证无论怎么退出都恢复只读。
+	TB_RO_DISABLED=0
+	tb_restore_readonly() {
+		if [ "${TB_RO_DISABLED:-0}" -eq 1 ]; then
+			printf '%s\n' "$current_password" | sudo -S steamos-readonly enable 2>/dev/null \
+				&& echo "已恢复只读模式。" \
+				|| echo "⚠️ 无法恢复只读模式，请手动执行: sudo steamos-readonly enable"
+		fi
+	}
+	trap tb_restore_readonly EXIT
+	if printf '%s\n' "$current_password" | sudo -S steamos-readonly disable; then
+		TB_RO_DISABLED=1
+	fi
 
-	echo -e "$current_password\n" | sudo -S systemctl stop clover-bootmanager.service
-	echo -e "$current_password\n" | sudo -S rm /etc/systemd/system/clover-bootmanager*
-	echo -e "$current_password\n" | sudo -S systemctl daemon-reload
+	printf '%s\n' "$current_password" | sudo -S systemctl stop clover-bootmanager.service
+	printf '%s\n' "$current_password" | sudo -S rm -f /etc/systemd/system/clover-bootmanager*
+	printf '%s\n' "$current_password" | sudo -S systemctl daemon-reload
 
-	echo -e "$current_password\n" | sudo -S rm -f /etc/atomic-update.conf.d/clover-whitelist.conf
+	printf '%s\n' "$current_password" | sudo -S rm -f /etc/atomic-update.conf.d/clover-whitelist.conf
 
-	echo -e "$current_password\n" | sudo -S steamos-readonly enable
+	printf '%s\n' "$current_password" | sudo -S steamos-readonly enable
+	TB_RO_DISABLED=0
 
-	rm ~/.local/share/kservices5/ServiceMenus/open_as_root.desktop
+	rm -f ~/.local/share/kservices5/ServiceMenus/open_as_root.desktop
 
 	rm -rf ~/SteamDeck-Clover-dualboot
 	rm -rf ~/1Clover-tools/
@@ -3937,29 +4384,45 @@ install_anydesk() {
     cd /tmp || return
 
     local URL="https://download.anydesk.com/linux/anydesk-${TARGET_VERSION}-amd64.tar.gz"
+    local TARBALL="/tmp/anydesk-${TARGET_VERSION}.tar.gz"
+    local EXTRACT_DIR="/tmp/anydesk-extract.$$"
     echo "下载中..."
 
-    if [ -d "$ANYDESK_INSTALL_DIR" ]; then
-        rm -rf "$ANYDESK_INSTALL_DIR"
-    fi
-    mkdir -p "$ANYDESK_INSTALL_DIR"
-
-    wget -q --show-progress "$URL" -O anydesk.tar.gz || {
+    # 先把包下载并解压到临时目录，全部成功后再替换旧安装。
+    # 原逻辑是先 rm -rf 旧目录再下载，网络一失败用户的可用 AnyDesk 就没了。
+    rm -f "$TARBALL"
+    if ! wget -q --show-progress "$URL" -O "$TARBALL"; then
         echo -e "${RED}下载失败，请检查网络后重试。${NC}"
-        return 1
-    }
-
-    if ! tar -xzf anydesk.tar.gz -C "$ANYDESK_INSTALL_DIR" --strip-components=1; then
-        echo -e "${RED}✗ 解压失败，安装中止。${NC}"
-        rm -rf "$ANYDESK_INSTALL_DIR"
-        rm -f anydesk.tar.gz
+        echo -e "${YELLOW}已保留原有的 AnyDesk 安装（如有）。${NC}"
+        rm -f "$TARBALL"
         return 1
     fi
+    rm -rf "$EXTRACT_DIR"; mkdir -p "$EXTRACT_DIR"
+    if ! tar -xzf "$TARBALL" -C "$EXTRACT_DIR" --strip-components=1; then
+        echo -e "${RED}✗ 解压失败，安装中止。${NC}"
+        rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+        echo -e "${YELLOW}已保留原有的 AnyDesk 安装（如有）。${NC}"
+        return 1
+    fi
+    if [ ! -x "$EXTRACT_DIR/anydesk" ]; then
+        echo -e "${RED}✗ 安装包内容不完整（未找到 anydesk 可执行文件），安装中止。${NC}"
+        rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+        echo -e "${YELLOW}已保留原有的 AnyDesk 安装（如有）。${NC}"
+        return 1
+    fi
+
+    rm -rf "$ANYDESK_INSTALL_DIR"
+    mkdir -p "$ANYDESK_INSTALL_DIR"
+    if ! cp -a "$EXTRACT_DIR"/. "$ANYDESK_INSTALL_DIR"/; then
+        echo -e "${RED}✗ 安装文件复制失败。${NC}"
+        rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+        return 1
+    fi
+    rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
     chmod +x "$ANYDESK_BIN" 2>/dev/null
     if [ ! -x "$ANYDESK_BIN" ]; then
         echo -e "${RED}✗ 安装文件不完整（未找到可执行文件）。${NC}"
         rm -rf "$ANYDESK_INSTALL_DIR"
-        rm -f anydesk.tar.gz
         return 1
     fi
     mkdir -p "$HOME/.local/bin"
@@ -3974,7 +4437,6 @@ Type=Application
 Categories=Network;RemoteAccess;
 EOF
     chmod +x "$DESKTOP_FILE"
-    rm -f anydesk.tar.gz
 
     echo ""
     echo -e "${GREEN}✅ AnyDesk ${TARGET_VERSION} 安装完成！桌面快捷方式已创建。${NC}"
@@ -4062,11 +4524,75 @@ uninstall_anydesk() {
 install_todesk() {
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 安装ToDesk ════════════════${NC}"
-    sudo steamos-readonly disable
-    if curl -L todesk.lanbai.top | sh; then
-        echo -e "${GREEN}✓ ToDesk安装脚本已执行${NC}"
+    echo ""
+    echo -e "${YELLOW}⚠️  重要提示${NC}"
+    echo "  官方未提供可直接安装的 ToDesk 包，现有方案依赖第三方维护的安装脚本"
+    echo "  （todesk.lanbai.top → gitee.com/mclanbai/archtodesk）。"
+    echo "  该第三方脚本会执行以下系统级改动："
+    echo "    · sudo steamos-readonly disable  （解除 SteamOS 只读保护）"
+    echo "    · sudo pacman-key --init / --populate  （重建 pacman 钥匙环）"
+    echo "    · sudo pacman -S base-devel --noconfirm  （安装整个编译工具链，体积大）"
+    echo "    · 卸载并重装 todesk / todesk-bin 包"
+    echo "  另外该脚本内部把用户名硬编码为 /home/deck，非 deck 用户名的设备会出错。"
+    echo ""
+    echo -e "${CYAN}本工具不再自动执行该第三方脚本。${NC}"
+    echo "  请二选一："
+    echo "    A. 手动安装：先自行审阅脚本内容，再执行"
+    echo "       curl -L todesk.lanbai.top | less     # 先看内容"
+    echo "    B. 打开终端手动运行安装（执行前请确认已了解上述改动）"
+    echo ""
+
+    local ans
+    if ! read -p "输入 y 在终端中打开第三方脚本（需自行确认风险），其他键取消: " -n 1 -r ans < /dev/tty; then
+        echo ""
+        echo "操作已取消。"
+        return 0
+    fi
+    echo ""
+    if [[ ! "$ans" =~ ^[Yy]$ ]]; then
+        echo "操作已取消。"
+        return 0
+    fi
+
+    # 用户明确确认后：先把脚本下载到本地供查看，再在可见的情况下执行
+    local script_path="/tmp/steamdeck_toolbox_todesk_install.sh"
+    if ! curl -fL --connect-timeout 20 --max-time 60 -o "$script_path" todesk.lanbai.top; then
+        echo -e "${RED}✗ 下载安装脚本失败，请检查网络后重试。${NC}"
+        rm -f "$script_path"
+        return 1
+    fi
+    if [ ! -s "$script_path" ]; then
+        echo -e "${RED}✗ 下载内容为空，已中止。${NC}"
+        rm -f "$script_path"
+        return 1
+    fi
+    if ! bash -n "$script_path" 2>/dev/null; then
+        echo -e "${RED}✗ 下载的脚本存在语法错误，已中止执行。${NC}"
+        echo -e "${YELLOW}  脚本已保留在 $script_path 供检查。${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}脚本已下载到 $script_path，内容如下（请确认无误后继续）：${NC}"
+    echo "----------------------------------------"
+    sed -n '1,80p' "$script_path"
+    echo "----------------------------------------"
+    local go
+    if ! read -p "按回车键或 A 键执行该脚本，其他键取消: " -n 1 -r go < /dev/tty; then
+        echo ""
+        echo "操作已取消（脚本保留在 $script_path）。"
+        return 0
+    fi
+    echo ""
+    if [[ ! "$go" =~ ^[Aa]$ && -n "$go" ]]; then
+        echo "操作已取消（脚本保留在 $script_path）。"
+        return 0
+    fi
+
+    if bash "$script_path"; then
+        echo -e "${GREEN}✓ ToDesk 安装脚本已执行完成${NC}"
     else
-        echo -e "${RED}✗ ToDesk 安装脚本执行失败，请检查网络后重试。${NC}"
+        echo -e "${RED}✗ ToDesk 安装脚本执行失败，请检查上方输出。${NC}"
+        echo -e "${YELLOW}  脚本位置: $script_path${NC}"
         return 1
     fi
 }
@@ -4204,9 +4730,13 @@ uninstall_other_flatpak_apps() {
         local app_id="$1"
         local desktop_dir="$HOME/Desktop"
         [ -d "$desktop_dir" ] || return
+        local id_us="${app_id//./_}"
         for f in "$desktop_dir"/*.desktop; do
+            [ -e "$f" ] || continue
             local base=$(basename "$f")
-            if [ "$base" = "${app_id}.desktop" ] || [[ "$base" == *"${app_id//./_}"* ]]; then
+            # 只匹配文件名恰好等于应用 ID 的快捷方式（点/下划线两种写法），
+            # 不做子串匹配，避免误删无关 .desktop
+            if [ "$base" = "${app_id}.desktop" ] || [ "$base" = "${id_us}.desktop" ]; then
                 rm -f "$f" 2>/dev/null && echo "已删除桌面快捷方式 $base"
             fi
         done
@@ -4397,7 +4927,7 @@ install_yellow_duck_software() {
         return
     fi
 
-    sudo chown -R deck:deck "$HOME/.local/share/Steam/steamapps/common/Lossless Scaling"
+    sudo chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "$HOME/.local/share/Steam/steamapps/common/Lossless Scaling"
     rm -rf "$DOWNLOAD_DIR"
     echo -e "${GREEN}✅ 小黄鸭软件安装完成！${NC}"
 }
@@ -5575,13 +6105,20 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
             walk(items)
 
     def detect_system_type(self):
+        """探测当前是否为「SteamOS + Windows」双系统。
+
+        注意：不能把存在的 Clover 启动项当作双系统依据 —— Clover 是工具箱自己
+        装上去的，单系统 Steam Deck 装了 Clover 之后也会命中，结果会误显示「双系统」，
+        进而把「修复引导 / 修复互通盘」这类危险功能暴露出来。
+        真正的判据是：EFI 启动项里出现 Windows。
+        """
         if not shutil.which("efibootmgr"):
             return "单系统"
         for cmd in (["sudo", "-n", "efibootmgr"], ["efibootmgr"]):
             try:
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
                 if result.returncode == 0:
-                    if re.search(r'(?i)windows', result.stdout) or re.search(r'(?i)clover', result.stdout):
+                    if re.search(r'(?i)windows', result.stdout):
                         return "双系统"
                     return "单系统"
             except Exception:
@@ -5667,7 +6204,12 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
             dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
                                     type=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.YES_NO,
                                     text=f"危险操作确认：{func_name}")
-            dlg.format_secondary_text("该功能会修改系统引导、挂载或系统文件，请确认已了解风险。")
+            dlg.format_secondary_text(DANGEROUS_HINTS.get(func_key, DEFAULT_DANGEROUS_HINT))
+            # 危险操作默认焦点放在「否」上，避免误按回车直接执行
+            try:
+                dlg.set_default_response(Gtk.ResponseType.NO)
+            except Exception:
+                pass
             response = dlg.run()
             dlg.destroy()
             if response != Gtk.ResponseType.YES:
@@ -5686,7 +6228,30 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-19（v1.7.3）
+        changelog_content = """2026-10-19（v1.7.4）
+【问题修复】
+- 修复「一键应用 CryoByte33 推荐方案」重复执行会在 /etc/fstab 写入重复 swap 条目的问题（sed 分隔符转义错误导致删除失败）
+- 修复退出时无条件把 SteamOS 只读模式改回 enabled：现在只有脚本自己解除过只读才会恢复，不再覆盖用户手动设置的可写状态
+- 修复「调整虚拟内存」替换正在使用的 swapfile 前未先 swapoff（可能导致 device busy 或在内存紧张时 OOM），改为先停用并校验
+- 修复「调整虚拟内存」显示 / 剩余空间、实际预检 /home 的不一致；fstab 判断改为按第一字段精确匹配（不再误判注释行与 swapfile2）
+- 修复「配置ZRAM」设置无法持久化：现写入 /etc/systemd/zram-generator.conf，重启后仍生效，并修正原代码误删该配置的问题
+- 修复「清理虚拟内存配置」在未启用 ZRAM 时误报"ZRAM 重置失败"，且 fstab 改用精确匹配删除
+- 修复「清理hosts缓存」在只读模式下静默失败却仍提示成功，改为先确保可写、失败即中止并给出回滚方法
+- 修复「Steam缓存管理」只扫描默认库（SD 卡/第二块盘的库看不到）、游戏名含分隔符会解析错位、删除前缺少明细确认
+- 修复「安装/重装 Clover」缺少危险操作二次确认；并改为动态探测 ESP 分区（原硬编码 /dev/nvme0n1p1，eMMC/SATA 机型会失败）
+- 修复 Clover 安装中途失败会在 EFI 分区留下半套文件：备份/替换 BOOTX64.EFI 失败现在会中止并回滚，安装脚本失败即停
+- 修复 Clover 安装脚本用 echo -e 传递含反斜杠的 sudo 密码会被截断导致认证失败，改用 printf 原样传递
+- 修复 Clover 相关脚本退出时可能把系统停在可写状态，以及 ISO/7z 临时文件残留
+- 修复自更新先截断自身再写入、中途失败会导致程序损坏：改为写临时文件后原子替换，并增加语法校验
+- 修复版本比较把 1.7 与 1.7.0 判为不同版本，可能反复提示更新
+- 修复「安装/卸载插件」结果只看命令返回值，现在以目录实际状态为准，避免假成功
+- 修复非 deck 用户名的设备上安装插件/小黄鸭后文件属主被改成 deck 的问题
+- 修复「安装ToDesk」直接执行第三方远程脚本：现改为下载到本地、展示内容、语法校验后再询问是否执行，并明确列出该脚本对系统的改动
+- 修复检测系统类型时把 Clover 启动项当成双系统依据（单系统装了 Clover 会误显示"双系统"并暴露危险功能），改为仅以 Windows 启动项判断
+- 修复「安装/更新 GE-Proton」解压中断会在 compatibilitytools.d 留下残缺版本，改为先解压到临时目录校验后再移入
+- 危险操作确认框默认焦点改为「否」，避免误按回车直接执行
+
+2026-10-19（v1.7.3）
 【问题修复】
 - 修复浅色模式下危险操作确认窗口文字看不清：原生对话框底色是浅色而文字仍沿用深色主题配色，出现"白底浅字"；现为对话框显式指定底色与文字色，标题、正文、按钮均随主题正确切换
 - 修复浅色模式下下拉菜单、右键菜单、工具提示等原生浮层的文字配色不随主题变化的问题
@@ -5799,11 +6364,30 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.run_function(func_name, func_key)
 
     def _run_standalone_script(self, func_key):
+        # 这类功能用 zenity 弹窗交互，输出不进入内嵌终端。
+        # 如果系统没有 zenity，脚本只会把错误打到日志里，用户完全看不到任何反馈，
+        # 所以这里先检查，缺了就直接用对话框明确告知。
+        if not shutil.which("zenity"):
+            dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
+                                    type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK,
+                                    text="缺少 zenity 组件，无法运行该功能")
+            dlg.format_secondary_text(
+                "该功能依赖 zenity 提供图形化选择界面。\n"
+                "请先安装后重试：sudo pacman -S zenity")
+            dlg.run(); dlg.destroy()
+            return
         tmp_path = create_temp_script()
         log_path = "/tmp/steamdeck_toolbox_standalone.log"
-        with open(log_path, 'w', encoding='utf-8') as log_f:
-            subprocess.Popen([tmp_path, func_key], stdout=log_f, stderr=subprocess.STDOUT,
-                             stdin=subprocess.DEVNULL, start_new_session=True)
+        try:
+            with open(log_path, 'w', encoding='utf-8') as log_f:
+                subprocess.Popen([tmp_path, func_key], stdout=log_f, stderr=subprocess.STDOUT,
+                                 stdin=subprocess.DEVNULL, start_new_session=True)
+        except Exception as e:
+            dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
+                                    type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK,
+                                    text="启动任务失败")
+            dlg.format_secondary_text(f"{e}")
+            dlg.run(); dlg.destroy()
 
     def run_external_terminal(self, func_key):
         tmp_path = create_temp_script()
@@ -5909,6 +6493,7 @@ def get_remote_version():
 
 def _perform_update_in_dialog(dialog, remote_version):
     def do_download():
+        tmp_path = None
         try:
             req = urllib.request.Request(REPO_RAW_URL, headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'})
             with urllib.request.urlopen(req, timeout=30) as response:
@@ -5916,15 +6501,29 @@ def _perform_update_in_dialog(dialog, remote_version):
             if ('BASH_SCRIPT = ' not in new_content or 'VERSION = ' not in new_content
                     or len(new_content) < 50000):
                 raise ValueError('下载内容校验失败（不是有效的脚本文件），已中止更新')
+            # 再校验一次语法：远程文件若被人改坏，写进去就是个打不开的程序
+            compile(new_content, '<remote>', 'exec')
             current_path = os.path.abspath(sys.argv[0])
             backup_path = current_path + ".bak"
             try: shutil.copy2(current_path, backup_path)
             except: pass
-            with open(current_path, 'w', encoding='utf-8') as f: f.write(new_content)
-            os.chmod(current_path, 0o755)
+            # 先写临时文件再原子替换：直接以 'w' 打开自身会先把原文件截断，
+            # 一旦写入过程中出错/断电，用户的工具箱就彻底损坏且无法启动。
+            tmp_path = current_path + ".new"
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+                f.flush()
+                os.fsync(f.fileno())
+            os.chmod(tmp_path, 0o755)
+            os.replace(tmp_path, current_path)
+            tmp_path = None
             GLib.idle_add(_update_dialog_success, dialog, remote_version)
         except Exception as e:
             GLib.idle_add(_update_dialog_error, dialog, str(e))
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try: os.unlink(tmp_path)
+                except Exception: pass
     threading.Thread(target=do_download, daemon=True).start()
 
 def _update_dialog_success(dialog, remote_version):
