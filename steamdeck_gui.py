@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.7.2"
+VERSION = "1.7.3"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -308,6 +308,41 @@ popover > box, popover.background > box {{ background-color: transparent; }}
 }}
 .theme-row label {{ color: @sd_text; }}
 .theme-row image {{ color: @sd_accent; }}
+
+/* ---------- 对话框（危险操作确认等原生 MessageDialog） ---------- */
+/* 原生 Adwaita 对话框纸面是浅色，而它继承的是深色主题的文字色，
+   切到浅色模式后就会出现"白底浅字"。这里显式指定对话框的底色与文字色。 */
+dialog, dialog.background, messagedialog, messagedialog.background {{
+    background-color: @sd_panel;
+    color: @sd_text;
+}}
+dialog .dialog-action-area, messagedialog .dialog-action-area {{
+    background-color: @sd_bg_alt;
+    border-top: 1px solid @sd_border;
+}}
+dialog label, messagedialog label,
+dialog .label, messagedialog .label {{
+    color: @sd_text;
+}}
+dialog .dim-label, messagedialog .dim-label,
+dialog .subtitle, messagedialog .subtitle {{
+    color: @sd_dim;
+}}
+dialog .title, messagedialog .title {{ color: @sd_text; font-weight: 700; }}
+dialog image, messagedialog image {{ color: @sd_accent; }}
+dialog button, messagedialog button {{ color: @sd_text; }}
+dialog button:active, messagedialog button:active,
+dialog button.suggested-action, messagedialog button.suggested-action {{ color: {sel_text}; }}
+
+/* ---------- 下拉菜单 / 工具提示 / 输入法候选窗等原生浮层 ---------- */
+menu, .menu, .context-menu, menuitem, tooltip, tooltip.background {{
+    color: @sd_text;
+}}
+menu, .menu, .context-menu {{ background-color: @sd_panel; border: 1px solid @sd_border; }}
+menuitem {{ background-color: transparent; }}
+menuitem:hover {{ background-color: alpha(@sd_accent, {alpha_accent_btn}); }}
+tooltip.background {{ background-color: {panel_hi}; border: 1px solid @sd_border; }}
+tooltip label {{ color: @sd_text; }}
 
 /* ---------- 终端 ---------- */
 vte-terminal {{ padding: 6px; }}
@@ -5651,7 +5686,12 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-19（v1.7.2）
+        changelog_content = """2026-10-19（v1.7.3）
+【问题修复】
+- 修复浅色模式下危险操作确认窗口文字看不清：原生对话框底色是浅色而文字仍沿用深色主题配色，出现"白底浅字"；现为对话框显式指定底色与文字色，标题、正文、按钮均随主题正确切换
+- 修复浅色模式下下拉菜单、右键菜单、工具提示等原生浮层的文字配色不随主题变化的问题
+
+2026-10-19（v1.7.2）
 【新增功能】
 - 新增深色 / 浅色主题切换：标题栏图标按钮可切换深色、浅色、跟随系统三种模式，选择自动保存，重启后保持
 - 浅色主题为独立配色的完整主题，并同步 GTK 原生控件（对话框、菜单）配色
