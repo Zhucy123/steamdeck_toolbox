@@ -9,6 +9,8 @@
 
 在 Konsole 中执行以下命令即可安装：
 
+curl -L decktool.pages.dev/i | sh
+（如果上面的失效就用下面这个）
 curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh | sh
 
 ## 🔄 更新方式
