@@ -121,6 +121,35 @@ APP_CSS_TEMPLATE = """
 window {{ background-color: @sd_bg; color: @sd_text; }}
 .background {{ background-color: @sd_bg; }}
 
+/* ---------- 客户端装饰（CSD）与圆角 ----------
+   系统为浅色主题时，GTK 会用系统主题绘制窗口外框，
+   深色模式下表现为标题栏上方一条白边。这里用应用背景色绘制。 */
+decoration {{
+    background-color: @sd_bg;
+    border-radius: 12px;
+    box-shadow: 0 0 0 1px @sd_border, 0 8px 24px {shadow};
+}}
+decoration:backdrop {{
+    background-color: @sd_bg;
+    box-shadow: 0 0 0 1px @sd_border, 0 4px 12px {shadow};
+}}
+/* 四角都圆润：窗口本身透明，让 decoration 的圆角透出来，
+   否则方形背景会把下方两角裁成直角。 */
+window.csd, window.csd:backdrop {{
+    background-color: transparent;
+    border-radius: 12px;
+}}
+window.csd > .titlebar, window.csd > headerbar, .titlebar {{
+    background-color: @sd_bg;
+    border: none;
+    box-shadow: none;
+    border-radius: 12px 12px 0 0;
+}}
+window.csd > box, window.csd > .background {{
+    border-radius: 0 0 12px 12px;
+    background-color: transparent;
+}}
+
 /* ---------- 顶部标题栏 ---------- */
 headerbar {{
     min-height: 46px;
@@ -234,6 +263,8 @@ treeview button {{
     background-image: linear-gradient(to bottom, {bottom_top}, {bottom_bottom});
     border-top: 1px solid @sd_border;
     padding: 6px 10px;
+    /* 与窗口圆角一致，否则这条不透明底栏会盖住下方两角，使其变成直角 */
+    border-radius: 0 0 12px 12px;
 }}
 #status-label {{ font-size: 11px; color: @sd_dim; }}
 #task-timer {{ font-size: 11px; font-weight: bold; color: @sd_accent; }}
@@ -314,6 +345,34 @@ popover > box, popover.background > box {{ background-color: transparent; }}
    切到浅色模式后就会出现"白底浅字"。这里显式指定对话框的底色与文字色。 */
 dialog, dialog.background, messagedialog, messagedialog.background {{
     background-color: @sd_panel;
+    color: @sd_text;
+}}
+/* 对话框的 CSD 标题栏：由 gtk-dialogs-use-header 自动创建（.titlebar 是一个 Box）。
+   不刷成深色的话，浅色系统主题下会显示为一条白边。 */
+dialog .titlebar, messagedialog .titlebar,
+dialog box.titlebar, messagedialog box.titlebar {{
+    background-image: none;
+    background-color: @sd_bg_alt;
+    border-bottom: 1px solid @sd_border;
+    color: @sd_text;
+    box-shadow: none;
+    border-radius: 12px 12px 0 0;
+}}
+dialog .titlebar .title, messagedialog .titlebar .title,
+dialog .titlebar label, messagedialog .titlebar label {{
+    color: @sd_text;
+    font-weight: 700;
+}}
+dialog .titlebar button, messagedialog .titlebar button {{
+    background-image: none;
+    background-color: {btn_ghost};
+    border: 1px solid {btn_ghost_border};
+    border-radius: 8px;
+    color: @sd_text;
+    box-shadow: none;
+    text-shadow: none;
+}}
+dialog .titlebar button image, messagedialog .titlebar button image {{
     color: @sd_text;
 }}
 dialog .dialog-action-area, messagedialog .dialog-action-area {{
@@ -461,6 +520,13 @@ def apply_app_css(mode=None):
             settings = Gtk.Settings.get_default()
             if settings is not None:
                 settings.set_property("gtk-application-prefer-dark-theme", resolved == "dark")
+                # 让 GtkDialog 使用 CSD 标题栏。否则 KDE/KWin 会用系统主题绘制对话框
+                # 标题区，浅色系统主题 + 深色应用主题时表现为一条白边，CSS 无法覆盖。
+                try:
+                    if settings.find_property("gtk-dialogs-use-header") is not None:
+                        settings.set_property("gtk-dialogs-use-header", True)
+                except Exception:
+                    pass
         except Exception:
             pass
 
