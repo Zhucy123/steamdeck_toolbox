@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.8.6"
+VERSION = "1.8.7"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -129,9 +129,18 @@ decoration {{
     border-radius: 12px;
     box-shadow: 0 0 0 1px @sd_border, 0 8px 24px {shadow};
 }}
+/* 关键：:backdrop（窗口失焦）必须和普通状态用完全相同的 box-shadow。
+   GTK3 的 CSD 阴影不只是画出来的效果，它参与 _GTK_FRAME_EXTENTS 的计算，
+   窗口管理器按这个边距去摆放窗口。两个状态的阴影一旦不同：
+     · 点「帮助」弹出模态对话框 → 主窗口失焦进入 :backdrop
+     · GTK 立刻按新阴影重算边距（实测 68,68,60,76 → 34,34,30,38）
+     · 窗口管理器随之重新配置窗口（实测 1086x806 → 1018x738）并播放缩放过渡
+   结果整个主界面被重新布局，看起来就是「点帮助时主页面闪一下」，
+   关掉对话框恢复焦点时还会再闪一次。
+   「失焦」的视觉提示交给标题栏配色就够了，阴影尺寸不要再变。 */
 decoration:backdrop {{
     background-color: @sd_bg;
-    box-shadow: 0 0 0 1px @sd_border, 0 4px 12px {shadow};
+    box-shadow: 0 0 0 1px @sd_border, 0 8px 24px {shadow};
 }}
 /* 四角都圆润：窗口本身透明，让 decoration 的圆角透出来，
    否则方形背景会把下方两角裁成直角。 */
@@ -7517,7 +7526,16 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-22（v1.8.6）
+        changelog_content = """2026-10-22（v1.8.7）
+【界面修复】
+- 真正修复「点击帮助时主界面闪一下」：根因是 CSS 里窗口「失焦态」的阴影比正常态小，
+  弹出模态对话框后主窗口一失焦，GTK 就会按新阴影重算窗口边距，窗口管理器随之把
+  主窗口重新缩放一遍（实测 1086x806 → 1018x738）。现在两种状态用同样的阴影，
+  主窗口再也不会因为失焦/获焦而改变尺寸
+- 顺带说明：模态对话框打开时系统会把主窗口「压暗」一点点，这是 KDE 的 Dialog Parent
+  效果（所有程序都这样），不属于闪烁
+
+2026-10-22（v1.8.6）
 【界面修复】
 - 彻底修复对话框打开时的闪烁：改为在窗口完成尺寸计算后再显示出来，
   用户不会再看到「先小后大」的跳变
