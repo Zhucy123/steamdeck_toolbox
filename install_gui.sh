@@ -1,93 +1,95 @@
 #!/bin/bash
 
-TOOLBOX_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
+TOOLBOX_URL="https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/steamdeck_gui.py"
 TOOLBOX_NAME="$HOME/steamdeck_gui.py"
 
-# 脚本退出（含出错）时自动恢复 SteamOS 只读模式，避免系统更新受影响
+# Automatically restore SteamOS read-only mode when the script exits (including on error),
+# so that system updates are not affected.
 cleanup() {
     if command -v steamos-readonly &>/dev/null; then
         if sudo -n steamos-readonly status 2>/dev/null | grep -q "disabled"; then
             if sudo -n steamos-readonly enable 2>/dev/null; then
-                echo "✅ 已恢复只读模式"
+                echo "✅ Read-only mode restored"
             else
-                echo "⚠️ 请手动执行: sudo steamos-readonly enable"
+                echo "⚠️ Please run manually: sudo steamos-readonly enable"
             fi
         fi
     fi
 }
 trap cleanup EXIT
 
-echo "正在检查系统只读状态..."
+echo "Checking system read-only status..."
 sudo steamos-readonly disable 2>/dev/null || true
 
 if pacman -Q vte3 &> /dev/null; then
-    echo "✅ vte3 已安装。"
+    echo "✅ vte3 is already installed."
 else
-    echo "未找到 vte3（终端组件），正在尝试安装..."
-    # 注意：SteamOS 同时使用 archlinux 与 holo 两个钥匙环。
-    # 889B5EBD... 属于 holo-keyring，只 populate archlinux 时该密钥不会被导入，
-    # 后续 --lsign-key 必然报“无法在本地签署”，因此两个钥匙环都必须导入。
+    echo "vte3 (terminal component) not found, attempting to install..."
+    # Note: SteamOS uses both the archlinux and holo keyrings.
+    # 889B5EBD... belongs to holo-keyring. When only archlinux is populated, that key
+    # is not imported and the later --lsign-key necessarily reports "unable to sign
+    # locally", so both keyrings must be populated.
     if [ ! -f /etc/pacman.d/gnupg/pubring.gpg ]; then
-        echo "正在初始化 Pacman 密钥..."
+        echo "Initializing Pacman keys..."
         sudo pacman-key --init || {
-            echo "❌ pacman keyring 初始化失败，无法安装 vte3。"
+            echo "❌ Failed to initialize the pacman keyring, cannot install vte3."
             exit 1
         }
     fi
     sudo chown -R root:root /etc/pacman.d/gnupg 2>/dev/null || true
     sudo chmod 700 /etc/pacman.d/gnupg 2>/dev/null || true
-    echo "正在填充 Arch 官方与 SteamOS Holo 密钥..."
+    echo "Populating official Arch and SteamOS Holo keys..."
     sudo pacman-key --populate archlinux || {
-        echo "❌ archlinux 钥匙环填充失败。"
+        echo "❌ Failed to populate the archlinux keyring."
         exit 1
     }
     if [ -f /usr/share/pacman/keyrings/holo.gpg ]; then
         sudo pacman-key --populate holo || {
-            echo "❌ holo 钥匙环填充失败。"
+            echo "❌ Failed to populate the holo keyring."
             exit 1
         }
     fi
-    echo "正在信任 SteamOS 打包者密钥..."
+    echo "Trusting the SteamOS packager key..."
     if ! sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF; then
-        echo "⚠️ 密钥签署失败，刷新钥匙环后重试..."
+        echo "⚠️ Key signing failed, refreshing keyrings and retrying..."
         sudo pacman-key --refresh-keys 2>/dev/null || true
         sudo pacman-key --populate archlinux holo 2>/dev/null || true
         sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || {
-            echo "❌ 密钥签署仍失败，无法安装 vte3。"
-            echo "   可尝试手动执行: sudo pacman-key --init && sudo pacman-key --populate archlinux holo"
+            echo "❌ Key signing still failed, cannot install vte3."
+            echo "   You can try manually: sudo pacman-key --init && sudo pacman-key --populate archlinux holo"
             exit 1
         }
     fi
     sudo pacman -Sy --noconfirm 2>/dev/null || true
     if sudo pacman -S --needed --noconfirm vte3; then
-        echo "✅ vte3 安装成功！"
+        echo "✅ vte3 installed successfully!"
     else
-        echo "⚠️ vte3 安装失败，GUI 将使用纯文本模式（功能仍可用）。"
+        echo "⚠️ vte3 installation failed. The GUI will use plain-text mode (features still work)."
     fi
 fi
 
-echo "正在从 Gitee 下载 Steam Deck GUI 工具箱..."
+echo "Downloading the Steam Deck GUI toolbox from GitHub..."
 
 if curl -L --progress-bar "$TOOLBOX_URL" -o "$TOOLBOX_NAME"; then
-    # 下载内容校验，防止拿到错误页/不完整文件
+    # Validate the downloaded content to avoid an error page or an incomplete file
     if ! grep -q 'BASH_SCRIPT = ' "$TOOLBOX_NAME" || ! grep -q '^VERSION = ' "$TOOLBOX_NAME"; then
-        echo "❌ 下载内容校验失败（不是有效的工具箱脚本），请检查网络后重试"
+        echo "❌ Download validation failed (not a valid toolbox script). Please check your network and retry."
         rm -f "$TOOLBOX_NAME"
         exit 1
     fi
     chmod +x "$TOOLBOX_NAME"
-    echo "下载完成！"
-    echo "✅ 安装成功！"
+    echo "Download complete!"
+    echo "✅ Installation successful!"
     echo ""
 
-    DESKTOP_FILE="$HOME/Desktop/Deck工具箱.desktop"
+    DESKTOP_FILE="$HOME/Desktop/Deck Toolbox.desktop"
     if [ -f "$DESKTOP_FILE" ]; then
-        echo "桌面快捷方式已存在。"
+        echo "Desktop shortcut already exists."
     else
         cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Type=Application
-Name=Deck工具箱
+Name=Deck Toolbox
 Exec=$(command -v python3) "$TOOLBOX_NAME"
 Icon=input-gamepad-symbolic
 Terminal=false
@@ -95,13 +97,13 @@ StartupNotify=true
 Categories=Utility;
 EOF
         chmod +x "$DESKTOP_FILE"
-        echo "✅ 已创建桌面快捷方式：Deck工具箱.desktop"
+        echo "✅ Desktop shortcut created: Deck Toolbox.desktop"
     fi
 
-    echo "请单击或双击桌面上的 'Deck工具箱' 图标来启动程序。"
+    echo "Click or double-click the 'Deck Toolbox' icon on the desktop to launch the program."
     echo ""
     exit 0
 else
-    echo "❌ 下载失败，请检查网络后重试"
+    echo "❌ Download failed. Please check your network and retry."
     exit 1
 fi

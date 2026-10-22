@@ -1,335 +1,260 @@
-# SteamDeck 工具箱
-
-一个专为 Steam Deck 打造的一站式系统管理与增强工具，集成系统优化、引导管理、软件安装、网络加速、双系统支持、游戏增强等 40 余项实用功能，全面覆盖日常使用与进阶调校需求。
-
-> **版本：v1.8.2** | 更新日期：2026-10-19
-> 制作人：薯条 & DeepSeek
-
-## 🚀 一键安装
-
-在 Konsole 中执行以下命令即可安装：
-
-curl -L decktool.pages.dev/i | sh
-（如果这个失效就用下面的）
-
-curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh | sh
-
-## 🔄 更新方式
-
-- 打开工具箱后启动时自动检查更新（内置自更新）
-
-## 📝 更新日志
-
-2026-10-19（v1.8.2）
-【功能整合】
-- 「系统体检」升级为统一的排障入口：发现引导类问题时内联执行修复（不再跳转到独立的「修复引导」界面导致上下文丢失），发现挂载类问题时内联写入 fstab 自动挂载
-- 「修复引导」补齐关键能力：原来 Clover 启动项缺失时只会报错退出（因此对「掉引导」实际无能为力），现在会先动态探测 ESP，再自动重建 Clover / SteamOS 启动项，并顺带把 Clover 设为第一启动项
-- 「修复引导」不再硬编码 `/dev/nvme0n1p1` 与 `/dev/nvme0n1` 分区 1：改用 `findmnt` + EFI 分区类型 GUID 动态定位，兼容 eMMC / SATA 机型与不同分区号
-- 消除体检与「修复引导」「修复互通盘」的重复实现：启动顺序调整、启动项重建统一走同一套逻辑；体检内联执行时不再清屏、不重开界面
-- 体检的挂载修复写入 fstab 前自动备份（fstab 写坏会导致下次开机进不了系统）
-
-【问题修复】
-- 修复「修复引导」判断 Clover 文件是否存在时无法区分「文件缺失」与「读取失败」，可能误导用户去重装 Clover；现改为三态判断，权限不足时明确提示并继续尝试注册启动项
-- 清理体检中已不再使用的 3 个冗余修复函数（原 `hc_fix_clover_entry` / `hc_fix_steamos_entry` / `hc_fix_boot_order`），避免两套实现并存
-
-2026-10-19（v1.8.1）
-【问题修复】
-- 修复系统体检的结论误导：即使只有「注意」项（如 Windows 启动项被 Clover 接管、ESP 剩余空间偏小等环境差异），也会输出「以上问题需要手动处理」，让人误以为系统有故障；现改为按「异常」数量判定，无异常时明确显示「✅ 结论：未发现异常，引导与挂载均正常」，并说明提示项不影响使用
-- 修复系统体检第 3 项「Clover 引导文件完整性」在已输入 sudo 密码的情况下仍提示「无法读取 EFI 目录」：原代码用普通用户的 `[ -d ]` 判断 EFI 目录位置，而 `/esp` 权限为 700 root，普通用户永远看不到，导致路径判断错误后 sudo 探测也失败
-- EFI 目录定位改为依次用 sudo 探测 `/esp/EFI` 与 `/esp/efi/EFI` 两个候选路径，兼容不同机型与系统布局；两者都不存在时再区分「目录确实缺失」与「无 sudo 权限」，并给出 ESP 根目录的实际内容供排查
-
-2026-10-19（v1.8.0）
-【新增功能】
-- 新增「系统体检」功能（双系统用户可见）：专用于 SteamOS 更新后排查掉盘、掉引导、挂载失效，覆盖 6 大类共 18 项检查
-  - **ESP 分区**：是否识别、挂载状态、剩余空间（Clover 需约 15MB）
-  - **UEFI 启动项**：Clover / SteamOS / Windows 启动项是否存在，Clover 是否为第一启动项
-  - **Clover 引导文件**：`cloverx64.efi`、`config.plist`、`BOOTX64.EFI` 及其 `.orig` 备份是否完整
-  - **Windows 分区**：是否存在、是否挂载、Windows 系统文件结构是否完整
-  - **/etc/fstab**：条目是否指向仍存在的分区，有无失败的挂载单元
-  - **系统与引导服务**：SteamOS 只读模式、Clover 引导守护服务（`clover-bootmanager`）启用与运行状态
-- 体检为只读检查，发现问题后列出「可自动修复」项，经确认才执行修复
-- 可一键修复：重建丢失的 Clover / SteamOS 启动项、把 Clover 设为第一启动项、启用 Clover 引导守护服务、注释掉 fstab 中的失效条目（修改前自动备份）
-
-【问题修复】
-- 体检中的 ESP 探测不再硬编码 `/dev/nvme0n1p1`：改用 `findmnt` + EFI 分区类型 GUID 动态定位，兼容 eMMC / SATA 机型与不同分区号
-- 区分「文件确实缺失」与「无 sudo 权限无法读取」：无权限时明确提示跳过，不再把每个文件都误报为缺失
-
-2026-10-19（v1.7.7）
-【问题修复】
-- 修复双系统被误判为单系统：Clover 安装后会移除 / 隐藏 Windows 的 EFI 启动项，只看 `efibootmgr` 里有没有 "Windows" 字样会漏判，导致「修复引导」「修复互通盘」等双系统功能不显示
-- 系统类型检测改为多重判据：① EFI 启动项含 Windows ② 存在标签为 Windows 的 NTFS 分区 ③ NTFS 分区内存在 `Windows\Program Files` 或 `Windows\Users` 目录结构（即使分区标签被改也能识别）；任一成立即判定为双系统
-- 确保只有 Clover 启动项、没有 Windows 的单系统机器仍正确显示为「单系统」，不会误暴露双系统危险功能
-
-2026-10-19（v1.7.6）
-【界面优化】
-- 内嵌终端窗口新增「复制」按钮：有选中内容时复制选中，未选中时复制全部输出，并有短时状态反馈
-- 内嵌终端新增右键菜单：复制选中内容 / 复制全部输出 / 粘贴 / 全选
-- 内嵌终端新增键盘快捷键：Ctrl+Shift+C 复制、Ctrl+Shift+V 粘贴、Ctrl+Shift+A 全选（Ctrl+C 仍保留用于中断进程）
-- 任务窗口标题栏新增「最大化 / 还原」按钮，可把终端铺满屏幕；窗口不再强制模态，可自由缩放并切换到其他窗口
-
-【问题修复】
-- 修复「安装国内源」完成后提示的恢复官方源命令缺少 sudo、直接复制执行会失败的问题，并注明需在 Konsole 中执行
-
-2026-10-19（v1.7.5）
-【问题修复】
-- 统一全部 GitHub 下载镜像源：原 3 个镜像中 `gh.ddlc.top` 已 429 限流、`mirror.ghproxy.com` 域名失效，仅 `ghproxy.net` 仍可用但很慢，导致插件 / GE-Proton / Clover 下载经常失败
-- 新镜像列表（均经 5 轮稳定性 + 33MB 文件 sha256 完整性 + 实速实测）：`gh-proxy.com`（速度快）、`gh.3w.pm`（稳定）、`cors.isteed.cc`（稳定）、`ghproxy.net`（慢速备用）、GitHub 官方源
-- 修复下载镜像选择菜单显示空条目：官方源内部用空前缀（避免 URL 拼成 `https://github.com/https://github.com/...`），菜单改为显示可读名称
-- 修复 Clover 克隆镜像选择：实测 `gh-proxy.com` / `cors.isteed.cc` / `ghproxy.net` 均不支持 `git clone`，改为仅提供 `gh.3w.pm` 与官方源
-- 修复 Flatpak 国内源：原配置的 `mirror.sjtu.edu.cn/flathub` 已改为 301 跳回官方、实际无效；改用 `mirrors.ustc.edu.cn/flathub`（实测可正常查询与安装），并自动导入 flathub 签名公钥、切换后验证可用性、失败自动回滚
-- 修复 Flatpak 源配置使用不存在的 `flatpak remote-get-url` 命令获取原地址，改为从 remotes 列表解析
-- 修复 Flatpak 源验证因未指定分支必然失败，以及系统级 `remote-modify` 缺少 sudo 会卡在密码提示的问题
-- 修复「安装国内源」多余的禁用 SteamOS 只读模式操作：flatpak 配置位于可写的 `/var` 分区，与只读根分区无关
-
-2026-10-19（v1.7.4）
-【问题修复】
-- 修复「一键应用 CryoByte33 推荐方案」重复执行会在 `/etc/fstab` 写入重复 swap 条目（sed 分隔符转义错误导致删除失败）
-- 修复退出时无条件把 SteamOS 只读模式改回 enabled：现只有脚本自己解除过只读才恢复，不再覆盖用户手动设置的可写状态
-- 修复「调整虚拟内存」替换正在使用的 swapfile 前未先 `swapoff`（可能 device busy 或内存紧张时 OOM），改为先停用并校验
-- 修复「调整虚拟内存」显示 `/` 剩余空间、实际预检 `/home` 的不一致；fstab 判断改为按第一字段精确匹配（不再误判注释行与 `swapfile2`）
-- 修复「配置ZRAM」设置无法持久化：现写入 `/etc/systemd/zram-generator.conf`，重启后仍生效，并修正原代码误删该配置的问题
-- 修复「清理虚拟内存配置」在未启用 ZRAM 时误报「ZRAM 重置失败」，fstab 改用精确匹配删除
-- 修复「清理hosts缓存」在只读模式下静默失败却仍提示成功，改为先确保可写、失败即中止并给出回滚方法
-- 修复「Steam缓存管理」只扫描默认库（SD 卡 / 第二块盘的库看不到）、游戏名含分隔符会解析错位、删除前缺少明细确认
-- 修复「安装/重装 Clover」缺少危险操作二次确认；并改为动态探测 ESP 分区（原硬编码 `/dev/nvme0n1p1`，eMMC / SATA 机型会失败）
-- 修复 Clover 安装中途失败会在 EFI 分区留下半套文件：备份 / 替换 `BOOTX64.EFI` 失败现在会中止并回滚，安装脚本失败即停
-- 修复 Clover 安装脚本用 `echo -e` 传递含反斜杠的 sudo 密码会被截断导致认证失败，改用 `printf` 原样传递
-- 修复 Clover 相关脚本退出时可能把系统停在可写状态，以及 ISO / 7z 临时文件残留
-- 修复自更新先截断自身再写入、中途失败会导致程序损坏：改为写临时文件后原子替换，并增加语法校验
-- 修复版本比较把 `1.7` 与 `1.7.0` 判为不同版本，可能反复提示更新
-- 修复「安装/卸载插件」只看命令返回值，现以目录实际状态为准，避免假成功
-- 修复非 `deck` 用户名的设备上安装插件 / 小黄鸭后文件属主被改成 `deck` 的问题
-- 修复「安装 ToDesk」直接执行第三方远程脚本：现改为下载到本地、展示内容、语法校验后再询问是否执行，并明确列出该脚本对系统的改动
-- 修复检测系统类型时把 Clover 启动项当成双系统依据（单系统装了 Clover 会误显示「双系统」并暴露危险功能），改为仅以 Windows 启动项判断
-- 修复「安装/更新 GE-Proton」解压中断会在 `compatibilitytools.d` 留下残缺版本，改为先解压到临时目录校验后再移入
-- 危险操作确认框默认焦点改为「否」，避免误按回车直接执行
-
-2026-10-19（v1.7.3）
-【问题修复】
-- 修复浅色模式下危险操作确认窗口文字看不清：原生对话框底色是浅色而文字仍沿用深色主题配色，出现「白底浅字」；现为对话框显式指定底色与文字色，标题、正文、按钮均随主题正确切换
-- 修复浅色模式下下拉菜单、右键菜单、工具提示等原生浮层的文字配色不随主题变化的问题
-
-2026-10-19（v1.7.2）
-【新增功能】
-- 新增深色 / 浅色主题切换：标题栏图标按钮可切换「深色」「浅色」「跟随系统」三种模式，选择自动保存，重启后保持
-- 浅色主题为独立配色的完整主题（非简单反色），并同步 GTK 原生控件（对话框、弹出菜单）的配色
-
-【问题修复】
-- 修复 vte3 安装失败（"889B5EBD… 无法在本地签署"）：SteamOS 的 holo 密钥环与 Arch 官方钥匙环相互独立，仅执行 `pacman-key --populate archlinux` 时该密钥不会被导入，导致后续签名必然失败；现同时导入 archlinux 与 holo 两个钥匙环
-- 修复「修复磁盘写入错误」检测失效：原逻辑靠 ntfsfix 输出中的 "Volume is dirty" 判断，但 ntfsfix 并不打印该文字，导致所有分区恒显示"正常"；现改为读取 $Volume 的 Volume Flags 脏标志位
-- 修复已挂载 NTFS 分区无法检测：ntfsinfo / ntfsfix 需要独占打开设备，挂载中的分区会报占用；现检查前临时卸载、检查后自动挂回原处
-- 修复「修复磁盘写入错误」的无意义密码提示：单系统无 NTFS 分区时不再索要 sudo 密码，直接给出结论与排查建议
-- 修复有分区被跳过时仍显示"所有 NTFS 分区状态正常"的误导性结论，改为明确提示未检查数量
-- 修复 NTFS 分区编号与实际输入不一致的问题
-- 修复「修复互通盘」重启后失效：原逻辑只要分区当前已挂载就跳过，但 udisks 自动挂载重启后不会保留；现要求"已挂载且已写入 fstab"才算就绪，确保重启后仍自动挂载
-- 修复「修复互通盘」误删用户数据盘：不再强制卸载并删除 /run/media/deck/ 下非 NTFS 分区（ext4 / U 盘 / Btrfs 外置盘）的 fstab 条目
-- 修复 fstab 条目匹配使用子串导致误判（UUID 前缀相同会被当成已存在），改为锚定精确匹配
-- 修复 fstab 写入可能丢失条目：改为原子替换，失败时保留原条目
-- 修复 fstab 删除使用 sed 正则转义不全导致删不掉条目，改用按字段精确比对
-- 修复「修复互通盘」挂载失败时仍显示"全部完成"，现改为显示失败数量
-- 修复「修复互通盘」、UDisks2 修改的假成功提示，改为真实结果反馈
-- 修复主题「跟随系统」读取的是被自己改写过的值（自我污染），现改为启动时记录系统真实配色快照
-
-2026-09-09（v1.7.1）
-【界面优化】
-- 全新 Steam Deck 风格主题：深蓝黑底 + Steam 蓝高亮，圆角卡片与加高的触控友好列表行
-- 左侧分类栏新增面板标题，功能列表与搜索结果改为圆角卡片容器，帮助/退出按钮使用强调色
-- 顶部标题栏副标题显示系统类型，窗口按钮与搜索框统一为圆角样式
-- 任务窗口新增标题栏与深色终端配色，运行时显示计时、完成后显示"任务已完成"
-- 更新日志页补充页面标题，关于/更新日志正文改为圆角卡片
-
-2026-09-06（v1.7.0包含 v1.6.9 的调整）
-【界面优化】
-- 新增顶部标题栏（HeaderBar），显示版本号
-- 新增全局功能搜索：顶部搜索框跨分类查找功能，结果页显示所属分类
-- 任务窗口新增运行计时器，任务状态一目了然
-- 危险操作二次确认：修复引导/修复互通盘/卸载插件商店/清理hosts 执行前弹出确认
-- 底部状态栏显示系统类型、终端模式、版本
-- 全局样式优化：更舒适的列表间距与选中高亮
-
-【问题修复】
-- 修复取消任务无效：任务进程现在会被真正终止（此前点"取消"只是关窗口，进程仍在后台运行）
-- 修复 SteamOS 只读模式禁用后未恢复：所有功能执行完毕自动恢复，避免系统更新异常
-- 修复清理 hosts 误删系统条目：现在只移除 Steam 相关域名并自动备份
-- 修复自更新无内容校验：更新前校验下载内容，防止错误页覆盖脚本
-- 修复版本比较逻辑：数字逐段比较，本地版本更新时不再提示降级
-- 修复 ToMoon/Freedeck 等插件版本获取：排除 build 类无效标签、兼容无 v 前缀标签、智能选择下载资产（跳过源码包）、已装正式版时正确检测更新
-- 修复 GitHub API 检查在管道下误报异常
-- 修复 Watt Toolkit 已安装时静默重复下载：现在会先确认再覆盖
-
-【功能强化】
-- 交换文件创建增加空间预检与 dd/mkswap/swapon 逐级校验，失败时明确报错
-- 加速器/ToDesk/AnyDesk/应用更新增加失败提示
-- 安装育碧/Epic 前置检查 Proton Experimental 是否存在，缺失时给出指引
-- 插件安装器统一为通用逻辑，镜像源全局统一，zip 下载带完整性校验
-- 图标资源内嵌到脚本，离线自包含，无需外部文件夹
+# SteamDeck Toolbox
+
+An all-in-one system management and enhancement tool built for the Steam Deck. It integrates 40+ practical features — system optimization, boot management, software installation, network acceleration, dual-boot support, gaming enhancements, and more — covering everything from everyday use to advanced tuning.
+
+> **Version: v1.9.4** | Updated: 2026-10-22
+> Made by Zhucy123
+
+## 🚀 One-Click Installation
+
+Run the following command in Konsole to install:
+
+```bash
+curl -L https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/install_gui.sh | sh
+```
+
+## 🔄 Updating
+
+- The toolbox checks for updates automatically at startup (built-in self-update)
+
+## 📝 Changelog
+
+2026-10-22 (v1.9.4)
+**Interface**
+- Fixed the remaining light strip above dialogs in dark mode: on KDE/KWin the window manager draws the dialog title area with the system (light) colours, which CSS cannot reach. Client-side decorations are now forced so GTK paints it and the app theme applies
+- Fixed window corners: all four corners are now rounded (previously only the top two were — the bottom status bar painted an opaque square over them)
+
+2026-10-22 (v1.9.3)
+**Interface**
+- The X handle in the Help dialog is now a real clickable link (opens https://x.com/AlanWake2100)
+- Fixed a white strip above the title bar when running in dark mode on a light desktop theme: the client-side decoration frame and GTK theme variant now follow the app theme
 
-【其他】
-- 全面改用 $HOME 变量，减少硬编码路径
-- 桌面快捷方式改用 sys.executable，兼容性更好
-- 终端模拟器缺失时自动回退（konsole → xterm 等）
+2026-10-22 (v1.9.2)
+**Interface**
+- Help dialog: the social link now points to X (Twitter) — "Follow AlanWake (@AlanWake2100) on X for updates"
+- All dialog buttons are now English regardless of system locale: GTK built-in button sets (OK / Yes-No) were replaced with explicit English labels, and an English locale is forced for the process
 
-2026-08-07（v1.6.8）
-调整了从github上安装的部分功能的版本对比逻辑
-
-2026-08-05（v1.6.7）
-修复了部分bug，并完善了部分功能的逻辑
-
-2026-08-04（v1.6.6包含 v1.6.4-v1.6.5 的调整）
-增加了安装第三方游戏平台的功能（目前包含育碧，Epic，战网）
+2026-10-22 (v1.9.1)
+**Bug Fixes**
+- Self-update now fetches from GitHub only: the update check and self-update read `VERSION` and the script body from the official GitHub repository
+- Replaced the remaining Gitee references:
+  - Watt Toolkit (Steam++) download now uses the official GitHub release (`BeyondDimension/SteamTools`) instead of the Gitee mirror
+  - ToDesk notice now points to the GitHub project page
+  - Changelog wording no longer references Gitee
 
-2026-08-01（v1.6.3包含 v1.6.2 的调整）
-完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
-
-2026-07-31（v1.6.1）
-增加了GE-Proton 管理的功能，可以安装/卸载GE兼容层
-
-2026-07-30（v1.6.0包含 v1.5.7-v1.5.9 的调整）
-新增了安装Freedeck插件的功能，并修复了一些bug和优化完善了一些功能
-
-2026-07-29（v1.5.6包含 v1.5.2-v1.5.5 的调整）
-增加了安装Fcitx 5的功能并继续修复了一些bug,并调整了部分功能的逻辑
-
-2026-07-27（v1.5.1包含 v1.5.0 的调整）
-修复了一些bug,并优化完善了一些功能
-
-2026-07-26（v1.4.9）
-增加了安装Asklink远程的功能
-
-2026-07-25（v1.4.8包含 v1.3.9-v1.4.7 的调整）
-将文字形式停止更新，替换为图文形式，操作更加便捷，并对功能进行了修改和优化完善
-删除了设置管理员密码的功能，增加了安装奇游联机宝加速插件的功能
-
-2026-07-18（v1.3.8包含 v1.3.7 的调整）
-替换steamcommunity 302功能为安装Watt Toolkit (Steam++)，增加实用性
-
-调整了安装插件商店以及安装LSFG-VK插件和Framegen插件功能的部分逻辑，将校准摇杆更改为校准设备，增加了校准扳机
-
-2026-07-09（v1.3.6）
-修改了修复互通盘功能的实现逻辑，更具有通用性
-
-2026-07-08（v1.3.5包含 v1.3.4 的调整）
-删除了“远程无法连接点我”功能，调整从 GitHub 安装的功能的镜像顺序
-
-2026-06-30（v1.3.2）
-修复了安装AnyDesk功能的bug
-
-2026-06-28（v1.3.1）
-修复了调整虚拟内存大小功能的bug
-
-2026-06-27（v1.3.0）
-增加“远程无法连接点我”功能
-
-调整安装 AnyDesk 功能的安装逻辑，改为从官网安装
-
-2026-06-03（v1.2.7）
-增加安装/重装 Clover 引导功能，并进行多项完善
-
-2026-06-02（v1.2.6）
-调整从 GitHub 安装的功能的安装逻辑，支持预发布版本和正式版选择
-
-2026-05-31（v1.2.4，包含 v1.1.9、v1.2.0、v1.2.1 的调整）
-增加安装 LSFG‑VK 插件和 Framegen 插件功能（从 GitHub 安装，并使用镜像下载）
-
-调整插件商店功能的安装步骤，改用国内镜像加快下载速度，并增加镜像下载失败后的自动重试
-
-调整 Steam Deck 缓存管理器功能的部分参数
-
-2026-05-30（v1.1.8）
-调整自动更新的逻辑
-
-2026-05-28（v1.1.8，包含 v1.1.7）
-更改插件商店功能，改为从 GitHub 安装
-
-更新工具箱打开后自动更新的步骤
-
-2026-03-17（v1.1.2）
-由于宝葫芦停止维护，删除“安装＆卸载宝葫芦”功能
-
-2026-03-05（v1.1.1）
-更改安装 ToMoon 功能的实现逻辑，改为从 Gitee 克隆下载安装
-
-2026-03-02（v1.1.0）
-更改安装插件商店功能的实现逻辑，改为从 Gitee 克隆下载安装
-
-2026-01-21（v1.0.9）
-新增安装 Steam 社区 302 功能
-
-2026-01-16（v1.0.8）
-完善调整虚拟内存大小功能的文本展示
-
-2026-01-11（v1.0.7）
-完善调整虚拟内存大小功能
-
-最初发布在github，没做详细的统计，发布日期为2026-01-01
-
-## ✨ 特性亮点
-
-- **深色 / 浅色主题**：一键切换深色、浅色或跟随系统，偏好自动保存，重启后保持
-- **智能系统检测**：自动识别单 / 双系统，部分功能（修复引导、互通盘）仅对双系统用户显示  
-- **图形化引导管理**：支持 Clover 引导的安装、重装，并附带“引导文件配置”工具箱（主题、超时、默认系统等）  
-- **双系统专属支持**：Clover 启动顺序修复、Windows–SteamOS 数据互通盘自动挂载  
-- **一键软件管理**：涵盖办公、通讯、浏览器、云盘、音乐等常用应用（Flatpak / 脚本安装）  
-- **深度性能优化**：虚拟内存调整（CryoByte33 方案 / 传统 Swap / ZRAM）、GE-Proton 兼容层管理、Steam 着色器与兼容数据缓存管理、Hosts 缓存清理  
-- **游戏增强组件**：摇杆与扳机校准、LSFG‑VK / Framegen / Freedeck 插件、小黄鸭软件（Lossless Scaling）  
-- **第三方游戏平台**：支持安装育碧（Ubisoft Connect）、Epic、战网（Battle.net）等游戏平台  
-- **持续更新**：启动时自动检测更新，支持一键升级，无需手动下载  
-
-## 📋 功能列表
-
-### 系统优化与修复
-- 配置国内源（Flatpak 镜像加速）  
-- 虚拟内存调整（CryoByte33 推荐 / Swap 文件 / ZRAM / 清理所有配置）  
-- 修复磁盘写入错误（NTFS 分区脏标志修复）  
-- 清理 hosts 缓存   
-- 校准设备（摇杆 + 扳机）   
-- Steam 缓存管理器（图形界面，支持删除着色器缓存与 Proton 兼容数据）   
-- GE-Proton 管理（安装 / 卸载 GE 兼容层）  
-
-### 引导管理（单 / 双系统通用）
-- 安装 / 重装 Clover 图形化引导管理器  
-- （安装后自动生成“引导文件配置”桌面工具，支持主题、超时、默认系统等高级设置）  
-
-### 双系统支持（仅双系统用户可见）
-- 修复引导（自动将 Clover 设为 UEFI 第一启动项） 
-- 修复互通盘（自动挂载 Windows 与 SteamOS 共享分区，写入 fstab） 
-
-### 网络与远程工具
-- UU 加速器插件  
-- 迅游加速器插件  
-- 奇游联机宝加速插件  
-- Watt Toolkit (Steam++)  
-- AnyDesk 远程协助  
-- ToDesk 远程协助  
-- AskLink 远程协助  
-
-### 常用软件安装
-- WPS Office  
-- QQ  
-- 微信  
-- QQ 音乐  
-- 百度网盘  
-- Microsoft Edge 浏览器  
-- Google Chrome 浏览器  
-- Fcitx 5等
-
-### 游戏增强与 Decky 插件  
-- 插件商店（Decky Loader）安装 / 卸载 
-- ToMoon 插件（安装 / 更新 / 卸载） 
-- Freedeck 插件（安装 / 更新 / 卸载）  
-- LSFG‑VK 插件（安装 / 更新 / 卸载）  
-- Framegen 插件（安装 / 更新 / 卸载）  
-- 小黄鸭软件（Lossless Scaling，帧生成工具） 
-
-### 第三方游戏平台（安装 / 卸载）
-- 育碧平台（Ubisoft Connect）  
-- Epic 平台  
-- 战网平台（Battle.net）  
-
-### 应用管理与维护
-- 更新已安装应用（Flatpak 全局更新）
-- 卸载已安装应用（支持 WPS Office / QQ / 微信 / QQ音乐 / 百度网盘 / Edge / Chrome / Google / AnyDesk / Fcitx 5 及其他 Flatpak 应用）  
-
-### 工具箱自身
-- 深色 / 浅色主题切换（深色 / 浅色 / 跟随系统，自动记忆）  
-- 启动时自动检查更新，支持一键更新（无需手动下载）
+2026-10-22 (v1.9.0)
+**International Release**
+- The entire toolbox is now English-only: all UI text, menus, dialogs, status messages, terminal output, comments and documentation translated to English
+- Added an English README and translated all installer scripts (`install_gui.sh`, `steamdeck_toolbox.sh`, `install_decky_loader.sh`, `install_steamcommunity_302.sh`)
+- Default download source changed to the official GitHub repository: https://github.com/Zhucy123/steamdeck_toolbox
+
+**Feature Removals**
+- Removed the "Install Chinese Source" feature (China-only Flatpak mirror configuration)
+- Removed all third-party China mirrors (`gh-proxy.com`, `gh.3w.pm`, `cors.isteed.cc`, `ghproxy.net`): all downloads now use the official GitHub source only, and the mirror selection menus were removed
+- Removed the "Others" category together with its two features:
+  - Yellow Duck Software (Lossless Scaling installer)
+  - Third-Party Game Platforms (Ubisoft Connect / Epic / Battle.net install and uninstall)
+
+2026-10-19 (v1.8.2)
+**Feature Integration**
+- "System Health Check" is now a unified troubleshooting entry point: boot-related issues are repaired inline (no more jumping to the standalone "Repair Boot" screen and losing context), and mount-related issues are fixed inline by writing fstab entries for automatic mounting
+- "Repair Boot" now covers the key capabilities it was missing: previously, when the Clover boot entry was missing it only reported an error and exited (so it could not actually recover a "lost boot"); it now probes the ESP dynamically first, then automatically rebuilds the Clover / SteamOS boot entries and sets Clover as the first boot entry
+- "Repair Boot" no longer hardcodes `/dev/nvme0n1p1` and partition 1 of `/dev/nvme0n1`: it now locates the ESP dynamically via `findmnt` + the EFI partition type GUID, supporting eMMC / SATA models and different partition numbers
+- Removed duplicate implementations shared by the health check, "Repair Boot", and "Repair Shared Drive": boot order adjustment and boot entry rebuilding now share a single code path; inline repairs from the health check no longer clear the screen or reopen the UI
+- The health check now backs up fstab automatically before writing mount fixes (a corrupted fstab can keep the system from booting next time)
+
+**Bug Fixes**
+- Fixed "Repair Boot" being unable to distinguish "file missing" from "read failure" when checking whether Clover files exist, which could mislead users into reinstalling Clover; it now uses a three-state check and, when permissions are insufficient, clearly notifies the user and still attempts to register the boot entry
+- Removed 3 redundant repair functions no longer used by the health check (formerly `hc_fix_clover_entry` / `hc_fix_steamos_entry` / `hc_fix_boot_order`) to avoid two parallel implementations
+
+2026-10-19 (v1.8.1)
+**Bug Fixes**
+- Fixed misleading conclusions from the system health check: even when only "attention" items were present (environment differences such as the Windows boot entry being taken over by Clover or low ESP free space), it still printed "the above issues require manual handling", making users think the system was faulty; it now decides based on the number of "abnormal" items, and when there are none it clearly shows "✅ Conclusion: no abnormalities found — boot and mounts are normal", explaining that the flagged items do not affect usage
+- Fixed health check item 3, "Clover boot file integrity", still reporting "unable to read EFI directory" even after the sudo password had been entered: the original code used a normal-user `[ -d ]` test to determine the EFI directory location, but `/esp` is owned by root with mode 700, so a normal user can never see it, causing a wrong path decision and a failed sudo probe
+- EFI directory detection now probes the two candidate paths `/esp/EFI` and `/esp/efi/EFI` with sudo in turn, supporting different models and system layouts; if neither exists, it distinguishes "directory genuinely missing" from "no sudo permission" and prints the actual contents of the ESP root directory for troubleshooting
+
+2026-10-19 (v1.8.0)
+**New Features**
+- Added "System Health Check" (visible to dual-boot users): designed to troubleshoot missing drives, lost boot entries, and failed mounts after SteamOS updates, covering 6 categories and 18 checks in total
+  - **ESP partition**: whether it is detected, mount status, free space (Clover needs about 15 MB)
+  - **UEFI boot entries**: whether the Clover / SteamOS / Windows boot entries exist, and whether Clover is the first boot entry
+  - **Clover boot files**: whether `cloverx64.efi`, `config.plist`, `BOOTX64.EFI` and their `.orig` backups are complete
+  - **Windows partition**: whether it exists, whether it is mounted, and whether the Windows system file structure is complete
+  - **/etc/fstab**: whether entries point to partitions that still exist, and whether there are failed mount units
+  - **System and boot services**: SteamOS read-only mode, and whether the Clover boot guard service (`clover-bootmanager`) is enabled and running
+- The health check is read-only; after finding issues it lists the items that can be fixed automatically and only runs repairs after confirmation
+- One-click fixes: rebuild missing Clover / SteamOS boot entries, set Clover as the first boot entry, enable the Clover boot guard service, and comment out invalid fstab entries (with automatic backup before modification)
+
+**Bug Fixes**
+- ESP detection in the health check no longer hardcodes `/dev/nvme0n1p1`: it now locates the ESP dynamically via `findmnt` + the EFI partition type GUID, supporting eMMC / SATA models and different partition numbers
+- Distinguishes "file genuinely missing" from "cannot read without sudo permission": when permission is insufficient it clearly prompts and skips, instead of falsely reporting every file as missing
+
+2026-10-19 (v1.7.7)
+Fixed dual-boot systems being misdetected as single-boot: detection now uses multiple criteria — a Windows EFI boot entry, an NTFS partition labeled Windows, or `Windows\Program Files` / `Windows\Users` directory structures inside an NTFS partition — so any one match identifies a dual-boot setup, while Clover-only single-boot machines are still classified correctly.
+
+2026-10-19 (v1.7.6)
+Added a copy button, right-click menu, and keyboard shortcuts (Ctrl+Shift+C / Ctrl+Shift+V / Ctrl+Shift+A) to the embedded terminal; added maximize / restore and free resizing to the task window, which is no longer forced modal; fixed the missing sudo in the printed command for restoring official package sources.
+
+2026-10-19 (v1.7.5)
+Unified the GitHub download sources and fixed download source selection menus, Clover clone source selection, and Flatpak source configuration and validation issues.
+
+2026-10-19 (v1.7.4)
+A large batch of bug fixes: duplicate fstab swap entries, unconditional read-only mode restore, swapfile / ZRAM persistence, Steam cache scanning, Clover install rollback and dynamic ESP detection, atomic self-update, and dangerous-operation confirmations.
+
+2026-10-19 (v1.7.3)
+Fixed unreadable text in dangerous-operation dialogs and incorrect text colors in native popups (drop-down menus, context menus, tooltips) under the light theme.
+
+2026-10-19 (v1.7.2)
+Added dark / light theme switching with a follow-system mode and automatic saving; fixed vte3 keyring import, NTFS dirty-flag detection, shared-drive fstab persistence, and theme self-pollution issues.
+
+2026-09-09 (v1.7.1)
+Introduced a new Steam Deck-style theme (dark blue-black base with Steam blue highlights, rounded cards, taller touch-friendly list rows), panel titles, rounded search results, and a task window title bar with a dark terminal color scheme.
+
+2026-09-06 (v1.7.0, includes v1.6.9 changes)
+Added a HeaderBar, global feature search, a task runtime timer, dangerous-operation confirmations, and a bottom status bar; fixed task cancellation, read-only mode restore, hosts cleanup, self-update validation, and version comparison.
+
+2026-08-07 (v1.6.8)
+Adjusted the version comparison logic for features installed from GitHub.
+
+2026-08-05 (v1.6.7)
+Fixed several bugs and improved the logic of several features.
+
+2026-08-04 (v1.6.6, includes v1.6.4-v1.6.5 changes)
+Added installation of third-party game platforms (currently Ubisoft, Epic, and Battle.net).
+
+2026-08-01 (v1.6.3, includes v1.6.2 changes)
+Improved the shortcut removal step when uninstalling installed apps and added a prompt asking whether to delete app data.
+
+2026-07-31 (v1.6.1)
+Added GE-Proton management to install / uninstall GE compatibility layers.
+
+2026-07-30 (v1.6.0, includes v1.5.7-v1.5.9 changes)
+Added Freedeck plugin installation, along with bug fixes and feature improvements.
+
+2026-07-29 (v1.5.6, includes v1.5.2-v1.5.5 changes)
+Added Fcitx 5 installation and continued fixing bugs while adjusting the logic of several features.
+
+2026-07-27 (v1.5.1, includes v1.5.0 changes)
+Fixed several bugs and improved several features.
+
+2026-07-26 (v1.4.9)
+Added AskLink remote assistance installation.
+
+2026-07-25 (v1.4.8, includes v1.3.9-v1.4.7 changes)
+Switched documentation from text-only to illustrated guides, removed the admin password feature, and added the Qiyou acceleration plugin.
+
+2026-07-18 (v1.3.8, includes v1.3.7 changes)
+Replaced the steamcommunity 302 feature with Watt Toolkit (Steam++); improved parts of the plugin store, LSFG-VK, and Framegen installation logic; changed joystick calibration to device calibration and added trigger calibration.
+
+2026-07-09 (v1.3.6)
+Reworked the shared-drive repair logic to be more generic.
+
+2026-07-08 (v1.3.5, includes v1.3.4 changes)
+Removed the "remote connection help" feature and adjusted the download source order for GitHub-installed features.
+
+2026-06-30 (v1.3.2)
+Fixed a bug in AnyDesk installation.
+
+2026-06-28 (v1.3.1)
+Fixed a bug in the virtual memory size adjustment feature.
+
+2026-06-27 (v1.3.0)
+Added the "remote connection help" feature and changed AnyDesk installation to use the official website.
+
+2026-06-03 (v1.2.7)
+Added Clover boot manager install / reinstall with multiple improvements.
+
+2026-06-02 (v1.2.6)
+Updated the GitHub installation logic to support choosing between pre-release and stable versions.
+
+2026-05-31 (v1.2.4, includes v1.1.9, v1.2.0, v1.2.1 changes)
+Added LSFG-VK and Framegen plugin installation, improved the plugin store installation steps, and adjusted several Steam Deck cache manager parameters.
+
+2026-05-30 (v1.1.8)
+Adjusted the auto-update logic.
+
+2026-05-28 (v1.1.8, includes v1.1.7 changes)
+Changed the plugin store to install from GitHub and updated the auto-update steps at startup.
+
+2026-03-17 (v1.1.2)
+Removed the "install / uninstall Baohulu" feature because Baohulu is no longer maintained.
+
+2026-03-05 (v1.1.1)
+Switched ToMoon installation to a clone-based install.
+
+2026-03-02 (v1.1.0)
+Switched the plugin store implementation to a clone-based install.
+
+2026-01-21 (v1.0.9)
+Added Steam Community 302 installation.
+
+2026-01-16 (v1.0.8)
+Improved the text output of the virtual memory size adjustment feature.
+
+2026-01-11 (v1.0.7)
+Improved the virtual memory size adjustment feature.
+
+First released on GitHub with no detailed changelog; release date: 2026-01-01.
+
+## ✨ Highlights
+
+- **Dark / light themes**: switch between dark, light, or follow-system with one click; preferences are saved automatically and persist across reboots
+- **Smart system detection**: automatically identifies single / dual-boot setups; some features (Repair Boot, Shared Drive) are shown only to dual-boot users
+- **Graphical boot management**: install and reinstall the Clover boot manager, plus a "Boot Configuration" toolbox (theme, timeout, default system, etc.)
+- **Dual-boot exclusive support**: Clover boot order repair and automatic mounting of a shared Windows-SteamOS data drive
+- **One-click software management**: covers everyday apps for office, messaging, browsers, cloud storage, music, and more (Flatpak / script installation)
+- **Deep performance optimization**: virtual memory tuning (CryoByte33 profile / traditional swap / ZRAM), GE-Proton compatibility layer management, Steam shader and compatibility data cache management, and hosts cache cleanup
+- **Gaming enhancement components**: joystick and trigger calibration, plus LSFG-VK / Framegen / Freedeck plugins
+- **Continuous updates**: automatically checks for updates at startup with one-click upgrade, no manual download required
+
+## 📋 Feature List
+
+### System Optimization & Repair
+- Virtual memory tuning (CryoByte33 recommended / swap file / ZRAM / clear all configurations)
+- Fix disk write errors (NTFS partition dirty flag repair)
+- Clean hosts cache
+- Device calibration (joysticks + triggers)
+- Steam cache manager (GUI; delete shader caches and Proton compatibility data)
+- GE-Proton management (install / uninstall GE compatibility layers)
+
+### Boot Management (single / dual-boot)
+- Install / reinstall the Clover graphical boot manager
+- (Automatically creates a "Boot Configuration" desktop tool after installation, supporting theme, timeout, default system, and other advanced settings)
+
+### Dual-Boot Support (visible to dual-boot users only)
+- Repair Boot (automatically sets Clover as the first UEFI boot entry)
+- Repair Shared Drive (automatically mounts the shared Windows-SteamOS partition and writes it to fstab)
+
+### Network & Remote Tools
+- UU accelerator plugin
+- Xunyou accelerator plugin
+- Qiyou acceleration plugin
+- Watt Toolkit (Steam++)
+- AnyDesk remote assistance
+- ToDesk remote assistance
+- AskLink remote assistance
+
+### Common Software Installation
+- WPS Office
+- QQ
+- WeChat
+- QQ Music
+- Baidu Netdisk
+- Microsoft Edge
+- Google Chrome
+- Fcitx 5 and more
+
+### Gaming Enhancements & Decky Plugins
+- Plugin store (Decky Loader) install / uninstall
+- ToMoon plugin (install / update / uninstall)
+- Freedeck plugin (install / update / uninstall)
+- LSFG-VK plugin (install / update / uninstall)
+- Framegen plugin (install / update / uninstall)
+
+### App Management & Maintenance
+- Update installed apps (global Flatpak update)
+- Uninstall installed apps (supports WPS Office / QQ / WeChat / QQ Music / Baidu Netdisk / Edge / Chrome / Google / AnyDesk / Fcitx 5 and other Flatpak apps)
+
+### The Toolbox Itself
+- Dark / light theme switching (dark / light / follow system, remembered automatically)
+- Automatic update check at startup with one-click update (no manual download required)
