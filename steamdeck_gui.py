@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.8.3"
+VERSION = "1.8.4"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -505,6 +505,24 @@ def resolve_theme_mode(mode):
     if _system_theme is None:
         reset_system_theme_cache()
     return _system_theme or "light"
+
+def fix_dialog_size(dlg):
+    """修正对话框首次显示的尺寸偏小问题。
+
+    开启 gtk-dialogs-use-header 后，GTK3 首次 map 时尺寸协商偏小
+    （实测 498x296，自然尺寸应为 566x364），导致内容被裁剪、
+    过一会儿才自行变大。run() 之前先 realize 并 resize 到自然尺寸即可。
+    """
+    try:
+        dlg.realize()
+        req = dlg.get_preferred_size()
+        w = max(req.natural_size.width, req.minimum_size.width)
+        h = max(req.natural_size.height, req.minimum_size.height)
+        if w > 0 and h > 0:
+            dlg.resize(w, h)
+    except Exception:
+        pass
+
 
 def apply_app_css(mode=None):
     """应用主题样式；mode 为 dark/light/system，None 表示使用已保存的偏好。"""
@@ -6859,6 +6877,7 @@ class TaskWindow(Gtk.Window):
                                     type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK,
                                     text="未找到可用的终端模拟器")
             dlg.format_secondary_text("请安装 konsole 或 xterm 后重试。")
+            fix_dialog_size(dlg)
             dlg.run(); dlg.destroy()
 
     def start_command(self, func_key):
@@ -7454,6 +7473,7 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
                 dlg.set_default_response(Gtk.ResponseType.NO)
             except Exception:
                 pass
+            fix_dialog_size(dlg)
             response = dlg.run()
             dlg.destroy()
             if response != Gtk.ResponseType.YES:
@@ -7472,7 +7492,11 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-22（v1.8.3）
+        changelog_content = """2026-10-22（v1.8.4）
+【界面修复】
+- 修复对话框刚打开时尺寸偏小、内容被裁剪，过一会儿才变大的问题：现改为显示前先按内容计算好尺寸，一次性正确显示
+
+2026-10-22（v1.8.3）
 【界面修复】
 - 修复深色模式下对话框顶部出现白色横条：系统为浅色主题时，窗口管理器会用系统主题绘制对话框标题区，导致与深色界面不一致；现改为由程序自己绘制标题栏，配色跟随应用主题
 - 修复窗口四角圆角不一致：原来上方两角圆润、下方两角是直角（底部状态栏的不透明背景盖住了下方圆角），现四角圆角保持一致
@@ -7684,6 +7708,7 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
             dlg.format_secondary_text(
                 "该功能依赖 zenity 提供图形化选择界面。\n"
                 "请先安装后重试：sudo pacman -S zenity")
+            fix_dialog_size(dlg)
             dlg.run(); dlg.destroy()
             return
         tmp_path = create_temp_script()
@@ -7697,6 +7722,7 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
                                     type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK,
                                     text="启动任务失败")
             dlg.format_secondary_text(f"{e}")
+            fix_dialog_size(dlg)
             dlg.run(); dlg.destroy()
 
     def run_external_terminal(self, func_key):
@@ -7707,11 +7733,13 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
                                     type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK,
                                     text="未找到可用的终端模拟器")
             dlg.format_secondary_text("请安装 konsole 或 xterm 后重试。")
+            fix_dialog_size(dlg)
             dlg.run(); dlg.destroy()
 
     def on_help_clicked(self, button):
         help_dialog = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL, type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="Steam Deck 工具箱")
         help_dialog.format_secondary_text("本工具集成了系统优化、软件安装、网络工具等功能。\n点击左侧分类，右侧显示功能列表。\n小破站关注up主 AlanWake2100 可以来催更哦~")
+        fix_dialog_size(help_dialog)
         help_dialog.run(); help_dialog.destroy()
 
 def ensure_desktop_shortcut():
@@ -7739,6 +7767,7 @@ def ensure_vte_installed():
     dialog.format_secondary_text("点击“是”将自动解除只读模式并安装 vte3。")
     dialog.add_button("是", Gtk.ResponseType.YES); dialog.add_button("否", Gtk.ResponseType.NO)
     dialog.set_icon_name("input-gamepad-symbolic")
+    fix_dialog_size(dialog)
     response = dialog.run(); dialog.destroy()
     if response == Gtk.ResponseType.YES:
         install_cmd = (
@@ -7772,6 +7801,7 @@ def ensure_vte_installed():
             err = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.ERROR, Gtk.ButtonsType.OK,
                                     "未找到可用的终端模拟器")
             err.format_secondary_text("请手动打开终端执行：sudo pacman -S --noconfirm vte3")
+            fix_dialog_size(err)
             err.run(); err.destroy()
 
 def sync_emoji_icons():
@@ -7887,6 +7917,7 @@ class UpdateCheckWindow(Gtk.Window):
         dialog.set_default_size(400, 150); dialog.set_markup(f"<big><b>发现新版本 v{remote_version}</b></big>")
         dialog.format_secondary_text(f"当前版本: v{VERSION}\n最新版本: v{remote_version}\n\n是否立即更新？")
         dialog.add_button("是", Gtk.ResponseType.YES); dialog.add_button("否", Gtk.ResponseType.NO); dialog.set_icon_name("input-gamepad-symbolic")
+        fix_dialog_size(dialog)
         response = dialog.run()
         if response == Gtk.ResponseType.YES:
             dialog.set_markup("<big><b>正在更新...</b></big>"); dialog.format_secondary_text("正在下载新版本，请稍候。")
