@@ -35,7 +35,7 @@ import signal
 # ============================================================================
 # Version definition
 # ============================================================================
-VERSION = "1.9.4"
+VERSION = "1.9.5"
 REPO_RAW_URL = "https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/steamdeck_gui.py"
 REPO_URL = "https://github.com/Zhucy123/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -6687,7 +6687,12 @@ https://github.com/Zhucy123/steamdeck_toolbox
         self.status_label.set_text(f"System: {self.system_type} | Terminal: {term} | Version: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-22 (v1.9.4)
+        changelog_content = """2026-10-22 (v1.9.5)
+[Maintenance]
+- Repository baseline rebuilt on top of the upstream Gitee master; all changes
+  re-applied as a single commit (no functional change from v1.9.4)
+
+2026-10-22 (v1.9.4)
 [Interface]
 - Fixed the remaining light strip above dialogs in dark mode: on KDE/KWin the window manager draws the dialog title area using the system (light) colours, which our CSS cannot reach. Client-side decorations are now forced so GTK paints that area and the app theme applies
 - Fixed window corners: all four corners are now rounded (previously only the top two were, because the bottom status bar painted an opaque square over them)

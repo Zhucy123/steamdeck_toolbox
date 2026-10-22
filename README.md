@@ -2,7 +2,7 @@
 
 An all-in-one system management and enhancement tool built for the Steam Deck. It integrates 40+ practical features — system optimization, boot management, software installation, network acceleration, dual-boot support, gaming enhancements, and more — covering everything from everyday use to advanced tuning.
 
-> **Version: v1.9.4** | Updated: 2026-10-22
+> **Version: v1.9.5** | Updated: 2026-10-22
 > Made by Zhucy123
 
 ## 🚀 One-Click Installation
