@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.8.2"
+VERSION = "1.8.3"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -7472,7 +7472,12 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-19（v1.8.2）
+        changelog_content = """2026-10-22（v1.8.3）
+【界面修复】
+- 修复深色模式下对话框顶部出现白色横条：系统为浅色主题时，窗口管理器会用系统主题绘制对话框标题区，导致与深色界面不一致；现改为由程序自己绘制标题栏，配色跟随应用主题
+- 修复窗口四角圆角不一致：原来上方两角圆润、下方两角是直角（底部状态栏的不透明背景盖住了下方圆角），现四角圆角保持一致
+
+2026-10-19（v1.8.2）
 【功能整合】
 - 「系统体检」升级为统一的排障入口：发现引导类问题时内联执行修复（不再跳转到独立的「修复引导」界面导致上下文丢失），发现挂载类问题时内联写入 fstab 自动挂载
 - 「修复引导」补齐关键能力：原来 Clover 启动项缺失时只会报错退出（因此对"掉引导"实际无能为力），现在会先动态探测 ESP，再自动重建 Clover / SteamOS 启动项，并顺带把 Clover 设为第一启动项
