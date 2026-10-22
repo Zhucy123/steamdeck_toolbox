@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.8.4"
+VERSION = "1.8.5"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -510,16 +510,23 @@ def fix_dialog_size(dlg):
     """修正对话框首次显示的尺寸偏小问题。
 
     开启 gtk-dialogs-use-header 后，GTK3 首次 map 时尺寸协商偏小
-    （实测 498x296，自然尺寸应为 566x364），导致内容被裁剪、
-    过一会儿才自行变大。run() 之前先 realize 并 resize 到自然尺寸即可。
+    （实测 498x296，自然尺寸应为 566x364），导致对话框刚打开时内容被裁剪、
+    过一会儿才自行变大。
+
+    两个要点：
+      1. 必须用 set_size_request，不能用 realize()+resize()：
+         resize() 会被 run() 内部的 show_all 覆盖（实测无效），
+         而 realize() 还会让窗口闪现一下。
+      2. 必须用 natural_size，不能和 minimum_size 取 max：
+         带 CSD 标题栏时 minimum 可能更高（竖排文字 598 > 横排 364），
+         取 max 会让对话框过高、留下大片空白。
     """
     try:
-        dlg.realize()
         req = dlg.get_preferred_size()
-        w = max(req.natural_size.width, req.minimum_size.width)
-        h = max(req.natural_size.height, req.minimum_size.height)
+        w = req.natural_size.width or req.minimum_size.width
+        h = req.natural_size.height or req.minimum_size.height
         if w > 0 and h > 0:
-            dlg.resize(w, h)
+            dlg.set_size_request(w, h)
     except Exception:
         pass
 
@@ -7492,7 +7499,12 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-22（v1.8.4）
+        changelog_content = """2026-10-22（v1.8.5）
+【界面修复】
+- 修复对话框刚打开时尺寸偏小、内容被裁剪、过一会儿才变大的问题
+- 修复点击「帮助」时窗口闪烁一下的问题（去掉了会触发窗口闪现的尺寸处理方式）
+
+2026-10-22（v1.8.4）
 【界面修复】
 - 修复对话框刚打开时尺寸偏小、内容被裁剪，过一会儿才变大的问题：现改为显示前先按内容计算好尺寸，一次性正确显示
 
