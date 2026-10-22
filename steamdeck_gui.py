@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.8.5"
+VERSION = "1.8.6"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -507,19 +507,25 @@ def resolve_theme_mode(mode):
     return _system_theme or "light"
 
 def fix_dialog_size(dlg):
-    """修正对话框首次显示的尺寸偏小问题。
+    """修正对话框首次显示时「先小后大」的闪烁。
 
-    开启 gtk-dialogs-use-header 后，GTK3 首次 map 时尺寸协商偏小
-    （实测 498x296，自然尺寸应为 566x364），导致对话框刚打开时内容被裁剪、
-    过一会儿才自行变大。
+    背景：为消除深色模式下对话框标题栏的白条，启用了 gtk-dialogs-use-header
+    让 GTK 用 CSD 绘制标题栏。但 GTK3 在 KWin 下首次 map 时尺寸协商分两步：
+      第 1 帧 ~498x296（错误尺寸，内容被裁剪）
+      第 2 帧 ~566x364（正确尺寸）
+    用户会看到窗口闪一下。
 
-    两个要点：
-      1. 必须用 set_size_request，不能用 realize()+resize()：
-         resize() 会被 run() 内部的 show_all 覆盖（实测无效），
-         而 realize() 还会让窗口闪现一下。
-      2. 必须用 natural_size，不能和 minimum_size 取 max：
-         带 CSD 标题栏时 minimum 可能更高（竖排文字 598 > 横排 364），
-         取 max 会让对话框过高、留下大片空白。
+    试过无效的方案：
+      - set_size_request / set_geometry_hints / set_default_size：首帧仍偏小
+      - realize()+resize()：会触发窗口闪现，且 resize 被 run 内的 show_all 覆盖
+      - 自建 Gtk.Dialog：同样有首帧过渡，是 CSD 固有行为
+      - X11 _GTK_THEME_VARIANT=dark：KWin 不响应，标题栏仍是浅色
+
+    有效方案：先完全透明，等尺寸稳定后再恢复不透明。
+    这样用户看到的第一个可见帧就是正确尺寸。
+
+    同时仍设置 natural_size（不能用 minimum，带 CSD 时 minimum 高度可能更大，
+    取 max 会让对话框过高、留下大片空白）。
     """
     try:
         req = dlg.get_preferred_size()
@@ -527,6 +533,18 @@ def fix_dialog_size(dlg):
         h = req.natural_size.height or req.minimum_size.height
         if w > 0 and h > 0:
             dlg.set_size_request(w, h)
+
+        # 遮住首帧尺寸协商（WM 不支持透明度时会退化为原有的轻微闪烁）
+        dlg.set_opacity(0.0)
+
+        def _reveal():
+            try:
+                dlg.set_opacity(1.0)
+            except Exception:
+                pass
+            return False
+
+        GLib.timeout_add(90, _reveal)
     except Exception:
         pass
 
@@ -7499,7 +7517,13 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-22（v1.8.5）
+        changelog_content = """2026-10-22（v1.8.6）
+【界面修复】
+- 彻底修复对话框打开时的闪烁：改为在窗口完成尺寸计算后再显示出来，
+  用户不会再看到「先小后大」的跳变
+- 此前几个版本还修了：深色模式下对话框标题栏白边、窗口四角圆角不一致
+
+2026-10-22（v1.8.5）
 【界面修复】
 - 修复对话框刚打开时尺寸偏小、内容被裁剪、过一会儿才变大的问题
 - 修复点击「帮助」时窗口闪烁一下的问题（去掉了会触发窗口闪现的尺寸处理方式）
