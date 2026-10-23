@@ -11,7 +11,9 @@ Run the following command in Konsole to install:
 
 ```bash
 curl -L decktools.pages.dev/i | sh
+```
 or
+```bash
 curl -L https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/install_gui.sh | sh
 ```
 
