@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.8.8"
+VERSION = "1.8.9"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -121,41 +121,42 @@ APP_CSS_TEMPLATE = """
 window {{ background-color: @sd_bg; color: @sd_text; }}
 .background {{ background-color: @sd_bg; }}
 
-/* ---------- 客户端装饰（CSD）与圆角 ----------
+/* ---------- 客户端装饰（CSD）----------
    系统为浅色主题时，GTK 会用系统主题绘制窗口外框，
-   深色模式下表现为标题栏上方一条白边。这里用应用背景色绘制。 */
+   深色模式下表现为标题栏上方一条白边。这里用应用背景色绘制。
+
+   注意：这里刻意不使用「透明圆角 + 投影」。
+   那套做法要求窗口表面比可见内容大一圈（CSD 透明边距，实测四周
+   68/60/76px），一旦系统没开桌面特效合成器（X11 无法做 alpha 混合），
+   这圈透明边距就会被渲染成纯黑，表现为「窗口外面多一圈黑色区域」。
+   不透明 + 直角 + 无阴影时窗口边距为 0，有没有合成器都不会出现黑边。 */
 decoration {{
     background-color: @sd_bg;
-    border-radius: 12px;
-    box-shadow: 0 0 0 1px @sd_border, 0 8px 24px {shadow};
+    border-radius: 0;
+    box-shadow: none;
+    border: none;
+    margin: 0;
+    padding: 0;
 }}
-/* 关键：:backdrop（窗口失焦）必须和普通状态用完全相同的 box-shadow。
-   GTK3 的 CSD 阴影不只是画出来的效果，它参与 _GTK_FRAME_EXTENTS 的计算，
-   窗口管理器按这个边距去摆放窗口。两个状态的阴影一旦不同：
-     · 点「帮助」弹出模态对话框 → 主窗口失焦进入 :backdrop
-     · GTK 立刻按新阴影重算边距（实测 68,68,60,76 → 34,34,30,38）
-     · 窗口管理器随之重新配置窗口（实测 1086x806 → 1018x738）并播放缩放过渡
-   结果整个主界面被重新布局，看起来就是「点帮助时主页面闪一下」，
-   关掉对话框恢复焦点时还会再闪一次。
-   「失焦」的视觉提示交给标题栏配色就够了，阴影尺寸不要再变。 */
 decoration:backdrop {{
     background-color: @sd_bg;
-    box-shadow: 0 0 0 1px @sd_border, 0 8px 24px {shadow};
+    box-shadow: none;
 }}
-/* 四角都圆润：窗口本身透明，让 decoration 的圆角透出来，
-   否则方形背景会把下方两角裁成直角。 */
 window.csd, window.csd:backdrop {{
-    background-color: transparent;
-    border-radius: 12px;
+    background-color: @sd_bg;
+    border-radius: 0;
+    border: none;
+    margin: 0;
+    padding: 0;
 }}
 window.csd > .titlebar, window.csd > headerbar, .titlebar {{
     background-color: @sd_bg;
     border: none;
     box-shadow: none;
-    border-radius: 12px 12px 0 0;
+    border-radius: 0;
 }}
 window.csd > box, window.csd > .background {{
-    border-radius: 0 0 12px 12px;
+    border-radius: 0;
     background-color: transparent;
 }}
 
@@ -272,8 +273,7 @@ treeview button {{
     background-image: linear-gradient(to bottom, {bottom_top}, {bottom_bottom});
     border-top: 1px solid @sd_border;
     padding: 6px 10px;
-    /* 与窗口圆角一致，否则这条不透明底栏会盖住下方两角，使其变成直角 */
-    border-radius: 0 0 12px 12px;
+    border-radius: 0;
 }}
 #status-label {{ font-size: 11px; color: @sd_dim; }}
 #task-timer {{ font-size: 11px; font-weight: bold; color: @sd_accent; }}
@@ -365,7 +365,7 @@ dialog box.titlebar, messagedialog box.titlebar {{
     border-bottom: 1px solid @sd_border;
     color: @sd_text;
     box-shadow: none;
-    border-radius: 12px 12px 0 0;
+    border-radius: 0;
 }}
 dialog .titlebar .title, messagedialog .titlebar .title,
 dialog .titlebar label, messagedialog .titlebar label {{
@@ -416,51 +416,10 @@ tooltip label {{ color: @sd_text; }}
 vte-terminal {{ padding: 6px; }}
 """
 
-# 无合成器（X11 没有 alpha 混合）时的兜底样式。
-# 本程序的圆角 + 投影是靠 CSD 透明实现的：窗口表面会比可见内容大一圈
-# （实测四周 68/60/76px 的透明边距），有合成器时这圈是柔和阴影，没有合成器时
-# X11 无法把透明与桌面混合，这圈透明区域会直接渲染成黑色，表现为
-# 「窗口外面多一圈黑色的区域」。
-# 兜底做法：退回不透明 + 直角 + 无阴影 + 无边距。
-#   - 去掉 box-shadow 后 GTK 的阴影边距归零（68/60/76 → 0）
-#   - 但 decoration 默认还有 10px 的 border/margin 也会被计入 _GTK_FRAME_EXTENTS，
-#     一并清零后边距才是真正的 0（实测 10,10,10,10 → 无 extents 属性）
-#   - 圆角也一并去掉，否则四角同样会露出黑角
-NO_COMPOSITE_CSS = """
-/* ===== 无合成器兜底：关闭透明圆角与投影，避免窗口外出现黑边 ===== */
-decoration, decoration:backdrop {
-    box-shadow: none;
-    border: none;
-    margin: 0;
-    padding: 0;
-    border-radius: 0;
-    background-color: @sd_bg;
-}
-window.csd, window.csd:backdrop {
-    background-color: @sd_bg;
-    border: none;
-    margin: 0;
-    padding: 0;
-    border-radius: 0;
-}
-window.csd > .titlebar, window.csd > headerbar, .titlebar { border-radius: 0; }
-window.csd > box, window.csd > .background { border-radius: 0; }
-#bottom-bar { border-radius: 0; }
-dialog .titlebar, messagedialog .titlebar,
-dialog box.titlebar, messagedialog box.titlebar { border-radius: 0; }
-"""
-
-def build_css(theme_name, composited=True):
-    """根据主题名生成对应的 CSS 文本。
-
-    composited=False（系统没开合成器）时追加 NO_COMPOSITE_CSS 兜底，
-    否则窗口四周的透明边距会被渲染成黑边。
-    """
+def build_css(theme_name):
+    """根据主题名生成对应的 CSS 文本。"""
     palette = THEME_LIGHT if theme_name == "light" else THEME_DARK
-    css = APP_CSS_TEMPLATE.format(**palette)
-    if not composited:
-        css += NO_COMPOSITE_CSS
-    return css
+    return APP_CSS_TEMPLATE.format(**palette)
 
 # 向后兼容：旧代码中若有引用 APP_CSS 的地方，默认使用深色
 APP_CSS = build_css("dark")
@@ -472,8 +431,6 @@ THEME_MODES = ("dark", "light", "system")
 THEME_LABELS = {"dark": "深色", "light": "浅色", "system": "跟随系统"}
 
 _css_provider = None
-# 是否已经监听「合成器开/关」事件（只连一次）
-_composited_watch_connected = False
 
 def _config_path():
     return os.path.join(os.path.expanduser("~"), ".config", "steamdeck_toolbox", "config.json")
@@ -603,7 +560,7 @@ def fix_dialog_size(dlg):
 
 def apply_app_css(mode=None):
     """应用主题样式；mode 为 dark/light/system，None 表示使用已保存的偏好。"""
-    global _css_provider, _composited_watch_connected
+    global _css_provider
     try:
         if mode is None:
             mode = load_theme_pref()
@@ -612,12 +569,7 @@ def apply_app_css(mode=None):
         screen = Gdk.Screen.get_default()
         if screen is None:
             return
-        # 没有合成器时必须关掉透明圆角/投影，否则窗口四周会渲染成一圈黑边
-        try:
-            composited = bool(screen.is_composited())
-        except Exception:
-            composited = True
-        css = build_css(resolved, composited=composited)
+        css = build_css(resolved)
 
         # 同步 GTK 自身的深色偏好，让对话框、下拉菜单等原生控件配色一致
         try:
@@ -647,23 +599,8 @@ def apply_app_css(mode=None):
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         _css_provider = provider
 
-        # 合成器可能在使用过程中被开关（切到游戏模式再回来、手动关桌面特效等）。
-        # 状态一变就重新套用样式：开合成时用圆角+投影，关合成时退回不透明直角，
-        # 这样两种情况下都不会出现黑边。
-        if not _composited_watch_connected:
-            try:
-                screen.connect("composited-changed", _on_composited_changed)
-                _composited_watch_connected = True
-            except Exception:
-                pass
     except Exception as e:
         print(f"应用样式失败: {e}")
-
-
-def _on_composited_changed(screen):
-    """合成器开/关时重新套用主题样式。"""
-    apply_app_css(None)
-    return False
 
 def load_icon_pixbuf(name, size=24):
     """优先加载脚本目录 emoji_icons/ 下的本地图标，其次使用内嵌图标。"""
@@ -7591,15 +7528,15 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-23（v1.8.8）
+        changelog_content = """2026-10-23（v1.8.9）
 【界面修复】
-- 修复「打开后窗口外面多一圈黑色区域」：窗口的圆角和投影是靠 CSD 透明实现的，
-  窗口表面比可见内容大一圈（四周 68/60/76px）。系统没开桌面特效合成器时，
-  X11 无法把透明区域与桌面混合，这圈透明边距就被画成纯黑，看起来就是窗口外
-  多了一圈黑边。现在程序会自动检测合成器状态：没有合成器时退回不透明直角窗口
-  （边距归零，黑边消失）；有合成器时仍保留圆角投影
-- 支持运行中切换：开关桌面特效（如 Alt+Shift+F12）后窗口会自动在两种外观间切换，
-  不需要重启程序
+- 彻底修复「窗口外面多一圈黑色区域」：不再使用「透明圆角 + 投影」这套窗口外观。
+  那套做法要求窗口表面比可见内容大一圈（CSD 透明边距，实测四周 68/60/76px），
+  一旦系统没开桌面特效合成器（按 Alt+Shift+F12 就会关掉），X11 无法做透明混合，
+  这圈透明边距就被渲染成纯黑，也就是那圈黑边
+- 现在窗口改为不透明直角样式：窗口边距恒为 0，无论合成器开还是关都不会出现黑边，
+  也不再有切换时黑边闪一下再消失的过程
+- 对话框、内部卡片的圆角样式保持不变，只是窗口外框改为直角
 
 2026-10-22（v1.8.7）
 【界面修复】
