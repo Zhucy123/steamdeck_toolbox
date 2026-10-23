@@ -13,8 +13,9 @@
 curl -L decktool.pages.dev/i | sh
 ```
 （如果这个失效就用下面的）
-
+```bash
 curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh | sh
+```
 
 ## 🔄 更新方式
 
