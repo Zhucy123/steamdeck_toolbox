@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.8.7"
+VERSION = "1.8.8"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -416,10 +416,51 @@ tooltip label {{ color: @sd_text; }}
 vte-terminal {{ padding: 6px; }}
 """
 
-def build_css(theme_name):
-    """根据主题名生成对应的 CSS 文本。"""
+# 无合成器（X11 没有 alpha 混合）时的兜底样式。
+# 本程序的圆角 + 投影是靠 CSD 透明实现的：窗口表面会比可见内容大一圈
+# （实测四周 68/60/76px 的透明边距），有合成器时这圈是柔和阴影，没有合成器时
+# X11 无法把透明与桌面混合，这圈透明区域会直接渲染成黑色，表现为
+# 「窗口外面多一圈黑色的区域」。
+# 兜底做法：退回不透明 + 直角 + 无阴影 + 无边距。
+#   - 去掉 box-shadow 后 GTK 的阴影边距归零（68/60/76 → 0）
+#   - 但 decoration 默认还有 10px 的 border/margin 也会被计入 _GTK_FRAME_EXTENTS，
+#     一并清零后边距才是真正的 0（实测 10,10,10,10 → 无 extents 属性）
+#   - 圆角也一并去掉，否则四角同样会露出黑角
+NO_COMPOSITE_CSS = """
+/* ===== 无合成器兜底：关闭透明圆角与投影，避免窗口外出现黑边 ===== */
+decoration, decoration:backdrop {
+    box-shadow: none;
+    border: none;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    background-color: @sd_bg;
+}
+window.csd, window.csd:backdrop {
+    background-color: @sd_bg;
+    border: none;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+}
+window.csd > .titlebar, window.csd > headerbar, .titlebar { border-radius: 0; }
+window.csd > box, window.csd > .background { border-radius: 0; }
+#bottom-bar { border-radius: 0; }
+dialog .titlebar, messagedialog .titlebar,
+dialog box.titlebar, messagedialog box.titlebar { border-radius: 0; }
+"""
+
+def build_css(theme_name, composited=True):
+    """根据主题名生成对应的 CSS 文本。
+
+    composited=False（系统没开合成器）时追加 NO_COMPOSITE_CSS 兜底，
+    否则窗口四周的透明边距会被渲染成黑边。
+    """
     palette = THEME_LIGHT if theme_name == "light" else THEME_DARK
-    return APP_CSS_TEMPLATE.format(**palette)
+    css = APP_CSS_TEMPLATE.format(**palette)
+    if not composited:
+        css += NO_COMPOSITE_CSS
+    return css
 
 # 向后兼容：旧代码中若有引用 APP_CSS 的地方，默认使用深色
 APP_CSS = build_css("dark")
@@ -431,6 +472,8 @@ THEME_MODES = ("dark", "light", "system")
 THEME_LABELS = {"dark": "深色", "light": "浅色", "system": "跟随系统"}
 
 _css_provider = None
+# 是否已经监听「合成器开/关」事件（只连一次）
+_composited_watch_connected = False
 
 def _config_path():
     return os.path.join(os.path.expanduser("~"), ".config", "steamdeck_toolbox", "config.json")
@@ -560,12 +603,21 @@ def fix_dialog_size(dlg):
 
 def apply_app_css(mode=None):
     """应用主题样式；mode 为 dark/light/system，None 表示使用已保存的偏好。"""
-    global _css_provider
+    global _css_provider, _composited_watch_connected
     try:
         if mode is None:
             mode = load_theme_pref()
         resolved = resolve_theme_mode(mode)
-        css = build_css(resolved)
+
+        screen = Gdk.Screen.get_default()
+        if screen is None:
+            return
+        # 没有合成器时必须关掉透明圆角/投影，否则窗口四周会渲染成一圈黑边
+        try:
+            composited = bool(screen.is_composited())
+        except Exception:
+            composited = True
+        css = build_css(resolved, composited=composited)
 
         # 同步 GTK 自身的深色偏好，让对话框、下拉菜单等原生控件配色一致
         try:
@@ -584,9 +636,6 @@ def apply_app_css(mode=None):
 
         provider = Gtk.CssProvider()
         provider.load_from_data(css.encode('utf-8'))
-        screen = Gdk.Screen.get_default()
-        if screen is None:
-            return
         # 先移除旧 provider，避免重复叠加导致样式错乱
         if _css_provider is not None:
             try:
@@ -597,8 +646,24 @@ def apply_app_css(mode=None):
             screen, provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         _css_provider = provider
+
+        # 合成器可能在使用过程中被开关（切到游戏模式再回来、手动关桌面特效等）。
+        # 状态一变就重新套用样式：开合成时用圆角+投影，关合成时退回不透明直角，
+        # 这样两种情况下都不会出现黑边。
+        if not _composited_watch_connected:
+            try:
+                screen.connect("composited-changed", _on_composited_changed)
+                _composited_watch_connected = True
+            except Exception:
+                pass
     except Exception as e:
         print(f"应用样式失败: {e}")
+
+
+def _on_composited_changed(screen):
+    """合成器开/关时重新套用主题样式。"""
+    apply_app_css(None)
+    return False
 
 def load_icon_pixbuf(name, size=24):
     """优先加载脚本目录 emoji_icons/ 下的本地图标，其次使用内嵌图标。"""
@@ -7526,7 +7591,17 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-22（v1.8.7）
+        changelog_content = """2026-10-23（v1.8.8）
+【界面修复】
+- 修复「打开后窗口外面多一圈黑色区域」：窗口的圆角和投影是靠 CSD 透明实现的，
+  窗口表面比可见内容大一圈（四周 68/60/76px）。系统没开桌面特效合成器时，
+  X11 无法把透明区域与桌面混合，这圈透明边距就被画成纯黑，看起来就是窗口外
+  多了一圈黑边。现在程序会自动检测合成器状态：没有合成器时退回不透明直角窗口
+  （边距归零，黑边消失）；有合成器时仍保留圆角投影
+- 支持运行中切换：开关桌面特效（如 Alt+Shift+F12）后窗口会自动在两种外观间切换，
+  不需要重启程序
+
+2026-10-22（v1.8.7）
 【界面修复】
 - 真正修复「点击帮助时主界面闪一下」：根因是 CSS 里窗口「失焦态」的阴影比正常态小，
   弹出模态对话框后主窗口一失焦，GTK 就会按新阴影重算窗口边距，窗口管理器随之把
