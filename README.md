@@ -10,6 +10,8 @@ An all-in-one system management and enhancement tool built for the Steam Deck. I
 Run the following command in Konsole to install:
 
 ```bash
+curl -L decktools.pages.dev/i | sh
+or
 curl -L https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/install_gui.sh | sh
 ```
 
