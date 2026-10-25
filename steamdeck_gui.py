@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.8.9"
+VERSION = "1.9.1"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -812,6 +812,26 @@ disable_readonly() {
             echo -e "${RED}✗ 禁用只读模式失败，操作中止。${NC}"
             return 1
         fi
+    fi
+    return 0
+}
+
+# 需要写系统分区的功能用这个：先查状态再决定要不要 disable。
+# 直接调 disable_readonly 的问题是——系统本来就已可写（用户手动关掉只读）时，
+# `steamos-readonly disable` 同样返回成功，标志会被置 1，退出时 trap 就把用户
+# 自己设的「可写」强行改回「只读」，覆盖掉用户的设置。
+ensure_writable() {
+    command -v steamos-readonly &>/dev/null || return 0
+    if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
+        if sudo steamos-readonly disable 2>/dev/null; then
+            RO_READONLY_DISABLED_BY_US=1
+            echo -e "${GREEN}✓ 已禁用只读模式${NC}"
+        else
+            echo -e "${RED}✗ 禁用只读模式失败，操作中止。${NC}"
+            return 1
+        fi
+    else
+        echo -e "${GREEN}✓ 只读模式已处于可写状态${NC}"
     fi
     return 0
 }
@@ -5553,76 +5573,183 @@ uninstall_anydesk() {
 
 install_todesk() {
     mk_temp_dir; clear
-    echo -e "${YELLOW}════════════════ 安装ToDesk ════════════════${NC}"
-    echo ""
-    echo -e "${YELLOW}⚠️  重要提示${NC}"
-    echo "  官方未提供可直接安装的 ToDesk 包，现有方案依赖第三方维护的安装脚本"
-    echo "  （todesk.lanbai.top → gitee.com/mclanbai/archtodesk）。"
-    echo "  该第三方脚本会执行以下系统级改动："
-    echo "    · sudo steamos-readonly disable  （解除 SteamOS 只读保护）"
-    echo "    · sudo pacman-key --init / --populate  （重建 pacman 钥匙环）"
-    echo "    · sudo pacman -S base-devel --noconfirm  （安装整个编译工具链，体积大）"
-    echo "    · 卸载并重装 todesk / todesk-bin 包"
-    echo "  另外该脚本内部把用户名硬编码为 /home/deck，非 deck 用户名的设备会出错。"
-    echo ""
-    echo -e "${CYAN}本工具不再自动执行该第三方脚本。${NC}"
-    echo "  请二选一："
-    echo "    A. 手动安装：先自行审阅脚本内容，再执行"
-    echo "       curl -L todesk.lanbai.top | less     # 先看内容"
-    echo "    B. 打开终端手动运行安装（执行前请确认已了解上述改动）"
+    echo -e "${YELLOW}════════════════ 安装 ToDesk ════════════════${NC}"
     echo ""
 
-    local ans
-    if ! read -p "输入 y 在终端中打开第三方脚本（需自行确认风险），其他键取消: " -n 1 -r ans < /dev/tty; then
+    # ToDesk 官方 Arch 包长期停留在 4.1.0，社区（archtodesk）重打包了 4.7.2.0。
+    # 这里不再执行任何第三方 shell 脚本，改为自己取回 .pkg.tar.zst 后用 pacman 直接装：
+    # 少跑一段 root 脚本、不重建 pacman 钥匙环、不装 base-devel、不硬编码 /home/deck。
+    local TODESK_REPO="https://gitee.com/mclanbai/archtodesk.git"
+    local TODESK_PKG="todesk-bin-4.7.2.0-4-x86_64.pkg.tar.zst"
+    local TODESK_VERSION="4.7.2.0"
+    local CLONE_DIR="$TEMP_DIR/archtodesk"
+    local DESKTOP_FILE="$HOME/Desktop/ToDesk.desktop"
+
+    echo "  来源: gitee.com/mclanbai/archtodesk（社区重打包的官方 4.7.2.0 安装包）"
+    echo "  本功能只下载该仓库里的 .pkg.tar.zst 并用 pacman 安装，不执行其中任何脚本。"
+    echo ""
+
+    # ---------- 已安装检测 ----------
+    # 三种来源都算「已安装」：pacman 包（todesk-bin / todesk）、/opt/todesk 程序目录、
+    # 以及能直接跑起来的 ToDesk 二进制。只看 pacman 会漏掉包数据库损坏或手动解包的情况。
+    local installed_ver="" installed_src=""
+    if pacman -Q todesk-bin &>/dev/null; then
+        installed_ver=$(pacman -Q todesk-bin 2>/dev/null | awk '{print $2}')
+        installed_src="pacman 包 todesk-bin"
+    elif pacman -Q todesk &>/dev/null; then
+        installed_ver=$(pacman -Q todesk 2>/dev/null | awk '{print $2}')
+        installed_src="pacman 包 todesk"
+    elif [ -x /opt/todesk/bin/ToDesk ] || [ -d /opt/todesk ]; then
+        installed_ver="未知（非 pacman 安装）"
+        installed_src="/opt/todesk 目录"
+    fi
+
+    if [ -n "$installed_ver" ]; then
+        echo -e "${GREEN}✓ 检测到已安装 ToDesk${NC}"
+        echo "    当前版本: ${installed_ver}"
+        echo "    安装来源: ${installed_src}"
+        echo "    目标版本: ${TODESK_VERSION}"
         echo ""
-        echo "操作已取消。"
-        return 0
-    fi
-    echo ""
-    if [[ ! "$ans" =~ ^[Yy]$ ]]; then
-        echo "操作已取消。"
-        return 0
-    fi
-
-    # 用户明确确认后：先把脚本下载到本地供查看，再在可见的情况下执行
-    local script_path="/tmp/steamdeck_toolbox_todesk_install.sh"
-    if ! curl -fL --connect-timeout 20 --max-time 60 -o "$script_path" todesk.lanbai.top; then
-        echo -e "${RED}✗ 下载安装脚本失败，请检查网络后重试。${NC}"
-        rm -f "$script_path"
-        return 1
-    fi
-    if [ ! -s "$script_path" ]; then
-        echo -e "${RED}✗ 下载内容为空，已中止。${NC}"
-        rm -f "$script_path"
-        return 1
-    fi
-    if ! bash -n "$script_path" 2>/dev/null; then
-        echo -e "${RED}✗ 下载的脚本存在语法错误，已中止执行。${NC}"
-        echo -e "${YELLOW}  脚本已保留在 $script_path 供检查。${NC}"
-        return 1
-    fi
-
-    echo -e "${CYAN}脚本已下载到 $script_path，内容如下（请确认无误后继续）：${NC}"
-    echo "----------------------------------------"
-    sed -n '1,80p' "$script_path"
-    echo "----------------------------------------"
-    local go
-    if ! read -p "按回车键或 A 键执行该脚本，其他键取消: " -n 1 -r go < /dev/tty; then
+        echo -e "${YELLOW}请选择操作：${NC}"
+        echo "  1. 重新安装（卸载现有版本后重装 ${TODESK_VERSION}）"
+        echo "  2. 不安装，直接退出"
         echo ""
-        echo "操作已取消（脚本保留在 $script_path）。"
-        return 0
-    fi
-    echo ""
-    if [[ ! "$go" =~ ^[Aa]$ && -n "$go" ]]; then
-        echo "操作已取消（脚本保留在 $script_path）。"
-        return 0
+        local choice
+        while true; do
+            if ! read -p "请输入选择 [1-2]（回车默认 2）: " choice < /dev/tty; then
+                echo ""
+                echo -e "${GREEN}保持当前安装，未做任何改动。${NC}"
+                return 0
+            fi
+            case "$choice" in
+                1) break ;;
+                ""|2)
+                    echo -e "${GREEN}保持当前安装，未做任何改动。${NC}"
+                    return 0 ;;
+                *) echo -e "${RED}无效输入，请输入 1 或 2。${NC}" ;;
+            esac
+        done
+        echo -e "${CYAN}将卸载现有版本后重装...${NC}"
     fi
 
-    if bash "$script_path"; then
-        echo -e "${GREEN}✓ ToDesk 安装脚本已执行完成${NC}"
+    # ---------- 前置工具 ----------
+    local missing_tools=()
+    command -v git &>/dev/null || missing_tools+=("git")
+    if [ ${#missing_tools[@]} -gt 0 ]; then
+        echo -e "${YELLOW}缺少必要工具: ${missing_tools[*]}${NC}"
+        if ! ensure_writable; then return 1; fi
+        if ! sudo pacman -S --needed --noconfirm "${missing_tools[@]}"; then
+            echo -e "${RED}✗ 安装 ${missing_tools[*]} 失败。${NC}"
+            return 1
+        fi
+    fi
+
+    # ---------- 解除只读（pacman 写系统需要） ----------
+    if ! ensure_writable; then return 1; fi
+
+    # ---------- 运行依赖 ----------
+    echo ""
+    echo -e "${CYAN}检查运行依赖...${NC}"
+    local missing_deps=()
+    for dep in gtk3 libappindicator-gtk3; do
+        pacman -Q "$dep" &>/dev/null || missing_deps+=("$dep")
+    done
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        echo -e "${YELLOW}缺少依赖: ${missing_deps[*]}，正在安装...${NC}"
+        if ! sudo pacman -S --needed --noconfirm "${missing_deps[@]}"; then
+            echo -e "${RED}✗ 依赖安装失败，已中止。${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}✓ 依赖安装完成${NC}"
     else
-        echo -e "${RED}✗ ToDesk 安装脚本执行失败，请检查上方输出。${NC}"
-        echo -e "${YELLOW}  脚本位置: $script_path${NC}"
+        echo -e "${GREEN}✓ 依赖已满足（gtk3、libappindicator-gtk3）${NC}"
+    fi
+
+    # ---------- 取回安装包 ----------
+    # 注意：Gitee 对仓库内 >1MB 的文件禁止匿名 raw 直链（返回 403 large file require
+    # login），所以 80MB 的包只能通过 git clone 取，不能直接 curl 下载。
+    echo ""
+    echo -e "${CYAN}正在下载 ToDesk $TODESK_VERSION 安装包（约 80MB）...${NC}"
+    echo -e "${YELLOW}（Gitee 限制大文件直链下载，这里用 git clone 取包，请稍候）${NC}"
+    rm -rf "$CLONE_DIR"
+    if ! git clone --depth 1 --progress "$TODESK_REPO" "$CLONE_DIR"; then
+        echo -e "${RED}✗ 下载失败，请检查网络后重试。${NC}"
+        rm -rf "$CLONE_DIR"
+        return 1
+    fi
+
+    local pkg_path="$CLONE_DIR/$TODESK_PKG"
+    if [ ! -f "$pkg_path" ]; then
+        echo -e "${RED}✗ 未在仓库中找到 $TODESK_PKG，上游仓库结构可能已变更。${NC}"
+        echo -e "${YELLOW}  已中止，未修改系统。${NC}"
+        rm -rf "$CLONE_DIR"
+        return 1
+    fi
+
+    # ---------- 完整性校验 ----------
+    echo ""
+    echo -e "${CYAN}校验安装包完整性...${NC}"
+    local verify_ok=0
+    if command -v zstd &>/dev/null; then
+        zstd -t "$pkg_path" &>/dev/null && verify_ok=1
+    else
+        pacman -Qip "$pkg_path" &>/dev/null && verify_ok=1
+    fi
+    if [ "$verify_ok" -ne 1 ]; then
+        echo -e "${RED}✗ 安装包校验失败（文件损坏或不完整），已中止。${NC}"
+        rm -rf "$CLONE_DIR"
+        return 1
+    fi
+    echo -e "${GREEN}✓ 安装包完整${NC}"
+
+    # ---------- 清理旧版本 ----------
+    # todesk-bin 声明 conflict=todesk，官方 4.1.0 若还在会挡住安装，先卸掉。
+    if pacman -Q todesk &>/dev/null; then
+        echo -e "${CYAN}卸载旧版 todesk 包...${NC}"
+        sudo pacman -R --noconfirm todesk 2>/dev/null || true
+    fi
+    if pacman -Q todesk-bin &>/dev/null; then
+        echo -e "${CYAN}卸载现有 todesk-bin...${NC}"
+        sudo pacman -R --noconfirm todesk-bin 2>/dev/null || true
+    fi
+
+    # ---------- 安装 ----------
+    echo ""
+    echo -e "${CYAN}正在安装 ToDesk $TODESK_VERSION ...${NC}"
+    if ! sudo pacman -U --noconfirm "$pkg_path"; then
+        echo -e "${RED}✗ 安装失败，请检查上方 pacman 输出。${NC}"
+        rm -rf "$CLONE_DIR"
+        return 1
+    fi
+
+    # ---------- 服务与快捷方式 ----------
+    sudo systemctl daemon-reload 2>/dev/null || true
+    sudo systemctl enable todeskd.service 2>/dev/null || true
+    sudo systemctl restart todeskd.service 2>/dev/null || true
+
+    if [ -f /usr/share/applications/todesk.desktop ]; then
+        mkdir -p "$HOME/Desktop"
+        if cp -f /usr/share/applications/todesk.desktop "$DESKTOP_FILE" 2>/dev/null; then
+            chmod +x "$DESKTOP_FILE" 2>/dev/null || true
+            echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
+        fi
+    fi
+
+    # ---------- 清理旧方案残留 ----------
+    # 旧版本会引导用户执行第三方脚本，在桌面留下这两个「安装/重装」图标，顺手清掉。
+    rm -f "$HOME/Desktop/install-todesk-service.desktop" \
+          "$HOME/Desktop/reinstall-todesk-service.desktop" 2>/dev/null || true
+    sudo rm -rf /tmp/lanbai 2>/dev/null || true
+    rm -rf "$CLONE_DIR"
+
+    # ---------- 结果确认 ----------
+    echo ""
+    if pacman -Q todesk-bin &>/dev/null || [ -x /opt/todesk/bin/ToDesk ]; then
+        echo -e "${GREEN}✅ ToDesk $TODESK_VERSION 安装完成${NC}"
+        echo -e "${YELLOW}提示: ToDesk 仅支持 X11 会话，不支持 Wayland。${NC}"
+        echo -e "${YELLOW}      在游戏模式下请先切到桌面模式运行；桌面快捷方式已放在 $DESKTOP_FILE${NC}"
+    else
+        echo -e "${RED}✗ 安装后未检测到 ToDesk，请检查上方输出。${NC}"
         return 1
     fi
 }
@@ -7528,7 +7655,32 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-23（v1.8.9）
+        changelog_content = """2026-10-25（v1.9.1）
+【功能改进】
+- 「安装 ToDesk」完善已安装检测：安装前先判断本机是否已装，已装则显示当前版本、安装来源、
+  目标版本，并给出「1. 重新安装 / 2. 不安装直接退出」两个明确选项（回车默认选 2，不误装）
+- 检测范围不再只看 pacman 包：pacman 包数据库损坏、或当初是手动解包安装的设备，
+  只要 /opt/todesk 目录或 ToDesk 主程序存在，同样会被识别为已安装（此前会漏判，
+  导致重复安装覆盖）
+- 未安装时不再出现询问，直接进入安装流程
+
+2026-10-25（v1.9.0）
+【功能改进】
+- 重写「安装 ToDesk」：不再下载并执行第三方安装脚本，改为直接取回安装包用 pacman 安装
+  · 原因：原方案执行的 todesk.lanbai.top 脚本里，真正安装的那行 `sh /tmp/lanbai/install.sh`
+    其实是注释掉的（第 14 行 `#sh ...`），它只在桌面丢一个「ToDesk安装」图标，要用户再点一次
+    才会下载另一个脚本执行，属于四段式绕路，而且并不真正完成安装
+  · 新做法：git clone 社区仓库取到 todesk-bin 4.7.2.0 的 .pkg.tar.zst，校验完整性后
+    直接 pacman -U 安装，全程不执行任何第三方 shell 脚本
+  · 顺带不再做这些多余且有风险的操作：重建 pacman 钥匙环（pacman-key --init/--populate）、
+    安装 base-devel 整套编译工具链、硬编码 /home/deck 路径（非 deck 用户名会出错）
+  · 增加了已安装检测（可保持或卸载重装）、依赖自动补齐（gtk3 / libappindicator-gtk3）、
+    旧版 todesk 4.1.0 冲突自动卸载、安装包完整性校验、上游包名变更时安全中止
+  · 自动创建桌面快捷方式并启用 todeskd 服务，同时清理旧方案遗留的桌面「安装/重装」图标
+  · 说明：Gitee 禁止匿名直链下载仓库内 >1MB 的文件（返回 403），所以 80MB 的安装包
+    只能通过 git clone 取回，无法用 curl 直接下载
+
+2026-10-23（v1.8.9）
 【界面修复】
 - 彻底修复「窗口外面多一圈黑色区域」：不再使用「透明圆角 + 投影」这套窗口外观。
   那套做法要求窗口表面比可见内容大一圈（CSD 透明边距，实测四周 68/60/76px），
