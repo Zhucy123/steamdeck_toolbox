@@ -2,7 +2,7 @@
 
 一个专为 Steam Deck 打造的一站式系统管理与增强工具，集成系统优化、引导管理、软件安装、网络加速、双系统支持、游戏增强等 40 余项实用功能，全面覆盖日常使用与进阶调校需求。
 
-> **版本：v1.9.2** | 更新日期：2026-10-26
+> **版本：v1.9.3** | 更新日期：2026-10-26
 > 制作人：薯条 & DeepSeek
 
 ## 🚀 一键安装
@@ -22,6 +22,16 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - 打开工具箱后启动时自动检查更新（内置自更新）
 
 ## 📝 更新日志
+
+2026-10-26（v1.9.3）
+【功能改进】
+- 「Watt Toolkit (Steam++)」安装完成后新增一步「信任证书」，不再需要装完再手动敲命令
+  - 把加速插件自签的根证书（`~/.local/share/Steam++/Plugins/Accelerator/SteamTools.Certificate.cer`）写入系统信任库；把 `/etc/hosts` 设为可读写，加速改 hosts 时不用每次提权
+  - 证书由 Watt Toolkit 首次运行时生成，安装包里没有；若检测不到会提示先启动软件点一次「加速」，并可代为拉起 Watt Toolkit，之后按回车重新检测（Q 放弃）
+  - 写入前用 openssl 校验证书可解析、未过期，避免把损坏文件写进信任库；已存在则提示为覆盖更新
+  - 明确告知安全影响：信任该根证书等价于允许对应私钥持有者解密本机 https 流量
+- 「网络工具 → Watt Toolkit (Steam++)」新增独立的「信任证书」菜单项，可随时重跑（证书重新生成、换设备后需要再次信任）
+- 卸载 Watt Toolkit 时提示并可选一并清除系统级改动：从信任库移除该根证书、把 `/etc/hosts` 权限从所有人可写恢复，并刷新系统证书包；跳过则给出手动命令
 
 2026-10-26（v1.9.2）
 【功能改进】
@@ -353,7 +363,7 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - UU 加速器插件  
 - 迅游加速器插件  
 - 奇游联机宝加速插件  
-- Watt Toolkit (Steam++)  
+- Watt Toolkit (Steam++)（含加速证书信任、卸载时可选清除系统改动）  
 - AnyDesk 远程协助  
 - ToDesk 远程协助  
 - AskLink 远程协助  

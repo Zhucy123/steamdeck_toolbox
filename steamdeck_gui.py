@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.9.2"
+VERSION = "1.9.3"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -3254,6 +3254,7 @@ watt_toolkit_install() {
     local DESKTOP_DIR="$HOME/Desktop"
     local DOWNLOAD_URL="https://gitee.com/rmbgame/SteamTools/releases/download/3.1.0/Steam%20%20_v3.1.0_linux_x64.tgz"
     local VERSION="3.1.0"
+    local trust_now=""
 
     for cmd in curl sudo unzip tar; do
         if ! command -v $cmd &> /dev/null; then
@@ -3387,10 +3388,175 @@ EOF
     echo -e "${GREEN}安装目录: ${INSTALL_DIR}${NC}"
     echo ""
     echo -e "${YELLOW}使用提示：${NC}"
-    echo "如果加速报错，请按照下面步骤操作："
-    echo "  网络加速 → 加速设置 → 安装证书"
+    echo "  · 请在桌面启动 Watt Toolkit。"
+    echo "  · 首次加速前需要让加速插件生成证书：在「网络加速」里点一次「加速」即可。"
+    echo "  · 证书生成后运行本工具的「信任证书」，加速才不会报证书错误。"
     echo ""
-    echo "请在桌面启动 Watt Toolkit。"
+
+    # ---------- 安装后直接进入证书信任 ----------
+    echo -e "${YELLOW}加速功能还需要信任证书，否则 https 加速会报证书错误。${NC}"
+    read -n1 -p "现在信任加速证书吗？[回车/A=是，其他键=稍后] " trust_now < /dev/tty
+    echo
+    if [[ -z "$trust_now" || "$trust_now" =~ [Aa] ]]; then
+        watt_toolkit_trust_cert skip_clear
+    else
+        echo -e "${CYAN}已跳过。之后可在「网络工具 → Watt Toolkit (Steam++) → 信任证书」里执行。${NC}"
+    fi
+}
+
+watt_toolkit_trust_cert() {
+    # 从安装流程调用时传 skip_clear，避免把安装结果摘要清掉
+    [ "${1:-}" = "skip_clear" ] || clear
+    echo -e "${YELLOW}═══════ 信任 Watt Toolkit (Steam++) 加速证书 ═══════${NC}"
+    echo ""
+    echo "加速功能需要三项系统级改动："
+    echo "  1. 把 Watt Toolkit 自签的根证书加入系统信任库（否则 https 加速报证书错误）"
+    echo "  2. 允许写入 /etc/hosts（加速靠改 hosts 实现域名重定向）"
+    echo "  3. 允许读取 /etc/hosts（Watt Toolkit 读取当前 hosts 内容以做增量修改）"
+    echo ""
+    echo -e "${YELLOW}安全提示：${NC}"
+    echo "  该证书是 Watt Toolkit 在本机自己生成的根证书（CN=SteamTools Certificate），"
+    echo "  信任它意味着持有对应私钥的进程可以解密本机的 https 流量。"
+    echo "  不再使用 Watt Toolkit 时，建议移除该信任（见卸载提示）。"
+    echo ""
+
+    local CERT_DIR="$HOME/.local/share/Steam++/Plugins/Accelerator"
+    local CERT_FILE="$CERT_DIR/SteamTools.Certificate.cer"
+    local INSTALL_DIR="$HOME/Watt Toolkit"
+    local launch_now="" retry=""
+
+    # ---------- 前置检查 ----------
+    if ! command -v trust &>/dev/null; then
+        echo -e "${RED}✗ 未找到 trust 命令（由 p11-kit 提供），无法写入系统信任库。${NC}"
+        echo -e "${YELLOW}  可尝试：sudo pacman -S p11-kit${NC}"
+        return 1
+    fi
+
+    # ---------- 证书存在性 ----------
+    # 证书不是安装包自带的，而是 Watt Toolkit 首次运行时加速插件生成的，
+    # 所以刚装完通常还没有，需要用户先启动软件并点一次「加速」。
+    if [ ! -f "$CERT_FILE" ]; then
+        echo -e "${YELLOW}未找到加速证书：${NC}"
+        echo "  $CERT_FILE"
+        echo ""
+        echo "这个证书由 Watt Toolkit 首次运行时生成，安装包里并没有。"
+        echo "请先启动 Watt Toolkit，在「网络加速」里点一次「加速」，证书才会出现。"
+        echo ""
+
+        if [ -x "$INSTALL_DIR/Steam++.sh" ]; then
+            read -n1 -p "现在启动 Watt Toolkit 吗？[回车/A=启动，其他键=跳过] " launch_now < /dev/tty
+            echo
+            if [[ -z "$launch_now" || "$launch_now" =~ [Aa] ]]; then
+                nohup "$INSTALL_DIR/Steam++.sh" >/dev/null 2>&1 &
+                echo -e "${GREEN}✓ 已启动 Watt Toolkit${NC}"
+                echo ""
+            fi
+        else
+            echo -e "${YELLOW}未找到 $INSTALL_DIR/Steam++.sh，请手动从桌面启动。${NC}"
+            echo ""
+        fi
+
+        # 等用户操作完再检测；Q 可放弃，避免卡死在循环里
+        local wait_count=0
+        while [ ! -f "$CERT_FILE" ]; do
+            wait_count=$((wait_count + 1))
+            if [ "$wait_count" -gt 30 ]; then
+                echo -e "${YELLOW}等待超时，已退出。证书生成后可再运行本功能。${NC}"
+                return 0
+            fi
+            read -n1 -p "在 Watt Toolkit 里点一次「加速」后按回车重新检测（Q 放弃）: " retry < /dev/tty
+            echo
+            if [[ "${retry:-}" =~ [Qq] ]]; then
+                echo -e "${CYAN}已放弃。证书生成后可再运行「信任证书」。${NC}"
+                return 0
+            fi
+        done
+        echo ""
+    fi
+
+    echo -e "${GREEN}✓ 找到证书: $CERT_FILE${NC}"
+
+    # ---------- 证书校验 ----------
+    if command -v openssl &>/dev/null; then
+        local cert_subject cert_end
+        if ! cert_subject=$(openssl x509 -in "$CERT_FILE" -noout -subject 2>/dev/null); then
+            echo -e "${RED}✗ 证书无法解析，文件可能已损坏。${NC}"
+            echo -e "${YELLOW}  请在 Watt Toolkit 里重新生成证书后再试。${NC}"
+            return 1
+        fi
+        echo "  $cert_subject"
+        cert_end=$(openssl x509 -in "$CERT_FILE" -noout -enddate 2>/dev/null | cut -d= -f2)
+        [ -n "$cert_end" ] && echo "  有效期至: $cert_end"
+        if ! openssl x509 -in "$CERT_FILE" -noout -checkend 0 &>/dev/null; then
+            echo -e "${RED}✗ 证书已过期，请先在 Watt Toolkit 里重新生成证书。${NC}"
+            return 1
+        fi
+    else
+        # 没有 openssl 时至少确认是 PEM 证书，避免把垃圾文件写进信任库
+        if ! grep -q "BEGIN CERTIFICATE" "$CERT_FILE" 2>/dev/null; then
+            echo -e "${RED}✗ 文件不是有效的 PEM 证书，已中止。${NC}"
+            return 1
+        fi
+    fi
+
+    # ---------- 已信任检测 ----------
+    local already_trusted=false
+    if trust list 2>/dev/null | grep -qi "SteamTools Certificate"; then
+        already_trusted=true
+        echo ""
+        echo -e "${CYAN}系统信任库里已存在该证书，本次将覆盖更新。${NC}"
+    fi
+
+    echo ""
+    read -n1 -p "按回车键或 A 键确认写入系统信任库并调整 /etc/hosts 权限，其他键取消: " confirm < /dev/tty
+    echo
+    if [[ -n "$confirm" && ! "$confirm" =~ [Aa] ]]; then
+        echo -e "${GREEN}已取消，未做任何改动。${NC}"
+        return 0
+    fi
+
+    # ---------- 解除只读（写 /etc 需要） ----------
+    if ! ensure_writable; then return 1; fi
+
+    # ---------- 写入信任库 ----------
+    echo ""
+    echo -e "${CYAN}正在把证书写入系统信任库...${NC}"
+    if sudo trust anchor --store "$CERT_FILE"; then
+        echo -e "${GREEN}✓ 证书已加入系统信任库${NC}"
+    else
+        echo -e "${RED}✗ 写入信任库失败，请检查上方输出。${NC}"
+        return 1
+    fi
+
+    if trust list 2>/dev/null | grep -qi "SteamTools Certificate"; then
+        echo -e "${GREEN}✓ 已确认证书在信任库中${NC}"
+    else
+        echo -e "${YELLOW}⚠ 未能从 trust list 中确认证书，请手动检查: trust list | grep -i steam${NC}"
+    fi
+
+    # ---------- /etc/hosts 权限 ----------
+    # 加速靠改 hosts 实现，Watt Toolkit 以普通用户运行，需要读写权限才不用每次提权。
+    echo ""
+    echo -e "${CYAN}调整 /etc/hosts 权限...${NC}"
+    if sudo chmod a+w /etc/hosts && sudo chmod a+r /etc/hosts; then
+        echo -e "${GREEN}✓ /etc/hosts 权限已调整${NC}"
+    else
+        echo -e "${RED}✗ 调整 /etc/hosts 权限失败${NC}"
+        return 1
+    fi
+    local hosts_perm
+    hosts_perm=$(stat -c '%A' /etc/hosts 2>/dev/null)
+    [ -n "$hosts_perm" ] && echo "  当前权限: $hosts_perm"
+
+    # ---------- 结果 ----------
+    echo ""
+    echo -e "${GREEN}✅ 加速证书信任完成${NC}"
+    echo -e "${YELLOW}提示：${NC}"
+    echo "  · 已打开的浏览器需要重启，才会重新加载系统证书库"
+    echo "  · 若 Watt Toolkit 重新生成了证书，需要再运行一次本功能"
+    if $already_trusted; then
+        echo "  · 本次是覆盖更新，旧证书已被替换"
+    fi
 }
 
 watt_toolkit_uninstall() {
@@ -3429,6 +3595,74 @@ watt_toolkit_uninstall() {
         echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
     else
         echo -e "${RED}✗ 删除桌面快捷方式失败${NC}"
+    fi
+
+    echo ""
+    # ---------- 清理信任证书与 hosts 权限 ----------
+    # 安装时「信任证书」把自签根证书写进了系统信任库、并放宽了 /etc/hosts 权限，
+    # 卸载后这些都得收回来，否则等于留下一张能解密 https 的根证书和可写的 hosts。
+    local cert_dir="$HOME/.local/share/Steam++/Plugins/Accelerator"
+    local cert_file="$cert_dir/SteamTools.Certificate.cer"
+    local trusted=false
+    trust list 2>/dev/null | grep -qi "SteamTools Certificate" && trusted=true
+    # 只有 others 的写权限位真的开着才提示，避免误报（比如用户从没跑过信任证书）
+    # stat -c %A 输出的第 9 个字符即 others 的写位，如 -rw-rw-rw- 的末位是 w
+    local hosts_open=false
+    local hosts_perm_now
+    hosts_perm_now=$(stat -c '%A' /etc/hosts 2>/dev/null)
+    [ "${hosts_perm_now:8:1}" = "w" ] && hosts_open=true
+
+    if $trusted || $hosts_open; then
+        echo -e "${YELLOW}检测到 Watt Toolkit 还留下了系统级改动：${NC}"
+        $trusted && echo "  • 系统信任库里仍有 SteamTools 根证书（可用于解密本机 https）"
+        $hosts_open && echo "  • /etc/hosts 被放宽为所有人可写（当前 $(stat -c '%A' /etc/hosts 2>/dev/null)）"
+        echo ""
+        read -n1 -p "是否一并清除（移除根证书 + 恢复 hosts 权限）？[回车/A=清除，其他键=保留] " clean_sys < /dev/tty
+        echo
+        if [[ -z "$clean_sys" || "$clean_sys" =~ [Aa] ]]; then
+            if ! ensure_writable; then return 1; fi
+
+            # 移除信任：优先用 trust anchor --remove，失败再从 trust list 里取 pkcs11 id 兜底
+            if $trusted; then
+                echo -e "${CYAN}正在移除系统信任库中的 SteamTools 证书...${NC}"
+                if [ -f "$cert_file" ] && sudo trust anchor --remove "$cert_file" 2>/dev/null; then
+                    echo -e "${GREEN}✓ 已移除证书${NC}"
+                else
+                    # 证书文件已被删掉时，只能从信任库里反查锚点 id
+                    local anchor_id
+                    anchor_id=$(trust list 2>/dev/null | grep -i -B 1 "label: SteamTools Certificate" \
+                                | grep -o 'pkcs11:id=[^;]*;type=cert' | head -1)
+                    if [ -n "$anchor_id" ] && sudo trust anchor --remove "$anchor_id" 2>/dev/null; then
+                        echo -e "${GREEN}✓ 已移除证书${NC}"
+                    else
+                        echo -e "${YELLOW}⚠ 自动移除失败，请手动执行：${NC}"
+                        echo "    trust list | grep -i -B1 'SteamTools'   # 查看锚点"
+                        echo "    sudo trust anchor --remove '<上面的 pkcs11:id=...>'"
+                    fi
+                fi
+            fi
+
+            # 恢复 /etc/hosts 权限为常规的 644（属主可写，其他只读）
+            echo -e "${CYAN}正在恢复 /etc/hosts 权限...${NC}"
+            if sudo chmod 644 /etc/hosts 2>/dev/null; then
+                echo -e "${GREEN}✓ /etc/hosts 已恢复为 644（所有人可写已收回）${NC}"
+            else
+                echo -e "${YELLOW}⚠ 恢复失败，请手动执行: sudo chmod 644 /etc/hosts${NC}"
+            fi
+            local hosts_perm
+            hosts_perm=$(stat -c '%A' /etc/hosts 2>/dev/null)
+            [ -n "$hosts_perm" ] && echo "  当前权限: $hosts_perm"
+
+            # 信任库变更后刷新系统证书包
+            if command -v update-ca-trust &>/dev/null; then
+                sudo update-ca-trust 2>/dev/null || true
+            fi
+        else
+            echo -e "${YELLOW}已保留证书信任与 hosts 权限。${NC}"
+            echo -e "${YELLOW}如需手动清除：${NC}"
+            echo "    sudo trust anchor --remove \"$cert_file\""
+            echo "    sudo chmod 644 /etc/hosts"
+        fi
     fi
 
     echo ""
@@ -7319,6 +7553,7 @@ class MainWindow(Gtk.Window):
                 ("奇游联机宝加速插件", "install_qiyou_accelerator"),
                 ("Watt Toolkit (Steam++)", [
                     ("安装", "watt_toolkit_install"),
+                    ("信任证书", "watt_toolkit_trust_cert"),
                     ("卸载", "watt_toolkit_uninstall")
                 ])
             ],
@@ -7781,7 +8016,21 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-26（v1.9.2）
+        changelog_content = """2026-10-26（v1.9.3）
+【功能改进】
+- 「Watt Toolkit (Steam++)」安装完成后新增一步「信任证书」，不再需要装完再手动敲命令
+  · 把加速插件自签的根证书（~/.local/share/Steam++/Plugins/Accelerator/SteamTools.Certificate.cer）
+    写入系统信任库；把 /etc/hosts 设为可读写，加速改 hosts 时不用每次提权
+  · 证书由 Watt Toolkit 首次运行时生成，安装包里没有；若检测不到会提示先启动软件点一次「加速」，
+    并可代为拉起 Watt Toolkit，之后按回车重新检测（Q 放弃）
+  · 写入前用 openssl 校验证书可解析、未过期，避免把损坏文件写进信任库；已存在则提示为覆盖更新
+  · 明确告知安全影响：信任该根证书等价于允许对应私钥持有者解密本机 https 流量
+- 「网络工具 → Watt Toolkit (Steam++)」新增独立的「信任证书」菜单项，可随时重跑
+  （证书重新生成、换设备后需要再次信任）
+- 卸载 Watt Toolkit 时提示并可选一并清除系统级改动：从信任库移除该根证书、
+  把 /etc/hosts 权限从所有人可写恢复，并刷新系统证书包；跳过则给出手动命令
+
+2026-10-26（v1.9.2）
 【功能改进】
 - 「安装 ToDesk」检测到本机已安装时，选项从两个增加为三个：新增「3. 卸载 ToDesk（不再安装）」，
   可以直接在安装流程里把 ToDesk 卸掉，不用再绕到「更新和卸载软件」里找（回车默认仍是 2 不安装，
