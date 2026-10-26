@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.9.3"
+VERSION = "1.9.4"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -4568,19 +4568,50 @@ ge_proton_do_install() {
         local idx=$((i+1))
         echo "# 正在处理第 $idx/$total 个: $version (准备下载...)" >&3
 
-        local download_url=$(curl -s "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/tags/${version}" | \
+        # ---------- 解析下载地址 ----------
+        # 注意：GE-Proton11-4 起上游改了产物命名，包名和压缩包内顶层目录都带架构后缀
+        # （GE-Proton11-11-x86_64.tar.gz / 解开后是 GE-Proton11-11-x86_64/），
+        # 而 release tag 仍是 GE-Proton11-11。旧版本则是 <tag>.tar.gz、顶层目录就是 <tag>。
+        # 这里同时取回文件大小和 sha512 地址，供下载后校验。
+        local asset_info
+        asset_info=$(curl -s --connect-timeout 20 --max-time 60 \
+            "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/tags/${version}" | \
             python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
-    for asset in data.get('assets', []):
-        name = asset.get('name', '')
-        if name.endswith('.tar.gz') and 'aarch64' not in name:
-            print(asset.get('browser_download_url', ''))
+except Exception:
+    sys.exit(0)
+assets = data.get('assets', [])
+pick = None
+for a in assets:
+    n = a.get('name', '')
+    if n.endswith('.tar.gz') and 'aarch64' not in n and 'x86_64' in n:
+        pick = a
+        break
+if pick is None:
+    for a in assets:
+        n = a.get('name', '')
+        if n.endswith('.tar.gz') and 'aarch64' not in n:
+            pick = a
             break
-except:
-    pass
+if pick is None:
+    sys.exit(0)
+sha = ''
+want = pick.get('name', '').replace('.tar.gz', '.sha512sum')
+for a in assets:
+    if a.get('name', '') == want:
+        sha = a.get('browser_download_url', '')
+        break
+print(pick.get('browser_download_url', ''))
+print(pick.get('size', 0))
+print(sha)
 ")
+        local download_url="" asset_size="" sha_url=""
+        download_url=$(printf '%s\n' "$asset_info" | sed -n '1p')
+        asset_size=$(printf '%s\n' "$asset_info" | sed -n '2p')
+        sha_url=$(printf '%s\n' "$asset_info" | sed -n '3p')
+
         if [ -z "$download_url" ]; then
             echo "# 错误：无法获取 $version 的下载链接，跳过" >&3
             ((failed_count++))
@@ -4609,6 +4640,38 @@ except:
         fi
         rm -f /tmp/curl_err_$$.log
 
+        # ---------- 下载完整性校验 ----------
+        # 镜像（gh-proxy 一类）在连接中断时可能返回 200 + 截断的包，
+        # curl 看不出问题，tar 又只在末尾才报 EOF，于是表现为「解压失败」。
+        # 这里先用文件大小和 sha512 两道校验把截断包挡在解压之前。
+        local fsize
+        fsize=$(stat -c '%s' "$filename" 2>/dev/null || echo 0)
+        if [ -n "$asset_size" ] && [ "$asset_size" != "0" ] && [ "$fsize" != "$asset_size" ]; then
+            echo "# 第 $idx/$total 个: $version 下载不完整（$fsize / $asset_size 字节），已跳过" >&3
+            rm -f "$filename"
+            cd /tmp && rm -rf "$temp_dir"
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (下载不完整: $fsize/$asset_size 字节)"
+            continue
+        fi
+
+        if [ -n "$sha_url" ] && command -v sha512sum &>/dev/null; then
+            local want_sha got_sha
+            want_sha=$(curl -sL --connect-timeout 20 --max-time 60 "${mirror}${sha_url}" 2>/dev/null \
+                       | awk '{print $1}' | head -1)
+            if [ -n "$want_sha" ]; then
+                got_sha=$(sha512sum "$filename" 2>/dev/null | awk '{print $1}')
+                if [ "$want_sha" != "$got_sha" ]; then
+                    echo "# 第 $idx/$total 个: $version 校验和不匹配，包已损坏，已跳过" >&3
+                    rm -f "$filename"
+                    cd /tmp && rm -rf "$temp_dir"
+                    ((failed_count++))
+                    failed_list="${failed_list}\n  $version (sha512 校验失败)"
+                    continue
+                fi
+            fi
+        fi
+
         # 先解压到临时目录校验完整性，成功后再移入 compatibilitytools.d。
         # 直接解到 install_dir 的问题是：下载包被截断/损坏时，tar 会留下
         # 半套目录，而 Steam 会把这个残缺版本当成可用的兼容层加载。
@@ -4629,18 +4692,42 @@ except:
         rm -f "$filename"
         cd /tmp && rm -rf "$temp_dir"
 
-        if [ $tar_ret -ne 0 ] || [ ! -d "$STAGE_DIR/$version" ]; then
+        # ---------- 定位解压出的顶层目录 ----------
+        # 不写死 "$STAGE_DIR/$version"：GE-Proton11-4 起包内顶层目录是
+        # GE-Proton11-11-x86_64（带架构后缀），与 tag GE-Proton11-11 不一致，
+        # 按旧判据会把解压成功的包误判成「压缩包损坏」。
+        # 这里取 stage 里唯一的顶层目录，再用 <tag> 前缀兜底匹配。
+        local EXTRACTED=""
+        if [ $tar_ret -eq 0 ]; then
+            local top_entries=("$STAGE_DIR"/*)
+            if [ ${#top_entries[@]} -eq 1 ] && [ -d "${top_entries[0]}" ]; then
+                EXTRACTED="${top_entries[0]}"
+            else
+                for d in "$STAGE_DIR/$version" "$STAGE_DIR/$version"-*; do
+                    [ -d "$d" ] && { EXTRACTED="$d"; break; }
+                done
+            fi
+        fi
+
+        if [ $tar_ret -ne 0 ] || [ -z "$EXTRACTED" ]; then
             # 解压失败：清掉半成品，绝不留到 compatibilitytools.d
             rm -rf "$STAGE_DIR"
-            echo "# 第 $idx/$total 个: $version 安装失败（压缩包损坏或解压中断）" >&3
+            if [ $tar_ret -ne 0 ]; then
+                echo "# 第 $idx/$total 个: $version 安装失败（压缩包损坏或解压中断）" >&3
+                failed_list="${failed_list}\n  $version (解压失败)"
+            else
+                echo "# 第 $idx/$total 个: $version 安装失败（压缩包结构异常，未找到版本目录）" >&3
+                failed_list="${failed_list}\n  $version (压缩包结构异常)"
+            fi
             ((failed_count++))
-            failed_list="${failed_list}\n  $version (解压失败)"
             continue
         fi
 
-        # 解压成功：删旧版本目录后原子移入，避免残留上一次的混合内容
+        # ---------- 移入目标目录 ----------
+        # 目标目录名保持 <tag>（如 GE-Proton11-11），这样已装列表、卸载、
+        # Steam 显示名都用同一个不带架构后缀的名字，和旧版本保持一致。
         rm -rf "${install_dir:?}/$version"
-        if ! mv "$STAGE_DIR/$version" "$install_dir/$version"; then
+        if ! mv "$EXTRACTED" "$install_dir/$version"; then
             rm -rf "$STAGE_DIR"
             echo "# 第 $idx/$total 个: $version 安装失败（移动到目标目录失败）" >&3
             ((failed_count++))
@@ -4658,6 +4745,9 @@ except:
             failed_list="${failed_list}\n  $version (安装校验失败)"
         fi
     done
+
+    # 用户中途取消时可能留下下载临时目录，统一收尾
+    rm -rf "${temp_dir:-}" /tmp/curl_err_$$.log 2>/dev/null || true
 
     if kill -0 $zenity_pid 2>/dev/null; then
         local result_msg="\n========== 安装完成 ==========\n成功: $success_count 个"
@@ -8016,7 +8106,22 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-26（v1.9.3）
+        changelog_content = """2026-10-26（v1.9.4）
+【问题修复】
+- 修复「GE-Proton 管理」安装时误报「解压失败（压缩包损坏或解压中断）」：
+  · 根因一（主因）：上游从 GE-Proton11-4 起改了产物命名，压缩包和包内顶层目录都带架构后缀
+    （GE-Proton11-11-x86_64.tar.gz，解开是 GE-Proton11-11-x86_64/），而 release tag 仍是
+    GE-Proton11-11。旧代码解压后写死检查 $STAGE_DIR/GE-Proton11-11，找不到就当成解压失败。
+    实际包是好的，tar 退出码也是 0，纯粹是判据写死了目录名
+  · 根因二：镜像断流时返回 200 + 截断的包，curl 认为成功，tar 一路解到末尾才报 EOF，
+    表现同样是「解压失败」。现在下载后先用文件大小 + sha512 校验，截断/损坏的包在解压前就被拦下
+  · 现在解压后按「stage 里唯一的顶层目录」定位，并用 <tag> 与 <tag>-* 前缀兜底；
+    安装目录名仍保持 <tag>（GE-Proton11-11），已装列表/卸载/Steam 显示名与旧版本一致
+  · 下载失败提示更具体：区分「下载不完整（x/y 字节）」「sha512 校验失败」「压缩包结构异常」，
+    不再一律报「解压失败」，便于判断是网络问题还是上游改名
+  · 安装循环结束后补充清理下载临时目录，用户中途取消不再留 /tmp/ge_proton_* 残留
+
+2026-10-26（v1.9.3）
 【功能改进】
 - 「Watt Toolkit (Steam++)」安装完成后新增一步「信任证书」，不再需要装完再手动敲命令
   · 把加速插件自签的根证书（~/.local/share/Steam++/Plugins/Accelerator/SteamTools.Certificate.cer）
