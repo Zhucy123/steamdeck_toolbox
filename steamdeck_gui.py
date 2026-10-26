@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.9.1"
+VERSION = "1.9.2"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -5613,20 +5613,25 @@ install_todesk() {
         echo -e "${YELLOW}请选择操作：${NC}"
         echo "  1. 重新安装（卸载现有版本后重装 ${TODESK_VERSION}）"
         echo "  2. 不安装，直接退出"
+        echo "  3. 卸载 ToDesk（不再安装）"
         echo ""
         local choice
         while true; do
-            if ! read -p "请输入选择 [1-2]（回车默认 2）: " choice < /dev/tty; then
+            if ! read -p "请输入选择 [1-3]（回车默认 2）: " choice < /dev/tty; then
                 echo ""
                 echo -e "${GREEN}保持当前安装，未做任何改动。${NC}"
                 return 0
             fi
             case "$choice" in
                 1) break ;;
+                3)
+                    echo ""
+                    uninstall_todesk
+                    return $? ;;
                 ""|2)
                     echo -e "${GREEN}保持当前安装，未做任何改动。${NC}"
                     return 0 ;;
-                *) echo -e "${RED}无效输入，请输入 1 或 2。${NC}" ;;
+                *) echo -e "${RED}无效输入，请输入 1、2 或 3。${NC}" ;;
             esac
         done
         echo -e "${CYAN}将卸载现有版本后重装...${NC}"
@@ -5752,6 +5757,126 @@ install_todesk() {
         echo -e "${RED}✗ 安装后未检测到 ToDesk，请检查上方输出。${NC}"
         return 1
     fi
+}
+
+uninstall_todesk() {
+    clear
+    echo -e "${YELLOW}════════════════ 卸载 ToDesk ════════════════${NC}"
+    echo ""
+
+    local DESKTOP_FILE="$HOME/Desktop/ToDesk.desktop"
+    local AUTOSTART_FILE="$HOME/.config/autostart/todesk.desktop"
+    local USER_DATA_DIR="$HOME/.local/share/todesk"
+
+    # ---------- 已安装检测 ----------
+    # 与 install_todesk 用同一套判据：pacman 包（todesk-bin / todesk）或 /opt/todesk 目录，
+    # 任一存在就算已安装。只看 pacman 会漏掉「包数据库损坏」和「手动解包安装」这两种情况。
+    local pkg_name="" pkg_ver=""
+    if pacman -Q todesk-bin &>/dev/null; then
+        pkg_name="todesk-bin"
+        pkg_ver=$(pacman -Q todesk-bin 2>/dev/null | awk '{print $2}')
+    elif pacman -Q todesk &>/dev/null; then
+        pkg_name="todesk"
+        pkg_ver=$(pacman -Q todesk 2>/dev/null | awk '{print $2}')
+    fi
+    local has_dir=false
+    [ -d /opt/todesk ] && has_dir=true
+
+    if [ -z "$pkg_name" ] && [ "$has_dir" = false ]; then
+        echo -e "${YELLOW}未检测到已安装的 ToDesk，无需卸载。${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}检测到 ToDesk 安装：${NC}"
+    [ -n "$pkg_name" ] && echo "  • pacman 包 ${pkg_name} ${pkg_ver}"
+    [ "$has_dir" = true ] && echo "  • 程序目录 /opt/todesk"
+    echo ""
+    echo -e "${YELLOW}将执行以下操作：${NC}"
+    echo "  1. 停止并禁用 todeskd 服务，结束正在运行的 ToDesk 进程"
+    echo "  2. 卸载 pacman 包（若存在），并清理 /opt/todesk 残留目录"
+    echo "  3. 删除桌面快捷方式与开机自启项"
+    echo ""
+    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm < /dev/tty
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo -e "${CYAN}继续卸载...${NC}"
+    else
+        echo -e "${GREEN}已取消，未做任何改动。${NC}"
+        return 0
+    fi
+
+    # ---------- 停止服务与进程 ----------
+    echo ""
+    echo -e "${CYAN}停止 ToDesk 服务...${NC}"
+    sudo systemctl stop todeskd.service 2>/dev/null || true
+    sudo systemctl disable todeskd.service 2>/dev/null || true
+    echo -e "${GREEN}✓ todeskd 服务已停止并禁用${NC}"
+    # 卸载前先结束残留进程，否则 /opt/todesk 里的二进制被占用会让删除不干净
+    sudo pkill -f '/opt/todesk/bin/' 2>/dev/null || true
+
+    # ---------- 卸载 pacman 包 ----------
+    if [ -n "$pkg_name" ]; then
+        if ! ensure_writable; then return 1; fi
+        echo ""
+        echo -e "${CYAN}正在卸载 pacman 包 ${pkg_name} ...${NC}"
+        if sudo pacman -R --noconfirm "$pkg_name"; then
+            echo -e "${GREEN}✓ ${pkg_name} 已卸载${NC}"
+        else
+            echo -e "${RED}✗ 卸载 ${pkg_name} 失败，请检查上方 pacman 输出。${NC}"
+            return 1
+        fi
+    fi
+
+    # ---------- 清理残留目录 ----------
+    # 手动解包安装（不经过 pacman）的设备，/opt/todesk 不在包数据库里，
+    # pacman -R 不会删它，必须自己清掉，否则下次检测仍会判成「已安装」。
+    if [ -d /opt/todesk ]; then
+        if ! ensure_writable; then return 1; fi
+        echo ""
+        echo -e "${CYAN}清理 /opt/todesk 残留目录...${NC}"
+        sudo rm -rf /opt/todesk 2>/dev/null || true
+        if [ -d /opt/todesk ]; then
+            echo -e "${YELLOW}⚠ /opt/todesk 未能完全删除，请手动执行: sudo rm -rf /opt/todesk${NC}"
+        else
+            echo -e "${GREEN}✓ /opt/todesk 已删除${NC}"
+        fi
+    fi
+    sudo systemctl daemon-reload 2>/dev/null || true
+
+    # ---------- 快捷方式与自启项 ----------
+    # 桌面快捷方式、自启项都不是包内文件（pacman -R 不会删），
+    # 连同旧方案遗留的两个「安装/重装」图标一起清掉。
+    local f
+    for f in "$DESKTOP_FILE" "$HOME/Desktop/todesk.desktop" \
+             "$HOME/Desktop/install-todesk-service.desktop" \
+             "$HOME/Desktop/reinstall-todesk-service.desktop" \
+             "$AUTOSTART_FILE"; do
+        if [ -e "$f" ]; then
+            rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ 已删除 $f${NC}"
+        fi
+    done
+
+    # ---------- 用户数据 ----------
+    if [ -d "$USER_DATA_DIR" ]; then
+        echo ""
+        echo -e "${CYAN}是否删除 ToDesk 的配置和用户数据（$USER_DATA_DIR）？${NC}"
+        echo -e "${YELLOW}删除后重装需要重新登录、重新配置设备列表。${NC}"
+        read -n1 -p "按回车键或 A 键确认删除，其他键保留: " del_data < /dev/tty
+        echo
+        if [[ -z "$del_data" || "$del_data" =~ [Aa] ]]; then
+            rm -rf "$USER_DATA_DIR" && echo -e "${GREEN}✓ 用户数据已删除${NC}"
+        else
+            echo -e "${YELLOW}已保留用户数据（$USER_DATA_DIR）。${NC}"
+        fi
+    fi
+
+    # ---------- 结果确认 ----------
+    echo ""
+    if pacman -Q todesk-bin &>/dev/null || pacman -Q todesk &>/dev/null || [ -d /opt/todesk ]; then
+        echo -e "${RED}✗ 卸载后仍检测到 ToDesk，请检查上方输出。${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✅ ToDesk 卸载完成${NC}"
 }
 
 install_wps_office() { install_flatpak_app "WPS Office" "WPS Office" "Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"; }
@@ -7233,6 +7358,7 @@ class MainWindow(Gtk.Window):
                     ("卸载 Edge浏览器", "uninstall_edge"),
                     ("卸载 Google浏览器", "uninstall_chrome"),
                     ("卸载 AnyDesk", "uninstall_anydesk"),
+                    ("卸载 ToDesk", "uninstall_todesk"),
                     ("卸载Fcitx 5", "uninstall_fcitx5"),
                     ("卸载其他已安装应用", "uninstall_other_flatpak_apps")
                 ])
@@ -7655,7 +7781,18 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-25（v1.9.1）
+        changelog_content = """2026-10-26（v1.9.2）
+【功能改进】
+- 「安装 ToDesk」检测到本机已安装时，选项从两个增加为三个：新增「3. 卸载 ToDesk（不再安装）」，
+  可以直接在安装流程里把 ToDesk 卸掉，不用再绕到「更新和卸载软件」里找（回车默认仍是 2 不安装，
+  不会误触）
+- 新增独立的「卸载 ToDesk」菜单项（更新和卸载软件 → 卸载已安装应用），可单独调用
+- 卸载范围覆盖 ToDesk 的两种安装来源：pacman 包（todesk-bin / todesk）、手动解包安装的
+  /opt/todesk 目录；卸载前先停用 todeskd 服务并结束残留进程，避免二进制被占用导致删不干净
+- 一并清理 pacman 不负责的痕迹：桌面快捷方式、~/.config/autostart 自启项、旧方案遗留的
+  「安装/重装 ToDesk」图标；用户数据（~/.local/share/todesk）单独询问后再删，默认保留
+
+2026-10-25（v1.9.1）
 【功能改进】
 - 「安装 ToDesk」完善已安装检测：安装前先判断本机是否已装，已装则显示当前版本、安装来源、
   目标版本，并给出「1. 重新安装 / 2. 不安装直接退出」两个明确选项（回车默认选 2，不误装）

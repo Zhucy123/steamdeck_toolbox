@@ -2,7 +2,7 @@
 
 一个专为 Steam Deck 打造的一站式系统管理与增强工具，集成系统优化、引导管理、软件安装、网络加速、双系统支持、游戏增强等 40 余项实用功能，全面覆盖日常使用与进阶调校需求。
 
-> **版本：v1.9.1** | 更新日期：2026-10-25
+> **版本：v1.9.2** | 更新日期：2026-10-26
 > 制作人：薯条 & DeepSeek
 
 ## 🚀 一键安装
@@ -22,6 +22,13 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - 打开工具箱后启动时自动检查更新（内置自更新）
 
 ## 📝 更新日志
+
+2026-10-26（v1.9.2）
+【功能改进】
+- 「安装 ToDesk」检测到本机已安装时，选项从两个增加为三个：新增「3. 卸载 ToDesk（不再安装）」，可以直接在安装流程里把 ToDesk 卸掉，不用再绕到「更新和卸载软件」里找（回车默认仍是 2 不安装，不会误触）
+- 新增独立的「卸载 ToDesk」菜单项（更新和卸载软件 → 卸载已安装应用），可单独调用
+- 卸载范围覆盖 ToDesk 的两种安装来源：pacman 包（todesk-bin / todesk）、手动解包安装的 `/opt/todesk` 目录；卸载前先停用 `todeskd` 服务并结束残留进程，避免二进制被占用导致删不干净
+- 一并清理 pacman 不负责的痕迹：桌面快捷方式、`~/.config/autostart` 自启项、旧方案遗留的「安装/重装 ToDesk」图标；用户数据（`~/.local/share/todesk`）单独询问后再删，默认保留
 
 2026-10-25（v1.9.1）
 【功能改进】
@@ -376,7 +383,7 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 
 ### 应用管理与维护
 - 更新已安装应用（Flatpak 全局更新）
-- 卸载已安装应用（支持 WPS Office / QQ / 微信 / QQ音乐 / 百度网盘 / Edge / Chrome / Google / AnyDesk / Fcitx 5 及其他 Flatpak 应用）  
+- 卸载已安装应用（支持 WPS Office / QQ / 微信 / QQ音乐 / 百度网盘 / Edge / Chrome / Google / AnyDesk / ToDesk / Fcitx 5 及其他 Flatpak 应用）  
 
 ### 工具箱自身
 - 深色 / 浅色主题切换（深色 / 浅色 / 跟随系统，自动记忆）  
