@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.9.5"
+VERSION = "1.9.6"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1047,19 +1047,59 @@ install_chinese_source() {
         return 1
     fi
 
-    # 1) 导入 flathub 官方公钥（镜像的摘要带 flathub 签名，缺公钥会被拒绝）
-    #    恢复官方源时也顺手导入一次，无害且能修好「公钥缺失导致安装报签名错误」的设备
+    # 1) 确保 flathub 签名公钥存在（镜像的摘要带 flathub 签名，缺公钥会被拒绝）
+    #
+    # 关键在于：公钥是「装一次就长期有效」的东西，正常设备上早就有了，
+    # 不需要每次切源都从 dl.flathub.org 重新下一遍。以前每次无条件下载，
+    # 而 dl.flathub.org 现在经常连不上，于是每次都打一条「无法下载公钥」的
+    # 黄字警告 —— 但公钥其实一直都在，功能完全正常，属于纯误导。
+    # 所以改成：先看本地有没有可用公钥，有就跳过下载。
     echo ""
-    echo "正在获取 flathub 签名公钥..."
-    if curl -fsSL --connect-timeout 15 --max-time 60 -o "$FP_KEY_TMP" \
-        https://dl.flathub.org/repo/flathub.gpg 2>/dev/null && [ -s "$FP_KEY_TMP" ]; then
-        if sudo flatpak remote-modify --gpg-import="$FP_KEY_TMP" flathub 2>/dev/null; then
-            echo -e "${GREEN}✓ 已导入 flathub 签名公钥${NC}"
+    echo "正在检查 flathub 签名公钥..."
+    local FP_KEYSTORE="/var/lib/flatpak/repo/flathub.trustedkeys.gpg"
+    local have_key=false
+    if [ -s "$FP_KEYSTORE" ]; then
+        # 文件存在还不够，确认里面确实是 flathub 的签名密钥（避免损坏的空壳文件误判）
+        if command -v gpg &>/dev/null; then
+            gpg --show-keys "$FP_KEYSTORE" 2>/dev/null | grep -qi "Flathub" && have_key=true
         else
-            echo -e "${YELLOW}⚠ 导入公钥失败（源可能已存在该公钥，继续）${NC}"
+            have_key=true
         fi
+    fi
+
+    if $have_key; then
+        echo -e "${GREEN}✓ 签名公钥已存在，无需重复导入${NC}"
     else
-        echo -e "${YELLOW}⚠ 无法下载 flathub 公钥，跳过导入（若安装报签名错误，请先联网执行一次官方安装）${NC}"
+        # 本地没有公钥才去下载：先官方，再试镜像（部分镜像也托管了这份公钥）
+        echo -e "${YELLOW}本地未找到 flathub 公钥，正在下载...${NC}"
+        local key_url got_key=false
+        for key_url in \
+            "https://dl.flathub.org/repo/flathub.gpg" \
+            "https://mirrors.ustc.edu.cn/flathub/flathub.gpg" \
+            "https://mirrors.cernet.edu.cn/flathub/flathub.gpg"; do
+            if curl -fsSL --connect-timeout 10 --max-time 30 -o "$FP_KEY_TMP" "$key_url" 2>/dev/null \
+               && [ -s "$FP_KEY_TMP" ] \
+               && gpg --show-keys "$FP_KEY_TMP" >/dev/null 2>&1; then
+                got_key=true
+                echo -e "${CYAN}  已从 $key_url 获取${NC}"
+                break
+            fi
+        done
+
+        if $got_key; then
+            if sudo flatpak remote-modify --gpg-import="$FP_KEY_TMP" flathub 2>/dev/null; then
+                echo -e "${GREEN}✓ 已导入 flathub 签名公钥${NC}"
+            else
+                echo -e "${YELLOW}⚠ 导入公钥失败，继续（若安装报签名错误再手动处理）${NC}"
+            fi
+        else
+            # 只有真的拿不到才告警，并说清后果和办法
+            echo -e "${YELLOW}⚠ 未能获取 flathub 签名公钥。${NC}"
+            echo -e "${YELLOW}  影响：安装/更新时会因签名校验失败而报错（Could not find public key）。${NC}"
+            echo -e "${YELLOW}  办法：网络恢复后重新运行本功能，或手动执行：${NC}"
+            echo -e "${YELLOW}    curl -fsSL https://dl.flathub.org/repo/flathub.gpg -o /tmp/f.gpg${NC}"
+            echo -e "${YELLOW}    sudo flatpak remote-modify --gpg-import=/tmp/f.gpg flathub${NC}"
+        fi
     fi
     rm -f "$FP_KEY_TMP"
 
@@ -8238,7 +8278,19 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-26（v1.9.5）
+        changelog_content = """2026-10-27（v1.9.6）
+【问题修复】
+- 修复「切换软件源」每次都会误报「无法下载 flathub 公钥」的警告：
+  · 原因：原逻辑每次切源都无条件去 dl.flathub.org 重新下载一遍公钥，而该站经常连不上，
+    于是每次都打一条黄字警告。但公钥是「导入一次就长期有效」的，正常设备上早就有了
+    （/var/lib/flatpak/repo/flathub.trustedkeys.gpg），功能完全正常，这条警告纯属误导
+  · 现在先检查本地是否已有可用公钥（并用 gpg 确认里面确实是 Flathub 的密钥，
+    避免损坏的空壳文件误判），有就直接跳过下载，不再打印任何警告
+  · 本地确实没有时才去下载，且按「官方 → 中科大 → CERNET」依次尝试
+  · 只有真的全都拿不到才告警，并明确写出后果（安装/更新会报 Could not find public key）
+    和两条手动修复命令，而不是让用户猜
+
+2026-10-26（v1.9.5）
 【问题修复】
 - 修复「更新全部应用」在提示「没有更新。」之后长时间卡住：
   · 根因：flatpak update 的流程是「先查更新 → 再刷新 appstream 元数据」。第二步要去
