@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.9.4"
+VERSION = "1.9.5"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -957,8 +957,8 @@ uninstall_flatpak_app() {
 
 install_chinese_source() {
     mk_temp_dir; clear
-    echo -e "${YELLOW}════════════════ 安装国内源 ════════════════${NC}"
-    echo "正在配置国内源..."
+    echo -e "${YELLOW}════════════ 切换 Flatpak 软件源 ════════════${NC}"
+    echo "可选择国内镜像加速，也可恢复为官方源。"
     echo ""
     # 不需要禁用 SteamOS 只读模式：flatpak remote 配置在 /var/lib/flatpak（可写分区），
     # 与只读的根分区无关。原实现先 disable_readonly 属于多余操作，还会顺手改掉系统只读状态。
@@ -976,18 +976,69 @@ install_chinese_source() {
     fi
     echo -e "${GREEN}✓ flatpak 环境正常${NC}"
     echo ""
-    echo -e "${CYAN}步骤2: 配置Flatpak国内源${NC}"
+    echo -e "${CYAN}步骤2: 选择 Flatpak 软件源${NC}"
+    echo ""
 
-    # 实测（2026-10）：
-    #   mirror.sjtu.edu.cn/flathub  → 已改为 301 跳回官方 dl.flathub.org，等于没加速
-    #   mirrors.tuna / nju / bfsu / iscas / aliyun 的 flathub → 404，没有这个镜像
-    #   mirrors.ustc.edu.cn/flathub → 真实镜像（yadex 增量方案），实测可正常查询与安装，
-    #                                 且需要先导入 flathub 公钥才能校验签名
-    local FP_MIRROR="https://mirrors.ustc.edu.cn/flathub/"
-    local FP_KEY_TMP="${TEMP_DIR}/flathub.gpg"
+    # 实测（2026-10，逐个探测 summary.idx 魔数确认是否为真实 ostree 数据）：
+    #   ✓ 可用：
+    #     mirrors.ustc.edu.cn/flathub            中科大（yadex 增量方案），已验证
+    #     unicom.mirrors.ustc.edu.cn/flathub     中科大联通节点
+    #     mobile.mirrors.ustc.edu.cn/flathub     中科大移动节点
+    #     mirrors.cernet.edu.cn/flathub          CERNET 聚合入口（按地理位置分发到各校节点）
+    #   ✗ 不可用（保留记录，避免以后又踩）：
+    #     mirror.sjtu.edu.cn/flathub   → 301 跳回官方 dl.flathub.org，等于没加速
+    #     mirrors.nju / sustech / bfsu / tuna / aliyun / tencent / huawei / zju / jlu /
+    #     iscas / xjtu / scau / qlu 的 flathub → 返回 HTML 首页或 404，没有这个镜像
+    #
+    # 所有国内镜像都只是 Flathub 的「缓存」而不是完整镜像：
+    # 未命中的对象会 302 回 dl.flathub.org，所以官方站仍需要基本连通性。
+    local MIRROR_LABELS=(
+        "中科大 (USTC)"
+        "中科大-联通节点"
+        "中科大-移动节点"
+        "CERNET 教育网聚合"
+        "恢复官方源 (dl.flathub.org)"
+    )
+    local MIRROR_URLS=(
+        "https://mirrors.ustc.edu.cn/flathub/"
+        "https://unicom.mirrors.ustc.edu.cn/flathub/"
+        "https://mobile.mirrors.ustc.edu.cn/flathub/"
+        "https://mirrors.cernet.edu.cn/flathub/"
+        "https://dl.flathub.org/repo/"
+    )
+
+    # 显示当前源，方便判断要不要改
     local FP_OLD_URL
     # 注意：flatpak 没有 remote-get-url 这个子命令，要从 remotes 列表里取
     FP_OLD_URL=$(flatpak remotes --columns=name,url 2>/dev/null | awk '$1 == "flathub" {print $2; exit}')
+    if [ -n "$FP_OLD_URL" ]; then
+        echo -e "当前 flathub 源: ${CYAN}${FP_OLD_URL}${NC}"
+        echo ""
+    fi
+
+    echo "请选择要使用的软件源（国内源可加速下载，官方源需能访问 dl.flathub.org）："
+    local i
+    for i in "${!MIRROR_LABELS[@]}"; do
+        echo "  $((i+1)). ${MIRROR_LABELS[$i]}"
+    done
+    echo ""
+    local choice
+    while true; do
+        read -p "请输入编号 [1-${#MIRROR_LABELS[@]}]（回车取消）: " choice < /dev/tty || { echo "操作已取消。"; return 0; }
+        [ -z "$choice" ] && { echo "操作已取消。"; return 0; }
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRROR_LABELS[@]} ]; then
+            break
+        fi
+        echo -e "${RED}输入无效，请输入 1-${#MIRROR_LABELS[@]} 之间的数字。${NC}"
+    done
+
+    local FP_MIRROR="${MIRROR_URLS[$((choice-1))]}"
+    local FP_MIRROR_NAME="${MIRROR_LABELS[$((choice-1))]}"
+    echo ""
+    echo -e "${CYAN}已选择: ${FP_MIRROR_NAME}${NC}"
+    echo "  地址: $FP_MIRROR"
+
+    local FP_KEY_TMP="${TEMP_DIR}/flathub.gpg"
 
     # 先确认 sudo 可用：系统级 flatpak remote 配置需要 root，
     # 若这里不先验证，后面 remote-modify 会卡在密码提示上（输出被 2>/dev/null 吞掉，看起来像无响应）
@@ -996,7 +1047,9 @@ install_chinese_source() {
         return 1
     fi
 
-    # 1) 导入 flathub 官方公钥（UESTC 镜像的摘要带 flathub 签名，缺公钥会被拒绝）
+    # 1) 导入 flathub 官方公钥（镜像的摘要带 flathub 签名，缺公钥会被拒绝）
+    #    恢复官方源时也顺手导入一次，无害且能修好「公钥缺失导致安装报签名错误」的设备
+    echo ""
     echo "正在获取 flathub 签名公钥..."
     if curl -fsSL --connect-timeout 15 --max-time 60 -o "$FP_KEY_TMP" \
         https://dl.flathub.org/repo/flathub.gpg 2>/dev/null && [ -s "$FP_KEY_TMP" ]; then
@@ -1010,20 +1063,27 @@ install_chinese_source() {
     fi
     rm -f "$FP_KEY_TMP"
 
-    # 2) 切换 flathub 地址到镜像
+    # 2) 切换 flathub 地址
     if ! sudo flatpak remote-modify flathub --url="$FP_MIRROR" 2>/dev/null; then
-        echo -e "${RED}✗ Flatpak国内源配置失败${NC}"
+        echo -e "${RED}✗ Flatpak 源配置失败${NC}"
         return 1
     fi
     echo -e "${GREEN}✓ Flatpak 源已切换为 $FP_MIRROR${NC}"
 
     # 3) 实际拉一次元数据验证，不只看命令返回值
     #    remote-info 必须指定分支，否则会因"多个可用分支"直接报错，被误判为镜像不可用
-    echo "正在验证镜像可用性..."
+    echo ""
+    echo "正在验证源可用性..."
     if timeout 90 flatpak remote-info flathub org.freedesktop.Platform/x86_64/24.08 >/dev/null 2>&1; then
-        echo -e "${GREEN}✓ 镜像验证通过（可正常查询软件包）${NC}"
+        echo -e "${GREEN}✓ 验证通过（可正常查询软件包）${NC}"
     else
-        echo -e "${RED}✗ 镜像验证失败，正在回滚到官方源...${NC}"
+        # 官方源本身也可能因为网络问题暂时查不到，不能一律判为「源坏了」
+        if [ "$FP_MIRROR" = "https://dl.flathub.org/repo/" ]; then
+            echo -e "${YELLOW}⚠ 已切回官方源，但当前无法验证（dl.flathub.org 可能不通）。${NC}"
+            echo -e "${YELLOW}  源地址本身已设置成功，网络恢复后即可正常使用。${NC}"
+            return 0
+        fi
+        echo -e "${RED}✗ 该源验证失败，正在回滚到原来的源...${NC}"
         if [ -n "$FP_OLD_URL" ]; then
             sudo flatpak remote-modify flathub --url="$FP_OLD_URL" 2>/dev/null \
                 && echo -e "${YELLOW}已回滚到原地址: $FP_OLD_URL${NC}" \
@@ -1031,12 +1091,19 @@ install_chinese_source() {
         else
             echo -e "${RED}未获取到原地址，请手动恢复: sudo flatpak remote-modify flathub --url=https://dl.flathub.org/repo/${NC}"
         fi
+        echo -e "${YELLOW}提示：可换一个源再试（部分镜像偶尔会临时失效）。${NC}"
         return 1
     fi
     echo ""
-    echo -e "${GREEN}✓ 国内源配置已生效。${NC}"
-    echo -e "${CYAN}  如需恢复官方源，请在 Konsole 中执行（需要 sudo）：${NC}"
-    echo -e "${CYAN}    sudo flatpak remote-modify flathub --url=https://dl.flathub.org/repo/${NC}"
+    if [ "$FP_MIRROR" = "https://dl.flathub.org/repo/" ]; then
+        echo -e "${GREEN}✓ 已恢复为 Flathub 官方源。${NC}"
+    else
+        echo -e "${GREEN}✓ 已切换到 ${FP_MIRROR_NAME}。${NC}"
+        echo -e "${YELLOW}说明：国内镜像都是 Flathub 的缓存，未命中的文件会跳回官方站，${NC}"
+        echo -e "${YELLOW}      因此仍需要能基本连通 dl.flathub.org。${NC}"
+    fi
+    echo ""
+    echo -e "${CYAN}  如需再次切换，重新运行本功能即可（含「恢复官方源」选项）。${NC}"
 }
 
 adjust_swap() {
@@ -6231,12 +6298,77 @@ install_fcitx5() {
 update_installed_apps() {
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 更新全部应用 ════════════════${NC}"
-    if flatpak update -y; then
-        echo -e "${GREEN}✓ 所有应用更新完成${NC}"
-    else
-        echo -e "${RED}✗ 更新失败，请检查网络或 flatpak 状态。${NC}"
+    echo ""
+
+    # 为什么不用 flatpak update 一条命令搞定：
+    # update 的顺序是「先查更新 → 再刷新 appstream 元数据」。第二步在 dl.flathub.org
+    # 不通时会卡很久（连接超时 + 最多 5 次重试），用户看到的就是「没有更新。」之后
+    # 长时间不动，像是死机。而 appstream 只是软件介绍/图标的元数据，
+    # 与「能不能更新」无关，完全可以跳过。
+    # 所以这里分开做：用 remote-ls 查更新（只刷新 summary，走镜像站，快），
+    # 跳过 appstream 刷新，再按需执行 update。
+
+    echo -e "${CYAN}正在检查可用更新...${NC}"
+    local updates="" check_rc=0
+    updates=$(timeout 120 flatpak remote-ls --updates 2>/dev/null) || check_rc=$?
+
+    if [ $check_rc -ne 0 ]; then
+        # 联网检查失败/超时（常见于镜像站抖动），退回本地缓存再判断一次，
+        # 总比直接报错好——至少能把已知的更新列出来
+        echo -e "${YELLOW}联网检查超时或失败，改用本地缓存数据判断...${NC}"
+        updates=$(timeout 30 flatpak remote-ls --updates --cached 2>/dev/null)
+        [ -z "$updates" ] && {
+            echo ""
+            echo -e "${RED}✗ 无法检查更新：网络异常，且本地缓存中没有待更新项。${NC}"
+            echo -e "${YELLOW}  请检查网络后重试，或在「切换软件源」里换个镜像源。${NC}"
+            return 1
+        }
+    fi
+
+    if [ -z "$updates" ]; then
+        echo ""
+        echo -e "${GREEN}✓ 所有已安装应用均为最新版本，无需更新。${NC}"
+        echo ""
+        echo -e "${YELLOW}说明：已跳过「刷新软件目录(appstream)」这一步。${NC}"
+        echo -e "${YELLOW}      该步骤只更新软件介绍/图标等展示信息，与能否更新无关，${NC}"
+        echo -e "${YELLOW}      且在 dl.flathub.org 不通时会长时间卡住，故不再执行。${NC}"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${CYAN}以下应用可更新：${NC}"
+    printf '%s\n' "$updates" | sed 's/^/  · /'
+    echo ""
+
+    # 下载阶段可能较慢（取决于源和包大小），给 20 分钟；但 appstream 卡住不会无限等，
+    # 超时后明确告知而不是静默挂起
+    echo -e "${CYAN}开始更新（大包可能较慢，请耐心等待）...${NC}"
+    echo ""
+    local rc=0
+    timeout 1200 flatpak update -y < /dev/null || rc=$?
+
+    echo ""
+    if [ $rc -eq 124 ]; then
+        echo -e "${RED}✗ 更新超时（20 分钟），已中止。${NC}"
+        echo -e "${YELLOW}  若卡在「更新 appstream 数据」，属于 dl.flathub.org 不通；${NC}"
+        echo -e "${YELLOW}  已下载的部分不会丢失，可稍后重试或先切换软件源。${NC}"
+        return 1
+    elif [ $rc -ne 0 ]; then
+        echo -e "${RED}✗ 更新失败，请检查上方输出。${NC}"
         return 1
     fi
+
+    # 用本地缓存复核：update 已经刷新过 summary，这里不会再有额外的网络等待
+    local left
+    left=$(timeout 30 flatpak remote-ls --updates --cached 2>/dev/null)
+    if [ -z "$left" ]; then
+        echo -e "${GREEN}✓ 所有应用更新完成，当前均为最新版本${NC}"
+        return 0
+    fi
+    echo -e "${YELLOW}⚠ 更新命令已结束，但以下应用仍显示有更新：${NC}"
+    printf '%s\n' "$left" | sed 's/^/  · /'
+    echo -e "${YELLOW}  可能被跳过（如正在运行）或需要重启后再试。${NC}"
+    return 1
 }
 
 uninstall_wps_office() { uninstall_flatpak_app "WPS Office" "WPS Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"; }
@@ -7613,7 +7745,7 @@ class MainWindow(Gtk.Window):
             "支持和维护": [],
             "更新日志": [],
             "系统优化": [
-                ("安装国内源", "install_chinese_source"),
+                ("切换软件源（国内/官方）", "install_chinese_source"),
                 ("调整虚拟内存", "adjust_swap"),
                 ("修复磁盘写入错误", "fix_disk_write_error"),
                 ("清理hosts缓存", "clear_hosts_cache"),
@@ -8106,7 +8238,36 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
 
     def display_changelog(self):
-        changelog_content = """2026-10-26（v1.9.4）
+        changelog_content = """2026-10-26（v1.9.5）
+【问题修复】
+- 修复「更新全部应用」在提示「没有更新。」之后长时间卡住：
+  · 根因：flatpak update 的流程是「先查更新 → 再刷新 appstream 元数据」。第二步要去
+    dl.flathub.org 拉约 10MB 的 appstream 数据，而该站当前连通率极低（实测 8 次试连
+    只有 1 次成功），连接超时后还会重试 5 轮，于是卡在「正在为远程仓库 flathub 更新
+    appstream 数据」几分钟甚至更久
+  · 但 appstream 只是软件介绍/图标等展示用元数据，和「能不能更新」完全无关，
+    所以现在改为直接跳过它：用 remote-ls 查更新（只刷新 summary，走镜像站，很快），
+    再按需执行 update
+  · 现在没有更新时会明确显示「所有已安装应用均为最新版本，无需更新」，不再卡住
+  · 联网检查失败时先退回本地缓存判断；缓存里也没有才报「无法检查更新」，不会假装最新
+  · 更新下载加了 20 分钟超时，超时会明确提示而不是静默挂起；更新完再用本地缓存复核一遍，
+    还有残留会列出来
+
+【功能改进】
+- 「安装国内源」改为「切换软件源（国内/官方）」，改为菜单选择，不再写死单一镜像：
+  · 新增 4 个国内可选源 + 1 个「恢复官方源」选项，逐个实测确认可用：
+    中科大 (USTC)、中科大-联通节点、中科大-移动节点、CERNET 教育网聚合
+  · 菜单里会先显示当前使用的源，选完再做可用性验证；验证失败会自动回滚到原来的源，
+    并提示「可换一个源再试」
+  · 恢复官方源时若因为网络不通而验证失败，不会误报失败，而是说明「地址已设置成功，
+    网络恢复后即可用」
+  · 顺带纠正原注释里过时的探测结论：sjtu 已 301 跳回官方（等于没加速），
+    nju / sustech / bfsu / tuna / aliyun / tencent / huawei / zju / jlu / iscas /
+    xjtu / scau / qlu 的 flathub 返回 HTML 首页或 404，并非真实镜像
+  · 说明：国内镜像都是 Flathub 的缓存而非完整镜像，未命中的文件会 302 回官方站，
+    因此仍需能基本连通 dl.flathub.org
+
+2026-10-26（v1.9.4）
 【问题修复】
 - 修复「GE-Proton 管理」安装时误报「解压失败（压缩包损坏或解压中断）」：
   · 根因一（主因）：上游从 GE-Proton11-4 起改了产物命名，压缩包和包内顶层目录都带架构后缀
