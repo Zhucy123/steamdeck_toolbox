@@ -468,20 +468,54 @@ def save_theme_pref(mode):
         return False
 
 # ---------------------------------------------------------------------------
-# 语言配置：zh / en，持久化到同一 config.json 的 language 字段
+# 语言配置：zh / en / system，持久化到同一 config.json 的 language 字段
+# system = 跟随系统语言（LANG/LC_*）；解析后的实际界面语言仍是 zh 或 en
 # ---------------------------------------------------------------------------
-LANG_MODES = ("zh", "en")
-_current_lang = "zh"
+LANG_MODES = ("zh", "en", "system")
+_current_lang = "zh"          # 实际生效的界面语言：仅 zh / en
+_lang_pref = "system"         # 用户偏好：zh / en / system
+
+
+def detect_system_lang():
+    """根据系统 locale 判断界面语言：英文系用 en，其余默认 zh。"""
+    for key in ("LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"):
+        val = (os.environ.get(key) or "").strip()
+        if not val:
+            continue
+        # LANGUAGE 可能是 en_US:zh_CN 这类列表，取第一项
+        first = val.split(":")[0].strip().replace("-", "_")
+        if not first or first.upper() in ("C", "POSIX"):
+            continue
+        low = first.lower()
+        if low.startswith("en"):
+            return "en"
+        if low.startswith("zh"):
+            return "zh"
+        # 其他语言：工具箱目前只有中英，默认中文
+        return "zh"
+    return "zh"
+
+
+def resolve_lang(pref=None):
+    """把用户偏好解析成实际 zh/en。"""
+    if pref is None:
+        pref = _lang_pref
+    if pref == "en":
+        return "en"
+    if pref == "zh":
+        return "zh"
+    return detect_system_lang()
+
 
 def load_lang_pref():
-    """读取界面语言偏好，默认中文。失败时不影响启动。"""
+    """读取语言偏好，默认跟随系统。失败时不影响启动。"""
     try:
         with open(_config_path(), "r", encoding="utf-8") as f:
             data = json.load(f)
-        lang = data.get("language", "zh")
-        return lang if lang in LANG_MODES else "zh"
+        lang = data.get("language", "system")
+        return lang if lang in LANG_MODES else "system"
     except Exception:
-        return "zh"
+        return "system"
 
 def save_lang_pref(lang):
     """保存语言偏好；失败不影响使用。"""
@@ -508,10 +542,18 @@ def save_lang_pref(lang):
 def get_lang():
     return _current_lang
 
+def get_lang_pref():
+    return _lang_pref
+
 def set_lang(lang):
-    global _current_lang
-    if lang in LANG_MODES:
+    """设置界面语言。可传 zh/en/system；system 会解析为当前系统语言。"""
+    global _current_lang, _lang_pref
+    if lang in ("zh", "en"):
+        _lang_pref = lang
         _current_lang = lang
+    elif lang == "system":
+        _lang_pref = "system"
+        _current_lang = detect_system_lang()
 
 # GTK UI 字符串表；内嵌 shell 用户可见输出通过 BASH_SCRIPT_EN / get_bash_script() 切换
 _UI_STRINGS = {
@@ -521,6 +563,7 @@ _UI_STRINGS = {
     "lang_tooltip": {"zh": "切换语言 / Language", "en": "Switch language / 语言"},
     "lang_zh": {"zh": "中文", "en": "中文"},
     "lang_en": {"zh": "English", "en": "English"},
+    "lang_system": {"zh": "跟随系统", "en": "Follow System"},
     "cat_sidebar": {"zh": "功能分类", "en": "Categories"},
     "help": {"zh": "帮助", "en": "Help"},
     "quit": {"zh": "退出", "en": "Quit"},
@@ -15668,7 +15711,7 @@ class MainWindow(Gtk.Window):
     # ------------------------------------------------------------------
     def _build_lang_menu(self):
         """构建语言下拉菜单。"""
-        current = get_lang()
+        current = get_lang_pref()
         popover = Gtk.Popover()
         popover.set_relative_to(self.lang_button)
         popover.set_position(Gtk.PositionType.BOTTOM)
@@ -15677,7 +15720,7 @@ class MainWindow(Gtk.Window):
         box.set_margin_start(6); box.set_margin_end(6)
         box.get_style_context().add_class("theme-popover")
         self._lang_items = {}
-        for lang, label_key in (("zh", "lang_zh"), ("en", "lang_en")):
+        for lang, label_key in (("system", "lang_system"), ("zh", "lang_zh"), ("en", "lang_en")):
             row = Gtk.Button()
             row.set_relief(Gtk.ReliefStyle.NONE)
             row.get_style_context().add_class("theme-row")
@@ -15699,7 +15742,7 @@ class MainWindow(Gtk.Window):
         self._lang_menu = popover
 
     def on_lang_row_clicked(self, button, lang):
-        if lang == get_lang():
+        if lang == get_lang_pref():
             try:
                 popover = self.lang_button.get_popover()
                 if popover is not None:
