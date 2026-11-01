@@ -1,9 +1,11 @@
 # SteamDeck 工具箱
 
+[English](./README_EN.md)
+
 一个专为 Steam Deck 打造的一站式系统管理与增强工具，集成系统优化、引导管理、软件安装、网络加速、双系统支持、游戏增强等 40 余项实用功能，全面覆盖日常使用与进阶调校需求。
 
-> **版本：v1.9.6** | 更新日期：2026-10-27
-> 制作人：薯条 & DeepSeek
+> **版本：v1.9.7** | 更新日期：2026-11-01
+> 制作人：Zhucy
 
 ## 🚀 一键安装
 
@@ -22,6 +24,16 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - 打开工具箱后启动时自动检查更新（内置自更新）
 
 ## 📝 更新日志
+
+2026-11-01（v1.9.7）
+【新功能】
+- 新增界面语言切换（中文 / English）：顶栏可随时切换，偏好写入 `~/.config/steamdeck_toolbox/config.json` 的 `language` 字段，下次启动自动恢复
+- 英文模式下界面文案、分类/功能名、更新日志、对话框按钮（含 Yes / No / OK），以及内嵌终端脚本的用户可见输出均为英文；中文模式保持中文
+- 帮助页按语言分流：中文仍保留 B 站催更入口；英文显示可点击的 X 链接 [@AlanWake2100](https://x.com/AlanWake2100)
+【界面改进】
+- 制作人署名改为 Zhucy（中英文一致）
+- 危险确认等对话框不再依赖系统语言的「是/否」「确定」按钮文案，改为跟随工具箱语言
+- 说明：系统 sudo 密码提示语仍随本机系统语言显示，属于正常现象，并非工具箱文案
 
 2026-10-27（v1.9.6）
 【问题修复】
@@ -364,6 +376,7 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 
 ## ✨ 特性亮点
 
+- **中英界面**：顶栏一键切换中文 / English，偏好自动保存，重启后保持
 - **深色 / 浅色主题**：一键切换深色、浅色或跟随系统，偏好自动保存，重启后保持
 - **智能系统检测**：自动识别单 / 双系统，部分功能（修复引导、互通盘）仅对双系统用户显示  
 - **图形化引导管理**：支持 Clover 引导的安装、重装，并附带“引导文件配置”工具箱（主题、超时、默认系统等）  
@@ -430,5 +443,6 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - 卸载已安装应用（支持 WPS Office / QQ / 微信 / QQ音乐 / 百度网盘 / Edge / Chrome / Google / AnyDesk / ToDesk / Fcitx 5 及其他 Flatpak 应用）  
 
 ### 工具箱自身
+- 界面语言切换（中文 / English，自动记忆）  
 - 深色 / 浅色主题切换（深色 / 浅色 / 跟随系统，自动记忆）  
 - 启动时自动检查更新，支持一键更新（无需手动下载）

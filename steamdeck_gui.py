@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.9.6"
+VERSION = "1.9.7"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -467,6 +467,1009 @@ def save_theme_pref(mode):
         print(f"保存主题设置失败: {e}")
         return False
 
+# ---------------------------------------------------------------------------
+# 语言配置：zh / en，持久化到同一 config.json 的 language 字段
+# ---------------------------------------------------------------------------
+LANG_MODES = ("zh", "en")
+_current_lang = "zh"
+
+def load_lang_pref():
+    """读取界面语言偏好，默认中文。失败时不影响启动。"""
+    try:
+        with open(_config_path(), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        lang = data.get("language", "zh")
+        return lang if lang in LANG_MODES else "zh"
+    except Exception:
+        return "zh"
+
+def save_lang_pref(lang):
+    """保存语言偏好；失败不影响使用。"""
+    if lang not in LANG_MODES:
+        return False
+    try:
+        path = _config_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        data = {}
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f) or {}
+            except Exception:
+                data = {}
+        data["language"] = lang
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"保存语言设置失败: {e}")
+        return False
+
+def get_lang():
+    return _current_lang
+
+def set_lang(lang):
+    global _current_lang
+    if lang in LANG_MODES:
+        _current_lang = lang
+
+# GTK UI 字符串表；内嵌 shell 用户可见输出通过 BASH_SCRIPT_EN / get_bash_script() 切换
+_UI_STRINGS = {
+    "app_title": {"zh": "Steam Deck 工具箱", "en": "Steam Deck Toolbox"},
+    "search_placeholder": {"zh": "全局搜索功能...", "en": "Search all functions..."},
+    "theme_tooltip": {"zh": "切换深色 / 浅色模式", "en": "Switch dark / light mode"},
+    "lang_tooltip": {"zh": "切换语言 / Language", "en": "Switch language / 语言"},
+    "lang_zh": {"zh": "中文", "en": "中文"},
+    "lang_en": {"zh": "English", "en": "English"},
+    "cat_sidebar": {"zh": "功能分类", "en": "Categories"},
+    "help": {"zh": "帮助", "en": "Help"},
+    "quit": {"zh": "退出", "en": "Quit"},
+    "ok": {"zh": "确定", "en": "OK"},
+    "theme_dark": {"zh": "深色", "en": "Dark"},
+    "theme_light": {"zh": "浅色", "en": "Light"},
+    "theme_system": {"zh": "跟随系统", "en": "Follow System"},
+    "cat_support": {"zh": "支持和维护", "en": "Support & Maintenance"},
+    "cat_changelog": {"zh": "更新日志", "en": "Changelog"},
+    "cat_sysopt": {"zh": "系统优化", "en": "System Optimization"},
+    "cat_software": {"zh": "软件安装", "en": "Software Installation"},
+    "cat_network": {"zh": "网络工具", "en": "Network Tools"},
+    "cat_plugins": {"zh": "插件相关", "en": "Plugins"},
+    "cat_boot": {"zh": "引导管理", "en": "Boot Management"},
+    "cat_update": {"zh": "更新和卸载软件", "en": "Update & Uninstall"},
+    "cat_other": {"zh": "其他", "en": "Other"},
+    "sys_dual": {"zh": "双系统", "en": "Dual Boot"},
+    "sys_single": {"zh": "单系统", "en": "Single System"},
+    "about_title": {"zh": "关于本工具", "en": "About This Tool"},
+    "search_col_func": {"zh": "功能", "en": "Function"},
+    "search_col_cat": {"zh": "分类", "en": "Category"},
+    "search_results": {"zh": "搜索结果（{n} 项）", "en": "Search Results ({n} items)"},
+    "search_none": {"zh": "搜索结果（无匹配）", "en": "Search Results (no matches)"},
+    "status": {"zh": "系统: {sys} ｜ 终端: {term} ｜ 版本: v{ver}",
+               "en": "System: {sys} ｜ Terminal: {term} ｜ Version: v{ver}"},
+    "term_embedded": {"zh": "内嵌终端", "en": "Embedded"},
+    "term_external": {"zh": "外部终端", "en": "External"},
+    "danger_title": {"zh": "危险操作确认：{name}", "en": "Dangerous operation: {name}"},
+    "danger_default": {
+        "zh": "该功能会修改系统引导、挂载或系统文件，请确认已了解风险。",
+        "en": "This will modify system boot, mount or system files; make sure you understand the risks.",
+    },
+    "help_body_zh": (
+        "本工具集成了系统优化、软件安装、网络工具等功能。\n"
+        "点击左侧分类，右侧显示功能列表。\n"
+        "小破站关注up主 AlanWake2100 可以来催更哦~"
+    ),
+    "help_body_en_markup": (
+        "This tool integrates system optimization, software installation, network tools and more.\n"
+        "Click a category on the left to show its function list on the right.\n"
+        "Follow <a href=\"https://x.com/AlanWake2100\">AlanWake (@AlanWake2100)</a> on X for updates~"
+    ),
+    "no_terminal": {"zh": "未找到可用的终端模拟器", "en": "No usable terminal emulator found"},
+    "no_terminal_hint": {"zh": "请安装 konsole 或 xterm 后重试。",
+                         "en": "Please install konsole or xterm and try again."},
+    "task_running": {"zh": "任务运行中", "en": "Running"},
+    "task_done": {"zh": "任务已完成", "en": "Task completed"},
+    "task_external": {"zh": "任务已在外部终端中运行，请查看弹出的终端窗口。",
+                      "en": "The task is running in an external terminal. Check the popup window."},
+    "close": {"zh": "关闭", "en": "Close"},
+    "task_complete_btn": {"zh": "完成", "en": "Done"},
+    "cancel": {"zh": "取消", "en": "Cancel"},
+    "cancelling": {"zh": "正在取消...", "en": "Cancelling..."},
+    "copy": {"zh": "复制", "en": "Copy"},
+    "copy_tooltip": {"zh": "复制选中的终端内容；未选中时复制全部输出",
+                     "en": "Copy the selected terminal content; copies all output when nothing is selected"},
+    "copy_sel_ok": {"zh": "已复制选中内容", "en": "Selection copied"},
+    "copy_fail": {"zh": "复制失败", "en": "Copy failed"},
+    "copy_all_ok": {"zh": "已复制全部输出", "en": "All output copied"},
+    "copy_empty": {"zh": "没有可复制的内容", "en": "Nothing to copy"},
+    "copy_sel": {"zh": "复制选中内容", "en": "Copy Selection"},
+    "copy_all": {"zh": "复制全部输出", "en": "Copy All Output"},
+    "paste": {"zh": "粘贴", "en": "Paste"},
+    "select_all": {"zh": "全选", "en": "Select All"},
+    "maximize": {"zh": "最大化 / 还原", "en": "Maximize / Restore"},
+    "elapsed": {"zh": "已运行 {m}:{s:02d}", "en": "Elapsed {m}:{s:02d}"},
+    "elapsed_zero": {"zh": "已运行 0:00", "en": "Elapsed 0:00"},
+    "start_fail": {"zh": "启动失败", "en": "Failed to start"},
+    "check_update": {"zh": "检查更新", "en": "Check for Updates"},
+    "checking_update": {"zh": "正在检查更新...", "en": "Checking for updates..."},
+    "check_update_fail": {"zh": "检查更新失败，请检查网络连接。",
+                          "en": "Update check failed. Please check your network."},
+    "enter_main": {"zh": "进入主界面", "en": "Enter Main Window"},
+    "already_latest": {"zh": "当前已是最新版本 (v{ver})", "en": "Already up to date (v{ver})"},
+    "found_new": {"zh": "发现新版本", "en": "New version available"},
+    "found_new_big": {"zh": "发现新版本 v{ver}", "en": "New version v{ver}"},
+    "update_prompt": {"zh": "当前版本: v{cur}\n最新版本: v{remote}\n\n是否立即更新？",
+                      "en": "Current: v{cur}\nLatest: v{remote}\n\nUpdate now?"},
+    "updating": {"zh": "正在更新...", "en": "Updating..."},
+    "updating_hint": {"zh": "正在下载新版本，请稍候。", "en": "Downloading the new version, please wait."},
+    "update_ok": {"zh": "✅ 更新完成", "en": "✅ Update complete"},
+    "update_ok_hint": {"zh": "新版本 v{ver} 已下载。\n程序即将自动重启...",
+                       "en": "Version v{ver} downloaded.\nThe app will restart shortly..."},
+    "update_fail": {"zh": "❌ 更新失败", "en": "❌ Update failed"},
+    "update_fail_hint": {"zh": "更新过程中发生错误：{err}\n请手动从以下地址下载最新版本：\n{url}",
+                         "en": "An error occurred while updating: {err}\nPlease download the latest version manually from:\n{url}"},
+    "vte_missing": {"zh": "未检测到 VTE 终端组件。\n是否立即安装？(需要 sudo 密码，安装后请手动重启程序)",
+                    "en": "VTE terminal component not found.\nInstall now? (sudo password required; restart the app afterwards)"},
+    "vte_missing_hint": {"zh": "点击“是”将自动解除只读模式并安装 vte3。",
+                         "en": "Choosing Yes will disable read-only mode and install vte3."},
+    "yes": {"zh": "是", "en": "Yes"},
+    "no": {"zh": "否", "en": "No"},
+    "vte_manual": {"zh": "请手动打开终端执行：sudo pacman -S --noconfirm vte3",
+                   "en": "Please open a terminal and run: sudo pacman -S --noconfirm vte3"},
+}
+
+# 功能显示名（及分组标题）；功能 key 保持不变
+_FUNC_LABELS = {
+    "install_chinese_source": {"zh": "切换软件源（国内/官方）", "en": "Switch Software Source (China/Official)"},
+    "adjust_swap": {"zh": "调整虚拟内存", "en": "Adjust Virtual Memory"},
+    "fix_disk_write_error": {"zh": "修复磁盘写入错误", "en": "Fix Disk Write Errors"},
+    "clear_hosts_cache": {"zh": "清理hosts缓存", "en": "Clean hosts Cache"},
+    "grp_calibrate": {"zh": "校准设备", "en": "Calibrate Device"},
+    "calibrate_joystick_stick": {"zh": "校准摇杆", "en": "Calibrate Joystick"},
+    "calibrate_joystick_trigger": {"zh": "校准扳机", "en": "Calibrate Triggers"},
+    "steamdeck_cache_manager": {"zh": "Steam缓存管理", "en": "Steam Cache Manager"},
+    "ge_proton_manager": {"zh": "GE-Proton 管理", "en": "GE-Proton Manager"},
+    "health_check": {"zh": "系统体检", "en": "System Health Check"},
+    "fix_boot": {"zh": "修复引导", "en": "Fix Boot"},
+    "fix_shared_disk": {"zh": "修复互通盘", "en": "Fix Shared Disk"},
+    "install_anydesk": {"zh": "AnyDesk", "en": "AnyDesk"},
+    "install_todesk": {"zh": "ToDesk", "en": "ToDesk"},
+    "install_asklink": {"zh": "AskLink远程", "en": "AskLink Remote"},
+    "install_wps_office": {"zh": "WPS Office", "en": "WPS Office"},
+    "install_qq": {"zh": "QQ", "en": "QQ"},
+    "install_wechat": {"zh": "微信", "en": "WeChat"},
+    "install_qqmusic": {"zh": "QQ音乐", "en": "QQ Music"},
+    "install_baidunetdisk": {"zh": "百度网盘", "en": "Baidu Netdisk"},
+    "install_edge": {"zh": "Edge浏览器", "en": "Edge Browser"},
+    "install_chrome": {"zh": "Google浏览器", "en": "Google Chrome"},
+    "install_fcitx5": {"zh": "Fcitx 5", "en": "Fcitx 5"},
+    "install_uu_accelerator": {"zh": "UU加速器插件", "en": "UU Accelerator Plugin"},
+    "install_xunyou_accelerator": {"zh": "迅游加速器插件", "en": "Xunyou Accelerator Plugin"},
+    "install_qiyou_accelerator": {"zh": "奇游联机宝加速插件", "en": "Qiyou Accelerator Plugin"},
+    "grp_watt": {"zh": "Watt Toolkit (Steam++)", "en": "Watt Toolkit (Steam++)"},
+    "watt_toolkit_install": {"zh": "安装", "en": "Install"},
+    "watt_toolkit_trust_cert": {"zh": "信任证书", "en": "Trust Certificate"},
+    "watt_toolkit_uninstall": {"zh": "卸载", "en": "Uninstall"},
+    "grp_plugin_store": {"zh": "安装/卸载插件商店", "en": "Install/Uninstall Plugin Store"},
+    "install_plugin_store": {"zh": "安装插件商店", "en": "Install Plugin Store"},
+    "uninstall_plugin_store": {"zh": "卸载插件商店", "en": "Uninstall Plugin Store"},
+    "grp_tomoon": {"zh": "ToMoon 插件", "en": "ToMoon Plugin"},
+    "install_tomoon_install": {"zh": "安装/更新 ToMoon", "en": "Install/Update ToMoon"},
+    "install_tomoon_uninstall": {"zh": "卸载 ToMoon", "en": "Uninstall ToMoon"},
+    "grp_freedeck": {"zh": "Freedeck 插件", "en": "Freedeck Plugin"},
+    "install_freedeck_install": {"zh": "安装/更新 Freedeck", "en": "Install/Update Freedeck"},
+    "install_freedeck_uninstall": {"zh": "卸载 Freedeck", "en": "Uninstall Freedeck"},
+    "grp_lsfg": {"zh": "LSFG-VK插件", "en": "LSFG-VK Plugin"},
+    "install_decky_lsfg_vk_install": {"zh": "安装/更新 LSFG-VK", "en": "Install/Update LSFG-VK"},
+    "install_decky_lsfg_vk_uninstall": {"zh": "卸载 LSFG-VK", "en": "Uninstall LSFG-VK"},
+    "grp_framegen": {"zh": "Framegen插件", "en": "Framegen Plugin"},
+    "install_decky_framegen_install": {"zh": "安装/更新 Framegen", "en": "Install/Update Framegen"},
+    "install_decky_framegen_uninstall": {"zh": "卸载 Framegen", "en": "Uninstall Framegen"},
+    "clover_install_or_reinstall": {"zh": "安装/重装 Clover", "en": "Install/Reinstall Clover"},
+    "update_installed_apps": {"zh": "更新已安装应用", "en": "Update Installed Apps"},
+    "grp_uninstall_apps": {"zh": "卸载已安装应用", "en": "Uninstall Installed Apps"},
+    "uninstall_wps_office": {"zh": "卸载 WPS Office", "en": "Uninstall WPS Office"},
+    "uninstall_qq": {"zh": "卸载 QQ", "en": "Uninstall QQ"},
+    "uninstall_wechat": {"zh": "卸载微信", "en": "Uninstall WeChat"},
+    "uninstall_qqmusic": {"zh": "卸载 QQ音乐", "en": "Uninstall QQ Music"},
+    "uninstall_baidunetdisk": {"zh": "卸载百度网盘", "en": "Uninstall Baidu Netdisk"},
+    "uninstall_edge": {"zh": "卸载 Edge浏览器", "en": "Uninstall Edge Browser"},
+    "uninstall_chrome": {"zh": "卸载 Google浏览器", "en": "Uninstall Google Chrome"},
+    "uninstall_anydesk": {"zh": "卸载 AnyDesk", "en": "Uninstall AnyDesk"},
+    "uninstall_todesk": {"zh": "卸载 ToDesk", "en": "Uninstall ToDesk"},
+    "uninstall_fcitx5": {"zh": "卸载Fcitx 5", "en": "Uninstall Fcitx 5"},
+    "uninstall_other_flatpak_apps": {"zh": "卸载其他已安装应用", "en": "Uninstall Other Installed Apps"},
+    "install_yellow_duck_software": {"zh": "小黄鸭软件", "en": "Yellow Duck Software"},
+    "grp_third_party": {"zh": "安装/卸载第三方游戏平台", "en": "Install/Uninstall Third-party Game Platforms"},
+    "install_third_party_platform": {"zh": "安装第三方游戏平台", "en": "Install Third-party Game Platform"},
+    "uninstall_third_party_platform": {"zh": "卸载第三方游戏平台", "en": "Uninstall Third-party Game Platform"},
+}
+
+_DANGER_HINTS_I18N = {
+    "clover_install_or_reinstall": {
+        "zh": ("该功能会向 EFI 系统分区写入 Clover 引导文件，"
+               "替换 BOOTX64.EFI 并修改 EFI 启动项。\n"
+               "操作不当可能导致设备无法开机，请确认已了解风险并做好备份。"),
+        "en": ("This will write Clover boot files to the EFI system partition, "
+               "replace BOOTX64.EFI and modify EFI boot entries.\n"
+               "Improper operation may make the device unbootable; make sure you understand the risks and have a backup."),
+    },
+    "fix_boot": {
+        "zh": "该功能会修改 EFI 启动顺序，把 Clover 设为第一启动项。",
+        "en": "This will modify the EFI boot order and set Clover as the first boot entry.",
+    },
+    "fix_shared_disk": {
+        "zh": "该功能会修改 /etc/fstab 与 UDisks2 策略文件，用于自动挂载 Windows 分区。",
+        "en": "This will modify /etc/fstab and the UDisks2 policy file to auto-mount the Windows partition.",
+    },
+    "uninstall_plugin_store": {
+        "zh": "该功能会删除已安装的插件商店及其插件数据。",
+        "en": "This will delete the installed plugin store and its plugin data.",
+    },
+    "clear_hosts_cache": {
+        "zh": "该功能会修改系统 /etc/hosts 文件（会自动备份）。",
+        "en": "This will modify the system /etc/hosts file (a backup is created automatically).",
+    },
+    "health_check": {
+        "zh": ("该功能会检查 ESP 分区、UEFI 启动项、Clover 引导文件与 /etc/fstab。\n"
+               "检查过程为只读，仅在你确认修复后才会修改系统（fstab 修改前会自动备份）。"),
+        "en": ("This will check the ESP partition, UEFI boot entries, Clover boot files and /etc/fstab.\n"
+               "The check is read-only; the system is only modified after you confirm a fix (fstab is backed up before modification)."),
+    },
+}
+
+def t(key, **kwargs):
+    entry = _UI_STRINGS.get(key)
+    if not entry:
+        return key
+    if isinstance(entry, str):
+        s = entry
+    else:
+        s = entry.get(_current_lang) or entry.get("zh") or key
+    if kwargs:
+        try:
+            return s.format(**kwargs)
+        except Exception:
+            return s
+    return s
+
+def fl(key):
+    """功能 / 分组显示名。"""
+    entry = _FUNC_LABELS.get(key)
+    if not entry:
+        return key
+    return entry.get(_current_lang) or entry.get("zh") or key
+
+def theme_label(mode):
+    return t(f"theme_{mode}")
+
+def system_type_display(system_type):
+    """system_type 内部仍为「双系统」/「单系统」，仅显示时翻译。"""
+    if system_type == "双系统":
+        return t("sys_dual")
+    return t("sys_single")
+
+def dangerous_hint(func_key):
+    entry = _DANGER_HINTS_I18N.get(func_key)
+    if entry:
+        return entry.get(_current_lang) or entry.get("zh")
+    return t("danger_default")
+
+def changelog_body_text():
+    """更新日志正文：中英各一份。"""
+    if get_lang() == "en":
+        return CHANGELOG_BODY_EN
+    return CHANGELOG_BODY_ZH
+
+CHANGELOG_BODY_ZH = """2026-11-01（v1.9.7）
+【新功能】
+- 新增界面语言切换（中文 / English）：顶栏可随时切换，偏好写入
+  ~/.config/steamdeck_toolbox/config.json 的 language 字段，下次启动自动恢复
+- 英文模式下界面文案、分类/功能名、更新日志、对话框按钮（含 Yes / No / OK）、
+  以及内嵌终端脚本的用户可见输出均为英文；中文模式保持中文
+- 帮助页按语言分流：中文仍保留 B 站催更入口；英文显示可点击的 X 链接
+  @AlanWake2100（https://x.com/AlanWake2100）
+【界面改进】
+- 制作人署名改为 Zhucy（中英文一致）
+- 危险确认等对话框不再依赖系统语言的「是/否」「确定」按钮文案，改为跟随工具箱语言
+- 说明：系统 sudo 密码提示语仍随本机系统语言显示，属于正常现象，并非工具箱文案
+
+2026-10-27（v1.9.6）
+【问题修复】
+- 修复「切换软件源」每次都会误报「无法下载 flathub 公钥」的警告：
+  · 原因：原逻辑每次切源都无条件去 dl.flathub.org 重新下载一遍公钥，而该站经常连不上，
+    于是每次都打一条黄字警告。但公钥是「导入一次就长期有效」的，正常设备上早就有了
+    （/var/lib/flatpak/repo/flathub.trustedkeys.gpg），功能完全正常，这条警告纯属误导
+  · 现在先检查本地是否已有可用公钥（并用 gpg 确认里面确实是 Flathub 的密钥，
+    避免损坏的空壳文件误判），有就直接跳过下载，不再打印任何警告
+  · 本地确实没有时才去下载，且按「官方 → 中科大 → CERNET」依次尝试
+  · 只有真的全都拿不到才告警，并明确写出后果（安装/更新会报 Could not find public key）
+    和两条手动修复命令，而不是让用户猜
+
+2026-10-26（v1.9.5）
+【问题修复】
+- 修复「更新全部应用」在提示「没有更新。」之后长时间卡住：
+  · 根因：flatpak update 的流程是「先查更新 → 再刷新 appstream 元数据」。第二步要去
+    dl.flathub.org 拉约 10MB 的 appstream 数据，而该站当前连通率极低（实测 8 次试连
+    只有 1 次成功），连接超时后还会重试 5 轮，于是卡在「正在为远程仓库 flathub 更新
+    appstream 数据」几分钟甚至更久
+  · 但 appstream 只是软件介绍/图标等展示用元数据，和「能不能更新」完全无关，
+    所以现在改为直接跳过它：用 remote-ls 查更新（只刷新 summary，走镜像站，很快），
+    再按需执行 update
+  · 现在没有更新时会明确显示「所有已安装应用均为最新版本，无需更新」，不再卡住
+  · 联网检查失败时先退回本地缓存判断；缓存里也没有才报「无法检查更新」，不会假装最新
+  · 更新下载加了 20 分钟超时，超时会明确提示而不是静默挂起；更新完再用本地缓存复核一遍，
+    还有残留会列出来
+
+【功能改进】
+- 「安装国内源」改为「切换软件源（国内/官方）」，改为菜单选择，不再写死单一镜像：
+  · 新增 4 个国内可选源 + 1 个「恢复官方源」选项，逐个实测确认可用：
+    中科大 (USTC)、中科大-联通节点、中科大-移动节点、CERNET 教育网聚合
+  · 菜单里会先显示当前使用的源，选完再做可用性验证；验证失败会自动回滚到原来的源，
+    并提示「可换一个源再试」
+  · 恢复官方源时若因为网络不通而验证失败，不会误报失败，而是说明「地址已设置成功，
+    网络恢复后即可用」
+  · 顺带纠正原注释里过时的探测结论：sjtu 已 301 跳回官方（等于没加速），
+    nju / sustech / bfsu / tuna / aliyun / tencent / huawei / zju / jlu / iscas /
+    xjtu / scau / qlu 的 flathub 返回 HTML 首页或 404，并非真实镜像
+  · 说明：国内镜像都是 Flathub 的缓存而非完整镜像，未命中的文件会 302 回官方站，
+    因此仍需能基本连通 dl.flathub.org
+
+2026-10-26（v1.9.4）
+【问题修复】
+- 修复「GE-Proton 管理」安装时误报「解压失败（压缩包损坏或解压中断）」：
+  · 根因一（主因）：上游从 GE-Proton11-4 起改了产物命名，压缩包和包内顶层目录都带架构后缀
+    （GE-Proton11-11-x86_64.tar.gz，解开是 GE-Proton11-11-x86_64/），而 release tag 仍是
+    GE-Proton11-11。旧代码解压后写死检查 $STAGE_DIR/GE-Proton11-11，找不到就当成解压失败。
+    实际包是好的，tar 退出码也是 0，纯粹是判据写死了目录名
+  · 根因二：镜像断流时返回 200 + 截断的包，curl 认为成功，tar 一路解到末尾才报 EOF，
+    表现同样是「解压失败」。现在下载后先用文件大小 + sha512 校验，截断/损坏的包在解压前就被拦下
+  · 现在解压后按「stage 里唯一的顶层目录」定位，并用 <tag> 与 <tag>-* 前缀兜底；
+    安装目录名仍保持 <tag>（GE-Proton11-11），已装列表/卸载/Steam 显示名与旧版本一致
+  · 下载失败提示更具体：区分「下载不完整（x/y 字节）」「sha512 校验失败」「压缩包结构异常」，
+    不再一律报「解压失败」，便于判断是网络问题还是上游改名
+  · 安装循环结束后补充清理下载临时目录，用户中途取消不再留 /tmp/ge_proton_* 残留
+
+2026-10-26（v1.9.3）
+【功能改进】
+- 「Watt Toolkit (Steam++)」安装完成后新增一步「信任证书」，不再需要装完再手动敲命令
+  · 把加速插件自签的根证书（~/.local/share/Steam++/Plugins/Accelerator/SteamTools.Certificate.cer）
+    写入系统信任库；把 /etc/hosts 设为可读写，加速改 hosts 时不用每次提权
+  · 证书由 Watt Toolkit 首次运行时生成，安装包里没有；若检测不到会提示先启动软件点一次「加速」，
+    并可代为拉起 Watt Toolkit，之后按回车重新检测（Q 放弃）
+  · 写入前用 openssl 校验证书可解析、未过期，避免把损坏文件写进信任库；已存在则提示为覆盖更新
+  · 明确告知安全影响：信任该根证书等价于允许对应私钥持有者解密本机 https 流量
+- 「网络工具 → Watt Toolkit (Steam++)」新增独立的「信任证书」菜单项，可随时重跑
+  （证书重新生成、换设备后需要再次信任）
+- 卸载 Watt Toolkit 时提示并可选一并清除系统级改动：从信任库移除该根证书、
+  把 /etc/hosts 权限从所有人可写恢复，并刷新系统证书包；跳过则给出手动命令
+
+2026-10-26（v1.9.2）
+【功能改进】
+- 「安装 ToDesk」检测到本机已安装时，选项从两个增加为三个：新增「3. 卸载 ToDesk（不再安装）」，
+  可以直接在安装流程里把 ToDesk 卸掉，不用再绕到「更新和卸载软件」里找（回车默认仍是 2 不安装，
+  不会误触）
+- 新增独立的「卸载 ToDesk」菜单项（更新和卸载软件 → 卸载已安装应用），可单独调用
+- 卸载范围覆盖 ToDesk 的两种安装来源：pacman 包（todesk-bin / todesk）、手动解包安装的
+  /opt/todesk 目录；卸载前先停用 todeskd 服务并结束残留进程，避免二进制被占用导致删不干净
+- 一并清理 pacman 不负责的痕迹：桌面快捷方式、~/.config/autostart 自启项、旧方案遗留的
+  「安装/重装 ToDesk」图标；用户数据（~/.local/share/todesk）单独询问后再删，默认保留
+
+2026-10-25（v1.9.1）
+【功能改进】
+- 「安装 ToDesk」完善已安装检测：安装前先判断本机是否已装，已装则显示当前版本、安装来源、
+  目标版本，并给出「1. 重新安装 / 2. 不安装直接退出」两个明确选项（回车默认选 2，不误装）
+- 检测范围不再只看 pacman 包：pacman 包数据库损坏、或当初是手动解包安装的设备，
+  只要 /opt/todesk 目录或 ToDesk 主程序存在，同样会被识别为已安装（此前会漏判，
+  导致重复安装覆盖）
+- 未安装时不再出现询问，直接进入安装流程
+
+2026-10-25（v1.9.0）
+【功能改进】
+- 重写「安装 ToDesk」：不再下载并执行第三方安装脚本，改为直接取回安装包用 pacman 安装
+  · 原因：原方案执行的 todesk.lanbai.top 脚本里，真正安装的那行 `sh /tmp/lanbai/install.sh`
+    其实是注释掉的（第 14 行 `#sh ...`），它只在桌面丢一个「ToDesk安装」图标，要用户再点一次
+    才会下载另一个脚本执行，属于四段式绕路，而且并不真正完成安装
+  · 新做法：git clone 社区仓库取到 todesk-bin 4.7.2.0 的 .pkg.tar.zst，校验完整性后
+    直接 pacman -U 安装，全程不执行任何第三方 shell 脚本
+  · 顺带不再做这些多余且有风险的操作：重建 pacman 钥匙环（pacman-key --init/--populate）、
+    安装 base-devel 整套编译工具链、硬编码 /home/deck 路径（非 deck 用户名会出错）
+  · 增加了已安装检测（可保持或卸载重装）、依赖自动补齐（gtk3 / libappindicator-gtk3）、
+    旧版 todesk 4.1.0 冲突自动卸载、安装包完整性校验、上游包名变更时安全中止
+  · 自动创建桌面快捷方式并启用 todeskd 服务，同时清理旧方案遗留的桌面「安装/重装」图标
+  · 说明：Gitee 禁止匿名直链下载仓库内 >1MB 的文件（返回 403），所以 80MB 的安装包
+    只能通过 git clone 取回，无法用 curl 直接下载
+
+2026-10-23（v1.8.9）
+【界面修复】
+- 彻底修复「窗口外面多一圈黑色区域」：不再使用「透明圆角 + 投影」这套窗口外观。
+  那套做法要求窗口表面比可见内容大一圈（CSD 透明边距，实测四周 68/60/76px），
+  一旦系统没开桌面特效合成器（按 Alt+Shift+F12 就会关掉），X11 无法做透明混合，
+  这圈透明边距就被渲染成纯黑，也就是那圈黑边
+- 现在窗口改为不透明直角样式：窗口边距恒为 0，无论合成器开还是关都不会出现黑边，
+  也不再有切换时黑边闪一下再消失的过程
+- 对话框、内部卡片的圆角样式保持不变，只是窗口外框改为直角
+
+2026-10-22（v1.8.7）
+【界面修复】
+- 真正修复「点击帮助时主界面闪一下」：根因是 CSS 里窗口「失焦态」的阴影比正常态小，
+  弹出模态对话框后主窗口一失焦，GTK 就会按新阴影重算窗口边距，窗口管理器随之把
+  主窗口重新缩放一遍（实测 1086x806 → 1018x738）。现在两种状态用同样的阴影，
+  主窗口再也不会因为失焦/获焦而改变尺寸
+- 顺带说明：模态对话框打开时系统会把主窗口「压暗」一点点，这是 KDE 的 Dialog Parent
+  效果（所有程序都这样），不属于闪烁
+
+2026-10-22（v1.8.6）
+【界面修复】
+- 彻底修复对话框打开时的闪烁：改为在窗口完成尺寸计算后再显示出来，
+  用户不会再看到「先小后大」的跳变
+- 此前几个版本还修了：深色模式下对话框标题栏白边、窗口四角圆角不一致
+
+2026-10-22（v1.8.5）
+【界面修复】
+- 修复对话框刚打开时尺寸偏小、内容被裁剪、过一会儿才变大的问题
+- 修复点击「帮助」时窗口闪烁一下的问题（去掉了会触发窗口闪现的尺寸处理方式）
+
+2026-10-22（v1.8.4）
+【界面修复】
+- 修复对话框刚打开时尺寸偏小、内容被裁剪，过一会儿才变大的问题：现改为显示前先按内容计算好尺寸，一次性正确显示
+
+2026-10-22（v1.8.3）
+【界面修复】
+- 修复深色模式下对话框顶部出现白色横条：系统为浅色主题时，窗口管理器会用系统主题绘制对话框标题区，导致与深色界面不一致；现改为由程序自己绘制标题栏，配色跟随应用主题
+- 修复窗口四角圆角不一致：原来上方两角圆润、下方两角是直角（底部状态栏的不透明背景盖住了下方圆角），现四角圆角保持一致
+
+2026-10-19（v1.8.2）
+【功能整合】
+- 「系统体检」升级为统一的排障入口：发现引导类问题时内联执行修复（不再跳转到独立的「修复引导」界面导致上下文丢失），发现挂载类问题时内联写入 fstab 自动挂载
+- 「修复引导」补齐关键能力：原来 Clover 启动项缺失时只会报错退出（因此对"掉引导"实际无能为力），现在会先动态探测 ESP，再自动重建 Clover / SteamOS 启动项，并顺带把 Clover 设为第一启动项
+- 「修复引导」不再硬编码 /dev/nvme0n1p1 与 /dev/nvme0n1 分区 1：改用 findmnt + EFI 分区类型 GUID 动态定位，兼容 eMMC / SATA 机型与不同分区号
+- 消除体检与「修复引导」「修复互通盘」的重复实现：启动顺序调整、启动项重建统一走同一套逻辑；体检内联执行时不再清屏、不重开界面
+- 体检的挂载修复写入 fstab 前自动备份（fstab 写坏会导致下次开机进不了系统）
+
+【问题修复】
+- 修复「修复引导」判断 Clover 文件是否存在时无法区分「文件缺失」与「读取失败」，可能误导用户去重装 Clover；现改为三态判断，权限不足时明确提示并继续尝试注册启动项
+- 清理体检中已不再使用的 3 个冗余修复函数（原 hc_fix_clover_entry / hc_fix_steamos_entry / hc_fix_boot_order），避免两套实现并存
+
+2026-10-19（v1.8.1）
+【问题修复】
+- 修复系统体检的结论误导：即使只有「注意」项（如 Windows 启动项被 Clover 接管、ESP 剩余空间偏小等环境差异），也会输出「以上问题需要手动处理」，让人误以为系统有故障；现改为按「异常」数量判定，无异常时明确显示「✅ 结论：未发现异常，引导与挂载均正常」，并说明提示项不影响使用
+- 修复系统体检第 3 项「Clover 引导文件完整性」在已输入 sudo 密码的情况下仍提示「无法读取 EFI 目录」：原代码用普通用户的 [ -d ] 判断 EFI 目录位置，而 /esp 权限为 700 root，普通用户永远看不到，导致路径判断错误后 sudo 探测也失败
+- EFI 目录定位改为依次用 sudo 探测 /esp/EFI 与 /esp/efi/EFI 两个候选路径，兼容不同机型与系统布局；两者都不存在时再区分「目录确实缺失」与「无 sudo 权限」，并给出 ESP 根目录的实际内容供排查
+
+2026-10-19（v1.8.0）
+【新增功能】
+- 新增「系统体检」功能（双系统用户可见）：专用于 SteamOS 更新后排查掉盘、掉引导、挂载失效，覆盖 6 大类共 18 项检查
+  · ESP 分区：是否识别、挂载状态、剩余空间（Clover 需约 15MB）
+  · UEFI 启动项：Clover / SteamOS / Windows 启动项是否存在，Clover 是否为第一启动项
+  · Clover 引导文件：cloverx64.efi、config.plist、BOOTX64.EFI 及其 .orig 备份是否完整
+  · Windows 分区：是否存在、是否挂载、Windows 系统文件结构是否完整
+  · /etc/fstab：条目是否指向仍存在的分区，有无失败的挂载单元
+  · 系统与引导服务：SteamOS 只读模式、Clover 引导守护服务（clover-bootmanager）启用与运行状态
+- 体检为只读检查，发现问题后列出「可自动修复」项，经确认才执行修复
+- 可一键修复：重建丢失的 Clover / SteamOS 启动项、把 Clover 设为第一启动项、启用 Clover 引导守护服务、注释掉 fstab 中的失效条目（修改前自动备份）
+
+【问题修复】
+- 体检中的 ESP 探测不再硬编码 /dev/nvme0n1p1：改用 findmnt + EFI 分区类型 GUID 动态定位，兼容 eMMC/SATA 机型与不同分区号
+- 区分「文件确实缺失」与「无 sudo 权限无法读取」：无权限时明确提示跳过，不再把每个文件都误报为缺失
+
+2026-10-19（v1.7.7）
+【问题修复】
+- 修复双系统被误判为单系统：Clover 安装后会移除/隐藏 Windows 的 EFI 启动项，只看 efibootmgr 里有没有 "Windows" 字样会漏判，导致「修复引导」「修复互通盘」等双系统功能不显示
+- 系统类型检测改为多重判据：① EFI 启动项含 Windows ② 存在标签为 Windows 的 NTFS 分区 ③ NTFS 分区内存在 Windows\\Program Files 或 Windows\\Users 目录结构（即使分区标签被改也能识别）；任一成立即判定为双系统
+- 确保只有 Clover 启动项、没有 Windows 的单系统机器仍正确显示为「单系统」，不会误暴露双系统危险功能
+
+2026-10-19（v1.7.6）
+【界面优化】
+- 内嵌终端窗口新增「复制」按钮：有选中内容时复制选中，未选中时复制全部输出，并有短时状态反馈
+- 内嵌终端新增右键菜单：复制选中内容 / 复制全部输出 / 粘贴 / 全选
+- 内嵌终端新增键盘快捷键：Ctrl+Shift+C 复制、Ctrl+Shift+V 粘贴、Ctrl+Shift+A 全选（Ctrl+C 仍保留用于中断进程）
+- 任务窗口标题栏新增「最大化 / 还原」按钮，可把终端铺满屏幕；窗口不再强制模态，可自由缩放并切换到其他窗口
+
+【问题修复】
+- 修复「安装国内源」完成后提示的恢复官方源命令缺少 sudo、直接复制执行会失败的问题，并注明需在 Konsole 中执行
+
+2026-10-19（v1.7.5）
+【问题修复】
+- 统一全部 GitHub 下载镜像源：原 3 个镜像中 gh.ddlc.top 已 429 限流、mirror.ghproxy.com 域名失效，仅 ghproxy.net 仍可用但很慢，导致插件 / GE-Proton / Clover 下载经常失败
+- 新镜像列表（均经 5 轮稳定性 + 33MB 文件 sha256 完整性 + 实速实测）：gh-proxy.com（速度快）、gh.3w.pm（稳定）、cors.isteed.cc（稳定）、ghproxy.net（慢速备用）、GitHub 官方源
+- 修复下载镜像选择菜单显示空条目：官方源在内部用空前缀（避免 URL 拼成 https://github.com/https://github.com/...），菜单改为显示可读名称
+- 修复 Clover 克隆镜像选择：实测 gh-proxy.com / cors.isteed.cc / ghproxy.net 均不支持 git clone，改为仅提供 gh.3w.pm 与官方源
+- 修复 Flatpak 国内源：原配置的 mirror.sjtu.edu.cn/flathub 已改为 301 跳回官方、实际无效；改用 mirrors.ustc.edu.cn/flathub（实测可正常查询与安装），并自动导入 flathub 签名公钥、切换后验证可用性、失败自动回滚
+- 修复 Flatpak 源配置使用不存在的 `flatpak remote-get-url` 命令获取原地址，改为从 remotes 列表解析
+- 修复 Flatpak 源验证因未指定分支必然失败，以及系统级 remote-modify 缺少 sudo 会卡在密码提示的问题
+- 修复「安装国内源」多余的禁用 SteamOS 只读模式操作：flatpak 配置位于可写的 /var 分区，与只读根分区无关
+
+2026-10-19（v1.7.4）
+【问题修复】
+- 修复「一键应用 CryoByte33 推荐方案」重复执行会在 /etc/fstab 写入重复 swap 条目的问题（sed 分隔符转义错误导致删除失败）
+- 修复退出时无条件把 SteamOS 只读模式改回 enabled：现在只有脚本自己解除过只读才会恢复，不再覆盖用户手动设置的可写状态
+- 修复「调整虚拟内存」替换正在使用的 swapfile 前未先 swapoff（可能导致 device busy 或在内存紧张时 OOM），改为先停用并校验
+- 修复「调整虚拟内存」显示 / 剩余空间、实际预检 /home 的不一致；fstab 判断改为按第一字段精确匹配（不再误判注释行与 swapfile2）
+- 修复「配置ZRAM」设置无法持久化：现写入 /etc/systemd/zram-generator.conf，重启后仍生效，并修正原代码误删该配置的问题
+- 修复「清理虚拟内存配置」在未启用 ZRAM 时误报"ZRAM 重置失败"，且 fstab 改用精确匹配删除
+- 修复「清理hosts缓存」在只读模式下静默失败却仍提示成功，改为先确保可写、失败即中止并给出回滚方法
+- 修复「Steam缓存管理」只扫描默认库（SD 卡/第二块盘的库看不到）、游戏名含分隔符会解析错位、删除前缺少明细确认
+- 修复「安装/重装 Clover」缺少危险操作二次确认；并改为动态探测 ESP 分区（原硬编码 /dev/nvme0n1p1，eMMC/SATA 机型会失败）
+- 修复 Clover 安装中途失败会在 EFI 分区留下半套文件：备份/替换 BOOTX64.EFI 失败现在会中止并回滚，安装脚本失败即停
+- 修复 Clover 安装脚本用 echo -e 传递含反斜杠的 sudo 密码会被截断导致认证失败，改用 printf 原样传递
+- 修复 Clover 相关脚本退出时可能把系统停在可写状态，以及 ISO/7z 临时文件残留
+- 修复自更新先截断自身再写入、中途失败会导致程序损坏：改为写临时文件后原子替换，并增加语法校验
+- 修复版本比较把 1.7 与 1.7.0 判为不同版本，可能反复提示更新
+- 修复「安装/卸载插件」结果只看命令返回值，现在以目录实际状态为准，避免假成功
+- 修复非 deck 用户名的设备上安装插件/小黄鸭后文件属主被改成 deck 的问题
+- 修复「安装ToDesk」直接执行第三方远程脚本：现改为下载到本地、展示内容、语法校验后再询问是否执行，并明确列出该脚本对系统的改动
+- 修复检测系统类型时把 Clover 启动项当成双系统依据（单系统装了 Clover 会误显示"双系统"并暴露危险功能），改为仅以 Windows 启动项判断
+- 修复「安装/更新 GE-Proton」解压中断会在 compatibilitytools.d 留下残缺版本，改为先解压到临时目录校验后再移入
+- 危险操作确认框默认焦点改为「否」，避免误按回车直接执行
+
+2026-10-19（v1.7.3）
+【问题修复】
+- 修复浅色模式下危险操作确认窗口文字看不清：原生对话框底色是浅色而文字仍沿用深色主题配色，出现"白底浅字"；现为对话框显式指定底色与文字色，标题、正文、按钮均随主题正确切换
+- 修复浅色模式下下拉菜单、右键菜单、工具提示等原生浮层的文字配色不随主题变化的问题
+
+2026-10-19（v1.7.2）
+【新增功能】
+- 新增深色 / 浅色主题切换：标题栏图标按钮可切换深色、浅色、跟随系统三种模式，选择自动保存，重启后保持
+- 浅色主题为独立配色的完整主题，并同步 GTK 原生控件（对话框、菜单）配色
+
+【问题修复】
+- 修复 vte3 安装失败（"889B5EBD… 无法在本地签署"）：SteamOS 的 holo 密钥环与 Arch 官方钥匙环相互独立，只执行 pacman-key --populate archlinux 时该密钥不会被导入，导致后续签名必然失败；现同时导入 archlinux 与 holo 两个钥匙环
+- 修复「修复磁盘写入错误」功能检测失效：原逻辑靠 ntfsfix 输出中的 "Volume is dirty" 判断，但 ntfsfix 并不打印该文字，导致所有分区恒显示"正常"；现改为读取 $Volume 的 Volume Flags 脏标志位
+- 修复已挂载 NTFS 分区无法检测：ntfsinfo/ntfsfix 需要独占打开设备，挂载中的分区会报占用；现检查前临时卸载、检查后自动挂回原处
+- 修复「修复磁盘写入错误」的无意义密码提示：单系统无 NTFS 分区时不再索要 sudo 密码，直接给出结论与排查建议
+- 修复有分区被跳过时仍显示"所有 NTFS 分区状态正常"的误导性结论，改为明确提示未检查数量
+- 修复 NTFS 分区编号与实际输入不一致的问题
+- 修复「修复互通盘」重启后失效：原逻辑只要分区当前已挂载就跳过，但 udisks 自动挂载重启后不会保留；现要求"已挂载且已写入 fstab"才算就绪，确保重启后仍自动挂载
+- 修复「修复互通盘」误删用户数据盘：不再强制卸载并删除 /run/media/deck/ 下非 NTFS 分区（ext4/U盘/Btrfs 外置盘）的 fstab 条目
+- 修复 fstab 条目匹配使用子串导致误判（UUID 前缀相同会被当成已存在），改为锚定精确匹配
+- 修复 fstab 写入可能丢失条目：改为原子替换，失败时保留原条目
+- 修复 fstab 删除使用 sed 正则转义不全导致删不掉条目，改用按字段精确比对
+- 修复「修复互通盘」挂载失败时仍显示"全部完成"，现改为显示失败数量
+- 修复「修复互通盘」、UDisks2 修改的假成功提示，改为真实结果反馈
+- 修复主题"跟随系统"读取的是被自己改写过的值（自我污染），现改为启动时记录系统真实配色快照
+
+2026-09-09（v1.7.1）
+【界面优化】
+- 全新 Steam Deck 风格主题：深蓝黑底 + Steam 蓝高亮，圆角卡片与加高的触控友好列表行
+- 左侧分类栏新增面板标题，功能列表与搜索结果改为圆角卡片容器，帮助/退出按钮使用强调色
+- 顶部标题栏副标题显示系统类型，窗口按钮与搜索框统一为圆角样式
+- 任务窗口新增标题栏与深色终端配色，运行时显示计时、完成后显示"任务已完成"
+- 更新日志页补充页面标题，关于/更新日志正文改为圆角卡片
+
+2026-09-06（v1.7.0包含 v1.6.9 的调整）
+【界面优化】
+- 新增顶部标题栏（HeaderBar），显示版本号
+- 新增全局功能搜索：顶部搜索框跨分类查找功能，结果页显示所属分类
+- 任务窗口新增运行计时器，任务状态一目了然
+- 危险操作二次确认：修复引导/修复互通盘/卸载插件商店/清理hosts 执行前弹出确认
+- 底部状态栏显示系统类型、终端模式、版本
+- 全局样式优化：更舒适的列表间距与选中高亮
+
+【问题修复】
+- 修复取消任务无效：任务进程现在会被真正终止（此前点"取消"只是关窗口，进程仍在后台运行）
+- 修复 SteamOS 只读模式禁用后未恢复：所有功能执行完毕自动恢复，避免系统更新异常
+- 修复清理 hosts 误删系统条目：现在只移除 Steam 相关域名并自动备份
+- 修复自更新无内容校验：更新前校验下载内容，防止错误页覆盖脚本
+- 修复版本比较逻辑：数字逐段比较，本地版本更新时不再提示降级
+- 修复 ToMoon/Freedeck 等插件版本获取：排除 build 类无效标签、兼容无 v 前缀标签、智能选择下载资产（跳过源码包）、已装正式版时正确检测更新
+- 修复 GitHub API 检查在管道下误报异常
+- 修复 Watt Toolkit 已安装时静默重复下载：现在会先确认再覆盖
+
+【功能强化】
+- 交换文件创建增加空间预检与 dd/mkswap/swapon 逐级校验，失败时明确报错
+- 加速器/ToDesk/AnyDesk/应用更新增加失败提示
+- 安装育碧/Epic 前置检查 Proton Experimental 是否存在，缺失时给出指引
+- 插件安装器统一为通用逻辑，镜像源全局统一，zip 下载带完整性校验
+- 图标资源内嵌到脚本，离线自包含，无需外部文件夹
+
+【其他】
+- 全面改用 $HOME 变量，减少硬编码路径
+- 桌面快捷方式改用 sys.executable，兼容性更好
+- 终端模拟器缺失时自动回退（konsole → xterm 等）
+2026-08-07（v1.6.8） 调整了从github上安装的部分功能的版本对比逻辑
+2026-08-05（v1.6.7） 修复了部分bug，并完善了部分功能的逻辑
+2026-08-04（v1.6.6包含 v1.6.4-v1.6.5 的调整） 增加了安装第三方游戏平台的功能（目前包含育碧，Epic，战网）
+2026-08-01（v1.6.3包含 v1.6.2 的调整） 完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
+2026-07-31（v1.6.1） 增加了GE-Proton 管理的功能，可以安装/卸载GE兼容层
+2026-07-30（v1.6.0包含 v1.5.7-v1.5.9 的调整） 新增了安装Freedeck插件的功能，并修复了一些bug和优化完善了一些功能
+2026-07-29（v1.5.6包含 v1.5.2-v1.5.5 的调整） 增加了安装Fcitx 5的功能并继续修复了一些bug,并调整了部分功能的逻辑
+2026-07-27（v1.5.1包含 v1.5.0 的调整） 修复了一些bug,并优化完善了一些功能
+2026-07-26（v1.4.9） 增加了安装Asklink远程的功能
+2026-07-25（v1.4.8包含 v1.3.9-v1.4.7 的调整）将文字形式停止更新，替换为图文形式，操作更加便捷，并对功能进行了修改和优化完善
+删除了设置管理员密码的功能，增加了安装奇游联机宝加速插件的功能
+2026-07-18（v1.3.8包含 v1.3.7 的调整） 替换steamcommunity 302功能为安装Watt Toolkit (Steam++)，增加实用性
+调整了安装插件商店以及安装LSFG-VK插件和Framegen插件功能的部分逻辑，将校准摇杆更改为校准设备，增加了校准扳机
+2026-07-09（v1.3.6） 修改了修复互通盘功能的实现逻辑，更具有通用性
+2026-07-08（v1.3.5包含 v1.3.4 的调整） 删除了"远程无法连接点我"功能，调整从 GitHub 安装的功能的镜像顺序
+2026-06-30（v1.3.2） 修复了安装AnyDesk功能的bug
+2026-06-28（v1.3.1） 修复了调整虚拟内存大小功能的bug
+2026-06-27（v1.3.0） 增加"远程无法连接点我"功能
+调整安装 AnyDesk 功能的安装逻辑，改为从官网安装
+2026-06-03（v1.2.7） 增加安装/重装 Clover 引导功能，并进行多项完善
+2026-06-02（v1.2.6） 调整从 GitHub 安装的功能的安装逻辑，支持预发布版本和正式版选择
+2026-05-31（v1.2.4，包含 v1.1.9、v1.2.0、v1.2.1 的调整） 增加安装 LSFG‑VK 插件和 Framegen 插件功能（从 GitHub 安装，并使用镜像下载）
+调整插件商店功能的安装步骤，改用国内镜像加快下载速度，并增加镜像下载失败后的自动重试
+调整 Steam Deck 缓存管理器功能的部分参数
+2026-05-30（v1.1.8） 调整自动更新的逻辑
+2026-05-28（v1.1.8，包含 v1.1.7） 更改插件商店功能，改为从 GitHub 安装
+更新工具箱打开后自动更新的步骤
+2026-03-17（v1.1.2） 由于宝葫芦停止维护，删除"安装＆卸载宝葫芦"功能
+2026-03-05（v1.1.1） 更改安装 ToMoon 功能的实现逻辑，改为从 Gitee 克隆下载安装
+2026-03-02（v1.1.0） 更改安装插件商店功能的实现逻辑，改为从 Gitee 克隆下载安装
+2026-01-21（v1.0.9） 新增安装 Steam 社区 302 功能
+2026-01-16（v1.0.8） 完善调整虚拟内存大小功能的文本展示
+2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
+最初发布在github，没做详细的统计，发布日期为2026-01-01"""
+
+CHANGELOG_BODY_EN = """2026-11-01 (v1.9.7)
+[New features]
+- Added UI language switching (Chinese / English): switch anytime from the top bar; preference is saved to the language field in ~/.config/steamdeck_toolbox/config.json and restored on next launch
+- In English mode, UI strings, category/feature names, the changelog, dialog buttons (including Yes / No / OK), and user-visible embedded terminal script output are all English; Chinese mode stays Chinese
+- Help page follows the language: Chinese keeps the Bilibili nudge entry; English shows a clickable X link @AlanWake2100 (https://x.com/AlanWake2100)
+[UI improvements]
+- Credits updated to Made by / 制作人 Zhucy in both languages
+- Dangerous-confirm and other dialogs no longer rely on system-locale Yes/No/OK labels; they follow the toolbox language instead
+- Note: the system sudo password prompt still follows the OS language; that is expected and not toolbox UI text
+
+2026-10-27 (v1.9.6)
+[Bug fixes]
+- Fixed "Switch software source" falsely warning that the flathub public key could not be downloaded:
+  · Cause: every switch unconditionally re-downloaded the key from dl.flathub.org, which is often unreachable, so a yellow warning appeared every time. The key only needs to be imported once and is already present on normal devices (/var/lib/flatpak/repo/flathub.trustedkeys.gpg); the feature itself worked, the warning was misleading.
+  · Now check for a usable local key first (and verify with gpg that it really contains the Flathub key, to avoid empty/corrupt stubs). If present, skip the download and print no warning.
+  · Only download when missing, trying Official → USTC → CERNET in order.
+  · Warn only when all sources fail, and clearly state the consequence (installs/updates may report Could not find public key) plus two manual fix commands.
+
+2026-10-22 (v1.9.5)
+[Maintenance]
+- Repository baseline rebuilt on top of the upstream Gitee master; all changes
+  re-applied as a single commit (no functional change from v1.9.4)
+
+2026-10-22 (v1.9.4)
+[Interface]
+- Fixed the remaining light strip above dialogs in dark mode: on KDE/KWin the window manager draws the dialog title area using the system (light) colours, which our CSS cannot reach. Client-side decorations are now forced so GTK paints that area and the app theme applies
+- Fixed window corners: all four corners are now rounded (previously only the top two were, because the bottom status bar painted an opaque square over them)
+
+2026-10-22 (v1.9.3)
+[Interface]
+- The X handle in the Help dialog is now a real clickable link (opens https://x.com/AlanWake2100)
+- Fixed a white strip above the title bar when the app runs in dark mode on a light desktop theme: the client-side decoration frame and the GTK theme variant now follow the app theme instead of the system one
+
+2026-10-22 (v1.9.2)
+[Interface]
+- Help dialog: the social link now points to X (Twitter) — "Follow AlanWake (@AlanWake2100) on X for updates"
+- All dialog buttons are now English regardless of system locale: replaced GTK built-in button sets (OK / Yes-No) with explicit English labels, and forced an English locale for the process so system-provided strings stay English
+
+2026-10-22 (v1.9.1)
+[Bug Fixes]
+- Self-update now fetches from GitHub only: the update check and self-update read VERSION and the script body from the official GitHub repository
+- Replaced the remaining Gitee references:
+  - Watt Toolkit (Steam++) download now uses the official GitHub release (BeyondDimension/SteamTools) instead of the Gitee mirror
+  - ToDesk notice now points to the GitHub project page
+  - Changelog wording no longer references Gitee
+
+2026-10-22 (v1.9.0)
+[International Release]
+- The entire toolbox is now English-only: all UI text, menus, dialogs, status messages, terminal output, comments and documentation have been translated to English
+- Added an English README and translated all installer scripts (install_gui.sh, steamdeck_toolbox.sh, install_decky_loader.sh, install_steamcommunity_302.sh)
+- Default download source changed to the official GitHub repository (https://github.com/Zhucy123/steamdeck_toolbox)
+
+[Feature Removals]
+- Removed the "Install Chinese Source" feature (China-only Flatpak mirror configuration)
+- Removed all third-party China mirror sources (gh-proxy.com, gh.3w.pm, cors.isteed.cc, ghproxy.net): all downloads now use the official GitHub source only, and the mirror selection menus have been removed
+- Removed the "Others" category together with its only two features:
+  - Yellow Duck Software (Lossless Scaling installer)
+  - Third-Party Game Platforms (Ubisoft Connect / Epic / Battle.net install and uninstall)
+
+2026-10-19 (v1.8.2)
+[Feature Integration]
+- "System Health Check" is now the unified troubleshooting entry: boot-related problems are fixed inline (no longer jumping to the separate "Fix Boot" view and losing context), and mount-related problems are fixed inline by writing fstab for auto-mount
+- "Fix Boot" gains key capabilities: previously it only errored out when the Clover boot entry was missing (so it could not really help with "lost boot"); it now dynamically detects the ESP first, then automatically recreates the Clover / SteamOS boot entries and sets Clover as the first boot entry
+- "Fix Boot" no longer hardcodes /dev/nvme0n1p1 and /dev/nvme0n1 partition 1: it now uses findmnt + the EFI partition type GUID for dynamic detection, compatible with eMMC / SATA models and different partition numbers
+- Removed duplicated implementations shared by the health check, "Fix Boot" and "Fix Shared Disk": boot order adjustment and boot entry recreation now use one single code path; inline health-check execution no longer clears the screen or reopens the UI
+- The health check backs up fstab before writing mount fixes (a broken fstab prevents the system from booting next time)
+
+[Bug Fixes]
+- Fixed "Fix Boot" being unable to distinguish "file missing" from "read failure" when checking whether Clover files exist, which could mislead users into reinstalling Clover; it now uses a three-state check and, when permissions are insufficient, clearly says so and still tries to register the boot entry
+- Removed 3 redundant fix functions no longer used by the health check (formerly hc_fix_clover_entry / hc_fix_steamos_entry / hc_fix_boot_order) to avoid two parallel implementations
+
+2026-10-19 (v1.8.1)
+[Bug Fixes]
+- Fixed misleading conclusions from the system health check: even when only "notice" items existed (e.g. the Windows boot entry taken over by Clover, or low free space on the ESP), it printed "the above problems need manual handling", making users think the system was broken; it now decides by the number of "errors" and, when there are none, clearly shows "✅ Conclusion: no errors found, boot and mounts are normal", while explaining that notice items do not affect usage
+- Fixed item 3 "Clover boot file integrity" of the health check still reporting "cannot read the EFI directory" even after the sudo password was entered: the old code used a normal user's [ -d ] test to locate the EFI directory, but /esp is mode 700 root, so a normal user can never see it, which made the path detection wrong and also made the sudo probe fail
+- EFI directory detection now probes both candidate paths /esp/EFI and /esp/efi/EFI with sudo, compatible with different models and system layouts; when neither exists, it distinguishes "directory really missing" from "no sudo permission" and prints the actual contents of the ESP root for troubleshooting
+
+2026-10-19 (v1.8.0)
+[New Features]
+- Added the "System Health Check" feature (visible to dual-boot users): designed for troubleshooting lost disks, lost boot and broken mounts after a SteamOS update, covering 6 categories and 18 checks
+  · ESP partition: detected or not, mount state, free space (Clover needs about 15MB)
+  · UEFI boot entries: whether Clover / SteamOS / Windows entries exist, and whether Clover is the first boot entry
+  · Clover boot files: whether cloverx64.efi, config.plist, BOOTX64.EFI and their .orig backups are complete
+  · Windows partition: whether it exists, whether it is mounted, whether the Windows system file structure is complete
+  · /etc/fstab: whether entries point to partitions that still exist, and whether any mount units failed
+  · System and boot services: SteamOS read-only mode, and whether the Clover boot daemon (clover-bootmanager) is enabled and running
+- The health check is read-only; after finding problems it lists "auto-fixable" items and only fixes them after confirmation
+- One-click fixes: recreate lost Clover / SteamOS boot entries, set Clover as the first boot entry, enable the Clover boot daemon, and comment out stale fstab entries (backed up before modification)
+
+[Bug Fixes]
+- ESP detection in the health check no longer hardcodes /dev/nvme0n1p1: it now uses findmnt + the EFI partition type GUID for dynamic detection, compatible with eMMC/SATA models and different partition numbers
+- Distinguishes "file really missing" from "cannot read without sudo permission": when there is no permission it clearly reports a skip instead of falsely reporting every file as missing
+
+2026-10-19 (v1.7.7)
+[Bug Fixes]
+- Fixed dual boot being misjudged as single boot: after installing Clover, the Windows EFI boot entry is removed/hidden, so only checking efibootmgr for the word "Windows" missed it, and dual-boot features such as "Fix Boot" and "Fix Shared Disk" were not shown
+- System type detection now uses multiple criteria: (1) the EFI boot entries contain Windows; (2) an NTFS partition labelled Windows exists; (3) the NTFS partition contains a Windows\\Program Files or Windows\\Users directory structure (detectable even if the label was changed); any one of them declares dual boot
+- Single-boot machines that only have a Clover entry and no Windows are still correctly reported as "Single Boot" and no longer accidentally expose dangerous dual-boot features
+
+2026-10-19 (v1.7.6)
+[UI Improvements]
+- The embedded terminal window gains a "Copy" button: copies the selection when there is one, otherwise copies all output, with brief status feedback
+- The embedded terminal gains a context menu: Copy Selection / Copy All Output / Paste / Select All
+- The embedded terminal gains keyboard shortcuts: Ctrl+Shift+C copy, Ctrl+Shift+V paste, Ctrl+Shift+A select all (Ctrl+C is still reserved for interrupting the process)
+- The task window header bar gains a "Maximize / Restore" button to fill the screen with the terminal; the window is no longer forced modal, so it can be resized freely and switched away from
+
+[Bug Fixes]
+- Fixed the command shown after "Install Chinese Source" to restore the official source missing sudo, which failed when copied and run directly; it also now notes that it must be run in Konsole
+
+2026-10-19 (v1.7.5)
+[Bug Fixes]
+- Unified all GitHub download mirrors: of the original 3 mirrors, gh.ddlc.top was rate-limited (429) and the mirror.ghproxy.com domain had expired; only ghproxy.net still worked but was very slow, so plugin / GE-Proton / Clover downloads often failed
+- New mirror list (each verified with 5 stability rounds + sha256 integrity of a 33MB file + real speed tests): gh-proxy.com (fast), gh.3w.pm (stable), cors.isteed.cc (stable), ghproxy.net (slow fallback), GitHub official
+- Fixed the download mirror selection menu showing empty entries: the official source uses an empty prefix internally (to avoid URLs like https://github.com/https://github.com/...), so the menu now shows readable names
+- Fixed the Clover clone mirror selection: real-world tests showed gh-proxy.com / cors.isteed.cc / ghproxy.net do not support git clone, so only gh.3w.pm and the official source are offered
+- Fixed the Flatpak Chinese mirror: the configured mirror.sjtu.edu.cn/flathub now 301-redirects back to the official server and was effectively broken; switched to mirrors.ustc.edu.cn/flathub (verified working for queries and installs), with automatic import of the flathub signing public key, a usability check after switching, and automatic rollback on failure
+- Fixed the Flatpak source configuration using the non-existent `flatpak remote-get-url` command to read the original URL; it is now parsed from the remotes list
+- Fixed Flatpak source verification always failing because no branch was specified, and the system-level remote-modify getting stuck at the password prompt without sudo
+- Fixed the unnecessary "disable SteamOS read-only mode" step in "Install Chinese Source": the flatpak configuration lives on the writable /var partition and has nothing to do with the read-only root
+
+2026-10-19 (v1.7.4)
+[Bug Fixes]
+- Fixed "one-click apply CryoByte33 recommended settings" writing duplicate swap entries into /etc/fstab when run repeatedly (a sed delimiter escaping bug made the deletion fail)
+- Fixed unconditionally setting SteamOS read-only mode back to enabled on exit: now read-only is only restored when the script itself disabled it, no longer overriding a writable state the user set manually
+- Fixed "Adjust Virtual Memory" not running swapoff before replacing the swapfile in use (which could cause "device busy" or OOM under memory pressure); it now disables and verifies first
+- Fixed the mismatch between the free space shown by "Adjust Virtual Memory" and the actual pre-check of /home; fstab matching now compares the first field exactly (no longer misreading commented lines or swapfile2)
+- Fixed "Configure ZRAM" settings not persisting: they are now written to /etc/systemd/zram-generator.conf and survive reboot, and fixed the old code accidentally deleting that config
+- Fixed "Clean Virtual Memory Config" falsely reporting "ZRAM reset failed" when ZRAM was not enabled, and fstab now uses exact matching for deletion
+- Fixed "Clean hosts Cache" failing silently in read-only mode while still reporting success; it now ensures writability first and aborts with a rollback method on failure
+- Fixed "Steam Cache Manager" only scanning the default library (libraries on the SD card / second disk were invisible), game names containing the separator being misparsed, and the missing detailed confirmation before deletion
+- Fixed "Install/Reinstall Clover" missing the dangerous-operation second confirmation; it now detects the ESP partition dynamically (the old hardcoded /dev/nvme0n1p1 failed on eMMC/SATA models)
+- Fixed a failed Clover installation leaving half the files on the EFI partition: a failed backup/replace of BOOTX64.EFI now aborts and rolls back, and the install script stops on failure
+- Fixed the Clover install script truncating sudo passwords containing backslashes when passed via echo -e, which caused authentication failures; it now passes them as-is with printf
+- Fixed Clover-related scripts possibly leaving the system writable on exit, and leaving ISO/7z temp files behind
+- Fixed self-update truncating itself before writing, so a failure mid-way corrupted the program: it now writes a temp file and atomically replaces, with syntax validation added
+- Fixed version comparison treating 1.7 and 1.7.0 as different versions, which could prompt for updates repeatedly
+- Fixed "Install/Uninstall Plugins" judging success only by the command return value; it now goes by the actual directory state to avoid false success
+- Fixed plugin / Yellow Duck installations changing file ownership to deck on devices whose username is not deck
+- Fixed "Install ToDesk" executing a third-party remote script directly: it now downloads it locally, shows the content, validates the syntax, then asks whether to run it, and clearly lists the script's changes to the system
+- Fixed system type detection treating the Clover boot entry as evidence of dual boot (a single-boot system with Clover falsely showed "Dual Boot" and exposed dangerous features); it now judges only by the Windows boot entry
+- Fixed "Install/Update GE-Proton" leaving a broken version in compatibilitytools.d when extraction was interrupted; it now extracts to a temp directory, verifies, then moves it in
+- The default focus of the dangerous-operation confirmation is now "No", so pressing Enter by accident does not execute
+
+2026-10-19 (v1.7.3)
+[Bug Fixes]
+- Fixed unreadable text in the dangerous-operation confirmation window in light mode: native dialogs have a light background but kept the dark theme's text color, producing "light text on a white background"; the dialog background and text colors are now set explicitly, and the title, body and buttons all follow the theme correctly
+- Fixed the text colors of native popups (drop-down menus, context menus, tooltips) not following the theme in light mode
+
+2026-10-19 (v1.7.2)
+[New Features]
+- Added dark / light theme switching: the header bar icon button switches between dark, light and follow-system modes; the choice is saved automatically and kept after restart
+- The light theme is a complete theme with its own palette, and also syncs the colors of native GTK widgets (dialogs, menus)
+
+[Bug Fixes]
+- Fixed vte3 installation failing ("889B5EBD... cannot be signed locally"): SteamOS's holo keyring and the Arch official keyring are independent, so running only pacman-key --populate archlinux did not import that key and the subsequent signing always failed; both the archlinux and holo keyrings are now imported
+- Fixed "Fix Disk Write Errors" detection being ineffective: the old logic relied on "Volume is dirty" in ntfsfix output, but ntfsfix does not print that text, so every partition always showed "normal"; it now reads the Volume Flags dirty bit of $Volume
+- Fixed mounted NTFS partitions being undetectable: ntfsinfo/ntfsfix need exclusive access to the device and report "in use" for mounted partitions; they are now temporarily unmounted before the check and remounted afterwards
+- Fixed the pointless password prompt of "Fix Disk Write Errors": on a single-boot system with no NTFS partition it no longer asks for a sudo password and directly gives the conclusion and troubleshooting advice
+- Fixed the misleading "all NTFS partitions are normal" conclusion when some partitions were skipped; it now clearly states how many were not checked
+- Fixed the NTFS partition numbering not matching the actual input
+- Fixed "Fix Shared Disk" not working after reboot: the old logic skipped whenever the partition was currently mounted, but udisks auto-mounts do not survive a reboot; a partition now only counts as ready when it is "mounted and written into fstab", ensuring auto-mount after reboot
+- Fixed "Fix Shared Disk" accidentally deleting user data disks: it no longer force-unmounts and deletes fstab entries of non-NTFS partitions under /run/media/deck/ (ext4 / USB drives / external Btrfs disks)
+- Fixed fstab entry matching using substrings and causing false positives (UUIDs with the same prefix were treated as existing); it now uses anchored exact matching
+- Fixed fstab writes possibly losing entries: it now uses atomic replacement and keeps the original entry on failure
+- Fixed fstab deletion failing because of incomplete sed regex escaping; it now compares fields exactly
+- Fixed "Fix Shared Disk" still showing "all done" when mounting failed; it now shows the failure count
+- Fixed the false success messages of "Fix Shared Disk" and UDisks2 modifications; they now report real results
+- Fixed the theme "Follow System" reading a value it had overwritten itself (self-pollution); the system's real color scheme is now snapshotted at startup
+
+2026-09-09 (v1.7.1)
+[UI Improvements]
+- Brand-new Steam Deck style theme: dark blue-black background + Steam blue highlights, rounded cards and taller touch-friendly list rows
+- The left sidebar gains a panel title; the function list and search results become rounded card containers; the Help/Quit buttons use the accent color
+- The header bar subtitle shows the system type; window buttons and the search box share a unified rounded style
+- The task window gains a header bar and a dark terminal color scheme, showing a timer while running and "Task completed" when done
+- The changelog page gains a page title; the About/Changelog bodies become rounded cards
+
+2026-09-06 (v1.7.0, includes the v1.6.9 changes)
+[UI Improvements]
+- Added a top header bar (HeaderBar) showing the version number
+- Added global function search: the top search box searches functions across categories and the result page shows the category
+- The task window gains a runtime timer, making the task state clear at a glance
+- Second confirmation for dangerous operations: Fix Boot / Fix Shared Disk / Uninstall Plugin Store / Clean hosts now ask for confirmation before running
+- The bottom status bar shows system type, terminal mode and version
+- Global style improvements: more comfortable list spacing and selection highlight
+
+[Bug Fixes]
+- Fixed cancel not working: the task process is now really terminated (previously "Cancel" only closed the window and the process kept running in the background)
+- Fixed SteamOS read-only mode not being restored after being disabled: it is now restored automatically when all functions finish, avoiding system update problems
+- Fixed cleaning hosts accidentally deleting system entries: it now removes only Steam-related domains and backs up automatically
+- Fixed self-update lacking content validation: the downloaded content is validated before updating, preventing an error page from overwriting the script
+- Fixed the version comparison logic: numbers are compared segment by segment, so a newer local version no longer prompts for a downgrade
+- Fixed plugin version retrieval for ToMoon/Freedeck and others: invalid build tags are excluded, tags without a "v" prefix are supported, download assets are chosen intelligently (source packages are skipped), and updates are detected correctly when a stable version is installed
+- Fixed the GitHub API check falsely reporting an error when piped
+- Fixed Watt Toolkit silently downloading again when already installed: it now asks before overwriting
+
+[Enhancements]
+- Swap file creation adds a space pre-check and step-by-step dd/mkswap/swapon validation with clear errors on failure
+- Accelerator / ToDesk / AnyDesk / app updates now show failure messages
+- Installing Ubisoft/Epic pre-checks whether Proton Experimental exists and gives guidance when missing
+- Plugin installers are unified into generic logic, mirrors are globally unified, and zip downloads come with integrity validation
+- Icon assets are embedded in the script, self-contained offline, with no external folder needed
+
+[Other]
+- Switched to the $HOME variable throughout to reduce hardcoded paths
+- Desktop shortcuts now use sys.executable for better compatibility
+- Automatic fallback when no terminal emulator is available (konsole -> xterm, etc.)
+
+2026-08-07 (v1.6.8) Adjusted the version comparison logic of some features installed from GitHub
+2026-08-05 (v1.6.7) Fixed some bugs and improved the logic of some features
+2026-08-04 (v1.6.6, includes the v1.6.4-v1.6.5 changes) Added the third-party game platform installation feature (currently Ubisoft, Epic, Battle.net)
+2026-08-01 (v1.6.3, includes the v1.6.2 changes) Improved the shortcut deletion step of uninstalling installed apps and added a prompt asking whether to delete app data
+2026-07-31 (v1.6.1) Added the GE-Proton Manager feature to install/uninstall GE compatibility layers
+2026-07-30 (v1.6.0, includes the v1.5.7-v1.5.9 changes) Added the Freedeck plugin installation feature, fixed some bugs and improved some features
+2026-07-29 (v1.5.6, includes the v1.5.2-v1.5.5 changes) Added the Fcitx 5 installation feature, fixed more bugs and adjusted the logic of some features
+2026-07-27 (v1.5.1, includes the v1.5.0 changes) Fixed some bugs and improved some features
+2026-07-26 (v1.4.9) Added the AskLink Remote installation feature
+2026-07-25 (v1.4.8, includes the v1.3.9-v1.4.7 changes) Switched the changelog from plain text to illustrated form for easier operation, and revised and improved the features
+Removed the admin password feature and added the Qiyou accelerator plugin installation feature
+2026-07-18 (v1.3.8, includes the v1.3.7 changes) Replaced the steamcommunity 302 feature with Watt Toolkit (Steam++) for more usefulness
+Adjusted parts of the plugin store, LSFG-VK and Framegen installation logic, renamed Calibrate Joystick to Calibrate Device, and added trigger calibration
+2026-07-09 (v1.3.6) Reworked the Fix Shared Disk logic to be more universal
+2026-07-08 (v1.3.5, includes the v1.3.4 changes) Removed the "Remote cannot connect, click me" feature and adjusted the mirror order for GitHub installs
+2026-06-30 (v1.3.2) Fixed a bug in the AnyDesk installation feature
+2026-06-28 (v1.3.1) Fixed a bug in the virtual memory size adjustment feature
+2026-06-27 (v1.3.0) Added the "Remote cannot connect, click me" feature
+Adjusted the AnyDesk installation logic to install from the official website
+2026-06-03 (v1.2.7) Added the Install/Reinstall Clover boot feature with various improvements
+2026-06-02 (v1.2.6) Adjusted the GitHub installation logic to support choosing between pre-release and stable versions
+2026-05-31 (v1.2.4, includes the v1.1.9, v1.2.0 and v1.2.1 changes) Added the LSFG-VK and Framegen plugin installation features (installed from GitHub with mirror downloads)
+Adjusted the plugin store installation steps to use a Chinese mirror for faster downloads and added automatic retry when the mirror download fails
+Adjusted some parameters of the Steam Deck cache manager feature
+2026-05-30 (v1.1.8) Adjusted the auto-update logic
+2026-05-28 (v1.1.8, includes v1.1.7) Changed the plugin store feature to install from GitHub
+Updated the auto-update steps after the toolbox opens
+2026-03-17 (v1.1.2) Removed the "Install & Uninstall Baohulu" feature because Baohulu is no longer maintained
+2026-03-05 (v1.1.1) Changed the ToMoon installation logic to clone and install from a Git repository
+2026-03-02 (v1.1.0) Changed the plugin store installation logic to clone and install from a Git repository
+2026-01-21 (v1.0.9) Added the Steam Community 302 installation feature
+2026-01-16 (v1.0.8) Improved the text display of the virtual memory size adjustment feature
+2026-01-11 (v1.0.7) Improved the virtual memory size adjustment feature
+First released on GitHub with no detailed statistics; release date 2026-01-01"""
+
+def about_body_text():
+    if _current_lang == "en":
+        return (
+            f"\nSteam Deck Toolbox v{VERSION}\n"
+            f"Made by Zhucy\n"
+            f"Release date: January 1, 2026\n"
+            f"About: a toolbox designed for the Steam Deck, integrating system optimization, "
+            f"software installation, network tools and more.\n"
+            f"Usage: click a category on the left to view its functions; the top search box "
+            f"searches across categories; clicking a function opens a separate task window.\n"
+            f"{REPO_URL}\n"
+        )
+    return (
+        f"\nsteamdeck工具箱 v{VERSION}\n"
+        f"制作人：Zhucy\n"
+        f"发布日期：2026年1月1日\n"
+        f"工具箱介绍：这是一个专为 Steam Deck 设计的工具箱，集成了系统优化、软件安装、网络工具等多种功能。\n"
+        f"使用说明：点击左侧分类查看功能；顶部搜索框可跨分类查找；点击功能将弹出独立任务窗口。\n"
+        f"{REPO_URL}\n"
+    )
+
+def build_icon_map():
+    return {
+        t("cat_support"): "pushpin.png",
+        t("cat_changelog"): "clipboard_twemoji.png",
+        t("cat_sysopt"): "hammer_wrench.png",
+        t("cat_software"): "package.png",
+        t("cat_network"): "globe.png",
+        t("cat_plugins"): "game_controller.png",
+        t("cat_boot"): "refresh.png",
+        t("cat_update"): "inbox.png",
+        t("cat_other"): "trash.png",
+    }
+
+def build_category_tree():
+    """按当前语言构建分类树；叶子第二项始终是稳定功能 key。"""
+    return {
+        t("cat_support"): [],
+        t("cat_changelog"): [],
+        t("cat_sysopt"): [
+            (fl("install_chinese_source"), "install_chinese_source"),
+            (fl("adjust_swap"), "adjust_swap"),
+            (fl("fix_disk_write_error"), "fix_disk_write_error"),
+            (fl("clear_hosts_cache"), "clear_hosts_cache"),
+            (fl("grp_calibrate"), [
+                (fl("calibrate_joystick_stick"), "calibrate_joystick_stick"),
+                (fl("calibrate_joystick_trigger"), "calibrate_joystick_trigger"),
+            ]),
+            (fl("steamdeck_cache_manager"), "steamdeck_cache_manager"),
+            (fl("ge_proton_manager"), "ge_proton_manager"),
+        ],
+        t("cat_software"): [
+            (fl("install_anydesk"), "install_anydesk"),
+            (fl("install_todesk"), "install_todesk"),
+            (fl("install_asklink"), "install_asklink"),
+            (fl("install_wps_office"), "install_wps_office"),
+            (fl("install_qq"), "install_qq"),
+            (fl("install_wechat"), "install_wechat"),
+            (fl("install_qqmusic"), "install_qqmusic"),
+            (fl("install_baidunetdisk"), "install_baidunetdisk"),
+            (fl("install_edge"), "install_edge"),
+            (fl("install_chrome"), "install_chrome"),
+            (fl("install_fcitx5"), "install_fcitx5"),
+        ],
+        t("cat_network"): [
+            (fl("install_uu_accelerator"), "install_uu_accelerator"),
+            (fl("install_xunyou_accelerator"), "install_xunyou_accelerator"),
+            (fl("install_qiyou_accelerator"), "install_qiyou_accelerator"),
+            (fl("grp_watt"), [
+                (fl("watt_toolkit_install"), "watt_toolkit_install"),
+                (fl("watt_toolkit_trust_cert"), "watt_toolkit_trust_cert"),
+                (fl("watt_toolkit_uninstall"), "watt_toolkit_uninstall"),
+            ]),
+        ],
+        t("cat_plugins"): [
+            (fl("grp_plugin_store"), [
+                (fl("install_plugin_store"), "install_plugin_store"),
+                (fl("uninstall_plugin_store"), "uninstall_plugin_store"),
+            ]),
+            (fl("grp_tomoon"), [
+                (fl("install_tomoon_install"), "install_tomoon_install"),
+                (fl("install_tomoon_uninstall"), "install_tomoon_uninstall"),
+            ]),
+            (fl("grp_freedeck"), [
+                (fl("install_freedeck_install"), "install_freedeck_install"),
+                (fl("install_freedeck_uninstall"), "install_freedeck_uninstall"),
+            ]),
+            (fl("grp_lsfg"), [
+                (fl("install_decky_lsfg_vk_install"), "install_decky_lsfg_vk_install"),
+                (fl("install_decky_lsfg_vk_uninstall"), "install_decky_lsfg_vk_uninstall"),
+            ]),
+            (fl("grp_framegen"), [
+                (fl("install_decky_framegen_install"), "install_decky_framegen_install"),
+                (fl("install_decky_framegen_uninstall"), "install_decky_framegen_uninstall"),
+            ]),
+        ],
+        t("cat_boot"): [
+            (fl("clover_install_or_reinstall"), "clover_install_or_reinstall"),
+        ],
+        t("cat_update"): [
+            (fl("update_installed_apps"), "update_installed_apps"),
+            (fl("grp_uninstall_apps"), [
+                (fl("uninstall_wps_office"), "uninstall_wps_office"),
+                (fl("uninstall_qq"), "uninstall_qq"),
+                (fl("uninstall_wechat"), "uninstall_wechat"),
+                (fl("uninstall_qqmusic"), "uninstall_qqmusic"),
+                (fl("uninstall_baidunetdisk"), "uninstall_baidunetdisk"),
+                (fl("uninstall_edge"), "uninstall_edge"),
+                (fl("uninstall_chrome"), "uninstall_chrome"),
+                (fl("uninstall_anydesk"), "uninstall_anydesk"),
+                (fl("uninstall_todesk"), "uninstall_todesk"),
+                (fl("uninstall_fcitx5"), "uninstall_fcitx5"),
+                (fl("uninstall_other_flatpak_apps"), "uninstall_other_flatpak_apps"),
+            ]),
+        ],
+        t("cat_other"): [
+            (fl("install_yellow_duck_software"), "install_yellow_duck_software"),
+            (fl("grp_third_party"), [
+                (fl("install_third_party_platform"), "install_third_party_platform"),
+                (fl("uninstall_third_party_platform"), "uninstall_third_party_platform"),
+            ]),
+        ],
+    }
+
+
+
 # 系统真实配色方案的快照。
 # 注意：apply_app_css 会去改 GTK 的 prefer-dark 让原生控件跟着变，
 # 如果不先记录系统原始值，选“跟随系统”时读到的就是自己被改写过的值（自我污染）。
@@ -693,7 +1696,7 @@ DEFAULT_DANGEROUS_HINT = "该功能会修改系统引导、挂载或系统文件
 # ============================================================================
 # 内嵌 Bash 脚本
 # ============================================================================
-BASH_SCRIPT = r'''#!/bin/bash
+BASH_SCRIPT_ZH = r'''#!/bin/bash
 set -uo pipefail
 TEMP_DIR="/tmp/steamdeck_toolbox"
 cleanup_temp() { rm -rf "$TEMP_DIR" 2>/dev/null; }
@@ -7348,13 +8351,6672 @@ else
 fi
 '''
 
+BASH_SCRIPT_EN = r'''#!/bin/bash
+set -uo pipefail
+TEMP_DIR="/tmp/steamdeck_toolbox"
+cleanup_temp() { rm -rf "$TEMP_DIR" 2>/dev/null; }
+# SteamOS read-only mode: automatically restore when the script exits (sudo -n non-interactive, to avoid hanging on a password prompt)
+# Key point: only restore when the script itself disabled read-only mode.
+# Otherwise, if the user manually set the system to writable (disabled), running any function would force it back to
+# enabled on exit, overriding the user's own setting.
+RO_READONLY_DISABLED_BY_US=0
+restore_readonly() {
+    command -v steamos-readonly &>/dev/null || return 0
+    # 脚本没动过只读开关 → 保持用户原状，绝不擅自 enable
+    [ "${RO_READONLY_DISABLED_BY_US:-0}" -eq 1 ] || return 0
+    if sudo -n steamos-readonly status 2>/dev/null | grep -q "disabled"; then
+        if sudo -n steamos-readonly enable 2>/dev/null; then
+            echo -e "${GREEN}✓ Read-only mode restored${NC}"
+        else
+            echo -e "${YELLOW}⚠ Cannot restore read-only mode automatically, please run manually: sudo steamos-readonly enable${NC}"
+        fi
+    fi
+    return 0
+}
+trap 'restore_readonly; cleanup_temp; exit 0' EXIT
+trap 'echo -e "\n${YELLOW}User cancelled the operation, closing window.${NC}"; cleanup_temp; exit 0' INT TERM
+
+PYTHON_CMD="python3"
+command -v python3 &>/dev/null || PYTHON_CMD="python"
+# 当前用户名/组：不能硬编码 deck，非 deck 用户名的设备会把文件属主改错
+CURRENT_USER="${USER:-$(id -un)}"
+CURRENT_GROUP="$(id -gn "$CURRENT_USER" 2>/dev/null || echo "$CURRENT_USER")"
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; PURPLE='\033[0;35m'; NC='\033[0m'
+
+# 全局下载镜像源（GitHub 加速）
+# 2026-10 实测：各跑 5 轮小文件 + 33MB 二进制（sha256 校验）+ 大文件 range，
+#   旧列表里的 gh.ddlc.top 已 429 限流、mirror.ghproxy.com 域名失效，仅 ghproxy.net 仍可用但很慢。
+# 顺序按「速度 + 稳定性」排列。
+# 用法：${镜像前缀}${完整 GitHub URL}，例如 https://gh-proxy.com/https://github.com/a/b/releases/download/v1/x.zip
+# 官方源的前缀是空串（完整 URL 本身就能直接用），不能写成 https://github.com/ 否则会拼成
+# https://github.com/https://github.com/...
+MIRRORS=(
+    "https://gh-proxy.com/"     # 国内镜像，速度快
+    "https://gh.3w.pm/"         # 国内镜像，稳定
+    "https://cors.isteed.cc/"   # 国内镜像，稳定
+    "https://ghproxy.net/"      # 国内镜像，慢速备用
+    ""                          # 官方源（空前缀 = 直接用原始 GitHub URL）
+)
+# 给用户选择菜单用的人类可读名称，与 MIRRORS 一一对应
+MIRROR_LABELS=(
+    "gh-proxy.com (China mirror, fast)"
+    "gh.3w.pm (China mirror, stable)"
+    "cors.isteed.cc (China mirror, stable)"
+    "ghproxy.net (China mirror, slow fallback)"
+    "GitHub (official)"
+)
+
+
+# 安全解析 lsblk -P 输出（避免 eval 注入），变量名与 lsblk 字段一致
+parse_line() {
+    local line="$1" key val
+    local pat='([A-Z]+)="([^"]*)"(.*)'
+    NAME=""; TYPE=""; LABEL=""; FSTYPE=""; MOUNTPOINT=""; UUID=""; PARTTYPE=""; SIZE=""
+    while [[ "$line" =~ $pat ]]; do
+        key="${BASH_REMATCH[1]}"; val="${BASH_REMATCH[2]}"; line="${BASH_REMATCH[3]}"
+        case "$key" in
+            NAME) NAME="$val";; TYPE) TYPE="$val";; LABEL) LABEL="$val";;
+            FSTYPE) FSTYPE="$val";; MOUNTPOINT) MOUNTPOINT="$val";; UUID) UUID="$val";;
+            PARTTYPE) PARTTYPE="$val";; SIZE) SIZE="$val";;
+        esac
+    done
+}
+
+# Mirror download with zip integrity verification (reuses the global MIRRORS)
+download_zip_with_mirrors() {
+    local url="$1" output="$2" desc="${3:-ZIP file}"
+    while true; do
+        clear
+        echo -e "${CYAN}Downloading ${desc}${NC}\n"
+        echo "Please choose a download mirror (enter a number, 0 to cancel):"
+        for i in "${!MIRRORS[@]}"; do
+            echo "  $((i+1)). ${MIRROR_LABELS[$i]:-${MIRRORS[$i]}}"
+        done
+        read -p "Enter your choice: " choice < /dev/tty
+        [[ -z "$choice" ]] && echo -e "${RED}Invalid input${NC}" && sleep 1 && continue
+        [[ "$choice" == "0" ]] && echo "Operation cancelled." && return 1
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
+            local mirror="${MIRRORS[$((choice-1))]}"
+            local full_url="${mirror}${url}"
+            echo -e "Trying to download from ${MIRROR_LABELS[$((choice-1))]:-${mirror}} ..."
+            if curl -L --progress-bar -f -o "$output" "$full_url" && [ -s "$output" ] && unzip -t "$output" &>/dev/null; then
+                echo -e "${GREEN}Download successful, file is complete.${NC}"
+                return 0
+            fi
+            echo -e "${RED}Download failed or the file is incomplete, please choose another mirror.${NC}"
+            rm -f "$output"; sleep 1
+        else
+            echo -e "${RED}Invalid number.${NC}"; sleep 1
+        fi
+    done
+}
+
+mk_temp_dir() { mkdir -p "$TEMP_DIR"; }
+
+confirm_action() {
+    read -n1 -p "Press Enter or A to confirm, any other key to cancel: " confirm < /dev/tty
+    echo
+    [[ -z "$confirm" || "$confirm" =~ [Aa] ]]
+}
+
+disable_readonly() {
+    if command -v steamos-readonly &>/dev/null; then
+        if sudo steamos-readonly disable 2>/dev/null; then
+            # Record that "read-only was turned off by the script" so the exit trap restores it, without overriding the user's own setting
+            RO_READONLY_DISABLED_BY_US=1
+            echo -e "${GREEN}✓ Read-only mode disabled${NC}"
+        else
+            echo -e "${RED}✗ Failed to disable read-only mode, operation aborted.${NC}"
+            return 1
+        fi
+    fi
+    return 0
+}
+
+ensure_writable() {
+    command -v steamos-readonly &>/dev/null || return 0
+    if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
+        if sudo steamos-readonly disable 2>/dev/null; then
+            RO_READONLY_DISABLED_BY_US=1
+            echo -e "${GREEN}✓ Read-only mode disabled${NC}"
+        else
+            echo -e "${RED}✗ Failed to disable read-only mode, operation aborted.${NC}"
+            return 1
+        fi
+    else
+        echo -e "${GREEN}✓ Read-only mode is already writable${NC}"
+    fi
+    return 0
+}
+
+download_with_mirrors() {
+    local url="$1" output="$2" desc="${3:-file}"
+    while true; do
+        clear
+        echo -e "${CYAN}Downloading ${desc}${NC}\n"
+        echo "Please choose a download mirror (enter a number, 0 to cancel):"
+        for i in "${!MIRRORS[@]}"; do
+            echo "  $((i+1)). ${MIRROR_LABELS[$i]:-${MIRRORS[$i]}}"
+        done
+        read -p "Enter your choice: " choice < /dev/tty
+        [[ -z "$choice" ]] && echo -e "${RED}Invalid input${NC}" && sleep 1 && continue
+        [[ "$choice" == "0" ]] && echo "Operation cancelled." && return 1
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
+            local mirror="${MIRRORS[$((choice-1))]}"
+            local full_url="${mirror}${url}"
+            echo -e "Trying to download from ${MIRROR_LABELS[$((choice-1))]:-${mirror}} ..."
+            if curl -L --progress-bar -f -o "$output" "$full_url" && [ -s "$output" ]; then
+                echo -e "${GREEN}Download successful.${NC}"
+                return 0
+            fi
+            echo -e "${RED}Download failed, please choose another mirror.${NC}"
+            rm -f "$output"; sleep 1
+        else
+            echo -e "${RED}Invalid number.${NC}"; sleep 1
+        fi
+    done
+}
+
+install_flatpak_app() {
+    local app_title="$1" desktop_name="$2" categories="$3"; shift 3
+    local app_ids=("$@")
+    mk_temp_dir; clear
+    echo -e "${YELLOW}════════════════ Installing ${app_title} ════════════════${NC}"
+
+    local already_installed=""
+    for app_id in "${app_ids[@]}"; do
+        flatpak info "$app_id" &>/dev/null && already_installed="$app_id" && break
+    done
+    if [ -n "$already_installed" ]; then
+        echo -e "${GREEN}✓ ${app_title} is already installed (${already_installed}), no need to install again.${NC}"
+        return 0
+    fi
+
+    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null
+
+    local available_id=""
+    for app_id in "${app_ids[@]}"; do
+        if timeout 10 flatpak remote-info flathub "$app_id" &>/dev/null; then
+            available_id="$app_id"; break
+        else
+            echo -e "${YELLOW}${app_id} does not exist or the query timed out, trying the next one...${NC}"
+        fi
+    done
+    [ -z "$available_id" ] && echo -e "${RED}✗ No installable package found for ${app_title}.${NC}" && return 1
+
+    echo "Installing ${available_id} ..."
+    if flatpak install flathub "$available_id" -y 2>/dev/null; then
+        echo -e "${GREEN}✓ ${app_title} installed successfully${NC}"
+        cat > "$HOME/Desktop/${desktop_name}.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=${desktop_name}
+Exec=flatpak run ${available_id}
+Icon=${available_id}
+Terminal=false
+Categories=${categories};
+EOF
+        chmod +x "$HOME/Desktop/${desktop_name}.desktop"
+        echo -e "${GREEN}✓ Desktop shortcut created${NC}"
+    else
+        echo -e "${RED}✗ Installation failed, please check your network or install manually.${NC}"
+    fi
+}
+
+uninstall_flatpak_app() {
+    local app_title="$1" desktop_name="$2"; shift 2
+    local app_ids=("$@")
+    mk_temp_dir; clear
+    echo -e "${YELLOW}════════════════ Uninstalling ${app_title} ════════════════${NC}"
+    local installed=""
+    for pkg in "${app_ids[@]}"; do flatpak info "$pkg" &>/dev/null && installed="$pkg" && break; done
+    [ -z "$installed" ] && echo -e "${YELLOW}No installed ${app_title} detected.${NC}" && return 0
+
+    confirm_action || { echo "Uninstall cancelled."; return 0; }
+    if flatpak uninstall "$installed" -y; then
+        echo -e "${GREEN}✓ ${app_title} uninstalled${NC}"
+        local desktop_dir="$HOME/Desktop"
+        if [ -d "$desktop_dir" ]; then
+            local deleted_any=false
+            for f in "$desktop_dir"/*.desktop; do
+                # When the Desktop directory is empty the glob does not expand; skip the literal to avoid basename returning "*.desktop"
+                [ -e "$f" ] || continue
+                local base=$(basename "$f")
+                # Only two things count: (1) a .desktop whose name is exactly the display name / app ID
+                #           (2) a file name containing the full app ID (dot or underscore form, e.g. com_qq_QQ.desktop)
+                # Do not use ${installed//./_} for substring matching: com.qq.QQ would also delete
+                # unrelated shortcuts such as com_qq_QQ_something.desktop.
+                local id_us="${installed//./_}"
+                if [ "$base" = "${desktop_name}.desktop" ] || [ "$base" = "${installed}.desktop" ] \
+                   || [ "$base" = "${id_us}.desktop" ] || [ "$base" = "${installed//./-}.desktop" ]; then
+                    rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ Desktop shortcut deleted: $base${NC}" && deleted_any=true
+                fi
+            done
+            $deleted_any || echo -e "${YELLOW}No matching desktop shortcut found.${NC}"
+        fi
+
+        local data_dir="$HOME/.var/app/$installed"
+        if [ -d "$data_dir" ]; then
+            echo ""
+            echo -e "${CYAN}Delete all settings and user data for this app?${NC}"
+            confirm_action && rm -rf "$data_dir" && echo -e "${GREEN}✓ User data deleted${NC}" || echo -e "${YELLOW}User data kept.${NC}"
+        fi
+        echo ""
+        echo -e "${GREEN}${app_title} uninstall finished.${NC}"
+    else
+        echo -e "${RED}✗ Uninstall failed${NC}"
+    fi
+}
+
+install_chinese_source() {
+    mk_temp_dir; clear
+    echo -e "${YELLOW}════════════ Switch Flatpak software source ════════════${NC}"
+    echo "You can switch to a China mirror for speed, or restore the official source."
+    echo ""
+    # 不需要禁用 SteamOS 只读模式：flatpak remote 配置在 /var/lib/flatpak（可写分区），
+    # 与只读的根分区无关。原实现先 disable_readonly 属于多余操作，还会顺手改掉系统只读状态。
+    echo -e "${CYAN}Step 1: check flatpak environment${NC}"
+    if ! command -v flatpak &>/dev/null; then
+        echo -e "${RED}✗ flatpak command not found; cannot configure mirrors.${NC}"
+        return 1
+    fi
+    if ! flatpak remotes --columns=name 2>/dev/null | grep -qx "flathub"; then
+        echo -e "${YELLOW}⚠ No flathub remote found; adding the official URL...${NC}"
+        if ! sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null; then
+            echo -e "${RED}✗ Failed to add flathub; aborted.${NC}"
+            return 1
+        fi
+    fi
+    echo -e "${GREEN}✓ flatpak environment OK${NC}"
+    echo ""
+    echo -e "${CYAN}Step 2: choose Flatpak software source${NC}"
+    echo ""
+
+    # 实测（2026-10，逐个探测 summary.idx 魔数确认是否为真实 ostree 数据）：
+    #   ✓ 可用：
+    #     mirrors.ustc.edu.cn/flathub            中科大（yadex 增量方案），已验证
+    #     unicom.mirrors.ustc.edu.cn/flathub     中科大联通节点
+    #     mobile.mirrors.ustc.edu.cn/flathub     中科大移动节点
+    #     mirrors.cernet.edu.cn/flathub          CERNET 聚合入口（按地理位置分发到各校节点）
+    #   ✗ 不可用（保留记录，避免以后又踩）：
+    #     mirror.sjtu.edu.cn/flathub   → 301 跳回官方 dl.flathub.org，等于没加速
+    #     mirrors.nju / sustech / bfsu / tuna / aliyun / tencent / huawei / zju / jlu /
+    #     iscas / xjtu / scau / qlu 的 flathub → 返回 HTML 首页或 404，没有这个镜像
+    #
+    # 所有国内镜像都只是 Flathub 的「缓存」而不是完整镜像：
+    # 未命中的对象会 302 回 dl.flathub.org，所以官方站仍需要基本连通性。
+    local MIRROR_LABELS=(
+        "USTC"
+        "USTC - China Unicom node"
+        "USTC - China Mobile node"
+        "CERNET education network aggregate"
+        "Restore official source (dl.flathub.org)"
+    )
+    local MIRROR_URLS=(
+        "https://mirrors.ustc.edu.cn/flathub/"
+        "https://unicom.mirrors.ustc.edu.cn/flathub/"
+        "https://mobile.mirrors.ustc.edu.cn/flathub/"
+        "https://mirrors.cernet.edu.cn/flathub/"
+        "https://dl.flathub.org/repo/"
+    )
+
+    # 显示当前源，方便判断要不要改
+    local FP_OLD_URL
+    # 注意：flatpak 没有 remote-get-url 这个子命令，要从 remotes 列表里取
+    FP_OLD_URL=$(flatpak remotes --columns=name,url 2>/dev/null | awk '$1 == "flathub" {print $2; exit}')
+    if [ -n "$FP_OLD_URL" ]; then
+        echo -e "Current flathub source: ${CYAN}${FP_OLD_URL}${NC}"
+        echo ""
+    fi
+
+    echo "Please choose a software source (China mirrors are faster; official needs access to dl.flathub.org):"
+    local i
+    for i in "${!MIRROR_LABELS[@]}"; do
+        echo "  $((i+1)). ${MIRROR_LABELS[$i]}"
+    done
+    echo ""
+    local choice
+    while true; do
+        read -p "Enter number [1-${#MIRROR_LABELS[@]}] (Enter to cancel): " choice < /dev/tty || { echo "Operation cancelled."; return 0; }
+        [ -z "$choice" ] && { echo "Operation cancelled."; return 0; }
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRROR_LABELS[@]} ]; then
+            break
+        fi
+        echo -e "${RED}Invalid input; enter a number between 1 and ${#MIRROR_LABELS[@]}.${NC}"
+    done
+
+    local FP_MIRROR="${MIRROR_URLS[$((choice-1))]}"
+    local FP_MIRROR_NAME="${MIRROR_LABELS[$((choice-1))]}"
+    echo ""
+    echo -e "${CYAN}Selected: ${FP_MIRROR_NAME}${NC}"
+    echo "  URL: $FP_MIRROR"
+
+    local FP_KEY_TMP="${TEMP_DIR}/flathub.gpg"
+
+    # 先确认 sudo 可用：系统级 flatpak remote 配置需要 root，
+    # 若这里不先验证，后面 remote-modify 会卡在密码提示上（输出被 2>/dev/null 吞掉，看起来像无响应）
+    if ! sudo -v 2>/dev/null; then
+        echo -e "${RED}✗ sudo is required to modify Flatpak remotes; aborted.${NC}"
+        return 1
+    fi
+
+    # 1) 确保 flathub 签名公钥存在（镜像的摘要带 flathub 签名，缺公钥会被拒绝）
+    #
+    # 关键在于：公钥是「装一次就长期有效」的东西，正常设备上早就有了，
+    # 不需要每次切源都从 dl.flathub.org 重新下一遍。以前每次无条件下载，
+    # 而 dl.flathub.org 现在经常连不上，于是每次都打一条「无法下载公钥」的
+    # 黄字警告 —— 但公钥其实一直都在，功能完全正常，属于纯误导。
+    # 所以改成：先看本地有没有可用公钥，有就跳过下载。
+    echo ""
+    echo "Checking flathub signing public key..."
+    local FP_KEYSTORE="/var/lib/flatpak/repo/flathub.trustedkeys.gpg"
+    local have_key=false
+    if [ -s "$FP_KEYSTORE" ]; then
+        # 文件存在还不够，确认里面确实是 flathub 的签名密钥（避免损坏的空壳文件误判）
+        if command -v gpg &>/dev/null; then
+            gpg --show-keys "$FP_KEYSTORE" 2>/dev/null | grep -qi "Flathub" && have_key=true
+        else
+            have_key=true
+        fi
+    fi
+
+    if $have_key; then
+        echo -e "${GREEN}✓ Signing public key already present; no need to import again${NC}"
+    else
+        # 本地没有公钥才去下载：先官方，再试镜像（部分镜像也托管了这份公钥）
+        echo -e "${YELLOW}Local flathub public key not found; downloading...${NC}"
+        local key_url got_key=false
+        for key_url in \
+            "https://dl.flathub.org/repo/flathub.gpg" \
+            "https://mirrors.ustc.edu.cn/flathub/flathub.gpg" \
+            "https://mirrors.cernet.edu.cn/flathub/flathub.gpg"; do
+            if curl -fsSL --connect-timeout 10 --max-time 30 -o "$FP_KEY_TMP" "$key_url" 2>/dev/null \
+               && [ -s "$FP_KEY_TMP" ] \
+               && gpg --show-keys "$FP_KEY_TMP" >/dev/null 2>&1; then
+                got_key=true
+                echo -e "${CYAN}  Fetched from $key_url${NC}"
+                break
+            fi
+        done
+
+        if $got_key; then
+            if sudo flatpak remote-modify --gpg-import="$FP_KEY_TMP" flathub 2>/dev/null; then
+                echo -e "${GREEN}✓ Imported flathub signing public key${NC}"
+            else
+                echo -e "${YELLOW}⚠ Failed to import public key; continuing (fix manually if installs fail signature checks)${NC}"
+            fi
+        else
+            # 只有真的拿不到才告警，并说清后果和办法
+            echo -e "${YELLOW}⚠ Could not obtain the flathub signing public key.${NC}"
+            echo -e "${YELLOW}  Impact: installs/updates may fail signature checks (Could not find public key).${NC}"
+            echo -e "${YELLOW}  Fix: rerun this after the network recovers, or run manually:${NC}"
+            echo -e "${YELLOW}    curl -fsSL https://dl.flathub.org/repo/flathub.gpg -o /tmp/f.gpg${NC}"
+            echo -e "${YELLOW}    sudo flatpak remote-modify --gpg-import=/tmp/f.gpg flathub${NC}"
+        fi
+    fi
+    rm -f "$FP_KEY_TMP"
+
+    # 2) 切换 flathub 地址
+    if ! sudo flatpak remote-modify flathub --url="$FP_MIRROR" 2>/dev/null; then
+        echo -e "${RED}✗ Flatpak source configuration failed${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Flatpak source switched to $FP_MIRROR${NC}"
+
+    # 3) 实际拉一次元数据验证，不只看命令返回值
+    #    remote-info 必须指定分支，否则会因"多个可用分支"直接报错，被误判为镜像不可用
+    echo ""
+    echo "Verifying source availability..."
+    if timeout 90 flatpak remote-info flathub org.freedesktop.Platform/x86_64/24.08 >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Verification passed (package queries work)${NC}"
+    else
+        # 官方源本身也可能因为网络问题暂时查不到，不能一律判为「源坏了」
+        if [ "$FP_MIRROR" = "https://dl.flathub.org/repo/" ]; then
+            echo -e "${YELLOW}⚠ Reverted to official source, but verification failed (dl.flathub.org may be unreachable).${NC}"
+            echo -e "${YELLOW}  The source URL was set successfully; it will work once the network recovers.${NC}"
+            return 0
+        fi
+        echo -e "${RED}✗ Source verification failed; rolling back to the previous source...${NC}"
+        if [ -n "$FP_OLD_URL" ]; then
+            sudo flatpak remote-modify flathub --url="$FP_OLD_URL" 2>/dev/null \
+                && echo -e "${YELLOW}Rolled back to previous URL: $FP_OLD_URL${NC}" \
+                || echo -e "${RED}Rollback failed, please run manually: sudo flatpak remote-modify flathub --url=$FP_OLD_URL${NC}"
+        else
+            echo -e "${RED}Previous URL unknown, please restore manually: sudo flatpak remote-modify flathub --url=https://dl.flathub.org/repo/${NC}"
+        fi
+        echo -e "${YELLOW}Tip: try another mirror (some mirrors occasionally go down).${NC}"
+        return 1
+    fi
+    echo ""
+    if [ "$FP_MIRROR" = "https://dl.flathub.org/repo/" ]; then
+        echo -e "${GREEN}✓ Restored Flathub official source.${NC}"
+    else
+        echo -e "${GREEN}✓ Switched to ${FP_MIRROR_NAME}.${NC}"
+        echo -e "${YELLOW}Note: China mirrors cache Flathub; cache misses fall back to the official site,${NC}"
+        echo -e "${YELLOW}      so basic connectivity to dl.flathub.org is still required.${NC}"
+    fi
+    echo ""
+    echo -e "${CYAN}  To switch again, rerun this feature (includes Restore official source).${NC}"
+}
+
+adjust_swap() {
+    mk_temp_dir
+    while true; do
+        clear
+        echo -e "${YELLOW}════════════════ Adjusting virtual memory size ════════════════${NC}"
+        echo ""
+        echo -e "${CYAN}Current system status${NC}"
+        echo "--------------------------------------------"
+        if command -v free &> /dev/null; then
+            mem_line=$(LANG=C free -h | grep '^Mem:')
+            swap_line=$(LANG=C free -h | grep '^Swap:')
+            [ -n "$mem_line" ] && echo -e "Physical memory: ${GREEN}$(echo "$mem_line" | awk '{print $2}')${NC} | Used: ${YELLOW}$(echo "$mem_line" | awk '{print $3}')${NC}"
+            [ -n "$swap_line" ] && echo -e "Swap space: ${GREEN}$(echo "$swap_line" | awk '{print $2}')${NC} | Used: ${YELLOW}$(echo "$swap_line" | awk '{print $3}')${NC}"
+        fi
+        echo ""
+        echo -e "${CYAN}Please choose an operation${NC}"
+        echo "============================================"
+        echo -e "${GREEN}[1] Apply the recommended CryoByte33 settings${NC}"
+        echo -e "${GREEN}[2] Adjust the traditional Swap file size${NC}"
+        echo -e "${GREEN}[3] Configure ZRAM (compressed memory swap)${NC}"
+        echo -e "${GREEN}[4] Clean up all virtual memory settings and start over${NC}"
+        echo "============================================"
+        echo ""
+        read -p "Enter an option [1-4]: " main_choice < /dev/tty
+        case $main_choice in
+            1) apply_cryo_recommendation ;;
+            2) adjust_swapfile ;;
+            3) configure_zram ;;
+            4) cleanup_swap ;;
+            *) echo -e "${RED}Invalid choice, please try again.${NC}"; sleep 1; continue ;;
+        esac
+        echo ""
+        read -p "Press Enter to continue..." < /dev/tty
+    done
+}
+
+# Check whether /home has enough free space for a swap file of the given size (GB)
+check_swap_space() {
+    local need_gb="$1"
+    local avail_kb=$(df --block-size=1K --output=avail /home 2>/dev/null | tail -1 | tr -d ' ')
+    if [ -z "$avail_kb" ] || [ "$avail_kb" -lt $((need_gb * 1024 * 1024)) ]; then
+        echo -e "${RED}✗ Not enough free space on /home: about ${need_gb}GB needed, about $((avail_kb / 1024 / 1024))GB available.${NC}"
+        return 1
+    fi
+    echo -e "${CYAN}✓ /home has enough free space (about $((avail_kb / 1024 / 1024))GB).${NC}"
+    return 0
+}
+
+apply_cryo_recommendation() {
+    mk_temp_dir
+    echo -e "${YELLOW}═══════════════ Applying the recommended CryoByte33 settings ═══════════════${NC}"
+    confirm_action || { echo "Operation cancelled."; return; }
+    local swap_size_gb=16; local block_count=$((swap_size_gb*1024))
+    check_swap_space "$swap_size_gb" || return 1
+    sudo swapoff /home/swapfile 2>/dev/null; sudo swapoff -a 2>/dev/null
+    sudo rm -f /home/swapfile
+    sudo touch /home/swapfile; sudo chattr +C /home/swapfile 2>/dev/null || true
+    if ! sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$block_count conv=fsync status=progress 2>/dev/null; then
+        echo -e "${RED}✗ Failed to create the swap file (dd error, possibly not enough disk space).${NC}"
+        return 1
+    fi
+    sudo chmod 600 /home/swapfile
+    if ! sudo mkswap /home/swapfile 2>/dev/null; then
+        echo -e "${RED}✗ mkswap formatting failed.${NC}"
+        return 1
+    fi
+    if ! sudo swapon /home/swapfile 2>/dev/null; then
+        echo -e "${RED}✗ swapon failed.${NC}"
+        return 1
+    fi
+    sudo sed -i '\|/home/swapfile|d' /etc/fstab 2>/dev/null
+    echo "/home/swapfile none swap defaults 0 0" | sudo tee -a /etc/fstab > /dev/null
+    echo -e "${GREEN}✓ 16GB swap file created${NC}"
+    sudo tee /etc/sysctl.d/99-cryo-optimizations.conf > /dev/null <<'EOF'
+vm.swappiness=1
+vm.vfs_cache_pressure=50
+vm.page-cluster=0
+vm.dirty_background_ratio=3
+vm.dirty_ratio=50
+EOF
+    sudo sysctl --system --load=/etc/sysctl.d/99-cryo-optimizations.conf >/dev/null 2>&1
+    if [ -f /etc/sysctl.d/99-cryo-optimizations.conf ]; then
+        echo -e "${GREEN}✓ Kernel parameter optimization complete${NC}"
+    else
+        echo -e "${YELLOW}⚠ Failed to write the kernel parameter config file, this optimization will not persist${NC}"
+    fi
+    # Disabling ZRAM must be judged by the actual result, not by printing success unconditionally
+    sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
+    sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null
+    if ! systemctl is-active systemd-zram-setup@zram0 &>/dev/null \
+       && ! systemctl is-enabled systemd-zram-setup@zram0 &>/dev/null 2>&1; then
+        echo -e "${GREEN}✓ ZRAM disabled${NC}"
+    else
+        echo -e "${YELLOW}⚠ ZRAM could not be fully disabled, to disable it completely please run manually:"
+        echo -e "   sudo systemctl disable --now systemd-zram-setup@zram0${NC}"
+    fi
+    echo -e "${GREEN}✅ The recommended CryoByte33 settings were applied successfully!${NC}"
+}
+
+adjust_swapfile() {
+    mk_temp_dir
+    while true; do
+        clear; echo -e "${YELLOW}Adjust traditional Swap file size${NC}"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        [ -f "/home/swapfile" ] && echo -e "Current file size: ${GREEN}$(sudo du -h /home/swapfile 2>/dev/null | cut -f1)${NC}" || echo -e "Current file: ${YELLOW}not found${NC}"
+        echo -n "/home free space: "; df -h /home | tail -1
+        echo "Choose a new size: 1)1G 2)4G 3)8G 4)16G 5)32G 6)Custom"
+        local swap_size_gb=""
+        read -p "Please choose [1-6]: " size_choice < /dev/tty
+        case $size_choice in
+            1) swap_size_gb=1;; 2) swap_size_gb=4;; 3) swap_size_gb=8;; 4) swap_size_gb=16;; 5) swap_size_gb=32;;
+            6) read -p "Enter the size (GB): " custom_size < /dev/tty
+               [[ "$custom_size" =~ ^[0-9]+$ ]] && swap_size_gb=$custom_size || { echo -e "${RED}Invalid number.${NC}"; sleep 1; continue; };;
+            *) echo -e "${RED}Invalid option.${NC}"; sleep 1; continue;;
+        esac
+        break
+    done
+    check_swap_space "$swap_size_gb" || return 1
+    # The old swapfile must be disabled before replacement, otherwise rm/mkswap hit "device busy",
+    # and deleting the only swap area while memory is tight risks an OOM.
+    if swapon --show=NAME --noheadings 2>/dev/null | awk '$1 == "/home/swapfile" {found=1} END {exit !found}'; then
+        echo -e "${CYAN}Disabling the old /home/swapfile ...${NC}"
+        if ! sudo swapoff /home/swapfile 2>/dev/null; then
+            echo -e "${RED}✗ Cannot disable the /home/swapfile in use, aborted (please check memory usage and try again).${NC}"
+            return 1
+        fi
+        # Double-check that it is really released, to avoid rm errors from entries left in the swap table
+        if swapon --show=NAME --noheadings 2>/dev/null | awk '$1 == "/home/swapfile" {found=1} END {exit !found}'; then
+            echo -e "${RED}✗ /home/swapfile is still in use, aborted, no changes were made.${NC}"
+            return 1
+        fi
+    fi
+    sudo rm -f /home/swapfile
+    sudo touch /home/swapfile
+    if mount | grep " /home " | grep -q btrfs; then sudo chattr +C /home/swapfile 2>/dev/null || echo -e "${YELLOW}⚠ chattr +C failed, continuing${NC}"; fi
+    if ! sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$((swap_size_gb*1024)) status=progress conv=fsync 2>/dev/null; then
+        echo -e "${RED}✗ Failed to create the swap file (dd error, possibly not enough disk space).${NC}"
+        return 1
+    fi
+    sudo chmod 600 /home/swapfile
+    if ! sudo mkswap /home/swapfile 2>/dev/null; then
+        echo -e "${RED}✗ mkswap formatting failed.${NC}"
+        return 1
+    fi
+    if ! sudo swapon /home/swapfile 2>/dev/null; then
+        echo -e "${RED}✗ swapon failed.${NC}"
+        return 1
+    fi
+    # Match the first field exactly before deciding "already exists": the old grep -q "/home/swapfile" would also match
+    # comment lines (#/home/swapfile ...) or /home/swapfile2, so the entry was missing or added twice.
+    if ! awk '$1 == "/home/swapfile" {found=1} END {exit !found}' /etc/fstab 2>/dev/null; then
+        echo "/home/swapfile none swap defaults 0 0" | sudo tee -a /etc/fstab > /dev/null
+    fi
+    echo -e "${GREEN}✅ Swap file created successfully${NC}"
+}
+
+configure_zram() {
+    mk_temp_dir
+    while true; do
+        clear; echo -e "${YELLOW}Configure ZRAM (compressed memory swap)${NC}"
+        echo -e "${CYAN}The settings will be written to a persistent config and remain in effect after reboot.${NC}"
+        echo "Choose the ZRAM size: 1)2G 2)4G 3)8G"
+        local zram_size_gb=""
+        read -p "Please choose [1-3]: " zram_choice < /dev/tty
+        case $zram_choice in 1) zram_size_gb=2;; 2) zram_size_gb=4;; 3) zram_size_gb=8;; *) echo -e "${RED}Invalid option.${NC}"; sleep 1; continue;; esac
+        break
+    done
+    if ! command -v zramctl &>/dev/null; then
+        echo -e "${RED}❌ zramctl not found, cannot configure ZRAM.${NC}"
+        return 1
+    fi
+    sudo modprobe zram 2>/dev/null
+
+    # Persistence: write a zram-generator override config. /etc/systemd/zram-generator.conf takes priority
+    # over SteamOS's /usr/lib/systemd/zram-generator.conf (default ram/2 + zstd);
+    # without this file, zram-generator recreates it with the vendor default after reboot and this choice is lost.
+    # The old code also did rm -f on the same file at the end, which deleted the setting again; fixed here as well.
+    local zram_conf_tmp="${TEMP_DIR}/zram-generator.conf.$$"
+    cat > "$zram_conf_tmp" <<EOF
+[zram0]
+zram-size = ${zram_size_gb}G
+compression-algorithm = lz4
+swap-priority = 100
+fs-type = swap
+EOF
+    local persist_ok=1
+    if sudo install -D -m 644 "$zram_conf_tmp" /etc/systemd/zram-generator.conf 2>/dev/null; then
+        sudo systemctl daemon-reload 2>/dev/null
+        echo -e "${GREEN}✓ Persistent config written to /etc/systemd/zram-generator.conf (still effective after reboot)${NC}"
+    else
+        persist_ok=0
+        echo -e "${RED}❌ Failed to write the persistent config: this setting will be lost after reboot.${NC}"
+    fi
+    rm -f "$zram_conf_tmp"
+
+    # Take effect immediately: disable the old zram swap area first, then rebuild it with the chosen size
+    if swapon --show=NAME --noheadings 2>/dev/null | awk '$1 == "/dev/zram0" {found=1} END {exit !found}'; then
+        sudo swapoff /dev/zram0 2>/dev/null || echo -e "${YELLOW}⚠️ Cannot disable the existing /dev/zram0, will try to resize it directly.${NC}"
+    fi
+    sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
+    sudo zramctl /dev/zram0 --reset 2>/dev/null
+    local zram_dev="/dev/zram0" applied=0
+    if sudo zramctl /dev/zram0 --size ${zram_size_gb}G --algorithm lz4 2>/dev/null; then
+        applied=1
+    else
+        zram_dev=$(sudo zramctl --find --size ${zram_size_gb}G --algorithm lz4 2>/dev/null)
+        [ -n "$zram_dev" ] && applied=1
+    fi
+    if [ "$applied" -ne 1 ] || [ -z "$zram_dev" ]; then
+        echo -e "${RED}❌ Cannot create the ZRAM device.${NC}"
+        [ "$persist_ok" -eq 1 ] && echo -e "${CYAN}   Persistent config written, it will be created automatically as ${zram_size_gb}G after reboot.${NC}"
+        return 1
+    fi
+    sudo mkswap "$zram_dev" >/dev/null 2>&1
+    if ! sudo swapon "$zram_dev" -p 100 2>/dev/null; then
+        echo -e "${RED}❌ Failed to enable ZRAM (swapon error).${NC}"
+        return 1
+    fi
+    # Judge by the actual result, not by guessing success from the command exit code
+    if swapon --show=NAME --noheadings 2>/dev/null | awk -v d="$zram_dev" '$1 == d {found=1} END {exit !found}'; then
+        local real_size=$(zramctl "$zram_dev" --noheadings --output DISKSIZE 2>/dev/null | tr -d ' ')
+        echo -e "${GREEN}✅ ZRAM enabled successfully: $zram_dev (requested ${zram_size_gb}G, actual ${real_size:-unknown}, lz4, priority 100)${NC}"
+        [ "$zram_dev" != "/dev/zram0" ] && echo -e "${YELLOW}⚠️ The actual device this time is $zram_dev; the persistent config uses zram0, so zram0 applies after reboot.${NC}"
+        [ "$persist_ok" -eq 1 ] && echo -e "${GREEN}✓ This configuration will be restored automatically after reboot.${NC}" \
+            || echo -e "${YELLOW}⚠️ Failed to write the persistent config, the vendor default ZRAM will be restored after reboot.${NC}"
+    else
+        echo -e "${RED}❌ ZRAM does not appear in the swap list after being enabled.${NC}"
+        return 1
+    fi
+}
+
+cleanup_swap() {
+    mk_temp_dir
+    confirm_action || { echo "Operation cancelled."; return; }
+    sudo swapoff -a 2>/dev/null
+    # Only reset /dev/zram0 when it really exists; when it does not, that means "ZRAM is not enabled", not a failure.
+    # The old form `[ -b ... ] && reset || echo failed` wrongly reported "ZRAM reset failed" when the device did not exist.
+    if [ -b /dev/zram0 ]; then
+        if sudo zramctl /dev/zram0 --reset 2>/dev/null; then
+            echo -e "${GREEN}✓ ZRAM reset${NC}"
+        else
+            echo -e "${YELLOW}⚠️ ZRAM reset failed (the device may still be in use), try again after a reboot.${NC}"
+        fi
+    else
+        echo -e "${CYAN}ℹ No ZRAM device found, skipping the reset.${NC}"
+    fi
+    sudo rm -f /home/swapfile 2>/dev/null
+    # Delete by exact match on the first field, to avoid also deleting comment lines / entries with a similar prefix
+    if awk '$1 == "/home/swapfile" {found=1} END {exit !found}' /etc/fstab 2>/dev/null; then
+        local fstab_tmp="${TEMP_DIR}/fstab.$$"
+        if awk '$1 != "/home/swapfile"' /etc/fstab > "$fstab_tmp" 2>/dev/null; then
+            sudo cp "$fstab_tmp" /etc/fstab && echo -e "${GREEN}✓ Removed the swapfile entry from fstab${NC}"
+        else
+            echo -e "${YELLOW}⚠️ Failed to write the temporary fstab, the swapfile entry in /etc/fstab was not removed.${NC}"
+        fi
+        rm -f "$fstab_tmp"
+    fi
+    sudo systemctl stop systemd-zram-setup@zram0 2>/dev/null
+    sudo systemctl disable systemd-zram-setup@zram0 2>/dev/null
+    # After cleaning up swap, zram-generator should no longer rebuild ZRAM with the previously chosen size,
+    # so deleting the persistence file written by "Configure ZRAM" here is the correct behavior.
+    if [ -f /etc/systemd/zram-generator.conf ]; then
+        if sudo rm -f /etc/systemd/zram-generator.conf 2>/dev/null; then
+            echo -e "${GREEN}✓ Removed the ZRAM persistent config${NC}"
+        else
+            echo -e "${YELLOW}⚠️ Cannot delete /etc/systemd/zram-generator.conf, ZRAM may still be rebuilt from the old config after reboot.${NC}"
+        fi
+    fi
+    sudo systemctl daemon-reload
+    echo -e "${GREEN}✅ All virtual memory settings cleaned up (effective after reboot).${NC}"
+}
+
+fix_single_ntfs() {
+    local device="$1" mountpoint="$2"
+    echo ""
+    echo -e "${CYAN}Repairing partition: $device${NC}"
+    if [ -n "$mountpoint" ] && mountpoint -q "$mountpoint" 2>/dev/null; then
+        echo "  Partition is currently mounted at $mountpoint, unmounting..."
+        if sudo umount "$device" 2>/dev/null || sudo umount -f "$device" 2>/dev/null; then echo -e "${GREEN}  ✓ Unmounted${NC}"; else echo -e "${RED}  ✗ Unmount failed, cannot continue the repair${NC}"; return 1; fi
+    fi
+    echo "  Running ntfsfix ..."
+    if sudo ntfsfix "$device" 2>/dev/null; then echo -e "${GREEN}  ✓ Repair succeeded${NC}"; else echo -e "${RED}  ✗ Repair failed, please check the dmesg output${NC}"; sudo dmesg | grep -i ntfs | tail -5; fi
+    if [ -n "$mountpoint" ] && [ -d "$mountpoint" ]; then
+        echo "  Trying to remount at $mountpoint ..."
+        if sudo mount "$device" "$mountpoint" 2>/dev/null; then echo -e "${GREEN}  ✓ Remounted successfully${NC}"; else echo -e "${YELLOW}  ⚠️ Automatic mount failed, please mount manually later${NC}"; fi
+    fi
+}
+
+fix_disk_write_error() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Fix disk write errors ════════════════${NC}"
+    echo -e "${CYAN}Scanning NTFS partitions and checking for errors...${NC}"
+
+    # ------------------------------------------------------------------
+    # Scan first, then decide whether sudo is needed:
+    # a single-system SteamOS usually has no NTFS partition at all, and the user should not be asked for a password then.
+    # ------------------------------------------------------------------
+    echo ""
+    echo "Step 1: Scanning NTFS partitions..."
+    local ntfs_devices=()
+    local ntfs_labels=()
+    local ntfs_mountpoints=()
+    local ntfs_uuids=()
+    local ntfs_count=0
+
+    while IFS= read -r line; do
+        parse_line "$line"
+
+        [ "$TYPE" != "part" ] && continue
+        [[ "$FSTYPE" =~ ^(ntfs|fuseblk|ntfs3)$ ]] || continue
+
+        dev="/dev/$NAME"
+        ntfs_devices+=("$dev")
+        ntfs_labels+=("${LABEL:-no label}")
+        ntfs_uuids+=("${UUID:-}")
+
+        if [ -z "$MOUNTPOINT" ] || [ "$MOUNTPOINT" = "None" ]; then
+            ntfs_mountpoints+=("")
+        else
+            ntfs_mountpoints+=("$MOUNTPOINT")
+        fi
+        ((ntfs_count++))
+    done < <(lsblk -P -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID --noheadings 2>/dev/null)
+
+    # If lsblk shows no NTFS, blkid almost certainly has none either, but keep the fallback probe
+    # (note: blkid needs root to read all information, so sudo -n is used here and the probe is skipped if unavailable)
+    if [ $ntfs_count -eq 0 ] && sudo -n true 2>/dev/null; then
+        echo -e "${YELLOW}⚠️  lsblk found no NTFS partitions, trying blkid ...${NC}"
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            dev=$(echo "$line" | cut -d: -f1)
+            fstype=$(echo "$line" | sed -n 's/.* TYPE="\([^"]*\)".*/\1/p')
+            label=$(echo "$line" | sed -n 's/.* LABEL="\([^"]*\)".*/\1/p')
+            uuid=$(echo "$line" | sed -n 's/.* UUID="\([^"]*\)".*/\1/p')
+
+            if [[ "$fstype" == "ntfs" || "$fstype" == "fuseblk" || "$fstype" == "ntfs3" ]]; then
+                ntfs_devices+=("$dev")
+                ntfs_labels+=("${label:-no label}")
+                ntfs_uuids+=("${uuid:-}")
+                ntfs_mountpoints+=("")
+                ((ntfs_count++))
+            fi
+        done < <(sudo -n blkid 2>/dev/null)
+    fi
+
+    # No NTFS partition: give a clear conclusion directly, without asking for a password or touching read-only mode
+    if [ $ntfs_count -eq 0 ]; then
+        echo ""
+        echo -e "${GREEN}✅ No NTFS partitions detected, nothing to repair.${NC}"
+        echo -e "${CYAN}   This function repairs the dirty flag (Volume dirty) left on"
+        echo -e "${CYAN}   Windows dual-boot / NTFS memory cards after unsafe removal or power loss; a SteamOS-only system does not have this problem.${NC}"
+        echo ""
+        echo -e "${CYAN}   If you really do see disk write errors, it may be one of the following:${NC}"
+        echo "     · Filesystem error (btrfs/ext4) -> run sudo btrfs check or sudo fsck"
+        echo "     · Not enough space           -> run df -h to check free space"
+        echo "     · Hardware/IO error          -> run sudo dmesg | grep -i error to check"
+        echo ""
+        echo -e "${YELLOW}   Tip: if an NTFS memory card or external drive is inserted, make sure it is fully seated and try again.${NC}"
+        return 0
+    fi
+
+    # ------------------------------------------------------------------
+    # Only after confirming an NTFS partition exists is root access needed
+    # ------------------------------------------------------------------
+    if ! command -v ntfsfix &> /dev/null; then
+        echo ""
+        echo -e "${RED}Error: ntfsfix is not installed.${NC}"
+        echo "Please install the ntfs-3g package:"
+        echo "  sudo pacman -S ntfs-3g   (Arch/SteamOS)"
+        echo "  sudo apt install ntfs-3g (Debian/Ubuntu)"
+        return 1
+    fi
+
+    echo ""
+    echo -e "${CYAN}$ntfs_count NTFS partition(s) found, root permission is required for the check.${NC}"
+    echo -e "${CYAN}Please enter your sudo password to continue (it will not be shown while typing)${NC}"
+    if ! sudo -v 2>/dev/null; then
+        echo -e "${RED}Password verification failed or was cancelled, operation terminated.${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}Password verified, continuing.${NC}"
+
+    # Record the read-only state on entry and restore it as needed on exit, so the system is not left writable permanently
+    local readonly_was_enabled=0
+    if command -v steamos-readonly &> /dev/null; then
+        echo ""
+        echo "Step 2: Check and disable SteamOS read-only mode"
+        if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
+            readonly_was_enabled=1
+            if sudo steamos-readonly disable 2>/dev/null; then
+                RO_READONLY_DISABLED_BY_US=1
+                echo -e "${GREEN}✓ Read-only mode disabled${NC}"
+            else
+                echo -e "${YELLOW}⚠️  Failed to disable read-only mode, trying to continue...${NC}"
+            fi
+        else
+            echo -e "${GREEN}✓ The system is already in read-write mode${NC}"
+        fi
+    else
+        echo ""
+        echo "Step 2: Skipping the SteamOS read-only check (not SteamOS)"
+    fi
+
+    echo ""
+    echo -e "${CYAN}Checking the error status of $ntfs_count NTFS partition(s)...${NC}"
+    local dirty_indices=()
+    local skipped_count=0
+    for ((i=0; i<ntfs_count; i++)); do
+        echo -n "  Checking ${ntfs_devices[$i]} ... "
+        # Note: ntfsinfo / ntfsfix both need exclusive access to the device; a mounted volume reports
+        #      “Access is denied because the NTFS volume is already exclusively opened”.
+        #     The Windows partition the user really cares about is usually mounted, so it must be temporarily unmounted before checking,
+        #     and remounted at its original mount point right after the check.
+        local dev="${ntfs_devices[$i]}"
+        local mp="${ntfs_mountpoints[$i]}"
+        local was_mounted=0
+        if [ -n "$mp" ] && mountpoint -q "$mp" 2>/dev/null; then
+            was_mounted=1
+            # Discard all unmount/mount output so it does not interrupt the "Checking xxx ..." line
+            if ! sudo umount "$dev" >/dev/null 2>&1 && ! sudo umount -f "$dev" >/dev/null 2>&1; then
+                echo -e "${YELLOW}Skipped (partition is in use and cannot be unmounted)${NC}"
+                skipped_count=$((skipped_count + 1))
+                continue
+            fi
+        fi
+
+        # Read the Volume Flags of $Volume to test the DIRTY bit (0x0001).
+        # Do not look for "Volume is dirty" in `ntfsfix -n` output -- ntfsfix never prints that.
+        local vol_out dirty=0 check_err=""
+        vol_out=$(sudo ntfsinfo -m "$dev" 2>&1)
+        local rc=$?
+        if echo "$vol_out" | grep -q "DIRTY"; then
+            dirty=1
+        else
+            local flags_hex
+            flags_hex=$(echo "$vol_out" | sed -n 's/.*Volume Flags:[[:space:]]*0x\([0-9a-fA-F]\+\).*/\1/p' | head -1)
+            if [ -n "$flags_hex" ]; then
+                local flags_dec=$((16#$flags_hex))
+                [ $((flags_dec & 1)) -eq 1 ] && dirty=1
+            elif [ $rc -ne 0 ]; then
+                check_err="read failed"
+            fi
+        fi
+
+        # Whatever the check result, remount the volume at its original location first so normal use is not affected
+        if [ "$was_mounted" -eq 1 ] && [ -n "$mp" ]; then
+            if ! sudo mount "$mp" >/dev/null 2>&1 && ! sudo mount "$dev" "$mp" >/dev/null 2>&1; then
+                echo -e "${YELLOW}⚠ Cannot remount $mp automatically after the check, please mount it manually${NC}"
+            fi
+        fi
+
+        if [ "$dirty" -eq 1 ]; then
+            echo -e "${RED}Errors found (dirty)${NC}"
+            dirty_indices+=("$i")
+        elif [ -n "$check_err" ]; then
+            echo -e "${YELLOW}Skipped ($check_err)${NC}"
+            skipped_count=$((skipped_count + 1))
+        else
+            echo -e "${GREEN}Normal${NC}"
+        fi
+    done
+
+    # Whichever branch is taken, try to restore read-only mode before exiting
+    _restore_readonly_after_fix() {
+        if [ "$readonly_was_enabled" -eq 1 ] && command -v steamos-readonly &> /dev/null; then
+            echo ""
+            echo "Restoring SteamOS read-only mode..."
+            if sudo -n steamos-readonly enable 2>/dev/null; then
+                echo -e "${GREEN}✓ Read-only mode restored${NC}"
+            else
+                echo -e "${YELLOW}⚠️  Cannot restore read-only mode automatically, please run manually: sudo steamos-readonly enable${NC}"
+            fi
+        fi
+    }
+
+    if [ ${#dirty_indices[@]} -eq 0 ]; then
+        echo ""
+        if [ "$skipped_count" -gt 0 ]; then
+            # If some partitions could not be checked, do not claim "everything is fine"
+            echo -e "${YELLOW}⚠️  ${skipped_count} partition(s) could not be checked (in use or read failure), the other $((ntfs_count - skipped_count)) partition(s) are in normal state.${NC}"
+            echo -e "${CYAN}   Close programs that are using these partitions (Steam library, file manager) and try again.${NC}"
+        else
+            echo -e "${GREEN}✅ All NTFS partitions are in normal state, no disk write errors.${NC}"
+        fi
+        _restore_readonly_after_fix
+        return 0
+    fi
+
+    echo ""
+    echo -e "${YELLOW}${#dirty_indices[@]} partition(s) have write errors (dirty flag):${NC}"
+    # Numbering uses consecutive indices within the dirty partition list (1,2,3...), matching the input of option 2 below
+    local n=0
+    for idx in "${dirty_indices[@]}"; do
+        n=$((n + 1))
+        local mp_display="${ntfs_mountpoints[$idx]:-not mounted}"
+        echo "  ${n}. ${ntfs_devices[$idx]}  Label:${ntfs_labels[$idx]}  Mount point:${mp_display}"
+    done
+
+    echo ""
+    echo "Please choose a repair method:"
+    echo "  1) Repair all partitions with errors"
+    echo "  2) Choose specific partitions to repair"
+    echo "  3) Cancel the repair"
+
+    local fix_choice
+    while true; do
+        # On read failure (no tty / EOF) exit the loop, to avoid endless retry spam
+        if ! read -p "Enter an option [1-3]: " fix_choice < /dev/tty; then
+            echo -e "${YELLOW}Cannot read input, operation cancelled.${NC}"
+            _restore_readonly_after_fix
+            return 1
+        fi
+        case $fix_choice in
+            1|2|3) break ;;
+            *) echo -e "${RED}Invalid option, please try again.${NC}" ;;
+        esac
+    done
+
+    case $fix_choice in
+        1)
+            for idx in "${dirty_indices[@]}"; do
+                fix_single_ntfs "${ntfs_devices[$idx]}" "${ntfs_mountpoints[$idx]}"
+            done
+            ;;
+        2)
+            echo "Enter the partition number(s) to repair (separate multiple numbers with spaces, e.g. 1 3):"
+            while true; do
+                if ! read -p "Number: " -a indices < /dev/tty; then
+                    echo -e "${YELLOW}Cannot read input, operation cancelled.${NC}"
+                    _restore_readonly_after_fix
+                    return 1
+                fi
+                local valid=true
+                for num in "${indices[@]}"; do
+                    # Number range is 1..number of dirty partitions
+                    if [[ ! "$num" =~ ^[0-9]+$ ]] || [ "$num" -lt 1 ] || [ "$num" -gt ${#dirty_indices[@]} ]; then
+                        valid=false; break
+                    fi
+                done
+                if $valid; then
+                    break
+                else
+                    echo -e "${RED}Invalid number, please enter a number between 1 and ${#dirty_indices[@]}.${NC}"
+                fi
+            done
+            for num in "${indices[@]}"; do
+                # Map the "dirty partition list index" back to the real partition index
+                local target_idx="${dirty_indices[$((num-1))]}"
+                fix_single_ntfs "${ntfs_devices[$target_idx]}" "${ntfs_mountpoints[$target_idx]}"
+            done
+            ;;
+        3|*)
+            echo "Operation cancelled."
+            ;;
+    esac
+
+    _restore_readonly_after_fix
+    echo ""
+    echo -e "${GREEN}✅ Repair process finished.${NC}"
+}
+
+clear_hosts_cache() {
+    mk_temp_dir; clear
+    echo -e "${YELLOW}════════════════ Clean hosts cache ════════════════${NC}"
+    echo -e "${CYAN}Removes only Steam-related hosts entries, keeps system entries, and backs up automatically.${NC}"
+    # /etc/hosts lives on the SteamOS read-only root partition: in read-only mode sudo sed fails silently,
+    # and the old code ignored the return value and still printed "cleanup complete". Here we ensure writability first and abort clearly on failure.
+    if command -v steamos-readonly &>/dev/null; then
+        if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
+            echo -e "${CYAN}Temporarily disabling read-only mode to modify /etc/hosts (restored automatically on exit)...${NC}"
+            disable_readonly || { echo -e "${RED}✗ Cannot disable read-only mode, /etc/hosts was not modified.${NC}"; return 1; }
+        fi
+    fi
+    local backup="/etc/hosts.backup.$(date +%Y%m%d_%H%M%S)"
+    if ! sudo cp /etc/hosts "$backup" 2>/dev/null; then
+        echo -e "${RED}✗ Failed to back up /etc/hosts (or the target is read-only), aborted, no changes were made.${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Original hosts backed up to $backup${NC}"
+    local steam_hosts_re='^\s*([0-9a-fA-F:.]+|\*)\s+(steamcommunity\.com|steamstatic\.com|steamcontent\.com|steamusercontent\.com|api\.steampowered\.com|store\.steampowered\.com|s\.team|steamcdn-a\.akamaihd\.net)(\s|$)'
+    if ! sudo sed -i -E "/${steam_hosts_re}/d" /etc/hosts 2>/dev/null; then
+        echo -e "${RED}✗ Failed to write /etc/hosts (disk read-only or insufficient permission), the original file was not modified.${NC}"
+        echo -e "${YELLOW}   To roll back: sudo cp $backup /etc/hosts${NC}"
+        return 1
+    fi
+    # Verify by actual content, not just by the command exit code
+    if grep -qE "$steam_hosts_re" /etc/hosts 2>/dev/null; then
+        echo -e "${RED}✗ Some Steam-related entries could not be removed, please check /etc/hosts.${NC}"
+        echo -e "${YELLOW}   Backup file: $backup (roll back with sudo cp $backup /etc/hosts)${NC}"
+        return 1
+    fi
+    # The localhost check must anchor on the full host name, otherwise 127.0.0.1 localhost.localdomain
+    # is wrongly treated as "localhost entry already present" and the real localhost entry never gets added
+    grep -qE '^\s*127\.0\.0\.1\s+localhost([[:space:]]|$)' /etc/hosts 2>/dev/null \
+        || echo "127.0.0.1 localhost" | sudo tee -a /etc/hosts > /dev/null
+    grep -qE '^\s*::1\s+localhost([[:space:]]|$)' /etc/hosts 2>/dev/null \
+        || echo "::1 localhost ip6-localhost ip6-loopback" | sudo tee -a /etc/hosts > /dev/null
+    echo -e "${GREEN}✓ hosts cleanup complete (backup: $backup)${NC}"
+}
+
+calibrate_joystick_stick() {
+    mk_temp_dir; clear
+    echo -e "${YELLOW}════════════════ Calibrate joystick ════════════════${NC}"
+    if thumbstick_cal; then echo -e "${GREEN}✓ Joystick calibration complete${NC}"; else echo -e "${RED}✗ Joystick calibration failed${NC}"; echo "Please make sure the joystick calibration tool (thumbstick_cal) is installed"; fi
+}
+
+calibrate_joystick_trigger() {
+    mk_temp_dir; clear
+    echo -e "${YELLOW}════════════════ Calibrate trigger ════════════════${NC}"
+    if trigger_cal; then echo -e "${GREEN}✓ Trigger calibration complete${NC}"; else echo -e "${RED}✗ Trigger calibration failed${NC}"; echo "Please make sure the trigger calibration tool (trigger_cal) is installed"; fi
+}
+
+steamdeck_cache_manager() {
+    # Without zenity the old code still called zenity to report an error, showing nothing at all; now write to standard output
+    if ! command -v zenity &>/dev/null; then
+        echo -e "${RED}✗ zenity not found, cannot open the cache manager. Please install it first: sudo pacman -S zenity${NC}"
+        return 1
+    fi
+    mk_temp_dir
+
+    # Collect the steamapps directory of every Steam library: the default library plus the others listed in libraryfolders.vdf.
+    # The old implementation hard-coded only $HOME/.local/share/Steam/steamapps, so libraries on an SD card / second disk
+    # never appeared in the list (on this machine the VDF really does contain /run/media/deck/Game/SteamLibrary).
+    local steam_root="$HOME/.local/share/Steam"
+    local -a steamapps_dirs=()
+    [ -d "$steam_root/steamapps" ] && steamapps_dirs+=("$steam_root/steamapps")
+    local vdf="$steam_root/steamapps/libraryfolders.vdf"
+    if [ -f "$vdf" ]; then
+        local lib_path
+        while IFS= read -r lib_path; do
+            [ -n "$lib_path" ] || continue
+            [ -d "$lib_path/steamapps" ] || continue
+            local dup=0 d
+            for d in "${steamapps_dirs[@]}"; do
+                [ "$d" = "$lib_path/steamapps" ] && { dup=1; break; }
+            done
+            [ "$dup" -eq 0 ] && steamapps_dirs+=("$lib_path/steamapps")
+        done < <(awk -F'"' '/"path"/ {print $4}' "$vdf" 2>/dev/null)
+    fi
+    if [ ${#steamapps_dirs[@]} -eq 0 ]; then
+        zenity --error --text="Steam library directory not found, please confirm Steam is installed and you have logged in at least once."
+        return 1
+    fi
+
+    # Warn the user to quit Steam before deleting compatdata/shader cache, otherwise data in use may be corrupted
+    local steam_running=0
+    if pgrep -x steam >/dev/null 2>&1 || pgrep -x steamwebhelper >/dev/null 2>&1; then
+        steam_running=1
+        if ! zenity --question --title="Steam is running" \
+            --text="Steam is detected running. Deleting compatibility data may damage Proton prefixes that are in use. It is recommended to quit Steam before cleaning. Continue anyway?" \
+            --ok-label="Continue" --cancel-label="Cancel"; then
+            return 0
+        fi
+    fi
+
+    while true; do
+        local choice
+        # The first column of a radio list must contain one TRUE, otherwise pressing OK returns empty and the user thinks nothing happened
+        choice=$(zenity --list --radiolist \
+            --title="Steam Cache Manager" \
+            --text="Please choose the cache type to clean" \
+            --column="Select" --column="Type" --column="Description" \
+            TRUE  "Shader cache" "shadercache, rebuilt automatically after deletion" \
+            FALSE "Compatibility data" "compatdata, contains each game's Proton prefix" \
+            --width=600 --height=240) || break
+        [ -z "$choice" ] && break
+
+        local cache_type title
+        if [ "$choice" = "Shader cache" ]; then
+            cache_type="shadercache"; title="Shader cache"
+        else
+            cache_type="compatdata"; title="Compatibility data"
+        fi
+
+        # Store in parallel arrays, to avoid joining game names into a |-separated string (names containing | would misalign parsing)
+        local -a app_ids=() app_names=() app_sizes=() app_dirs=()
+        local sa dir app_id size manifest game_name
+        for sa in "${steamapps_dirs[@]}"; do
+            [ -d "$sa/$cache_type" ] || continue
+            for dir in "$sa/$cache_type"/*; do
+                [ -d "$dir" ] || continue
+                app_id=$(basename "$dir")
+                [[ "$app_id" =~ ^[0-9]+$ ]] || continue
+                size=$(du -sm "$dir" 2>/dev/null | cut -f1)
+                if [ -z "$size" ] || [ "$size" -le 0 ] 2>/dev/null; then
+                    continue
+                fi
+                game_name=""
+                manifest="$sa/appmanifest_${app_id}.acf"
+                [ -f "$manifest" ] && game_name=$(grep -m1 '"name"' "$manifest" 2>/dev/null | cut -d'"' -f4)
+                [ -z "$game_name" ] && game_name="Unknown app"
+                app_ids+=("$app_id"); app_names+=("$game_name")
+                app_sizes+=("$size"); app_dirs+=("$dir")
+            done
+        done
+
+        if [ ${#app_ids[@]} -eq 0 ]; then
+            zenity --info --text="Nothing to clean was found for $title."
+            continue
+        fi
+
+        local -a list_data=()
+        local i
+        for i in "${!app_ids[@]}"; do
+            list_data+=("FALSE" "${app_ids[$i]}" "${app_names[$i]}" "${app_sizes[$i]}MB")
+        done
+
+        local selections
+        # The ID column is hidden but used for matching on return: avoid matching by "display name" (breaks on duplicates / names containing |)
+        selections=$(zenity --list --checklist \
+            --title="Choose the $title to delete" \
+            --text="${#app_ids[@]} item(s) in total, check multiple items and click OK." \
+            --column="Select" --column="ID" --column="App name" --column="Size" \
+            --hide-column=2 --print-column=2 --separator=$'\n' \
+            "${list_data[@]}" \
+            --width=720 --height=460) || continue
+        [ -z "$selections" ] && continue
+
+        local -a sel_dirs=() sel_labels=()
+        local sel_line
+        while IFS= read -r sel_line; do
+            [ -n "$sel_line" ] || continue
+            for i in "${!app_ids[@]}"; do
+                if [ "${app_ids[$i]}" = "$sel_line" ]; then
+                    sel_dirs+=("${app_dirs[$i]}")
+                    sel_labels+=("${app_names[$i]} (${app_sizes[$i]}MB)")
+                    break
+                fi
+            done
+        done <<< "$selections"
+
+        if [ ${#sel_dirs[@]} -eq 0 ]; then
+            zenity --info --text="No valid items selected."
+            continue
+        fi
+
+        # List the specific items and total size in the confirmation dialog so the user sees exactly what will be deleted
+        local total_mb=0 label one_mb
+        for i in "${!sel_dirs[@]}"; do
+            label="${sel_labels[$i]}"
+            # When du fails its output is empty, and using it directly in $(( )) raises an arithmetic syntax error; fall back to 0 first
+            one_mb=$(du -sm "${sel_dirs[$i]}" 2>/dev/null | cut -f1)
+            [[ "$one_mb" =~ ^[0-9]+$ ]] || one_mb=0
+            total_mb=$((total_mb + one_mb))
+        done
+        local confirm_text="The following $title will be permanently deleted:"
+        for label in "${sel_labels[@]}"; do
+            confirm_text+=$'\n'"  • $label"
+        done
+        confirm_text+=$'\n\n'"${#sel_dirs[@]} item(s), about ${total_mb}MB, this cannot be undone."
+        zenity --question --title="Confirm deletion" --text="$confirm_text" \
+            --ok-label="Delete" --cancel-label="Cancel" || continue
+
+        local deleted=0 failed=0
+        for i in "${!sel_dirs[@]}"; do
+            if rm -rf -- "${sel_dirs[$i]}" 2>/dev/null; then
+                deleted=$((deleted + 1))
+            else
+                failed=$((failed + 1))
+            fi
+        done
+
+        local result_text="Deletion complete."
+        result_text+=$'\n'"Succeeded: $deleted item(s)"
+        result_text+=$'\n'"Failed: $failed item(s)"
+        [ "$failed" -gt 0 ] && result_text+=$'\n\n'"Failed items may be in use; quit Steam and try again."
+        [ "$steam_running" -eq 1 ] && result_text+=$'\n'"It is recommended to restart Steam so the cache is rebuilt."
+        zenity --info --text="$result_text"
+    done
+}
+
+fix_boot() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Repair boot ════════════════${NC}"
+    echo -e "${CYAN}Running the boot repair script...${NC}"
+
+    cat > "$TEMP_DIR/fix_boot.sh" << 'EOF'
+#!/bin/bash
+
+echo "========================================"
+echo "  Clover boot order auto-configuration script"
+echo "========================================"
+echo ""
+
+if [ "$EUID" -ne 0 ]; then
+    echo "⚠️ Administrator privileges are required, elevating..."
+    echo "   To change the boot order, please enter your user password (it will not be shown while typing)"
+    echo ""
+    sudo "$0" "$@"
+    exit $?
+fi
+
+if ! command -v efibootmgr &> /dev/null; then
+    echo "❌ Error: efibootmgr command not found."
+    echo "   Please make sure the efibootmgr tool is installed on the system."
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Dynamically detect the ESP partition for "rebuild boot entries".
+# Do not hard-code /dev/nvme0n1p1: Steam Deck has eMMC (/dev/mmcblk0) and SATA (/dev/sda)
+# models, and the partition number is not necessarily 1.
+# ---------------------------------------------------------------------------
+detect_esp() {
+    local dev=""
+    ESP_DEV=""; ESP_DISK=""; ESP_PARTN=""
+
+    # 1) 已挂载的 /esp 或 /boot/efi
+    for mp in /esp /boot/efi; do
+        dev=$(findmnt -n -o SOURCE -M "$mp" 2>/dev/null | grep '^/dev/' | head -1 || true)
+        [ -n "$dev" ] || dev=$(mount 2>/dev/null | awk -v m="$mp" '$3 == m {print $1; exit}')
+        if [ -n "$dev" ] && [ -b "$dev" ]; then ESP_DEV="$dev"; break; fi
+    done
+    # 2) 按 EFI 分区类型 GUID 查找
+    if [ -z "$ESP_DEV" ]; then
+        dev=$(lsblk -P -n -o PATH,PARTTYPE 2>/dev/null \
+            | awk -F'"' '/PARTTYPE="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"/{print $2; exit}' || true)
+        [ -n "$dev" ] && [ -b "$dev" ] && ESP_DEV="$dev"
+    fi
+    [ -n "$ESP_DEV" ] || return 1
+    ESP_DISK="/dev/$(lsblk -n -o PKNAME "$ESP_DEV" 2>/dev/null | head -1 | tr -d '[:space:]')"
+    ESP_PARTN=$(lsblk -n -o PARTN "$ESP_DEV" 2>/dev/null | head -1 | tr -d '[:space:]')
+    [ -n "$ESP_PARTN" ] || ESP_PARTN=1
+    return 0
+}
+
+# 检查 ESP 上 Clover 引导文件是否存在（决定「重建启动项」是否有意义）
+# 返回值：0 = 文件存在；1 = 确认不存在；2 = 无法判断（权限/挂载问题）
+clover_files_ok() {
+    local mnt=""
+    if [ -n "${ESP_DEV:-}" ]; then
+        if mountpoint -q /esp 2>/dev/null; then mnt=/esp
+        elif mountpoint -q /boot/efi 2>/dev/null; then mnt=/boot/efi
+        else
+            mnt=$(mktemp -d 2>/dev/null) || return 2
+            if ! mount -o ro "$ESP_DEV" "$mnt" 2>/dev/null; then
+                rmdir "$mnt" 2>/dev/null; return 2
+            fi
+            TMP_ESP_MNT="$mnt"
+        fi
+    else
+        return 2
+    fi
+    # The EFI directory may be at the root or in an efi subdirectory.
+    # Note: this script already runs with sudo, but "directory does not exist" must still be distinguished from "cannot read it",
+    # otherwise permission problems are misreported as "Clover files missing" and mislead the user into reinstalling Clover.
+    local efi_root=""
+    for cand in "$mnt/EFI" "$mnt/efi/EFI"; do
+        if [ -d "$cand" ] && ls "$cand" &>/dev/null; then efi_root="$cand"; break; fi
+    done
+    if [ -z "$efi_root" ]; then
+        # Cannot tell whether there is no EFI directory or it cannot be read
+        if [ ! -r "$mnt" ]; then return 2; fi
+        return 1
+    fi
+    for cand in "$efi_root/clover/cloverx64.efi"; do
+        if [ -f "$cand" ]; then return 0; fi
+    done
+    return 1
+}
+
+echo "1. Scanning UEFI boot entries..."
+echo "----------------------------------------"
+
+BACKUP_FILE="/tmp/boot_backup_$(date +%Y%m%d_%H%M%S).txt"
+CURRENT_BOOT_ORDER=$(efibootmgr | grep "BootOrder")
+echo "Current boot order: $CURRENT_BOOT_ORDER"
+efibootmgr -v > "$BACKUP_FILE"
+echo "Boot entry backup saved to: $BACKUP_FILE"
+
+echo ""
+echo "2. Looking for the Clover boot entry..."
+echo "----------------------------------------"
+
+CLOVER_ENTRY=$(efibootmgr -v | grep -i "CLOVER" | head -1)
+
+# When the Clover boot entry is missing, do not just exit: after a SteamOS update or firmware reset boot entries
+# are often cleared while the Clover files on the ESP are usually still there, so it can be rebuilt automatically.
+if [ -z "$CLOVER_ENTRY" ]; then
+    echo "⚠️  Clover boot entry not found, trying to rebuild it automatically..."
+    echo ""
+
+    if ! detect_esp; then
+        echo "❌ Cannot identify the ESP partition, cannot rebuild the boot entry."
+        echo "   Please confirm the system is SteamOS/Bazzite and the ESP partition is mounted properly."
+        exit 1
+    fi
+    echo "   ESP partition: $ESP_DEV (disk $ESP_DISK, partition number $ESP_PARTN)"
+
+    clover_files_ok
+    local files_rc=$?
+    if [ "$files_rc" -eq 2 ]; then
+        echo ""
+        echo "⚠️  Cannot read the ESP contents to determine whether the Clover files exist (permission or mount problem)."
+        echo "   File check skipped, will try to register the boot entry directly."
+        echo "   If it still does not boot after registering, please reinstall Clover (Boot Management -> Install/Reinstall Clover)."
+    elif [ "$files_rc" -eq 1 ]; then
+        echo ""
+        echo "❌ Clover boot file (cloverx64.efi) not found on the ESP."
+        echo "   Possible causes:"
+        echo "   • Clover is not installed yet"
+        echo "   • A SteamOS update overwrote the Clover files on the ESP"
+        echo ""
+        echo "   -> Please reinstall using Boot Management -> Install/Reinstall Clover."
+        [ -n "${TMP_ESP_MNT:-}" ] && { umount "$TMP_ESP_MNT" 2>/dev/null; rmdir "$TMP_ESP_MNT" 2>/dev/null; }
+        exit 1
+    fi
+
+    # Clean up leftover entries with the same name to avoid duplicates
+    for old_entry in $(efibootmgr | grep -i "clover" | grep -o 'Boot[0-9A-Fa-f]\{4\}' | sed 's/Boot//'); do
+        efibootmgr -b "$old_entry" -B &>/dev/null || true
+    done
+
+    echo "   Registering the Clover boot entry..."
+    if efibootmgr -c -d "$ESP_DISK" -p "$ESP_PARTN" \
+        -L "Clover - GUI Boot Manager" -l '\EFI\clover\cloverx64.efi'; then
+        echo "   ✅ Clover boot entry rebuilt"
+        CLOVER_ENTRY=$(efibootmgr -v | grep -i "CLOVER" | head -1)
+    else
+        echo "   ❌ Rebuild failed. Please try Boot Management -> Install/Reinstall Clover."
+        [ -n "${TMP_ESP_MNT:-}" ] && { umount "$TMP_ESP_MNT" 2>/dev/null; rmdir "$TMP_ESP_MNT" 2>/dev/null; }
+        exit 1
+    fi
+
+    # Also check the SteamOS boot entry
+    if ! efibootmgr | grep -qi "steamos\|steamcl"; then
+        echo ""
+        echo "⚠️  SteamOS boot entry not found, rebuilding it as well..."
+        if efibootmgr -c -d "$ESP_DISK" -p "$ESP_PARTN" \
+            -L "SteamOS" -l '\EFI\steamos\steamcl.efi'; then
+            echo "   ✅ SteamOS boot entry rebuilt"
+        else
+            echo "   ⚠️  Failed to rebuild the SteamOS boot entry, please check steamcl.efi on the ESP manually"
+        fi
+    fi
+
+    [ -n "${TMP_ESP_MNT:-}" ] && { umount "$TMP_ESP_MNT" 2>/dev/null; rmdir "$TMP_ESP_MNT" 2>/dev/null; }
+
+    if [ -z "$CLOVER_ENTRY" ]; then
+        echo ""
+        echo "❌ The Clover boot entry still cannot be found after rebuilding."
+        echo "   Current boot entries:"
+        efibootmgr | grep "Boot[0-9A-F][0-9A-F][0-9A-F][0-9A-F]"
+        exit 1
+    fi
+    echo ""
+fi
+
+CLOVER_BOOTNUM=$(echo "$CLOVER_ENTRY" | grep -o 'Boot[0-9A-F]\{4\}' | head -1 | sed 's/Boot//')
+
+echo "✅ Clover boot entry found:"
+echo "   Boot number: Boot$CLOVER_BOOTNUM"
+echo "   Description: $CLOVER_ENTRY"
+
+echo ""
+echo "3. Analyzing the current boot order..."
+echo "----------------------------------------"
+
+CURRENT_ORDER=$(efibootmgr | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
+
+if [ -z "$CURRENT_ORDER" ]; then
+    echo "⚠️  Cannot get the current boot order, a new order will be created."
+    NEW_ORDER="$CLOVER_BOOTNUM"
+else
+    if [[ "$CURRENT_ORDER" == "$CLOVER_BOOTNUM,"* ]] || [[ "$CURRENT_ORDER" == "$CLOVER_BOOTNUM" ]]; then
+        echo "✅ Clover is already first in the boot order, no change needed."
+        echo "   Current order: $CURRENT_ORDER"
+        exit 0
+    fi
+
+    NEW_ORDER="$CLOVER_BOOTNUM,$(echo "$CURRENT_ORDER" | tr ',' '\n' | grep -v "^$CLOVER_BOOTNUM$" | tr '\n' ',' | sed 's/,$//')"
+fi
+
+echo "Current order: $CURRENT_ORDER"
+echo "New order: $NEW_ORDER"
+
+echo ""
+echo "4. Confirm the setting"
+echo "----------------------------------------"
+echo "The script will perform the following actions:"
+echo "  • Set Clover (Boot$CLOVER_BOOTNUM) as the first boot entry"
+echo "  • Keep the order of the other boot entries unchanged"
+echo ""
+
+read -n1 -p "Press Enter or A to confirm, any other key to cancel: " confirm_boot < /dev/tty
+echo
+
+if [[ -z "$confirm_boot" || "$confirm_boot" =~ [Aa] ]]; then
+    echo "Continuing..."
+else
+    echo "❌ Operation cancelled."
+    exit 0
+fi
+
+echo ""
+echo "5. Setting the boot order..."
+echo "----------------------------------------"
+
+efibootmgr -o "$NEW_ORDER"
+
+echo ""
+echo "6. Verifying the result"
+echo "----------------------------------------"
+
+RESULT=$(efibootmgr | grep "BootOrder")
+echo "Final boot order: $RESULT"
+
+if echo "$RESULT" | grep -q "^BootOrder: $CLOVER_BOOTNUM,"; then
+    echo ""
+    echo "✅ Success! Clover (Boot$CLOVER_BOOTNUM) is now the first boot entry."
+    echo ""
+    echo "The Clover boot menu will be entered first on the next reboot."
+    echo "To test the setting, please restart the Steam Deck."
+else
+    echo ""
+    echo "⚠️  The setting may not have taken full effect."
+    echo "   Please run 'efibootmgr -v' manually to check the setting."
+fi
+
+echo ""
+echo "========================================"
+echo "Script execution finished"
+echo "========================================"
+echo "Tip: to restore the original setting, refer to the backup file: $BACKUP_FILE"
+EOF
+
+    chmod +x "$TEMP_DIR/fix_boot.sh"
+    "$TEMP_DIR/fix_boot.sh"
+}
+
+# Safely remove a given entry from fstab (exact comparison on the first field, no regex, to avoid special characters / prefix damage)
+fstab_remove_entry() {
+    local key="$1"
+    [ -z "$key" ] && return 1
+    [ -f /etc/fstab ] || return 1
+    # Check whether the key exists first, to avoid a pointless write
+    awk -v k="$key" '$1 == k {found=1} END {exit !found}' /etc/fstab 2>/dev/null || return 1
+    # Back up, then filter and write back with awk (temp file in /tmp with explicit read permission to avoid permission problems)
+    local tmp="${TEMP_DIR:-/tmp}/fstab.$$"
+    mkdir -p "$(dirname "$tmp")" 2>/dev/null
+    awk -v k="$key" '$1 != k' /etc/fstab > "$tmp" 2>/dev/null || { rm -f "$tmp"; return 1; }
+    chmod 644 "$tmp" 2>/dev/null
+    sudo cp "$tmp" /etc/fstab && rm -f "$tmp"
+}
+
+fix_shared_disk() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Automatically mount Windows partitions ════════════════${NC}"
+    echo ""
+
+    echo "Step 1: Check SteamOS read-only mode"
+    if command -v steamos-readonly &>/dev/null; then
+        # Record the state on entry; the global trap restores it on exit (only when the script turned it off)
+        if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
+            if sudo steamos-readonly disable 2>/dev/null; then
+                RO_READONLY_DISABLED_BY_US=1
+                echo -e "${GREEN}✓ Read-only mode temporarily disabled${NC}"
+            else
+                echo -e "${YELLOW}⚠️  Failed to disable read-only mode, writing fstab later may fail${NC}"
+            fi
+        else
+            echo -e "${GREEN}✓ The system is already in writable mode${NC}"
+        fi
+    else
+        echo -e "${GREEN}✓ Not a SteamOS system, skipping${NC}"
+    fi
+    echo ""
+
+    echo "Step 2: Modify the UDisks2 permission file"
+    UDISKS2_FILE="/usr/share/polkit-1/actions/org.freedesktop.UDisks2.policy"
+    if [ -f "$UDISKS2_FILE" ]; then
+        sudo cp "$UDISKS2_FILE" "$UDISKS2_FILE.backup.$(date +%Y%m%d)" 2>/dev/null
+        sudo sed -i '/<action id="org.freedesktop.udisks2.filesystem-mount-system">/,/<\/action>/ {
+            s|<allow_active>[^<]*</allow_active>|<allow_active>yes</allow_active>|
+        }' "$UDISKS2_FILE" 2>/dev/null
+        # Verify that the change really succeeded, instead of reporting "modified" unconditionally
+        if awk '/<action id="org.freedesktop.udisks2.filesystem-mount-system">/,/<\/action>/' "$UDISKS2_FILE" 2>/dev/null | grep -q '<allow_active>yes</allow_active>'; then
+            echo -e "${GREEN}✓ Modified${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Could not confirm the modification result, please check $UDISKS2_FILE${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  UDisks2 file not found, skipping${NC}"
+    fi
+    echo ""
+
+    echo "Step 3: Scanning Windows (NTFS) partitions (ignoring recovery partitions)..."
+    local sys_mounts=("/" "/home" "/var" "/efi" "/esp" "/boot" "/boot/efi")
+    local recovery_guid="de94bba4-06d1-4d40-a16a-bfd50179d6ac"
+
+    local part_devices=()
+    local part_labels=()
+    local part_mountpoints=()
+    local part_uuids=()
+    local part_sizes=()
+    local part_count=0
+    # The core goal of the shared drive is "still auto-mounted after reboot", which relies on fstab persistence.
+    # So do not just check whether the partition is currently mounted -- a udisks auto-mount disappears after reboot.
+    # Changed to: only "mounted AND an entry exists in fstab AND the mount point matches" counts as really ready.
+    local all_ready=true
+    local fail_count=0
+
+    echo "  Cleaning up invalid fstab entries..."
+    local bad_entries=()
+    while IFS= read -r line; do
+        if echo "$line" | grep -qE '^\s*UUID=[^\s]+\s+(\S+)\s+ntfs'; then
+            mp=$(echo "$line" | awk '{print $2}')
+            if [[ -z "$mp" || "$mp" != /* || "$mp" =~ ^[A-F0-9]{8,} ]]; then
+                bad_entries+=("$line")
+            fi
+        fi
+    done < /etc/fstab
+    if [ ${#bad_entries[@]} -gt 0 ]; then
+        echo "  ${#bad_entries[@]} invalid entry/entries detected, deleting..."
+        sudo cp /etc/fstab "/etc/fstab.toolbox.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null
+        for entry in "${bad_entries[@]}"; do
+            # Delete by exact match on the first field, no regex, to avoid special characters causing wrong deletions
+            fstab_remove_entry "$(echo "$entry" | awk '{print $1}')"
+        done
+        echo -e "${GREEN}✓ Invalid entries removed${NC}"
+    fi
+
+    while IFS= read -r line; do
+        parse_line "$line"
+
+        name="$NAME"
+        type="$TYPE"
+        label="$LABEL"
+        fstype="$FSTYPE"
+        mountpoint="$MOUNTPOINT"
+        uuid="$UUID"
+        parttype="$PARTTYPE"
+        size="$SIZE"
+
+        [[ "$type" != "part" ]] && continue
+        [[ ! "$fstype" =~ ^(ntfs|fuseblk|ntfs3)$ ]] && continue
+
+        local skip=0
+        for sysmp in "${sys_mounts[@]}"; do
+            if [[ "$mountpoint" == "$sysmp" ]]; then
+                skip=1
+                break
+            fi
+        done
+        [ $skip -eq 1 ] && continue
+
+        if [ -n "$parttype" ] && [[ "${parttype,,}" == "$recovery_guid" ]]; then
+            if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint" 2>/dev/null; then
+                echo "  Recovery partition $name is mounted, unmounting..."
+                sudo umount "$mountpoint" 2>/dev/null
+            fi
+            if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && [ -d "$mountpoint" ]; then
+                if [ -z "$(ls -A "$mountpoint" 2>/dev/null)" ]; then
+                    sudo rmdir "$mountpoint" 2>/dev/null && echo "  Removed the empty mount point $mountpoint"
+                fi
+            fi
+            continue
+        fi
+
+        part_devices+=("/dev/$name")
+        part_labels+=("${label:-}")
+        if [ "$mountpoint" = "None" ] || [ -z "$mountpoint" ]; then
+            part_mountpoints+=("")
+        else
+            part_mountpoints+=("$mountpoint")
+        fi
+        part_uuids+=("$uuid")
+        part_sizes+=("${size:-}")
+        ((part_count++))
+
+        if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint" 2>/dev/null; then
+            # If mounted, also confirm fstab has an entry matching this UUID exactly (substring matching misjudges; use anchored regex)
+            if [ -n "$uuid" ] && grep -qE "^[[:space:]]*UUID=${uuid}[[:space:]]" /etc/fstab 2>/dev/null; then
+                :
+            else
+                all_ready=false
+            fi
+        else
+            all_ready=false
+        fi
+    done < <(lsblk -P -o NAME,TYPE,LABEL,FSTYPE,MOUNTPOINT,UUID,PARTTYPE,SIZE --noheadings 2>/dev/null)
+
+    if [ $part_count -eq 0 ]; then
+        while IFS= read -r source fstype mountpoint; do
+            if [[ "$source" =~ ^/dev/ ]]; then
+                dev="$source"
+                label=$(lsblk -n -o LABEL "$dev" 2>/dev/null)
+                uuid=$(lsblk -n -o UUID "$dev" 2>/dev/null)
+                size=$(lsblk -n -o SIZE "$dev" 2>/dev/null)
+                part_devices+=("$dev")
+                part_labels+=("${label:-no label}")
+                part_mountpoints+=("$mountpoint")
+                part_uuids+=("${uuid:-}")
+                part_sizes+=("${size:-}")
+                ((part_count++))
+            fi
+        done < <(findmnt -t ntfs,fuseblk,ntfs3 -o SOURCE,FSTYPE,TARGET -n 2>/dev/null)
+    fi
+
+    if [ $part_count -eq 0 ]; then
+        echo -e "${YELLOW}⚠️  No matching Windows (NTFS) partition detected.${NC}"
+        return
+    fi
+
+    echo -e "${CYAN}The following Windows partitions were detected:${NC}"
+    for ((i=0; i<part_count; i++)); do
+        local mp_display="${part_mountpoints[$i]:-not mounted}"
+        echo "  $((i+1)). ${part_devices[$i]}  Label:${part_labels[$i]:-none}  Size:${part_sizes[$i]}  Mount point:${mp_display}"
+    done
+    echo ""
+
+    echo "Step 4: Cleaning up mounts and fstab entries of non-Windows partitions under /run/media/deck/..."
+    local cleaned=0
+
+    # Note: this used to force-unmount all non-NTFS partitions under /run/media/deck/ and delete their fstab entries,
+    # which damaged the user's ext4 external drives / USB sticks / Btrfs external disks. The shared-drive feature has no reason to touch them,
+    # so it was changed to: only clean up leftover entries in fstab that reference devices which no longer exist; never unmount any partition.
+    while IFS= read -r mp; do
+        [ -z "$mp" ] && continue
+        dev=$(findmnt -n -o SOURCE "$mp" 2>/dev/null)
+        fstype=$(findmnt -n -o FSTYPE "$mp" 2>/dev/null)
+        if [[ ! "$fstype" =~ ^(ntfs|fuseblk|ntfs3|ntfs-3g)$ ]]; then
+            if [ -n "$dev" ] && [ ! -b "$dev" ]; then
+                echo "  Cleaning up the stale mount record: $mp ($fstype)"
+                if [ -n "$dev" ]; then
+                    local _u
+                    _u=$(lsblk -n -o UUID "$dev" 2>/dev/null)
+                    [ -n "$_u" ] && fstab_remove_entry "UUID=$_u"
+                    fstab_remove_entry "$dev"
+                fi
+                ((cleaned++))
+            else
+                echo -e "${YELLOW}  Keeping the mounted non-NTFS partition: $mp ($fstype)${NC}"
+            fi
+        fi
+    done < <(findmnt -o TARGET -n -l 2>/dev/null | grep '^/run/media/deck/')
+
+    # Only delete leftover empty directories no longer referenced by fstab, to avoid deleting the user's own empty folders
+    for d in /run/media/deck/*; do
+        [ -d "$d" ] || continue
+        mountpoint -q "$d" 2>/dev/null && continue
+        [ -z "$(ls -A "$d" 2>/dev/null)" ] || continue
+        if grep -qE "^[[:space:]]*(UUID=|/dev/)[^[:space:]]+[[:space:]]+${d}[[:space:]]" /etc/fstab 2>/dev/null; then
+            continue
+        fi
+        echo "  Removing the leftover empty directory $d"
+        sudo rmdir "$d" 2>/dev/null && ((cleaned++))
+    done
+
+    while IFS= read -r line; do
+        if echo "$line" | grep -qE '^\s*(UUID=|/dev/)\S+\s+/run/media/deck/'; then
+            mp=$(echo "$line" | awk '{print $2}')
+            fs=$(echo "$line" | awk '{print $3}')
+            if [[ ! "$fs" =~ ^(ntfs|fuseblk|ntfs3|ntfs-3g)$ ]]; then
+                # Safety restriction: only handle leftover entries whose "device no longer exists".
+                # Never unmount/delete a non-NTFS partition that still really exists (such as the user's ext4 external drive,
+                # USB stick, Btrfs external disk), otherwise the user's data disk would be damaged.
+                local src
+                src=$(echo "$line" | awk '{print $1}')
+                local dev_exists=1
+                if [[ "$src" =~ ^UUID= ]]; then
+                    if [ -e "/dev/disk/by-uuid/${src#UUID=}" ]; then dev_exists=0; fi
+                elif [[ "$src" =~ ^/dev/ ]]; then
+                    if [ -b "$src" ]; then dev_exists=0; fi
+                fi
+                if [ $dev_exists -eq 1 ]; then
+                    echo "  Cleaning up the stale device entry: $mp ($fs)"
+                    fstab_remove_entry "$src"
+                    ((cleaned++))
+                    if [ -d "$mp" ] && [ -z "$(ls -A "$mp" 2>/dev/null)" ]; then
+                        sudo rmdir "$mp" 2>/dev/null
+                    fi
+                else
+                    echo -e "${YELLOW}  Keeping the non-NTFS partition entry (device still exists): $mp ($fs)${NC}"
+                fi
+            fi
+        fi
+    done < /etc/fstab
+
+    if [ $cleaned -gt 0 ]; then
+        echo -e "${GREEN}✓ Cleanup complete${NC}"
+    else
+        echo "  Nothing to clean up."
+    fi
+    echo ""
+
+    if $all_ready; then
+        echo -e "${GREEN}✅ All Windows partitions are mounted and written to fstab; they will still be mounted automatically after reboot, no action needed.${NC}"
+        return
+    fi
+
+    echo "Step 5: Mounting and writing to fstab..."
+    for ((i=0; i<part_count; i++)); do
+        device="${part_devices[$i]}"
+        label="${part_labels[$i]}"
+        mountpoint="${part_mountpoints[$i]}"
+        uuid="${part_uuids[$i]}"
+
+        echo -e "\n${CYAN}Processing partition $device${NC}"
+
+        # Key point: first decide which mount point this partition should finally use, then handle fstab.
+        # Prefer the mount point already present in fstab (to avoid two mount points for the same partition),
+        # then the current actual mount point, and only then create a new one from the label/device name.
+        local fstab_mp=""
+        if [ -n "$uuid" ] && grep -qE "^[[:space:]]*UUID=${uuid}[[:space:]]" /etc/fstab 2>/dev/null; then
+            fstab_mp=$(awk -v u="UUID=$uuid" '$1==u {print $2; exit}' /etc/fstab)
+        fi
+
+        if [ -n "$fstab_mp" ]; then
+            mount_point="$fstab_mp"
+            echo "  fstab already has an entry, mount point: $mount_point"
+        elif [ -n "$mountpoint" ]; then
+            mount_point="$mountpoint"
+            echo "  Currently mounted at $mount_point"
+        else
+            if [ -n "$label" ] && [ "$label" != "None" ]; then
+                clean_label=$(echo "$label" | sed 's/ /_/g; s|[/\\]|_|g')
+                mount_point="/run/media/deck/$clean_label"
+            else
+                devname=$(basename "$device")
+                mount_point="/run/media/deck/$devname"
+            fi
+            local suffix=1
+            while [ -d "$mount_point" ] && [ -n "$(ls -A "$mount_point" 2>/dev/null)" ]; do
+                mount_point="${mount_point%%_*}_$suffix"
+                ((suffix++))
+            done
+            echo "  Planned mount point: $mount_point"
+        fi
+        sudo mkdir -p "$mount_point"
+        sudo chown "${CURRENT_USER}:${CURRENT_GROUP}" "$mount_point" 2>/dev/null
+
+        # Write/update fstab: match the UUID exactly with an anchored regex, to avoid substring misjudgement
+        if [ -n "$fstab_mp" ]; then
+            if [ "$fstab_mp" != "$mount_point" ]; then
+                # Already exists but with a different mount point (e.g. the old path is invalid).
+                # Note: do not "delete first, then append" -- if a large write fails, the entry would be lost completely.
+                # Instead, generate the complete new file at once and atomically replace it with mv, so fstab never has an intermediate state.
+                sudo cp /etc/fstab "/etc/fstab.toolbox.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null
+                local _tmp="${TEMP_DIR:-/tmp}/fstab_upd.$$"
+                mkdir -p "$(dirname "$_tmp")" 2>/dev/null
+                {
+                    awk -v k="UUID=$uuid" '$1 != k' /etc/fstab 2>/dev/null
+                    printf '%s\n' "UUID=$uuid $mount_point ntfs-3g rw,exec,uid=1000,gid=1000,windows_names,nofail 0 0"
+                } > "$_tmp" 2>/dev/null && chmod 644 "$_tmp" 2>/dev/null \
+                    && sudo cp "$_tmp" /etc/fstab && rm -f "$_tmp" \
+                    && echo "  Updated the fstab mount point -> $mount_point" \
+                    || { rm -f "$_tmp"; echo -e "${RED}  ✗ Failed to update fstab (the original entry was not changed)${NC}"; ((fail_count++)); continue; }
+            else
+                echo "  fstab entry is already correct, no change needed."
+            fi
+        else
+            if [ -z "$uuid" ]; then
+                echo -e "${YELLOW}  ⚠ This partition has no UUID, skipping the fstab write (it may not be mounted automatically after reboot)${NC}"
+            else
+                sudo cp /etc/fstab "/etc/fstab.toolbox.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null
+                local _tmp2="${TEMP_DIR:-/tmp}/fstab_add.$$"
+                mkdir -p "$(dirname "$_tmp2")" 2>/dev/null
+                {
+                    cat /etc/fstab 2>/dev/null
+                    printf '%s\n' "UUID=$uuid $mount_point ntfs-3g rw,exec,uid=1000,gid=1000,windows_names,nofail 0 0"
+                } > "$_tmp2" 2>/dev/null && chmod 644 "$_tmp2" 2>/dev/null \
+                    && sudo cp "$_tmp2" /etc/fstab && rm -f "$_tmp2" \
+                    && echo "  fstab entry added." \
+                    || { rm -f "$_tmp2"; echo -e "${RED}  ✗ Failed to write fstab${NC}"; ((fail_count++)); }
+            fi
+        fi
+
+        if mountpoint -q "$mount_point" 2>/dev/null; then
+            echo "  Partition mounted at $mount_point"
+        else
+            if sudo systemctl daemon-reload 2>/dev/null; then :; fi
+            if sudo mount "$mount_point" 2>/dev/null || sudo mount -U "$uuid" "$mount_point" 2>/dev/null; then
+                echo -e "${GREEN}  ✓ Mounted successfully at $mount_point${NC}"
+            else
+                echo -e "${RED}  ✗ Mount failed, please check the dmesg output.${NC}"
+                echo "  Recent NTFS-related dmesg errors:"
+                sudo dmesg 2>/dev/null | grep -i ntfs | tail -5
+                ((fail_count++))
+            fi
+        fi
+    done
+    echo ""
+    if [ $fail_count -gt 0 ]; then
+        echo -e "${YELLOW}⚠️  Finished, but $fail_count partition(s) failed to mount, please check the error messages above.${NC}"
+    else
+        echo -e "${GREEN}════════════════ All done ════════════════${NC}"
+    fi
+}
+
+# ============================================================================
+# System health check: diagnose "missing disk / missing boot entry / mount failure" after a SteamOS update
+# Read-only checks; no system configuration is modified unless the user explicitly chooses a repair item
+# ============================================================================
+# Dynamically detect the ESP partition (do not hard-code /dev/nvme0n1p1: eMMC is mmcblk0 and the partition number may not be 1)
+detect_esp_partition() {
+    local dev="" line
+    ESP_DEV=""; ESP_DISK=""; ESP_PARTN=""; ESP_MOUNT=""
+    # 1) 已挂载的 /esp（SteamOS）或 /boot/efi（Bazzite）
+    #    注意：findmnt -M 也会返回 systemd autofs 的 "systemd-1"，必须过滤出 /dev/ 开头的真实设备
+    for mp in /esp /boot/efi; do
+        dev=$(findmnt -n -o SOURCE -M "$mp" 2>/dev/null | grep '^/dev/' | head -1 || true)
+        if [ -z "$dev" ]; then
+            # 兜底：从 mount 输出里找该挂载点对应的设备
+            dev=$(mount 2>/dev/null | awk -v m="$mp" '$3 == m {print $1; exit}')
+        fi
+        if [ -n "$dev" ] && [ -b "$dev" ]; then
+            ESP_DEV="$dev"; ESP_MOUNT="$mp"; break
+        fi
+    done
+    # 2) 按 EFI 分区类型 GUID 查找（c12a7328-f81f-11d2-ba4b-00a0c93ec93b）
+    if [ -z "$ESP_DEV" ]; then
+        dev=$(lsblk -P -n -o PATH,PARTTYPE 2>/dev/null \
+            | awk -F'"' '/PARTTYPE="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"/{print $2; exit}' || true)
+        [ -n "$dev" ] && [ -b "$dev" ] && ESP_DEV="$dev"
+    fi
+    [ -n "$ESP_DEV" ] || return 1
+    # 注意：lsblk 输出可能带前后空格，必须清理，否则 efibootmgr -p " 1" 会失败
+    ESP_DISK="/dev/$(lsblk -n -o PKNAME "$ESP_DEV" 2>/dev/null | head -1 | tr -d '[:space:]')"
+    ESP_PARTN=$(lsblk -n -o PARTN "$ESP_DEV" 2>/dev/null | head -1 | tr -d '[:space:]')
+    [ -n "$ESP_PARTN" ] || ESP_PARTN=1
+    return 0
+}
+
+# 检查结果累加器
+HC_TOTAL=0; HC_OK=0; HC_WARN=0; HC_FAIL=0
+HC_FIXABLE=()      # 可自动修复的问题编号
+hc_result() {
+    # $1=status ok/warn/fail  $2=title  $3=description  $4=fixable(1/0)  $5=repair function name
+    HC_TOTAL=$((HC_TOTAL + 1))
+    case "$1" in
+        ok)   HC_OK=$((HC_OK + 1));   echo -e "  ${GREEN}[OK]${NC} $2";;
+        warn) HC_WARN=$((HC_WARN + 1)); echo -e "  ${YELLOW}[Warning]${NC} $2";;
+        fail) HC_FAIL=$((HC_FAIL + 1)); echo -e "  ${RED}[Error]${NC} $2";;
+    esac
+    [ -n "$3" ] && echo -e "         $3"
+    if [ "${4:-0}" -eq 1 ] && [ -n "${5:-}" ]; then
+        HC_FIXABLE+=("$1|$2|$5")
+        echo -e "         ${CYAN}-> Can be handled with the Repair option below${NC}"
+    fi
+}
+
+# ---------- Individual checks ----------
+hc_check_esp() {
+    echo -e "${CYAN}[1/6] ESP (EFI system partition)${NC}"
+    if detect_esp_partition; then
+        hc_result ok "ESP partition identified" "$ESP_DEV mounted at $ESP_MOUNT"
+        # Free space check (Clover needs about 15MB)
+        local avail
+        avail=$(df --output=avail "$ESP_DEV" 2>/dev/null | tail -1 | tr -d ' ')
+        if [[ "$avail" =~ ^[0-9]+$ ]]; then
+            if [ "$avail" -ge 15000 ]; then
+                hc_result ok "ESP free space is sufficient" "about $((avail / 1024))MB available"
+            else
+                hc_result warn "ESP free space is small" "only about $((avail / 1024))MB, installing Clover needs about 15MB"
+            fi
+        fi
+        # EFI directory readability (root needed to list /esp/efi/EFI)
+        if sudo -n ls "$ESP_MOUNT/efi/EFI" &>/dev/null || sudo -n ls "$ESP_MOUNT/EFI" &>/dev/null; then
+            hc_result ok "ESP can be read normally" ""
+        else
+            hc_result warn "Cannot read the ESP contents (sudo required)" "please confirm sudo is available and try again"
+        fi
+    else
+        hc_result fail "Cannot identify the ESP partition" "no mounted /esp found, and it could not be located by EFI partition type either"
+    fi
+    echo ""
+}
+
+hc_check_efi_entries() {
+    echo -e "${CYAN}[2/6] UEFI boot entries${NC}"
+    if ! command -v efibootmgr &>/dev/null; then
+        hc_result fail "efibootmgr not found" "please install: sudo pacman -S efibootmgr"
+        echo ""; return
+    fi
+    local efi_out
+    efi_out=$(sudo -n efibootmgr 2>/dev/null || efibootmgr 2>/dev/null || true)
+    if [ -z "$efi_out" ]; then
+        hc_result fail "Cannot read the UEFI boot entries" "efibootmgr execution failed"
+        echo ""; return
+    fi
+    # Clover boot entry
+    if echo "$efi_out" | grep -qi "clover"; then
+        local cl_num
+        cl_num=$(echo "$efi_out" | grep -i "clover" | head -1 | grep -o 'Boot[0-9A-Fa-f]\{4\}' | head -1)
+        hc_result ok "Clover boot entry exists" "$cl_num"
+    else
+        hc_result fail "Clover boot entry is missing" "common after a SteamOS update or firmware reset; it will be rebuilt from the ESP automatically" 1 "hc_repair_boot"
+    fi
+    # SteamOS boot entry
+    if echo "$efi_out" | grep -qi "steamos\|steamcl"; then
+        hc_result ok "SteamOS boot entry exists" ""
+    else
+        hc_result fail "SteamOS boot entry is missing" "will be rebuilt from the ESP (Clover is checked as well)" 1 "hc_repair_boot"
+    fi
+    # Windows boot entry (not required: Clover takes over)
+    if echo "$efi_out" | grep -qi "windows"; then
+        hc_result ok "Windows boot entry exists" ""
+    else
+        hc_result warn "Windows boot entry is missing (Clover takes over, usually normal)" "only needed to boot Windows directly from the firmware menu"
+    fi
+    # Boot order
+    local order first
+    order=$(echo "$efi_out" | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
+    first=$(echo "$order" | cut -d, -f1)
+    if [ -n "$first" ] && echo "$efi_out" | grep -i "clover" | grep -q "Boot$first"; then
+        hc_result ok "Clover is the first boot entry" "BootOrder: $order"
+    else
+        hc_result warn "Clover is not the first boot entry" "current order: ${order:-unknown}" 1 "hc_repair_boot"
+    fi
+    echo ""
+}
+
+hc_check_clover_files() {
+    echo -e "${CYAN}[3/6] Clover boot file integrity${NC}"
+    if [ -z "${ESP_DEV:-}" ]; then
+        hc_result warn "Skipped: ESP not identified" ""
+        echo ""; return
+    fi
+    # If the ESP is not mounted, mount it temporarily on a read-only directory to check its contents
+    local tmp_mount="" efi_root=""
+    if [ -z "${ESP_MOUNT:-}" ]; then
+        tmp_mount=$(mktemp -d 2>/dev/null) || tmp_mount=""
+        if [ -n "$tmp_mount" ] && sudo -n mount -o ro "$ESP_DEV" "$tmp_mount" 2>/dev/null; then
+            ESP_MOUNT="$tmp_mount"
+        else
+            rmdir "$tmp_mount" 2>/dev/null
+            hc_result warn "ESP is not mounted and cannot be mounted temporarily for the check" "please mount it first: sudo mount $ESP_DEV /mnt"
+            echo ""; return
+        fi
+    fi
+    # Locate the EFI directory: on different models/systems EFI may be at the ESP root or in an efi subdirectory
+    # (the SteamOS Clover install script uses /esp/efi, but the boot path recorded by efibootmgr is \EFI\...
+    #  relative to the ESP root, so both layouts may exist). Do not rely on a normal user's [ -d ] test --
+    # /esp has permissions 700 root, a normal user can never see it, and the directory would be wrongly judged missing.
+    efi_root=""
+    local cand
+    for cand in "$ESP_MOUNT/EFI" "$ESP_MOUNT/efi/EFI"; do
+        if sudo -n ls "$cand" &>/dev/null; then
+            efi_root="$cand"; break
+        fi
+    done
+
+    if [ -z "$efi_root" ]; then
+        # Then try the parent directory to tell "no permission" from "the directory really does not exist"
+        if sudo -n ls "$ESP_MOUNT" &>/dev/null; then
+            local top_list
+            top_list=$(sudo -n ls "$ESP_MOUNT" 2>/dev/null || true)
+            hc_result fail "No EFI boot directory found on the ESP" \
+                "ESP root directory contents: $(echo "$top_list" | tr '\n' ' '). The boot files may have been removed by a SteamOS update; Clover needs to be reinstalled"
+        else
+            hc_result warn "Cannot read the EFI directory on the ESP (sudo password required)" \
+                "Clover file check skipped this time; enter the password during the health check, or run manually: sudo ls $ESP_MOUNT"
+        fi
+        [ -n "$tmp_mount" ] && { sudo -n umount "$tmp_mount" 2>/dev/null; rmdir "$tmp_mount" 2>/dev/null; }
+        echo ""; return
+    fi
+    hc_result ok "EFI directory located" "$efi_root"
+
+    # List the actual contents for a more accurate judgement
+    local efi_list
+    efi_list=$(sudo -n ls "$efi_root" 2>/dev/null || true)
+
+    # Clover main program
+    if sudo -n test -f "$efi_root/clover/cloverx64.efi" 2>/dev/null; then
+        hc_result ok "Clover EFI main program exists" "$efi_root/clover/cloverx64.efi"
+    elif echo "$efi_list" | grep -qx "clover"; then
+        hc_result fail "Clover directory exists but cloverx64.efi is missing" "boot files are incomplete, Clover needs to be reinstalled"
+    else
+        hc_result fail "Clover EFI main program is missing" "Clover needs to be reinstalled (Boot Management -> Install/Reinstall Clover)"
+    fi
+    # Clover config
+    if sudo -n test -f "$efi_root/clover/config.plist" 2>/dev/null; then
+        hc_result ok "Clover config file exists" ""
+    elif echo "$efi_list" | grep -qx "clover"; then
+        hc_result warn "Clover config file is missing" "reinstalling Clover restores the default config"
+    fi
+    # Whether BOOTX64.EFI is Clover (the original file should have been backed up as .orig)
+    local boot_dir=""
+    for cand in BOOT boot; do
+        if echo "$efi_list" | grep -qx "$cand"; then boot_dir="$cand"; break; fi
+    done
+    if [ -n "$boot_dir" ]; then
+        if sudo -n test -f "$efi_root/$boot_dir/BOOTX64.EFI" 2>/dev/null \
+            || sudo -n test -f "$efi_root/$boot_dir/bootx64.efi" 2>/dev/null; then
+            if sudo -n test -f "$efi_root/$boot_dir/BOOTX64.EFI.orig" 2>/dev/null \
+                || sudo -n test -f "$efi_root/$boot_dir/bootx64.efi.orig" 2>/dev/null; then
+                hc_result ok "BOOTX64.EFI is taken over by Clover" "the original file was backed up as .orig"
+            else
+                hc_result warn "No BOOTX64.EFI backup (.orig) found" "usually harmless as long as Clover still boots"
+            fi
+        else
+            hc_result warn "bootx64.efi not found in the BOOT directory" ""
+        fi
+    fi
+    # Unmount the temporary mount point
+    if [ -n "$tmp_mount" ]; then
+        sudo -n umount "$tmp_mount" 2>/dev/null
+        rmdir "$tmp_mount" 2>/dev/null
+    fi
+    echo ""
+}
+
+hc_check_windows_partition() {
+    echo -e "${CYAN}[4/6] Windows partitions${NC}"
+    local found=0 win_dev="" win_mp=""
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local nm fs lb mp
+        nm=$(echo "$line" | sed -n 's/.*NAME="\([^"]*\)".*/\1/p')
+        fs=$(echo "$line" | sed -n 's/.*FSTYPE="\([^"]*\)".*/\1/p')
+        lb=$(echo "$line" | sed -n 's/.*LABEL="\([^"]*\)".*/\1/p')
+        mp=$(echo "$line" | sed -n 's/.*MOUNTPOINT="\([^"]*\)".*/\1/p')
+        case "$fs" in
+            ntfs|fuseblk|ntfs3)
+                found=1
+                if [ "$lb" = "Windows" ]; then
+                    win_dev="/dev/$nm"; win_mp="$mp"
+                fi
+                ;;
+        esac
+    done < <(lsblk -P -n -o NAME,FSTYPE,LABEL,MOUNTPOINT 2>/dev/null)
+
+    if [ "$found" -eq 0 ]; then
+        hc_result warn "No NTFS partition found" "if this really is a Windows dual-boot, check whether the disk is loose or the partition table is abnormal"
+        echo ""; return
+    fi
+    if [ -n "$win_dev" ]; then
+        hc_result ok "Windows partition exists" "$win_dev${win_mp:+ mounted at $win_mp}"
+        if [ -n "$win_mp" ] && [ -d "$win_mp" ]; then
+            hc_result ok "Windows partition is mounted" "$win_mp"
+        else
+            hc_result warn "Windows partition is not mounted" "it will be written to fstab for automatic mounting at boot" 1 "hc_repair_mount"
+        fi
+        # Check the real Windows file structure (confirm it is not an empty partition)
+        local check_mp="$win_mp"
+        if [ -z "$check_mp" ] || [ ! -d "$check_mp" ]; then
+            for base in /run/media/*/"$nm" /media/*/"$nm"; do
+                [ -d "$base" ] && check_mp="$base" && break
+            done
+        fi
+        if [ -n "$check_mp" ] && [ -d "$check_mp" ]; then
+            if [ -d "$check_mp/Windows" ] && { [ -d "$check_mp/Program Files" ] || [ -d "$check_mp/Users" ]; }; then
+                hc_result ok "Windows system files are complete" "Windows/Program Files/Users detected"
+            else
+                hc_result warn "No Windows system files found in the partition" "it may be a pure data disk, or Windows has been deleted"
+            fi
+        fi
+    else
+        hc_result warn "No NTFS partition labeled Windows found" "it may be a pure data disk; if Windows is confirmed, check the partition label"
+    fi
+    echo ""
+}
+
+hc_check_fstab() {
+    echo -e "${CYAN}[5/6] /etc/fstab mount configuration${NC}"
+    if [ ! -f /etc/fstab ]; then
+        hc_result fail "/etc/fstab not found" ""
+        echo ""; return
+    fi
+    local bad=0 total=0
+    while IFS= read -r line; do
+        # Skip comments and blank lines
+        case "$line" in ''|\#*) continue;; esac
+        local dev mp rest uuid
+        dev=$(echo "$line" | awk '{print $1}')
+        mp=$(echo "$line" | awk '{print $2}')
+        [ -z "$dev" ] && continue
+        total=$((total + 1))
+        # UUID= form: verify it can be found in blkid
+        case "$dev" in
+            UUID=*)
+                uuid="${dev#UUID=}"
+                if ! lsblk -P -n -o UUID 2>/dev/null | grep -q "UUID=\"$uuid\""; then
+                    # /home/swapfile and the like are not partitions; check them separately
+                    if [ "$dev" = "/home/swapfile" ] || echo "$dev" | grep -q "/"; then
+                        :
+                    else
+                        echo -e "  ${RED}[Error]${NC} fstab entry points to a non-existent partition: $dev -> $mp"
+                        bad=$((bad + 1))
+                    fi
+                fi
+                ;;
+            /home/swapfile)
+                if [ ! -f /home/swapfile ]; then
+                    echo -e "  ${RED}[Error]${NC} fstab references /home/swapfile but the file does not exist"
+                    bad=$((bad + 1))
+                fi
+                ;;
+        esac
+    done < /etc/fstab
+    if [ "$bad" -eq 0 ]; then
+        hc_result ok "fstab entries are valid" "$total valid configuration(s) in total"
+    else
+        hc_result fail "fstab has $bad invalid entry/entries" "invalid entries can slow down boot or drop into rescue mode" 1 "hc_fix_fstab_invalid"
+    fi
+    # Check whether systemd reports mount failures
+    local failed_units
+    failed_units=$(systemctl list-units --state=failed --no-legend --plain 2>/dev/null | grep -cE '\.mount|\.swap' || true)
+    if [ "${failed_units:-0}" -gt 0 ]; then
+        hc_result fail "$failed_units mount unit(s) failed" "systemctl --failed shows the details"
+    else
+        hc_result ok "No failed mount units" ""
+    fi
+    echo ""
+}
+
+hc_check_system() {
+    echo -e "${CYAN}[6/6] System and boot services${NC}"
+    # SteamOS read-only mode
+    if command -v steamos-readonly &>/dev/null; then
+        local ro
+        ro=$(steamos-readonly status 2>/dev/null || true)
+        if echo "$ro" | grep -q "enabled"; then
+            hc_result ok "SteamOS read-only mode is normal (enabled)" ""
+        else
+            hc_result warn "SteamOS read-only mode is disabled" "it usually restores itself when no files are changed; staying writable long-term risks being overwritten by updates"
+        fi
+    fi
+    # clover-bootmanager service (the key to self-healing after a lost boot entry)
+    local has_clover_svc=0
+    if systemctl list-unit-files --no-legend --plain 2>/dev/null \
+        | awk '$1 == "clover-bootmanager.service" {found=1} END {exit !found}'; then
+        has_clover_svc=1
+    fi
+    if [ "$has_clover_svc" -eq 1 ]; then
+        if systemctl is-enabled clover-bootmanager.service &>/dev/null; then
+            hc_result ok "Clover boot guard service is enabled" "rebuilds lost boot entries automatically at boot"
+        else
+            hc_result fail "Clover boot guard service is not enabled" "when enabled it rebuilds boot entries automatically after updates" 1 "hc_fix_enable_service"
+        fi
+        if systemctl is-active clover-bootmanager.service &>/dev/null; then
+            hc_result ok "Clover boot guard service is running" ""
+        else
+            hc_result warn "Clover boot guard service is not running" "it can be started manually"
+        fi
+    else
+        hc_result warn "Clover boot guard service is not installed" "it is installed together with Clover"
+    fi
+    # Kernel and system version (to see whether an update just happened)
+    hc_result ok "Current kernel version: $(uname -r)" ""
+    local os_pretty
+    os_pretty=$(grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"')
+    hc_result ok "System version: ${os_pretty:-unknown}" ""
+    echo ""
+}
+
+# ---------- Repair actions ----------
+
+
+
+hc_fix_enable_service() {
+    if sudo systemctl enable --now clover-bootmanager.service 2>/dev/null; then
+        echo -e "${GREEN}✓ Clover boot guard service enabled${NC}"
+        return 0
+    fi
+    echo -e "${RED}✗ Failed to enable, please run manually: sudo systemctl enable --now clover-bootmanager.service${NC}"
+    return 1
+}
+
+hc_fix_fstab_invalid() {
+    echo -e "${CYAN}Backing up /etc/fstab and commenting out invalid entries...${NC}"
+    local backup="/etc/fstab.backup.$(date +%Y%m%d_%H%M%S)"
+    if ! sudo cp /etc/fstab "$backup" 2>/dev/null; then
+        echo -e "${RED}✗ Backup failed, aborted for safety${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Backed up to $backup${NC}"
+    local tmp="${TEMP_DIR}/fstab.hc.$$"
+    local changed=0
+    while IFS= read -r line; do
+        case "$line" in
+            ''|\#*) echo "$line"; continue;;
+        esac
+        local dev
+        dev=$(echo "$line" | awk '{print $1}')
+        case "$dev" in
+            UUID=*)
+                local uuid="${dev#UUID=}"
+                if lsblk -P -n -o UUID 2>/dev/null | grep -q "UUID=\"$uuid\""; then
+                    echo "$line"
+                elif [ "$dev" = "UUID=/home/swapfile" ]; then
+                    echo "$line"
+                else
+                    echo "# [health check] partition does not exist, commented out: $line"
+                    changed=$((changed + 1))
+                fi
+                ;;
+            *)
+                echo "$line"
+                ;;
+        esac
+    done < /etc/fstab > "$tmp" 2>/dev/null
+    if [ "$changed" -eq 0 ]; then
+        rm -f "$tmp"
+        echo -e "${YELLOW}No entries needed commenting out${NC}"
+        return 0
+    fi
+    if sudo cp "$tmp" /etc/fstab; then
+        rm -f "$tmp"
+        sudo systemctl daemon-reload 2>/dev/null
+        echo -e "${GREEN}✓ Commented out $changed invalid entry/entries (original file backed up at $backup)${NC}"
+        return 0
+    fi
+    rm -f "$tmp"
+    echo -e "${RED}✗ Write failed, /etc/fstab was not modified${NC}"
+    return 1
+}
+
+# Interactive repair entry point
+hc_run_fixes() {
+    if [ ${#HC_FIXABLE[@]} -eq 0 ]; then
+        echo -e "${GREEN}No problems that can be fixed automatically were found.${NC}"
+        return 0
+    fi
+    if ! sudo -v 2>/dev/null; then
+        echo -e "${RED}✗ Repair requires sudo permission, skipped${NC}"
+        return 1
+    fi
+    echo -e "${YELLOW}════════════════ Starting the repair ════════════════${NC}"
+    local item state title fn
+    for item in "${HC_FIXABLE[@]}"; do
+        state="${item%%|*}"
+        title="${item#*|}"; title="${title%%|*}"
+        fn="${item##*|}"
+        echo ""
+        echo -e "${CYAN}Repair: $title${NC}"
+        case "$fn" in
+            fix_boot)
+                hc_repair_boot
+                ;;
+            fix_shared_disk)
+                # "Repair shared drive" clears the screen and reopens an interactive UI; here its core action is executed directly
+                hc_repair_mount
+                ;;
+            *)
+                if declare -f "$fn" >/dev/null; then
+                    "$fn"
+                else
+                    echo -e "${RED}Internal error: repair function $fn does not exist${NC}"
+                fi
+                ;;
+        esac
+        if [ $? -ne 0 ]; then
+            echo -e "${YELLOW}This repair did not succeed, please check the messages above${NC}"
+        fi
+    done
+    echo ""
+    echo -e "${YELLOW}Tip: after repairing, run the health check again to confirm the result.${NC}"
+}
+
+# ---------------------------------------------------------------------------
+# Boot repair inlined in the health check (reuses fix_boot's detection and rebuild logic, without reopening a separate UI)
+# ---------------------------------------------------------------------------
+hc_repair_boot() {
+    if ! detect_esp_partition; then
+        echo -e "${RED}✗ Cannot identify the ESP partition, repair aborted${NC}"
+        return 1
+    fi
+    local efi_out
+    efi_out=$(efibootmgr 2>/dev/null || true)
+    local ro_fix_ok=0
+
+    # 1) Clover boot entry
+    if echo "$efi_out" | grep -qi "clover"; then
+        echo -e "${CYAN}Clover boot entry already exists, skipping the rebuild${NC}"
+    else
+        echo -e "${CYAN}Rebuilding the Clover boot entry ($ESP_DISK partition $ESP_PARTN)...${NC}"
+        # Clean up leftover entries with the same name
+        local old
+        for old in $(echo "$efi_out" | grep -i "clover" | grep -o 'Boot[0-9A-Fa-f]\{4\}' | sed 's/Boot//'); do
+            sudo efibootmgr -b "$old" -B &>/dev/null || true
+        done
+        if sudo efibootmgr -c -d "$ESP_DISK" -p "$ESP_PARTN" \
+            -L "Clover - GUI Boot Manager" -l '\EFI\clover\cloverx64.efi' &>/dev/null; then
+            echo -e "${GREEN}✓ Clover boot entry rebuilt${NC}"
+            ro_fix_ok=1
+        else
+            echo -e "${RED}✗ Failed to rebuild the Clover boot entry${NC}"
+            echo -e "${YELLOW}  cloverx64.efi may be missing on the ESP, please use Install/Reinstall Clover${NC}"
+            return 1
+        fi
+    fi
+
+    # 2) SteamOS boot entry
+    if echo "$efi_out" | grep -qi "steamos\|steamcl"; then
+        echo -e "${CYAN}SteamOS boot entry already exists, skipping the rebuild${NC}"
+    else
+        echo -e "${CYAN}Rebuilding the SteamOS boot entry...${NC}"
+        if sudo efibootmgr -c -d "$ESP_DISK" -p "$ESP_PARTN" \
+            -L "SteamOS" -l '\EFI\steamos\steamcl.efi' &>/dev/null; then
+            echo -e "${GREEN}✓ SteamOS boot entry rebuilt${NC}"
+            ro_fix_ok=1
+        else
+            echo -e "${RED}✗ Failed to rebuild the SteamOS boot entry${NC}"
+        fi
+    fi
+
+    # 3) Make Clover the first boot entry
+    local cl
+    cl=$(efibootmgr 2>/dev/null | grep -i "clover" | grep -o 'Boot[0-9A-Fa-f]\{4\}' | head -1 | sed 's/Boot//')
+    if [ -n "$cl" ]; then
+        local cur new
+        cur=$(efibootmgr 2>/dev/null | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
+        new="$cl"
+        if [ -n "$cur" ]; then
+            new="$cl,$(echo "$cur" | tr ',' '\n' | grep -vx "$cl" | tr '\n' ',' | sed 's/,$//')"
+        fi
+        if [ "$cur" = "$new" ]; then
+            echo -e "${CYAN}Clover is already the first boot entry, no adjustment needed${NC}"
+        else
+            echo -e "${CYAN}Adjusting the boot order: ${cur:-empty} -> $new${NC}"
+            if sudo efibootmgr -o "$new" &>/dev/null; then
+                echo -e "${GREEN}✓ Clover set as the first boot entry${NC}"
+            else
+                echo -e "${RED}✗ Failed to adjust the boot order${NC}"
+                return 1
+            fi
+        fi
+    else
+        echo -e "${YELLOW}⚠ Clover boot entry not found, cannot set the boot order${NC}"
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Mount repair inlined in the health check: write the Windows (NTFS) partition into fstab for automatic mounting
+# ---------------------------------------------------------------------------
+hc_repair_mount() {
+    echo -e "${CYAN}Configuring automatic mounting at boot for NTFS partitions...${NC}"
+    # fstab must be backed up before writing: a broken fstab can make the next boot fail
+    local backup="/etc/fstab.backup.$(date +%Y%m%d_%H%M%S)"
+    if ! sudo cp /etc/fstab "$backup" 2>/dev/null; then
+        echo -e "${RED}✗ Cannot back up /etc/fstab, modification aborted for safety${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ /etc/fstab backed up to $backup${NC}"
+    local changed=0 failed=0
+    local line nm fs lb mp uuid
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        nm=$(echo "$line" | sed -n 's/.*NAME="\([^"]*\)".*/\1/p')
+        fs=$(echo "$line" | sed -n 's/.*FSTYPE="\([^"]*\)".*/\1/p')
+        lb=$(echo "$line" | sed -n 's/.*LABEL="\([^"]*\)".*/\1/p')
+        mp=$(echo "$line" | sed -n 's/.*MOUNTPOINT="\([^"]*\)".*/\1/p')
+        uuid=$(echo "$line" | sed -n 's/.*UUID="\([^"]*\)".*/\1/p')
+        case "$fs" in ntfs|fuseblk|ntfs3) ;; *) continue;; esac
+        [ -n "$uuid" ] || continue
+        # Skip if this UUID is already matched exactly in fstab
+        if awk -v k="UUID=$uuid" '$1 == k {found=1} END {exit !found}' /etc/fstab 2>/dev/null; then
+            echo -e "${CYAN}  $nm is already in fstab, skipping${NC}"
+            continue
+        fi
+        # Decide the mount point: prefer the current mount point, otherwise /run/media/<user>/<label>
+        local target="${mp:-}"
+        if [ -z "$target" ] || [ "$target" = "None" ]; then
+            target="/run/media/${CURRENT_USER}/${lb:-$nm}"
+        fi
+        echo -e "${CYAN}  Adding $nm (UUID=$uuid) -> $target${NC}"
+        if echo "UUID=$uuid $target ntfs3 defaults,nofail,uid=1000,gid=1000 0 0" | sudo tee -a /etc/fstab >/dev/null; then
+            changed=$((changed + 1))
+        else
+            failed=$((failed + 1))
+        fi
+    done < <(lsblk -P -n -o NAME,FSTYPE,LABEL,MOUNTPOINT,UUID 2>/dev/null)
+
+    if [ "$changed" -gt 0 ]; then
+        sudo systemctl daemon-reload 2>/dev/null
+        echo -e "${GREEN}✓ Added $changed automatic mount entry/entries${NC}"
+        echo -e "${CYAN}  Testing the mount now...${NC}"
+        sudo mount -a 2>&1 | head -5 || true
+    else
+        echo -e "${CYAN}No mount entries need to be added${NC}"
+    fi
+    [ "$failed" -gt 0 ] && { echo -e "${RED}✗ $failed entry/entries failed to write${NC}"; return 1; }
+    return 0
+}
+
+health_check() {
+    mk_temp_dir
+    clear
+    echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║      SteamOS Health Check (post-update)       ║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo "For troubleshooting the common issues after a SteamOS update: missing disk, missing boot entry, mount failure."
+    echo "The checks are read-only; repairs are performed only after your confirmation."
+    echo ""
+    echo "Checking now; sudo permission is needed to read the EFI partition contents..."
+    if ! sudo -v 2>/dev/null; then
+        echo -e "${YELLOW}⚠ No sudo permission: some checks (ESP contents, boot entries) cannot be completed${NC}"
+    fi
+    echo ""
+    echo -e "${CYAN}──────────────── Check results ────────────────${NC}"
+    echo ""
+    hc_check_esp
+    hc_check_efi_entries
+    hc_check_clover_files
+    hc_check_windows_partition
+    hc_check_fstab
+    hc_check_system
+    echo -e "${CYAN}──────────────── Summary ────────────────${NC}"
+    echo -e "  $HC_TOTAL item(s) checked: ${GREEN}OK $HC_OK${NC} | ${YELLOW}Warning $HC_WARN${NC} | ${RED}Error $HC_FAIL${NC}"
+    echo ""
+
+    # The conclusion is based on the number of "fail" items, not "warn":
+    # "warn" items are mostly environment differences (e.g. the Windows boot entry taken over by Clover, small ESP free space),
+    # and do not mean boot or mounting is broken; the user should not be made to think the system is faulty.
+    if [ "$HC_FAIL" -eq 0 ]; then
+        if [ "$HC_WARN" -eq 0 ]; then
+            echo -e "${GREEN}✅ Conclusion: the system is in good shape, no problems found.${NC}"
+        else
+            echo -e "${GREEN}✅ Conclusion: no errors found, boot and mounting are normal.${NC}"
+            echo -e "${CYAN}   There are also $HC_WARN warning item(s), which are environment differences or optional optimizations and do not affect use (see the [Warning] items above).${NC}"
+        fi
+        if [ ${#HC_FIXABLE[@]} -gt 0 ]; then
+            echo ""
+            echo -e "${YELLOW}${#HC_FIXABLE[@]} of them can be optimized automatically. Handle them now?${NC}"
+            local ans
+            if read -p "Press y to handle, any other key to skip: " -n 1 -r ans < /dev/tty 2>/dev/null; then
+                echo ""
+                if [[ "$ans" =~ ^[Yy]$ ]]; then
+                    hc_run_fixes
+                else
+                    echo "Skipped. Run the health check again later to handle them."
+                fi
+            else
+                echo -e "${YELLOW}Cannot read input (non-interactive environment), skipped.${NC}"
+            fi
+        fi
+        echo ""
+        return 0
+    fi
+
+    # Reaching here means there really are "fail" items, so prompt that action is needed
+    echo -e "${RED}❌ Conclusion: $HC_FAIL error item(s) found, action is needed.${NC}"
+    if [ ${#HC_FIXABLE[@]} -gt 0 ]; then
+        echo -e "${YELLOW}${#HC_FIXABLE[@]} of them can be fixed automatically:${NC}"
+        local item title
+        for item in "${HC_FIXABLE[@]}"; do
+            title="${item#*|}"; title="${title%%|*}"
+            echo "   · $title"
+        done
+        local ans
+        if read -p "Repair now? (y/N): " -n 1 -r ans < /dev/tty 2>/dev/null; then
+            echo ""
+            if [[ "$ans" =~ ^[Yy]$ ]]; then
+                hc_run_fixes
+            else
+                echo "Repair skipped. Run the health check again later and choose repair."
+            fi
+        else
+            echo -e "${YELLOW}Cannot read input (non-interactive environment), repair skipped.${NC}"
+            echo "To repair, follow the 'can be fixed automatically' hints above and handle them manually."
+        fi
+    else
+        echo -e "${YELLOW}The above errors need manual handling, please follow the hints of the [Error] items above.${NC}"
+    fi
+    echo ""
+    echo -e "${CYAN}Common causes and suggestions:${NC}"
+    echo "  · Clover boot entry disappeared after a SteamOS update -> rebuild it with Repair in this feature, or reinstall Clover"
+    echo "  · Windows partitions no longer mount automatically -> run Repair shared drive"
+    echo "  · Clover files on the ESP were overwritten -> reinstall Clover (Boot Management -> Install/Reinstall Clover)"
+    echo "  · Completely unbootable / cannot enter the system -> rescue with a SteamOS recovery USB; this tool cannot handle that"
+}
+
+install_uu_accelerator() {
+    mk_temp_dir; clear
+    echo -e "${YELLOW}════════════════ Install the UU accelerator plugin ════════════════${NC}"
+    if curl -s uudeck.com | sudo sh; then
+        echo -e "${GREEN}✓ UU accelerator plugin installed.${NC}"
+    else
+        echo -e "${RED}✗ Installation failed (the script returned an error code), please check your network and try again.${NC}"
+        return 1
+    fi
+}
+
+install_xunyou_accelerator() {
+    mk_temp_dir; clear
+    echo -e "${YELLOW}════════════════ Install the Xunyou accelerator plugin ════════════════${NC}"
+    if curl -s sd.xunyou.com | sudo sh; then
+        echo -e "${GREEN}✓ Xunyou accelerator plugin installed.${NC}"
+    else
+        echo -e "${RED}✗ Installation failed (the script returned an error code), please check your network and try again.${NC}"
+        return 1
+    fi
+}
+
+install_qiyou_accelerator() {
+    mk_temp_dir; clear
+    echo -e "${YELLOW}════════════════ Install the Qiyou accelerator plugin ════════════════${NC}"
+    if curl -s sd.qiyou.cn | sudo sh; then
+        echo -e "${GREEN}✓ Qiyou accelerator plugin installed.${NC}"
+    else
+        echo -e "${RED}✗ Installation failed (the script returned an error code), please check your network and try again.${NC}"
+        return 1
+    fi
+}
+
+install_asklink() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ AskLink remote assistance ════════════════${NC}"
+
+    if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
+        echo -e "${GREEN}AskLink is installed.${NC}"
+        echo -e "${YELLOW}Press Enter/A to uninstall, press any other key to keep it installed and exit.${NC}"
+        read -p "Please choose: " -n 1 -r < /dev/tty
+        echo ""
+        if [[ $REPLY == "" ]]; then
+            echo -e "${CYAN}Uninstalling AskLink...${NC}"
+            sudo rm -rf /opt/AskLink
+            rm -f "$HOME/Desktop/AskLink.desktop"
+            sudo rm -f /usr/share/applications/AskLink.desktop
+            rm -f "$HOME/.local/share/applications/AskLink.desktop"
+            if [ -d "$HOME/Documents/AskLink" ]; then
+                rm -rf "$HOME/Documents/AskLink"
+                echo -e "${CYAN}Deleted the config directory $HOME/Documents/AskLink${NC}"
+            fi
+            echo -e "${GREEN}✅ AskLink uninstalled.${NC}"
+        else
+            echo -e "${GREEN}Keeping AskLink installed.${NC}"
+        fi
+        return 0
+    fi
+
+    echo -e "${CYAN}Checking the SteamOS read-only state...${NC}"
+    if command -v steamos-readonly &>/dev/null; then
+        if steamos-readonly status 2>/dev/null | grep -q "enabled"; then
+            echo -e "${CYAN}Disabling read-only mode...${NC}"
+            if ! sudo steamos-readonly disable; then
+                echo -e "${RED}Failed to disable read-only mode, please run manually: sudo steamos-readonly disable${NC}"
+                return 1
+            fi
+            RO_READONLY_DISABLED_BY_US=1
+        else
+            echo -e "${GREEN}Read-only mode disabled${NC}"
+        fi
+    fi
+
+    if ! command -v dpkg &>/dev/null; then
+        echo -e "${CYAN}dpkg not detected, installing...${NC}"
+        if command -v pacman &>/dev/null; then
+            sudo pacman -S --noconfirm dpkg
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}Failed to install dpkg, please run manually: sudo pacman -S dpkg${NC}"
+                return 1
+            fi
+            echo -e "${GREEN}dpkg installation complete${NC}"
+        else
+            echo -e "${RED}No package manager found, cannot install dpkg. Please install dpkg manually.${NC}"
+            return 1
+        fi
+    else
+        echo -e "${GREEN}dpkg already present${NC}"
+    fi
+
+    local ASKLINK_URL="https://dl.asklink.com/linux/4.0.33.0/AskLink-4.0.33.0-x86_64.deb"
+    local FILENAME="AskLink-4.0.33.0-x86_64.deb"
+
+    echo -e "${CYAN}Download address: ${ASKLINK_URL}${NC}"
+    echo -e "${CYAN}Downloading ${FILENAME} ...${NC}"
+
+    cd "$TEMP_DIR" || return
+    if command -v wget &>/dev/null; then
+        wget --show-progress "$ASKLINK_URL" -O "$FILENAME"
+    else
+        curl -L --fail --progress-bar "$ASKLINK_URL" -o "$FILENAME"
+    fi
+    if [ $? -ne 0 ] || [ ! -f "$FILENAME" ]; then
+        echo -e "${RED}Download failed.${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}Installing...${NC}"
+    sudo dpkg --force-depends -i "$FILENAME" 2>/dev/null
+
+    rm -f "$FILENAME"
+
+    if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
+        echo -e "${GREEN}✅ AskLink installed successfully!${NC}"
+        local DESKTOP_FILE="$HOME/Desktop/AskLink.desktop"
+        cat > "$DESKTOP_FILE" << EOF
+[Desktop Entry]
+Type=Application
+Name=AskLink
+Comment=Remote assistance tool
+Exec=/opt/AskLink/AskLink
+Icon=AskLink
+Terminal=false
+Categories=Network;RemoteAccess;
+EOF
+        chmod +x "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ Desktop shortcut created.${NC}"
+    else
+        echo -e "${RED}Installation failed, please check manually.${NC}"
+        return 1
+    fi
+
+    echo -e "${GREEN}AskLink installation finished.${NC}"
+}
+
+watt_toolkit_install() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}═══════ Install/Update Watt Toolkit (Steam++) ═══════${NC}"
+    echo ""
+
+    local INSTALL_DIR="$HOME/Watt Toolkit"
+    local DESKTOP_DIR="$HOME/Desktop"
+    local DOWNLOAD_URL="https://gitee.com/rmbgame/SteamTools/releases/download/3.1.0/Steam%20%20_v3.1.0_linux_x64.tgz"
+    local VERSION="3.1.0"
+    local trust_now=""
+
+    for cmd in curl sudo unzip tar; do
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "${RED}Error: $cmd command not found, please install it first.${NC}"
+            return 1
+        fi
+    done
+
+    local installed_version=""
+    local has_install=false
+    if [ -d "$INSTALL_DIR" ]; then
+        has_install=true
+        if [ -f "$INSTALL_DIR/.version" ]; then
+            installed_version=$(cat "$INSTALL_DIR/.version")
+            echo -e "${CYAN}Currently installed version: ${installed_version}${NC}"
+        else
+            echo -e "${YELLOW}Install directory found, but version number could not be read.${NC}"
+        fi
+    else
+        echo -e "${YELLOW}No installed Watt Toolkit detected.${NC}"
+    fi
+
+    if $has_install; then
+        if [ -n "$installed_version" ] && [ "$installed_version" = "$VERSION" ]; then
+            echo -e "${GREEN}✅ Already up to date (${installed_version}); nothing to do.${NC}"
+            return 0
+        fi
+        # 已安装但版本不同或无法读取 → 先询问再下载，避免静默覆盖
+        if [ -n "$installed_version" ]; then
+            echo -e "${YELLOW}New version detected ${VERSION} (currently installed: ${installed_version}).${NC}"
+        else
+            echo -e "${YELLOW}Will re-download and install version ${VERSION}.${NC}"
+        fi
+        read -n1 -p "Press Enter or A to continue download/install; any other key cancels: " confirm < /dev/tty
+        echo
+        if [[ -n "$confirm" && ! "$confirm" =~ [Aa] ]]; then
+            echo "Operation cancelled."
+            return 0
+        fi
+    fi
+
+    echo -e "${GREEN}Will install version: ${VERSION}${NC}"
+    echo "Downloading ${DOWNLOAD_URL} ..."
+
+    local temp_dir="/tmp/watt_toolkit_install"
+    rm -rf "$temp_dir"
+    mkdir -p "$temp_dir"
+    cd "$temp_dir" || return 1
+
+    local filename="Steam_v${VERSION}_linux_x64.tgz"
+    curl -L --progress-bar -o "$filename" "$DOWNLOAD_URL"
+    if [ $? -ne 0 ] || [ ! -f "$filename" ]; then
+        echo -e "${RED}Download failed, please check your network and try again.${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}Extracting...${NC}"
+    local temp_extract="$temp_dir/extracted"
+    mkdir -p "$temp_extract"
+    if ! tar -xzf "$filename" -C "$temp_extract"; then
+        echo -e "${RED}Extraction failed.${NC}"
+        rm -rf "$temp_dir"
+        return 1
+    fi
+
+    local content_count=$(ls -1 "$temp_extract" | wc -l)
+    local first_item=$(ls -1 "$temp_extract" | head -1)
+
+    if [ -d "$INSTALL_DIR" ]; then
+        echo "Old install directory found; deleting..."
+        rm -rf "$INSTALL_DIR"
+    fi
+    mkdir -p "$INSTALL_DIR"
+
+    if [ $content_count -eq 1 ] && [ -d "$temp_extract/$first_item" ]; then
+        echo -e "${CYAN}Top-level directory detected; moving contents into $INSTALL_DIR ...${NC}"
+        shopt -s dotglob
+        mv "$temp_extract/$first_item"/* "$INSTALL_DIR/"
+        shopt -u dotglob
+        find "$temp_extract/$first_item" -maxdepth 1 -name ".*" ! -name "." ! -name ".." -exec mv {} "$INSTALL_DIR/" \;
+        rm -rf "$temp_extract/$first_item"
+    else
+        echo -e "${CYAN}Moving all contents into $INSTALL_DIR ...${NC}"
+        shopt -s dotglob
+        mv "$temp_extract"/* "$INSTALL_DIR/"
+        shopt -u dotglob
+        find "$temp_extract" -maxdepth 1 -name ".*" ! -name "." ! -name ".." -exec mv {} "$INSTALL_DIR/" \;
+    fi
+
+    rm -rf "$temp_dir"
+
+
+    echo "$VERSION" > "$INSTALL_DIR/.version"
+
+    local desktop_file="$DESKTOP_DIR/Watt_Toolkit.desktop"
+    local dotnet_root="$INSTALL_DIR/dotnet"
+    local dll_path="$INSTALL_DIR/assemblies/Steam++.dll"
+    local icon_path="$INSTALL_DIR/Icons/Watt-Toolkit.png"
+
+    if [ ! -f "$dll_path" ] || [ ! -f "$dotnet_root/dotnet" ]; then
+        echo -e "${RED}Error: key files missing; install may be incomplete.${NC}"
+        echo "Please inspect the contents of $INSTALL_DIR."
+        return 1
+    fi
+
+    cat > "$desktop_file" << EOF
+[Desktop Entry]
+Categories=Network;Game;
+Comment[zh_CN]=Steam Toolbox
+Comment=Steam Toolbox
+Exec=env 'DOTNET_ROOT=${dotnet_root}' '${dotnet_root}/dotnet' '${dll_path}'
+GenericName[zh_CN]=
+GenericName=
+Icon=${icon_path}
+MimeType=
+Name[zh_CN]=Watt Toolkit (Steam++)
+Name=Watt Toolkit (Steam++)
+Path=
+StartupNotify=true
+Terminal=false
+TerminalOptions=
+Type=Application
+X-KDE-SubstituteUID=false
+X-KDE-Username=
+EOF
+    chmod +x "$desktop_file"
+    echo -e "${GREEN}✓ Desktop shortcut created: ${desktop_file}${NC}"
+
+    echo ""
+    echo -e "${GREEN}✅ Watt Toolkit ${VERSION} installed!${NC}"
+    echo -e "${GREEN}Install directory: ${INSTALL_DIR}${NC}"
+    echo ""
+    echo -e "${YELLOW}Tips:${NC}"
+    echo "  · Please launch Watt Toolkit from the desktop."
+    echo "  · Before first acceleration, let the plugin generate a certificate: click Accelerate once under Network Acceleration."
+    echo "  · After the certificate is generated, run Trust Certificate in this tool so acceleration does not fail."
+    echo ""
+
+    # ---------- 安装后直接进入证书信任 ----------
+    echo -e "${YELLOW}Acceleration also needs a trusted certificate, or HTTPS accel will fail.${NC}"
+    read -n1 -p "Trust the acceleration certificate now? [Enter/A=yes, other=later] " trust_now < /dev/tty
+    echo
+    if [[ -z "$trust_now" || "$trust_now" =~ [Aa] ]]; then
+        watt_toolkit_trust_cert skip_clear
+    else
+        echo -e "${CYAN}Skipped. You can run it later under Network Tools → Watt Toolkit (Steam++) → Trust Certificate.${NC}"
+    fi
+}
+
+watt_toolkit_trust_cert() {
+    # 从安装流程调用时传 skip_clear，避免把安装结果摘要清掉
+    [ "${1:-}" = "skip_clear" ] || clear
+    echo -e "${YELLOW}═══════ Trust Watt Toolkit (Steam++) acceleration certificate ═══════${NC}"
+    echo ""
+    echo "Acceleration needs three system-level changes:"
+    echo "  1. Add Watt Toolkit's self-signed root certificate to the system trust store (otherwise HTTPS acceleration fails)"
+    echo "  2. Allow writing /etc/hosts (acceleration redirects domains via hosts)"
+    echo "  3. Allow reading /etc/hosts (Watt Toolkit reads hosts to apply incremental changes)"
+    echo ""
+    echo -e "${YELLOW}Security note:${NC}"
+    echo "  This certificate is a root CA generated locally by Watt Toolkit (CN=SteamTools Certificate),"
+    echo "  Trusting it means a process with the matching private key can decrypt local HTTPS traffic."
+    echo "  When you stop using Watt Toolkit, remove this trust (see uninstall tips)."
+    echo ""
+
+    local CERT_DIR="$HOME/.local/share/Steam++/Plugins/Accelerator"
+    local CERT_FILE="$CERT_DIR/SteamTools.Certificate.cer"
+    local INSTALL_DIR="$HOME/Watt Toolkit"
+    local launch_now="" retry=""
+
+    # ---------- 前置检查 ----------
+    if ! command -v trust &>/dev/null; then
+        echo -e "${RED}✗ trust command not found (from p11-kit); cannot write to the system trust store.${NC}"
+        echo -e "${YELLOW}  Try: sudo pacman -S p11-kit${NC}"
+        return 1
+    fi
+
+    # ---------- 证书存在性 ----------
+    # 证书不是安装包自带的，而是 Watt Toolkit 首次运行时加速插件生成的，
+    # 所以刚装完通常还没有，需要用户先启动软件并点一次「加速」。
+    if [ ! -f "$CERT_FILE" ]; then
+        echo -e "${YELLOW}Acceleration certificate not found:${NC}"
+        echo "  $CERT_FILE"
+        echo ""
+        echo "This certificate is generated the first time Watt Toolkit runs; it is not in the package."
+        echo "Please start Watt Toolkit, click Accelerate once under Network Acceleration, then the certificate will appear."
+        echo ""
+
+        if [ -x "$INSTALL_DIR/Steam++.sh" ]; then
+            read -n1 -p "Launch Watt Toolkit now? [Enter/A=launch, other=skip] " launch_now < /dev/tty
+            echo
+            if [[ -z "$launch_now" || "$launch_now" =~ [Aa] ]]; then
+                nohup "$INSTALL_DIR/Steam++.sh" >/dev/null 2>&1 &
+                echo -e "${GREEN}✓ Watt Toolkit launched${NC}"
+                echo ""
+            fi
+        else
+            echo -e "${YELLOW}$INSTALL_DIR/Steam++.sh not found; please launch from the desktop shortcut.${NC}"
+            echo ""
+        fi
+
+        # 等用户操作完再检测；Q 可放弃，避免卡死在循环里
+        local wait_count=0
+        while [ ! -f "$CERT_FILE" ]; do
+            wait_count=$((wait_count + 1))
+            if [ "$wait_count" -gt 30 ]; then
+                echo -e "${YELLOW}Timed out waiting; exited. Rerun this after the certificate is generated.${NC}"
+                return 0
+            fi
+            read -n1 -p "After clicking Accelerate once in Watt Toolkit, press Enter to re-check (Q to abort): " retry < /dev/tty
+            echo
+            if [[ "${retry:-}" =~ [Qq] ]]; then
+                echo -e "${CYAN}Aborted. You can run Trust Certificate again after generating the cert.${NC}"
+                return 0
+            fi
+        done
+        echo ""
+    fi
+
+    echo -e "${GREEN}✓ Certificate found: $CERT_FILE${NC}"
+
+    # ---------- 证书校验 ----------
+    if command -v openssl &>/dev/null; then
+        local cert_subject cert_end
+        if ! cert_subject=$(openssl x509 -in "$CERT_FILE" -noout -subject 2>/dev/null); then
+            echo -e "${RED}✗ Certificate could not be parsed; file may be corrupt.${NC}"
+            echo -e "${YELLOW}  Regenerate the certificate in Watt Toolkit and try again.${NC}"
+            return 1
+        fi
+        echo "  $cert_subject"
+        cert_end=$(openssl x509 -in "$CERT_FILE" -noout -enddate 2>/dev/null | cut -d= -f2)
+        [ -n "$cert_end" ] && echo "  Valid until: $cert_end"
+        if ! openssl x509 -in "$CERT_FILE" -noout -checkend 0 &>/dev/null; then
+            echo -e "${RED}✗ Certificate expired; regenerate it inside Watt Toolkit first.${NC}"
+            return 1
+        fi
+    else
+        # 没有 openssl 时至少确认是 PEM 证书，避免把垃圾文件写进信任库
+        if ! grep -q "BEGIN CERTIFICATE" "$CERT_FILE" 2>/dev/null; then
+            echo -e "${RED}✗ File is not a valid PEM certificate; aborted.${NC}"
+            return 1
+        fi
+    fi
+
+    # ---------- 已信任检测 ----------
+    local already_trusted=false
+    if trust list 2>/dev/null | grep -qi "SteamTools Certificate"; then
+        already_trusted=true
+        echo ""
+        echo -e "${CYAN}Certificate already in the system trust store; this run will overwrite it.${NC}"
+    fi
+
+    echo ""
+    read -n1 -p "Press Enter or A to write the system trust store and adjust /etc/hosts permissions; any other key cancels: " confirm < /dev/tty
+    echo
+    if [[ -n "$confirm" && ! "$confirm" =~ [Aa] ]]; then
+        echo -e "${GREEN}Cancelled; no changes made.${NC}"
+        return 0
+    fi
+
+    # ---------- 解除只读（写 /etc 需要） ----------
+    if ! ensure_writable; then return 1; fi
+
+    # ---------- 写入信任库 ----------
+    echo ""
+    echo -e "${CYAN}Writing certificate into the system trust store...${NC}"
+    if sudo trust anchor --store "$CERT_FILE"; then
+        echo -e "${GREEN}✓ Certificate added to the system trust store${NC}"
+    else
+        echo -e "${RED}✗ Failed to write trust store; check output above.${NC}"
+        return 1
+    fi
+
+    if trust list 2>/dev/null | grep -qi "SteamTools Certificate"; then
+        echo -e "${GREEN}✓ Certificate confirmed in the trust store${NC}"
+    else
+        echo -e "${YELLOW}⚠ Could not confirm the certificate from trust list; check manually: trust list | grep -i steam${NC}"
+    fi
+
+    # ---------- /etc/hosts 权限 ----------
+    # 加速靠改 hosts 实现，Watt Toolkit 以普通用户运行，需要读写权限才不用每次提权。
+    echo ""
+    echo -e "${CYAN}Adjusting /etc/hosts permissions...${NC}"
+    if sudo chmod a+w /etc/hosts && sudo chmod a+r /etc/hosts; then
+        echo -e "${GREEN}✓ /etc/hosts permissions adjusted${NC}"
+    else
+        echo -e "${RED}✗ Failed to adjust /etc/hosts permissions${NC}"
+        return 1
+    fi
+    local hosts_perm
+    hosts_perm=$(stat -c '%A' /etc/hosts 2>/dev/null)
+    [ -n "$hosts_perm" ] && echo "  Current permissions: $hosts_perm"
+
+    # ---------- 结果 ----------
+    echo ""
+    echo -e "${GREEN}✅ Acceleration certificate trusted${NC}"
+    echo -e "${YELLOW}Tip:${NC}"
+    echo "  · Open browsers must be restarted to reload the system certificate store"
+    echo "  · If Watt Toolkit regenerated the certificate, run this feature again"
+    if $already_trusted; then
+        echo "  · This was an overwrite update; the old certificate was replaced"
+    fi
+}
+
+watt_toolkit_uninstall() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}══════════════ Uninstall Watt Toolkit ══════════════${NC}"
+    local INSTALL_DIR="$HOME/Watt Toolkit"
+    local DESKTOP_DIR="$HOME/Desktop"
+
+    if [ ! -d "$INSTALL_DIR" ]; then
+        echo -e "${YELLOW}No installed Watt Toolkit detected.${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}Uninstalling Watt Toolkit...${NC}"
+    echo "Will delete this directory: ${INSTALL_DIR}"
+    echo "Will delete desktop shortcut: ${DESKTOP_DIR}/Watt_Toolkit.desktop"
+    echo ""
+
+    read -n1 -p "Press Enter or A to confirm uninstall; any other key cancels: " confirm < /dev/tty
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "Continuing the uninstall..."
+    else
+        echo "Uninstall cancelled."
+        return 0
+    fi
+
+    if rm -rf "$INSTALL_DIR"; then
+        echo -e "${GREEN}✓ Install directory deleted${NC}"
+    else
+        echo -e "${RED}✗ Failed to delete install directory${NC}"
+    fi
+
+    if rm -f "${DESKTOP_DIR}/Watt_Toolkit.desktop"; then
+        echo -e "${GREEN}✓ Desktop shortcut deleted${NC}"
+    else
+        echo -e "${RED}✗ Failed to delete desktop shortcut${NC}"
+    fi
+
+    echo ""
+    # ---------- 清理信任证书与 hosts 权限 ----------
+    # 安装时「信任证书」把自签根证书写进了系统信任库、并放宽了 /etc/hosts 权限，
+    # 卸载后这些都得收回来，否则等于留下一张能解密 https 的根证书和可写的 hosts。
+    local cert_dir="$HOME/.local/share/Steam++/Plugins/Accelerator"
+    local cert_file="$cert_dir/SteamTools.Certificate.cer"
+    local trusted=false
+    trust list 2>/dev/null | grep -qi "SteamTools Certificate" && trusted=true
+    # 只有 others 的写权限位真的开着才提示，避免误报（比如用户从没跑过信任证书）
+    # stat -c %A 输出的第 9 个字符即 others 的写位，如 -rw-rw-rw- 的末位是 w
+    local hosts_open=false
+    local hosts_perm_now
+    hosts_perm_now=$(stat -c '%A' /etc/hosts 2>/dev/null)
+    [ "${hosts_perm_now:8:1}" = "w" ] && hosts_open=true
+
+    if $trusted || $hosts_open; then
+        echo -e "${YELLOW}Watt Toolkit left some system-level changes:${NC}"
+        $trusted && echo "  • SteamTools root certificate is still in the system trust store (can decrypt local HTTPS)"
+        $hosts_open && echo "  • /etc/hosts was loosened to world-writable (currently $(stat -c '%A' /etc/hosts 2>/dev/null))"
+        echo ""
+        read -n1 -p "Also clear system changes (remove root cert + restore hosts permissions)? [Enter/A=clear, other=keep] " clean_sys < /dev/tty
+        echo
+        if [[ -z "$clean_sys" || "$clean_sys" =~ [Aa] ]]; then
+            if ! ensure_writable; then return 1; fi
+
+            # 移除信任：优先用 trust anchor --remove，失败再从 trust list 里取 pkcs11 id 兜底
+            if $trusted; then
+                echo -e "${CYAN}Removing SteamTools certificate from the system trust store...${NC}"
+                if [ -f "$cert_file" ] && sudo trust anchor --remove "$cert_file" 2>/dev/null; then
+                    echo -e "${GREEN}✓ Certificate removed${NC}"
+                else
+                    # 证书文件已被删掉时，只能从信任库里反查锚点 id
+                    local anchor_id
+                    anchor_id=$(trust list 2>/dev/null | grep -i -B 1 "label: SteamTools Certificate" \
+                                | grep -o 'pkcs11:id=[^;]*;type=cert' | head -1)
+                    if [ -n "$anchor_id" ] && sudo trust anchor --remove "$anchor_id" 2>/dev/null; then
+                        echo -e "${GREEN}✓ Certificate removed${NC}"
+                    else
+                        echo -e "${YELLOW}⚠ Automatic removal failed; run manually:${NC}"
+                        echo "    trust list | grep -i -B1 'SteamTools'   # view anchors"
+                        echo "    sudo trust anchor --remove '<pkcs11:id=... above>'"
+                    fi
+                fi
+            fi
+
+            # 恢复 /etc/hosts 权限为常规的 644（属主可写，其他只读）
+            echo -e "${CYAN}Restoring /etc/hosts permissions...${NC}"
+            if sudo chmod 644 /etc/hosts 2>/dev/null; then
+                echo -e "${GREEN}✓ /etc/hosts restored to 644 (world-writable bit removed)${NC}"
+            else
+                echo -e "${YELLOW}⚠ Restore failed; run manually: sudo chmod 644 /etc/hosts${NC}"
+            fi
+            local hosts_perm
+            hosts_perm=$(stat -c '%A' /etc/hosts 2>/dev/null)
+            [ -n "$hosts_perm" ] && echo "  Current permissions: $hosts_perm"
+
+            # 信任库变更后刷新系统证书包
+            if command -v update-ca-trust &>/dev/null; then
+                sudo update-ca-trust 2>/dev/null || true
+            fi
+        else
+            echo -e "${YELLOW}Kept certificate trust and hosts permissions.${NC}"
+            echo -e "${YELLOW}To clear manually:${NC}"
+            echo "    sudo trust anchor --remove \"$cert_file\""
+            echo "    sudo chmod 644 /etc/hosts"
+        fi
+    fi
+
+    echo ""
+    echo -e "${GREEN}✅ Watt Toolkit uninstalled.${NC}"
+}
+
+install_github_plugin() {
+    local GITHUB_REPO="$1"
+    local PLUGIN_DIR="$2"
+    local DISPLAY_NAME="$3"
+    local PLUGIN_PATH="$HOME/homebrew/plugins/${PLUGIN_DIR}"
+    local VERSION_FILE="$PLUGIN_PATH/package.json"
+    local TEMP_DIR="/tmp/${DISPLAY_NAME}_install"
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Install/Update ${DISPLAY_NAME} ════════════════${NC}"
+    echo ""
+
+    for cmd in curl sudo unzip python3; do
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "${RED}Error: $cmd command not found, please install it first.${NC}"
+            return 1
+        fi
+    done
+
+    echo -e "${CYAN}Fetching version information from GitHub...${NC}"
+    local releases_json=$(curl -s "https://api.github.com/repos/${GITHUB_REPO}/releases")
+    if [ -z "$releases_json" ]; then
+        echo -e "${RED}Error: cannot connect to the GitHub API, please check your network.${NC}"
+        return 1
+    fi
+    if ! [[ "$releases_json" == \[* ]]; then
+        echo -e "${RED}Error: the GitHub API returned an abnormal response (the repository may have no Release, or the network is limited).${NC}"
+        return 1
+    fi
+
+    local versions_info=$(echo "$releases_json" | $PYTHON_CMD -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    stable = []
+    prerelease = []
+    for rel in data:
+        tag = rel.get('tag_name', '')
+        if tag and rel.get('assets') and any(ch.isdigit() for ch in tag):
+            if rel.get('prerelease', False):
+                prerelease.append(tag)
+            else:
+                stable.append(tag)
+    print('STABLE:' + ','.join(stable) if stable else 'STABLE:')
+    print('PRERELEASE:' + ','.join(prerelease) if prerelease else 'PRERELEASE:')
+except:
+    print('STABLE:')
+    print('PRERELEASE:')
+")
+    if [ -z "$versions_info" ]; then
+        echo -e "${RED}Error: cannot parse the version information.${NC}"
+        return 1
+    fi
+
+    local stable_list=$(echo "$versions_info" | grep "^STABLE:" | sed 's/^STABLE://')
+    local prerelease_list=$(echo "$versions_info" | grep "^PRERELEASE:" | sed 's/^PRERELEASE://')
+
+    local latest_stable=""
+    if [ -n "$stable_list" ]; then
+        # The GitHub API returns results newest-first, so the first stable release is the latest
+        latest_stable=$(echo "$stable_list" | cut -d, -f1)
+    fi
+
+    local latest_prerelease=""
+    if [ -n "$prerelease_list" ]; then
+        latest_prerelease=$(echo "$prerelease_list" | cut -d, -f1)
+    fi
+
+    local local_version=""
+    if [ -f "$VERSION_FILE" ]; then
+        local_version=$(grep -o '"version": *"[^"]*"' "$VERSION_FILE" | head -1 | sed 's/.*"version": *"//; s/".*//')
+        if [ -n "$local_version" ]; then
+            local_version="v${local_version}"
+            echo -e "${CYAN}Currently installed version: ${local_version}${NC}"
+        else
+            echo -e "${YELLOW}Installed, but the version number cannot be read.${NC}"
+        fi
+    else
+        echo -e "${YELLOW}${DISPLAY_NAME} is not installed.${NC}"
+    fi
+
+    local options=()
+    local labels=()
+    local show_prerelease=false
+    if [ -n "$latest_prerelease" ]; then
+        if [ -z "$latest_stable" ]; then
+            show_prerelease=true
+        else
+            local opt_stable_num=$(echo "$latest_stable" | sed 's/^v//')
+            local opt_pre_num=$(echo "$latest_prerelease" | sed 's/^v//')
+            local opt_higher=$(printf '%s\n' "$opt_stable_num" "$opt_pre_num" | sort -V | tail -1)
+            if [ "$opt_higher" = "$opt_pre_num" ]; then
+                show_prerelease=true
+            fi
+        fi
+    fi
+    if [ -n "$latest_stable" ]; then
+        options+=("$latest_stable")
+        labels+=("Stable version $latest_stable")
+    fi
+    if [ "$show_prerelease" = true ]; then
+        options+=("$latest_prerelease")
+        labels+=("Pre-release version $latest_prerelease")
+    fi
+
+    if [ ${#options[@]} -eq 0 ]; then
+        echo -e "${RED}Error: no version found.${NC}"
+        return 1
+    fi
+
+    local target_version=""
+
+    if [ -z "$local_version" ]; then
+        while true; do
+            clear
+            echo -e "${YELLOW}════════════════ Install/Update ${DISPLAY_NAME} ════════════════${NC}"
+            echo ""
+            echo -e "${CYAN}Fetching version information from GitHub...${NC}"
+            echo -e "${YELLOW}${DISPLAY_NAME} is not installed.${NC}"
+            echo ""
+            if [ ${#options[@]} -eq 1 ]; then
+                target_version="${options[0]}"
+                echo -e "${GREEN}The only version available will be installed: ${target_version}${NC}"
+                break
+            else
+                echo "Please choose the version to install:"
+                for i in "${!options[@]}"; do
+                    echo "$((i+1))) ${labels[$i]}"
+                done
+                read -p "Enter your choice [1-${#options[@]}]: " choice < /dev/tty
+                if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#options[@]} ]; then
+                    target_version="${options[$((choice-1))]}"
+                    break
+                else
+                    echo -e "${RED}Invalid choice, please try again.${NC}"
+                    sleep 1
+                fi
+            fi
+        done
+        echo -e "${GREEN}Version to install: ${target_version}${NC}"
+    else
+        local is_prerelease=false
+        if [ -n "$prerelease_list" ]; then
+            local inst_ver_clean=$(echo "$local_version" | sed 's/^v//')
+            for tag in $(echo "$prerelease_list" | tr ',' '\n'); do
+                local tag_clean=$(echo "$tag" | sed 's/^v//')
+                if [ "$tag_clean" = "$inst_ver_clean" ]; then
+                    is_prerelease=true
+                    break
+                fi
+            done
+        fi
+
+        if [ "$is_prerelease" = true ]; then
+            local new_prerelease=""
+            if [ -n "$latest_prerelease" ]; then
+                local local_clean=$(echo "$local_version" | sed 's/^v//')
+                local pre_clean=$(echo "$latest_prerelease" | sed 's/^v//')
+                local higher_pre=$(printf '%s\n' "$local_clean" "$pre_clean" | sort -V | tail -1)
+                if [ "$higher_pre" = "$pre_clean" ] && [ "$local_clean" != "$pre_clean" ]; then
+                    new_prerelease="$latest_prerelease"
+                fi
+            fi
+
+            if [ -n "$new_prerelease" ]; then
+                echo -e "${YELLOW}Currently installed pre-release version ${local_version}.${NC}"
+                echo -e "${YELLOW}Update detected: pre-release ${new_prerelease}.${NC}"
+                echo "Please choose an action:"
+                echo "1) Update to the latest pre-release ${new_prerelease}"
+                if [ -n "$latest_stable" ]; then
+                    echo "2) Switch to the stable version ${latest_stable}"
+                    echo "3) Keep the current version"
+                else
+                    echo "2) Keep the current version"
+                fi
+                while true; do
+                    read -p "Enter your choice: " choice < /dev/tty
+                    if [ "$choice" = "1" ]; then
+                        target_version="$new_prerelease"
+                        echo -e "${GREEN}Updating to the pre-release: ${target_version}${NC}"
+                        break
+                    elif [ "$choice" = "2" ]; then
+                        if [ -n "$latest_stable" ]; then
+                            target_version="$latest_stable"
+                            echo -e "${GREEN}Switching to the stable version: ${target_version}${NC}"
+                            break
+                        else
+                            echo "Keeping the current version."
+                            return 0
+                        fi
+                    elif [ -n "$latest_stable" ] && [ "$choice" = "3" ]; then
+                        echo "Keeping the current version."
+                        return 0
+                    else
+                        echo -e "${RED}Invalid choice, please try again.${NC}"
+                    fi
+                done
+            elif [ -n "$latest_stable" ]; then
+                echo -e "${YELLOW}Currently installed pre-release version ${local_version}.${NC}"
+                echo -e "${YELLOW}Switch to the stable version ${latest_stable}?${NC}"
+                read -n1 -p "Press Enter or A to switch, any other key to keep: " switch_choice < /dev/tty
+                echo
+                if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
+                    target_version="$latest_stable"
+                    echo -e "${GREEN}Switching to the stable version: ${target_version}${NC}"
+                else
+                    echo "Keeping the current version."
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}Already the latest pre-release ${local_version}, and there is no stable version to switch to.${NC}"
+                return 0
+            fi
+        else
+            # Compare the local version with the latest stable release first (stable updates must also be detected when there is no pre-release)
+            local stable_num=$(echo "$local_version" | sed 's/^v//')
+            local latest_stable_num=$(echo "$latest_stable" | sed 's/^v//')
+            local higher_stable=$(printf '%s\n' "$stable_num" "$latest_stable_num" | sort -V | tail -1)
+            if [ -n "$latest_stable" ] && [ "$higher_stable" = "$latest_stable_num" ] && [ "$stable_num" != "$latest_stable_num" ]; then
+                echo -e "${YELLOW}New version detected: stable ${latest_stable} (currently ${local_version}).${NC}"
+                read -n1 -p "Press Enter or A to update, any other key to keep: " up_choice < /dev/tty
+                echo
+                if [[ -z "$up_choice" || "$up_choice" == "a" || "$up_choice" == "A" ]]; then
+                    target_version="$latest_stable"
+                    echo -e "${GREEN}Will update to: ${target_version}${NC}"
+                else
+                    echo "Keeping the current version."
+                    return 0
+                fi
+            elif [ -n "$latest_prerelease" ]; then
+                local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+                local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
+                if [ "$higher" = "$prerelease_num" ]; then
+                    echo -e "${YELLOW}Currently installed stable version ${local_version}.${NC}"
+                    echo -e "${YELLOW}A higher or equal pre-release ${latest_prerelease} was found, switch to it?${NC}"
+                    read -n1 -p "Press Enter or A to switch, any other key to keep: " switch_choice < /dev/tty
+                    echo
+                    if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
+                        target_version="$latest_prerelease"
+                        echo -e "${GREEN}Will switch to the pre-release: ${target_version}${NC}"
+                    else
+                        echo "Keeping the current version."
+                        return 0
+                    fi
+                else
+                    echo -e "${GREEN}Already the latest stable version ${local_version}, and there is no higher pre-release.${NC}"
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}Already the latest stable version ${local_version}, and there is no pre-release.${NC}"
+                return 0
+            fi
+        fi
+    fi
+
+    if [ -z "$target_version" ]; then
+        echo -e "${RED}Error: the target version was not determined.${NC}"
+        return 1
+    fi
+
+    local download_url=$(echo "$releases_json" | $PYTHON_CMD -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    def norm(t):
+        t = str(t).strip()
+        while t[:1] in 'vV':
+            t = t[1:]
+        return t
+    target_tag = norm('$target_version')
+    plugin_dir = norm('$PLUGIN_DIR').lower()
+    display = norm('$DISPLAY_NAME').lower()
+    def is_source(name):
+        n = name.lower()
+        return any(k in n for k in ('source', 'yuanma', 'src', '\u6e90\u7801'))
+    def pick(assets):
+        # 1. Prefer names containing the plugin directory name and not a source package
+        for a in assets:
+            n = a.get('name', '')
+            if plugin_dir in n.lower() and not is_source(n):
+                return a
+        # 2. Then prefer names containing the display name
+        for a in assets:
+            n = a.get('name', '')
+            if display in n.lower() and not is_source(n):
+                return a
+        # 3. Then prefer any non-source .zip
+        for a in assets:
+            n = a.get('name', '')
+            if n.endswith('.zip') and not is_source(n):
+                return a
+        # 4. Last resort: the first .zip
+        for a in assets:
+            if a.get('name', '').endswith('.zip'):
+                return a
+        return None
+    for rel in data:
+        if norm(rel.get('tag_name', '')) == target_tag:
+            asset = pick(rel.get('assets', []))
+            if asset:
+                print(asset.get('browser_download_url', ''))
+            break
+except:
+    pass
+")
+    if [ -z "$download_url" ]; then
+        echo -e "${RED}Error: cannot get the download link for ${target_version}.${NC}"
+        return 1
+    fi
+
+    rm -rf "$TEMP_DIR"
+    mkdir -p "$TEMP_DIR"
+    cd "$TEMP_DIR" || return
+
+    local zip_filename="${DISPLAY_NAME}.zip"
+
+    if ! download_zip_with_mirrors "$download_url" "$zip_filename" "${DISPLAY_NAME} ${target_version}"; then
+        echo -e "${RED}Download failed, installation aborted.${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}Extracting and installing to ${PLUGIN_PATH}...${NC}"
+
+    local EXTRACT_DIR="$TEMP_DIR/extract"
+    mkdir -p "$EXTRACT_DIR"
+
+    if ! sudo unzip -q "$zip_filename" -d "$EXTRACT_DIR"; then
+        echo -e "${RED}Extraction failed.${NC}"
+        rm -rf "$TEMP_DIR"
+        return 1
+    fi
+
+    local extracted_dir=""
+    extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 2 -type f -name "package.json" -exec dirname {} \; | head -1)
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 2 -type f -name "tomoon" -exec dirname {} \; | head -1)
+    fi
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir=$(find "$EXTRACT_DIR" -maxdepth 1 -type d ! -path "$EXTRACT_DIR" | head -1)
+    fi
+    if [ -z "$extracted_dir" ]; then
+        extracted_dir="$EXTRACT_DIR"
+    fi
+
+    sudo rm -rf "$PLUGIN_PATH"
+    sudo mkdir -p "$HOME/homebrew/plugins"
+    sudo mv "$extracted_dir" "$PLUGIN_PATH"
+    sudo chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "$PLUGIN_PATH"
+
+    rm -rf "$TEMP_DIR"
+
+    echo -e "${GREEN}✅ ${DISPLAY_NAME} plugin ${target_version} installed!${NC}"
+    echo -e "${GREEN}Install directory: ${PLUGIN_PATH}${NC}"
+}
+
+install_decky_lsfg_vk_install() { install_github_plugin "xXJSONDeruloXx/decky-lsfg-vk" "Decky-LSFG-VK" "LSFG-VK"; }
+install_decky_framegen_install() { install_github_plugin "xXJSONDeruloXx/Decky-Framegen" "Decky-Framegen" "Framegen"; }
+install_tomoon_install() { install_github_plugin "YukiCoco/ToMoon" "tomoon" "ToMoon"; }
+install_freedeck_install() { install_github_plugin "panyiwei-home/Freedeck" "Freedeck" "Freedeck"; }
+
+uninstall_plugin_generic() {
+    local plugin_dir="$1" display_name="$2"
+    local plugin_path="$HOME/homebrew/plugins/${plugin_dir}"
+    mk_temp_dir; clear
+    echo -e "${YELLOW}════════════════ Uninstalling ${display_name} ════════════════${NC}"
+    [ -d "$plugin_path" ] || { echo -e "${YELLOW}${display_name} is not installed.${NC}"; return 0; }
+    confirm_action || { echo "Uninstall cancelled."; return 0; }
+    sudo rm -rf "$plugin_path"
+    # Judge the deletion result by whether the directory really disappeared, never report success unconditionally
+    if [ -d "$plugin_path" ]; then
+        echo -e "${RED}✗ Failed to uninstall ${display_name}, the directory still exists: $plugin_path${NC}"
+        echo -e "${YELLOW}  Please delete it manually: sudo rm -rf \"$plugin_path\"${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✅ ${display_name} uninstalled.${NC}"
+}
+install_tomoon_uninstall() { uninstall_plugin_generic "tomoon" "ToMoon"; }
+install_freedeck_uninstall() { uninstall_plugin_generic "Freedeck" "Freedeck"; }
+install_decky_lsfg_vk_uninstall() { uninstall_plugin_generic "Decky-LSFG-VK" "LSFG-VK"; }
+install_decky_framegen_uninstall() { uninstall_plugin_generic "Decky-Framegen" "Framegen"; }
+
+install_plugin_store() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Install/Update Plugin Store (Decky Loader) ════════════════${NC}"
+    echo -e "${CYAN}Fetching version information from GitHub...${NC}"
+
+    local releases_json=$(curl -s "https://api.github.com/repos/SteamDeckHomebrew/decky-loader/releases")
+    if [ -z "$releases_json" ]; then
+        echo -e "${RED}Error: cannot connect to the GitHub API, please check your network.${NC}"
+        return 1
+    fi
+    if ! [[ "$releases_json" == \[* ]]; then
+        echo -e "${RED}Error: the GitHub API returned an abnormal response (the repository may have no Release, or the network is limited).${NC}"
+        return 1
+    fi
+
+    local versions_info=$(echo "$releases_json" | $PYTHON_CMD -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    stable = []
+    prerelease = []
+    for rel in data:
+        tag = rel.get('tag_name', '')
+        if tag and rel.get('assets') and any(ch.isdigit() for ch in tag):
+            if rel.get('prerelease', False):
+                prerelease.append(tag)
+            else:
+                stable.append(tag)
+    print('STABLE:' + ','.join(stable) if stable else 'STABLE:')
+    print('PRERELEASE:' + ','.join(prerelease) if prerelease else 'PRERELEASE:')
+except:
+    print('STABLE:')
+    print('PRERELEASE:')
+")
+    if [ -z "$versions_info" ]; then
+        echo -e "${RED}Error: cannot parse the version information.${NC}"
+        return 1
+    fi
+
+    local stable_list=$(echo "$versions_info" | grep "^STABLE:" | sed 's/^STABLE://')
+    local prerelease_list=$(echo "$versions_info" | grep "^PRERELEASE:" | sed 's/^PRERELEASE://')
+
+    local latest_stable=""
+    if [ -n "$stable_list" ]; then
+        # The GitHub API returns results newest-first, so the first stable release is the latest
+        latest_stable=$(echo "$stable_list" | cut -d, -f1)
+    fi
+
+    local latest_prerelease=""
+    if [ -n "$prerelease_list" ]; then
+        latest_prerelease=$(echo "$prerelease_list" | cut -d, -f1)
+    fi
+
+    local PLUGIN_LOADER="$HOME/homebrew/services/PluginLoader"
+    local installed_version=""
+    if [[ -f "$PLUGIN_LOADER" && -x "$PLUGIN_LOADER" ]]; then
+        installed_version=$(sudo journalctl -u plugin_loader --no-pager 2>/dev/null | grep -i "Starting Decky version" | tail -1 | grep -oP 'version v?\K[0-9.]+(-pre[0-9]+)?')
+        if [[ -z "$installed_version" ]]; then
+            installed_version=$("$PLUGIN_LOADER" --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+(-pre\d+)?')
+        fi
+        if [[ -n "$installed_version" ]]; then
+            installed_version="v${installed_version}"
+            echo -e "${CYAN}Currently installed version: ${installed_version}${NC}"
+        else
+            echo -e "${YELLOW}Installed, but the version cannot be obtained.${NC}"
+        fi
+    else
+        echo "No existing installation detected."
+    fi
+
+    local options=()
+    local labels=()
+    local show_prerelease=false
+    if [ -n "$latest_prerelease" ]; then
+        if [ -z "$latest_stable" ]; then
+            show_prerelease=true
+        else
+            local opt_stable_num=$(echo "$latest_stable" | sed 's/^v//')
+            local opt_pre_num=$(echo "$latest_prerelease" | sed 's/^v//')
+            local opt_higher=$(printf '%s\n' "$opt_stable_num" "$opt_pre_num" | sort -V | tail -1)
+            if [ "$opt_higher" = "$opt_pre_num" ]; then
+                show_prerelease=true
+            fi
+        fi
+    fi
+    if [ -n "$latest_stable" ]; then
+        options+=("$latest_stable")
+        labels+=("Stable version $latest_stable")
+    fi
+    if [ "$show_prerelease" = true ]; then
+        options+=("$latest_prerelease")
+        labels+=("Pre-release version $latest_prerelease")
+    fi
+
+    if [ ${#options[@]} -eq 0 ]; then
+        echo -e "${RED}Error: no version found.${NC}"
+        return 1
+    fi
+
+    local target_version=""
+
+    if [ -z "$installed_version" ]; then
+        while true; do
+            clear
+            echo -e "${YELLOW}════════════════ Install/Update Plugin Store ════════════════${NC}"
+            echo ""
+            echo -e "${YELLOW}No existing installation detected.${NC}"
+            echo ""
+            if [ ${#options[@]} -eq 1 ]; then
+                target_version="${options[0]}"
+                echo -e "${GREEN}The only version available will be installed: ${target_version}${NC}"
+                break
+            else
+                echo "Please choose the version to install:"
+                for i in "${!options[@]}"; do
+                    echo "$((i+1))) ${labels[$i]}"
+                done
+                read -p "Enter your choice [1-${#options[@]}]: " choice < /dev/tty
+                if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#options[@]} ]; then
+                    target_version="${options[$((choice-1))]}"
+                    break
+                else
+                    echo -e "${RED}Invalid choice, please try again.${NC}"
+                    sleep 1
+                fi
+            fi
+        done
+        echo -e "${GREEN}Version to install: ${target_version}${NC}"
+    else
+        local is_prerelease=false
+        if [ -n "$prerelease_list" ]; then
+            local inst_ver_clean=$(echo "$installed_version" | sed 's/^v//')
+            for tag in $(echo "$prerelease_list" | tr ',' '\n'); do
+                local tag_clean=$(echo "$tag" | sed 's/^v//')
+                if [ "$tag_clean" = "$inst_ver_clean" ]; then
+                    is_prerelease=true
+                    break
+                fi
+            done
+        fi
+
+        if [ "$is_prerelease" = true ]; then
+            local new_prerelease=""
+            if [ -n "$latest_prerelease" ]; then
+                local local_clean=$(echo "$installed_version" | sed 's/^v//')
+                local pre_clean=$(echo "$latest_prerelease" | sed 's/^v//')
+                local higher_pre=$(printf '%s\n' "$local_clean" "$pre_clean" | sort -V | tail -1)
+                if [ "$higher_pre" = "$pre_clean" ] && [ "$local_clean" != "$pre_clean" ]; then
+                    new_prerelease="$latest_prerelease"
+                fi
+            fi
+
+            if [ -n "$new_prerelease" ]; then
+                echo -e "${YELLOW}Currently installed pre-release version ${installed_version}.${NC}"
+                echo -e "${YELLOW}Update detected: pre-release ${new_prerelease}.${NC}"
+                echo "Please choose an action:"
+                echo "1) Update to the latest pre-release ${new_prerelease}"
+                if [ -n "$latest_stable" ]; then
+                    echo "2) Switch to the stable version ${latest_stable}"
+                    echo "3) Keep the current version"
+                else
+                    echo "2) Keep the current version"
+                fi
+                while true; do
+                    read -p "Enter your choice: " choice < /dev/tty
+                    if [ "$choice" = "1" ]; then
+                        target_version="$new_prerelease"
+                        echo -e "${GREEN}Updating to the pre-release: ${target_version}${NC}"
+                        break
+                    elif [ "$choice" = "2" ]; then
+                        if [ -n "$latest_stable" ]; then
+                            target_version="$latest_stable"
+                            echo -e "${GREEN}Switching to the stable version: ${target_version}${NC}"
+                            break
+                        else
+                            echo "Keeping the current version."
+                            return 0
+                        fi
+                    elif [ -n "$latest_stable" ] && [ "$choice" = "3" ]; then
+                        echo "Keeping the current version."
+                        return 0
+                    else
+                        echo -e "${RED}Invalid choice, please try again.${NC}"
+                    fi
+                done
+            elif [ -n "$latest_stable" ]; then
+                echo -e "${YELLOW}Currently installed pre-release version ${installed_version}.${NC}"
+                echo -e "${YELLOW}Switch to the stable version ${latest_stable}?${NC}"
+                read -n1 -p "Press Enter or A to switch, any other key to keep: " switch_choice < /dev/tty
+                echo
+                if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
+                    target_version="$latest_stable"
+                    echo -e "${GREEN}Switching to the stable version: ${target_version}${NC}"
+                else
+                    echo "Keeping the current version."
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}Already the latest pre-release ${installed_version}, and there is no stable version to switch to.${NC}"
+                return 0
+            fi
+        else
+            # Compare the local version with the latest stable release first (stable updates must also be detected when there is no pre-release)
+            local stable_num=$(echo "$installed_version" | sed 's/^v//')
+            local latest_stable_num=$(echo "$latest_stable" | sed 's/^v//')
+            local higher_stable=$(printf '%s\n' "$stable_num" "$latest_stable_num" | sort -V | tail -1)
+            if [ -n "$latest_stable" ] && [ "$higher_stable" = "$latest_stable_num" ] && [ "$stable_num" != "$latest_stable_num" ]; then
+                echo -e "${YELLOW}New version detected: stable ${latest_stable} (currently ${installed_version}).${NC}"
+                read -n1 -p "Press Enter or A to update, any other key to keep: " up_choice < /dev/tty
+                echo
+                if [[ -z "$up_choice" || "$up_choice" == "a" || "$up_choice" == "A" ]]; then
+                    target_version="$latest_stable"
+                    echo -e "${GREEN}Will update to: ${target_version}${NC}"
+                else
+                    echo "Keeping the current version."
+                    return 0
+                fi
+            elif [ -n "$latest_prerelease" ]; then
+                local prerelease_num=$(echo "$latest_prerelease" | sed 's/^v//')
+                local higher=$(printf '%s\n' "$stable_num" "$prerelease_num" | sort -V | tail -1)
+                if [ "$higher" = "$prerelease_num" ]; then
+                    echo -e "${YELLOW}Currently installed stable version ${installed_version}.${NC}"
+                    echo -e "${YELLOW}A higher or equal pre-release ${latest_prerelease} was found, switch to it?${NC}"
+                    read -n1 -p "Press Enter or A to switch, any other key to keep: " switch_choice < /dev/tty
+                    echo
+                    if [[ -z "$switch_choice" || "$switch_choice" == "a" || "$switch_choice" == "A" ]]; then
+                        target_version="$latest_prerelease"
+                        echo -e "${GREEN}Will switch to the pre-release: ${target_version}${NC}"
+                    else
+                        echo "Keeping the current version."
+                        return 0
+                    fi
+                else
+                    echo -e "${GREEN}Already the latest stable version ${installed_version}, and there is no higher pre-release.${NC}"
+                    return 0
+                fi
+            else
+                echo -e "${GREEN}Already the latest stable version ${installed_version}, and there is no pre-release.${NC}"
+                return 0
+            fi
+        fi
+    fi
+
+    if [ -z "$target_version" ]; then
+        echo -e "${RED}Error: the target version was not determined.${NC}"
+        return 1
+    fi
+
+    HOME_DIR="$HOME"
+    HOMEBREW_DIR="${HOME_DIR}/homebrew"
+    SERVICE_DIR="${HOMEBREW_DIR}/services"
+    PLUGIN_DIR="${HOMEBREW_DIR}/plugins"
+    PLUGIN_LOADER="${SERVICE_DIR}/PluginLoader"
+    SERVICE_FILE="${SERVICE_DIR}/plugin_loader.service"
+    SERVICE_DEST="/etc/systemd/system/plugin_loader.service"
+    CURRENT_USER=$(whoami)
+
+    DOWNLOAD_URL="https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${target_version}/PluginLoader"
+    TMP_FILE="${PLUGIN_LOADER}.tmp"
+
+    mkdir -p "$SERVICE_DIR" "$PLUGIN_DIR"
+    sudo chown -R ${CURRENT_USER}:${CURRENT_USER} "$HOMEBREW_DIR" 2>/dev/null || true
+
+    echo -e "${CYAN}Downloading PluginLoader...${NC}"
+    if ! download_with_mirrors "$DOWNLOAD_URL" "$TMP_FILE" "PluginLoader"; then
+        echo -e "${RED}Download failed, installation aborted.${NC}"
+        return 1
+    fi
+
+    FILE_SIZE=$(stat -c%s "$TMP_FILE" 2>/dev/null || stat -f%z "$TMP_FILE" 2>/dev/null)
+    if [[ -z "$FILE_SIZE" || "$FILE_SIZE" -lt 1000000 ]]; then
+        echo -e "${RED}The downloaded file is invalid (size: ${FILE_SIZE:-0} bytes).${NC}"
+        rm -f "$TMP_FILE"
+        return 1
+    fi
+    echo -e "\n${GREEN}Download successful (size: $((FILE_SIZE/1024/1024)) MB)${NC}"
+
+    for cmd in curl "$PYTHON_CMD" systemctl sudo journalctl stat; do
+        if ! command -v $cmd &> /dev/null; then
+            echo -e "${RED}Error: $cmd command not found, please install it first.${NC}"
+            rm -f "$TMP_FILE"
+            return 1
+        fi
+    done
+
+    if [[ -f "$PLUGIN_LOADER" ]]; then
+        sudo rm -f "$PLUGIN_LOADER"
+    fi
+    mv "$TMP_FILE" "$PLUGIN_LOADER"
+    chmod +x "$PLUGIN_LOADER"
+
+    touch "${HOME_DIR}/.steam/steam/.cef-enable-remote-debugging"
+    if [[ -d "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/" ]]; then
+        touch "${HOME_DIR}/.var/app/com.valvesoftware.Steam/data/Steam/.cef-enable-remote-debugging"
+    fi
+
+    cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=SteamDeck Plugin Loader
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deck
+Environment="HOMEBREW_FOLDER=${HOMEBREW_DIR}"
+ExecStart=${PLUGIN_LOADER}
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo cp "$SERVICE_FILE" "$SERVICE_DEST"
+    sudo systemctl daemon-reload
+    sudo systemctl enable plugin_loader
+    sudo systemctl restart plugin_loader
+
+    echo ""
+    echo -e "${GREEN}✅ Decky Loader ${target_version} installed/updated!${NC}"
+    echo "Please switch back to Game Mode and press the '...' button to open the sidebar and check."
+}
+
+uninstall_plugin_store() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Uninstall Plugin Store ════════════════${NC}"
+    if [ ! -d "$HOME/homebrew" ]; then
+        echo -e "${YELLOW}Plugin Store is not installed.${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}An installed Plugin Store was detected.${NC}"
+    echo "Warning: this deletes the entire $HOME/homebrew directory, including all plugins."
+    echo ""
+    read -n1 -p "Press Enter or A to confirm uninstalling, any other key to cancel: " confirm < /dev/tty
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "Continuing the uninstall..."
+    else
+        echo "Uninstall cancelled."
+        return 0
+    fi
+
+    echo "Running the uninstall..."
+    sudo rm -rf "$HOME/homebrew"
+    # Judge by whether the directory really disappeared (rm may also return 0 on partial failure)
+    if [ -d "$HOME/homebrew" ]; then
+        echo -e "${RED}✗ Failed to uninstall the Plugin Store, the directory still exists: $HOME/homebrew${NC}"
+        echo -e "${YELLOW}  Please delete it manually: sudo rm -rf \"$HOME/homebrew\"${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Plugin Store uninstalled${NC}"
+    echo "To reinstall, use the 'Install Plugin Store' feature."
+}
+
+get_ge_proton_versions() {
+    curl -s "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases?per_page=100" | \
+        python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    tags = []
+    for rel in data:
+        tag = rel.get('tag_name', '')
+        if tag.startswith('GE-Proton'):
+            tags.append(tag)
+    print('\n'.join(tags))
+except:
+    pass
+"
+}
+
+get_installed_ge_proton() {
+    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    [ -d "$install_dir" ] || return
+    for dir in "$install_dir"/GE-Proton*; do
+        [ -d "$dir" ] && basename "$dir"
+    done
+}
+
+ge_proton_manager() {
+    while true; do
+        local choice=$(zenity --list --radiolist \
+            --title="GE-Proton compatibility layer management" \
+            --text="Please choose an action" \
+            --column="Select" --column="Action" \
+            FALSE "Install GE-Proton" \
+            FALSE "Uninstall GE-Proton" \
+            --width=400 --height=200 2>/dev/null)
+        [ $? -eq 1 ] && return 0
+        case "$choice" in
+            "Install GE-Proton") ge_proton_install ;;
+            "Uninstall GE-Proton") ge_proton_uninstall ;;
+            *) return 0 ;;
+        esac
+    done
+}
+
+ge_proton_install() {
+    (
+        echo "10"; echo "# Fetching the version list, please wait..."
+        sleep 0.5
+        echo "50"; echo "# Connecting to the GitHub API..."
+        sleep 0.5
+        echo "100"
+    ) | zenity --progress --pulsate --title="Loading" --text="Fetching the version list..." --width=400 2>/dev/null &
+    ZENITY_PID=$!
+
+    local all_versions=$(get_ge_proton_versions)
+
+    kill $ZENITY_PID 2>/dev/null
+    wait $ZENITY_PID 2>/dev/null
+
+    [ -z "$all_versions" ] && {
+        zenity --error --text="Cannot fetch the version list, please check your network." --width=400 2>/dev/null
+        return 1
+    }
+    mapfile -t version_array <<< "$all_versions"
+
+    local installed_list=$(get_installed_ge_proton)
+    local installed_array=()
+    [ -n "$installed_list" ] && mapfile -t installed_array <<< "$installed_list"
+
+    local available_versions=()
+    for ver in "${version_array[@]}"; do
+        local already=false
+        for inst in "${installed_array[@]}"; do
+            [ "$ver" = "$inst" ] && { already=true; break; }
+        done
+        [ "$already" = false ] && available_versions+=("$ver")
+    done
+
+    [ ${#available_versions[@]} -eq 0 ] && {
+        zenity --info --text="All GE-Proton versions are already installed!" --width=400 2>/dev/null
+        return 0
+    }
+
+    local list_args=(
+        --list --checklist
+        --title="Install GE-Proton compatibility layer"
+        --text="Please choose the version(s) to install (multiple allowed)\n${#available_versions[@]} version(s) available, installed versions excluded"
+        --column="Select" --column="Version"
+        --width=600 --height=500
+        --ok-label="Install"
+        --cancel-label="Back"
+    )
+    for ver in "${available_versions[@]}"; do
+        list_args+=("FALSE" "$ver")
+    done
+
+    local selection
+    selection=$(zenity "${list_args[@]}" 2>/dev/null)
+    local ret=$?
+
+    if [ $ret -eq 1 ] || [ $ret -eq -1 ]; then
+        return 0
+    elif [ $ret -eq 0 ]; then
+        [ -z "$selection" ] && {
+            zenity --warning --text="Please select at least one version." --width=300 2>/dev/null
+            return 0
+        }
+        IFS='|' read -r -a selected <<< "$selection"
+        ge_proton_do_install "${selected[@]}"
+    fi
+}
+
+ge_proton_do_install() {
+    local versions=("$@")
+    local total=${#versions[@]}
+    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    mkdir -p "$install_dir"
+
+    local success_count=0
+    local failed_count=0
+    local failed_list=""
+
+    local mirror_choice=$(zenity --list --radiolist \
+        --title="Choose download mirror" \
+        --text="All versions will use the same download mirror" \
+        --column="Select" --column="Mirror" \
+        FALSE "gh-proxy.com (China mirror, fast)" \
+        FALSE "gh.3w.pm (China mirror, stable)" \
+        FALSE "cors.isteed.cc (China mirror, stable)" \
+        FALSE "ghproxy.net (China mirror, slow fallback)" \
+        FALSE "GitHub (official)" \
+        --width=560 --height=280 2>/dev/null)
+    [ -z "$mirror_choice" ] && return 0
+
+    local mirror=""
+    case "$mirror_choice" in
+        "gh-proxy.com (China mirror, fast)") mirror="https://gh-proxy.com/" ;;
+        "gh.3w.pm (China mirror, stable)") mirror="https://gh.3w.pm/" ;;
+        "cors.isteed.cc (China mirror, stable)") mirror="https://cors.isteed.cc/" ;;
+        "ghproxy.net (China mirror, slow fallback)") mirror="https://ghproxy.net/" ;;
+        # 官方源用空前缀：download_url 本身已是完整的 https://github.com/... 地址，
+        # 若这里也写 https://github.com/ 会拼成 .../https://github.com/... 导致 404
+        "GitHub (official)") mirror="" ;;
+    esac
+
+    local pipe="/tmp/zenity_pipe_$$"
+    mkfifo "$pipe"
+    zenity --progress --pulsate --title="Install GE-Proton" --text="Getting ready..." --width=500 < "$pipe" &
+    local zenity_pid=$!
+    exec 3> "$pipe"
+
+    for i in "${!versions[@]}"; do
+        if ! kill -0 $zenity_pid 2>/dev/null; then
+            echo "User cancelled install" >&2
+            break
+        fi
+
+        local version="${versions[$i]}"
+        local idx=$((i+1))
+        echo "# Processing $idx/$total: $version (preparing download...)" >&3
+
+        # ---------- 解析下载地址 ----------
+        # 注意：GE-Proton11-4 起上游改了产物命名，包名和压缩包内顶层目录都带架构后缀
+        # （GE-Proton11-11-x86_64.tar.gz / 解开后是 GE-Proton11-11-x86_64/），
+        # 而 release tag 仍是 GE-Proton11-11。旧版本则是 <tag>.tar.gz、顶层目录就是 <tag>。
+        # 这里同时取回文件大小和 sha512 地址，供下载后校验。
+        local asset_info
+        asset_info=$(curl -s --connect-timeout 20 --max-time 60 \
+            "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/tags/${version}" | \
+            python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+assets = data.get('assets', [])
+pick = None
+for a in assets:
+    n = a.get('name', '')
+    if n.endswith('.tar.gz') and 'aarch64' not in n and 'x86_64' in n:
+        pick = a
+        break
+if pick is None:
+    for a in assets:
+        n = a.get('name', '')
+        if n.endswith('.tar.gz') and 'aarch64' not in n:
+            pick = a
+            break
+if pick is None:
+    sys.exit(0)
+sha = ''
+want = pick.get('name', '').replace('.tar.gz', '.sha512sum')
+for a in assets:
+    if a.get('name', '') == want:
+        sha = a.get('browser_download_url', '')
+        break
+print(pick.get('browser_download_url', ''))
+print(pick.get('size', 0))
+print(sha)
+")
+        local download_url="" asset_size="" sha_url=""
+        download_url=$(printf '%s\n' "$asset_info" | sed -n '1p')
+        asset_size=$(printf '%s\n' "$asset_info" | sed -n '2p')
+        sha_url=$(printf '%s\n' "$asset_info" | sed -n '3p')
+
+        if [ -z "$download_url" ]; then
+            echo "# Error: could not get download URL for $version, skipped" >&3
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (cannot get download URL)"
+            continue
+        fi
+
+        local full_url="${mirror}${download_url}"
+        local temp_dir="/tmp/ge_proton_$$"
+        mkdir -p "$temp_dir"
+        cd "$temp_dir" || continue
+        local filename="${version}.tar.gz"
+
+        echo "# Processing $idx/$total: $version (downloading...)" >&3
+        curl -L -f -S --connect-timeout 30 --max-time 600 -o "$filename" "$full_url" 2> /tmp/curl_err_$$.log
+        local curl_ret=$?
+        if [ $curl_ret -ne 0 ]; then
+            echo "# Download failed; error:" >&3
+            tail -n 5 /tmp/curl_err_$$.log >&3
+            rm -f /tmp/curl_err_$$.log
+            rm -f "$filename"
+            cd /tmp && rm -rf "$temp_dir"
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (download failed)"
+            continue
+        fi
+        rm -f /tmp/curl_err_$$.log
+
+        # ---------- 下载完整性校验 ----------
+        # 镜像（gh-proxy 一类）在连接中断时可能返回 200 + 截断的包，
+        # curl 看不出问题，tar 又只在末尾才报 EOF，于是表现为「解压失败」。
+        # 这里先用文件大小和 sha512 两道校验把截断包挡在解压之前。
+        local fsize
+        fsize=$(stat -c '%s' "$filename" 2>/dev/null || echo 0)
+        if [ -n "$asset_size" ] && [ "$asset_size" != "0" ] && [ "$fsize" != "$asset_size" ]; then
+            echo "# Item $idx/$total: $version download incomplete ($fsize / $asset_size bytes), skipped" >&3
+            rm -f "$filename"
+            cd /tmp && rm -rf "$temp_dir"
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (download incomplete: $fsize/$asset_size bytes)"
+            continue
+        fi
+
+        if [ -n "$sha_url" ] && command -v sha512sum &>/dev/null; then
+            local want_sha got_sha
+            want_sha=$(curl -sL --connect-timeout 20 --max-time 60 "${mirror}${sha_url}" 2>/dev/null \
+                       | awk '{print $1}' | head -1)
+            if [ -n "$want_sha" ]; then
+                got_sha=$(sha512sum "$filename" 2>/dev/null | awk '{print $1}')
+                if [ "$want_sha" != "$got_sha" ]; then
+                    echo "# Item $idx/$total: $version checksum mismatch; package corrupt, skipped" >&3
+                    rm -f "$filename"
+                    cd /tmp && rm -rf "$temp_dir"
+                    ((failed_count++))
+                    failed_list="${failed_list}\n  $version (sha512 check failed)"
+                    continue
+                fi
+            fi
+        fi
+
+        # 先解压到临时目录校验完整性，成功后再移入 compatibilitytools.d。
+        # 直接解到 install_dir 的问题是：下载包被截断/损坏时，tar 会留下
+        # 半套目录，而 Steam 会把这个残缺版本当成可用的兼容层加载。
+        echo "# Processing $idx/$total: $version (extracting...)" >&3
+        local STAGE_DIR
+        STAGE_DIR=$(mktemp -d "$install_dir/.stage.XXXXXX" 2>/dev/null) || STAGE_DIR=""
+        if [ -z "$STAGE_DIR" ]; then
+            echo "# Item $idx/$total: $version install failed (cannot create temp dir)" >&3
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (cannot create temp dir)"
+            rm -f "$filename"
+            cd /tmp && rm -rf "$temp_dir"
+            continue
+        fi
+        tar -xzf "$filename" -C "$STAGE_DIR"
+        local tar_ret=$?
+
+        rm -f "$filename"
+        cd /tmp && rm -rf "$temp_dir"
+
+        # ---------- 定位解压出的顶层目录 ----------
+        # 不写死 "$STAGE_DIR/$version"：GE-Proton11-4 起包内顶层目录是
+        # GE-Proton11-11-x86_64（带架构后缀），与 tag GE-Proton11-11 不一致，
+        # 按旧判据会把解压成功的包误判成「压缩包损坏」。
+        # 这里取 stage 里唯一的顶层目录，再用 <tag> 前缀兜底匹配。
+        local EXTRACTED=""
+        if [ $tar_ret -eq 0 ]; then
+            local top_entries=("$STAGE_DIR"/*)
+            if [ ${#top_entries[@]} -eq 1 ] && [ -d "${top_entries[0]}" ]; then
+                EXTRACTED="${top_entries[0]}"
+            else
+                for d in "$STAGE_DIR/$version" "$STAGE_DIR/$version"-*; do
+                    [ -d "$d" ] && { EXTRACTED="$d"; break; }
+                done
+            fi
+        fi
+
+        if [ $tar_ret -ne 0 ] || [ -z "$EXTRACTED" ]; then
+            # 解压失败：清掉半成品，绝不留到 compatibilitytools.d
+            rm -rf "$STAGE_DIR"
+            if [ $tar_ret -ne 0 ]; then
+                echo "# Item $idx/$total: $version install failed (corrupt archive or extract interrupted)" >&3
+                failed_list="${failed_list}\n  $version (extract failed)"
+            else
+                echo "# Item $idx/$total: $version install failed (bad archive layout, version dir missing)" >&3
+                failed_list="${failed_list}\n  $version (bad archive layout)"
+            fi
+            ((failed_count++))
+            continue
+        fi
+
+        # ---------- 移入目标目录 ----------
+        # 目标目录名保持 <tag>（如 GE-Proton11-11），这样已装列表、卸载、
+        # Steam 显示名都用同一个不带架构后缀的名字，和旧版本保持一致。
+        rm -rf "${install_dir:?}/$version"
+        if ! mv "$EXTRACTED" "$install_dir/$version"; then
+            rm -rf "$STAGE_DIR"
+            echo "# Item $idx/$total: $version install failed (move to target dir failed)" >&3
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (move failed)"
+            continue
+        fi
+        rm -rf "$STAGE_DIR"
+
+        if [ -d "$install_dir/$version" ]; then
+            echo "# Item $idx/$total: $version installed successfully" >&3
+            ((success_count++))
+        else
+            echo "# Item $idx/$total: $version install failed" >&3
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (install verification failed)"
+        fi
+    done
+
+    # 用户中途取消时可能留下下载临时目录，统一收尾
+    rm -rf "${temp_dir:-}" /tmp/curl_err_$$.log 2>/dev/null || true
+
+    if kill -0 $zenity_pid 2>/dev/null; then
+        local result_msg="\n========== Install complete ==========\nSucceeded: $success_count"
+        if [ $failed_count -gt 0 ]; then
+            result_msg+="\nFailed: $failed_count\nFailed versions:${failed_list}"
+        fi
+        if [ $success_count -gt 0 ]; then
+            result_msg+="\n\nRestart Steam to refresh the compatibility tool list."
+        fi
+        echo "# $result_msg" >&3
+        exec 3>&-
+        wait $zenity_pid 2>/dev/null
+    fi
+
+    rm -f "$pipe"
+}
+
+ge_proton_uninstall() {
+    local installed_list=$(get_installed_ge_proton)
+    [ -z "$installed_list" ] && {
+        zenity --info --text="No installed GE-Proton detected." --ok-label="Back" --width=400 2>/dev/null
+        return 0
+    }
+    mapfile -t installed_array <<< "$installed_list"
+
+    local list_args=(
+        --list --checklist
+        --title="Uninstall GE-Proton compatibility layer"
+        --text="Please choose the version(s) to uninstall (multiple allowed)"
+        --column="Select" --column="Version"
+        --width=500 --height=350
+        --ok-label="Uninstall"
+        --cancel-label="Back"
+    )
+    for ver in "${installed_array[@]}"; do
+        list_args+=("FALSE" "$ver")
+    done
+
+    local selection=$(zenity "${list_args[@]}" 2>/dev/null)
+    [ -z "$selection" ] && return 0
+    IFS='|' read -r -a selected <<< "$selection"
+
+    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    local total=${#selected[@]}
+    local success=0 fail=0
+    local failed_list=""
+
+    local pipe="/tmp/zenity_pipe_$$"
+    mkfifo "$pipe"
+    zenity --progress --pulsate --title="Uninstall GE-Proton" --text="Getting ready..." --width=500 < "$pipe" &
+    local zenity_pid=$!
+    exec 3> "$pipe"
+
+    for i in "${!selected[@]}"; do
+        if ! kill -0 $zenity_pid 2>/dev/null; then
+            echo "User cancelled the uninstall" >&2
+            break
+        fi
+
+        local version="${selected[$i]}"
+        local idx=$((i+1))
+
+        echo "# Processing item $idx/$total: $version ..." >&3
+
+        if [ -d "$install_dir/$version" ]; then
+            rm -rf "$install_dir/$version"
+            if [ ! -d "$install_dir/$version" ]; then
+                ((success++))
+                echo "# Item $idx/$total: $version uninstalled" >&3
+            else
+                ((fail++))
+                failed_list="${failed_list}\n  $version (deletion failed)"
+                echo "# Item $idx/$total: $version uninstall failed" >&3
+            fi
+        else
+            ((success++))
+            echo "# Item $idx/$total: $version (directory does not exist, skipped)" >&3
+        fi
+        sleep 0.3
+    done
+
+    if kill -0 $zenity_pid 2>/dev/null; then
+        local result_msg="\n========== Uninstall complete ==========\nSucceeded: $success"
+        if [ $fail -gt 0 ]; then
+            result_msg+="\nFailed: $fail\nFailed versions:${failed_list}"
+        fi
+        result_msg+="\n\nIt is recommended to restart Steam for the changes to take effect."
+        echo "# $result_msg" >&3
+        exec 3>&-
+        wait $zenity_pid 2>/dev/null
+    fi
+
+    rm -f "$pipe"
+}
+
+clover_install_or_reinstall() {
+    clear
+    echo -e "${YELLOW}════════════════ Install/Reinstall Clover bootloader ════════════════${NC}"
+    echo ""
+    echo -e "${CYAN}This will install or reinstall the Clover graphical boot manager.${NC}"
+    echo -e "${YELLOW}Important: first apply the following settings in Windows (if Windows already exists and this is the first bootloader install). Skip if reinstalling the bootloader:${NC}"
+    echo "  1. Open Command Prompt or PowerShell as Administrator"
+    echo "  2. Run: bcdedit.exe -set \"{globalsettings}\" highestmode on"
+    echo "  3. Run: reg add \"HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Control\\TimeZoneInformation\" /v RealTimeIsUniversal /d 1 /t REG_DWORD /f"
+    echo ""
+
+    echo "========================================="
+    echo "   Steam Deck Clover Install Helper"
+    echo "========================================="
+    # 注意：这里克隆走的是 git 协议，不是普通 HTTP 下载。
+    # 2026-10 实测：gh-proxy.com / cors.isteed.cc / ghproxy.net 都**不支持** git clone
+    # （只有 gh.3w.pm 和官方源可用），所以克隆镜像单独列，不套用下载镜像列表。
+    echo "Choose clone mirror:"
+    echo "  1) gh.3w.pm        (China mirror, recommended)"
+    echo "  2) GitHub official (may be slow in China)"
+    read -p "Enter a number [1-2]: " choice < /dev/tty
+
+    case "$choice" in
+        1) BASE_URL="https://gh.3w.pm/https://github.com" ;;
+        2) BASE_URL="https://github.com" ;;
+        *) echo "Operation cancelled."; return 0 ;;
+    esac
+
+    REPO_FULL_PATH="ryanrudolfoba/SteamDeck-Clover-dualboot"
+    REPO_URL="${BASE_URL}/${REPO_FULL_PATH}"
+    TARGET_DIR="$HOME/SteamDeck-Clover-dualboot"
+
+    if [ -d "$TARGET_DIR" ]; then
+        echo -e "${YELLOW}Directory $TARGET_DIR already exists.${NC}"
+        read -p "Delete the old folder and clone again? (y/N): " -n 1 -r < /dev/tty
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            rm -rf "$TARGET_DIR"
+        else
+            echo "Operation cancelled."
+            read -p "Press Enter to return to the main menu..." < /dev/tty
+            return 0
+        fi
+    fi
+
+    echo -e "${CYAN}Cloning repository...${NC}"
+    if ! git clone --progress --depth=1 "$REPO_URL" "$TARGET_DIR" 2>&1 | tee /tmp/clone_log.txt; then
+        echo -e "${RED}Clone failed; check network or switch mirrors.${NC}"
+        rm -rf "$TARGET_DIR"
+        read -p "Press Enter to return to the main menu..." < /dev/tty
+        return 1
+    fi
+
+    echo -e "${GREEN}Clone finished.${NC}"
+    cd "$TARGET_DIR" || { echo -e "${RED}Cannot enter directory${NC}"; return 1; }
+
+    echo -e "${CYAN}Generating optimized install-Clover.sh...${NC}"
+    cat > install-Clover.sh << 'CLOVER_SCRIPT_EOF'
+#!/bin/bash
+# 失败即中止：原脚本没有 set -e，中间任何一步失败（cp/挂载/efibootmgr）都会继续
+# 往下执行，可能在 ESP 上写出半套 Clover，最后还打印“安装完成”。
+# 这里加 -euo pipefail，并对“允许失败”的命令（grep 探测、efibootmgr -B、umount）
+# 显式写 `|| true` 或放进 if 里，见下方逐处注释。
+set -euo pipefail
+
+clear
+
+echo "Clover dual-boot install script - Steam Deck edition"
+echo "Project: https://github.com/ryanrudolfoba/SteamDeck-Clover-dualboot"
+echo "Author YT: 10MinuteSteamDeckGamer"
+echo "Running initial checks..."
+
+CLOVER=$(efibootmgr | grep -i Clover | colrm 9 | colrm 1 4 || true)
+REFIND=$(efibootmgr | grep -i rEFInd | colrm 9 | colrm 1 4 || true)
+
+# 动态识别 ESP，替代硬编码 /dev/nvme0n1p1：
+#   Steam Deck 有 NVMe / eMMC(/dev/mmcblk0) / SATA(/dev/sda) 多种型号，
+#   分区号也不保证是 1（Windows 装在 SteamOS 之前的机器 ESP 可能是 p2/p3）。
+# 顺序：① 已挂载的 /esp（SteamOS）或 /boot/efi（Bazzite）→ ② 按 EFI 分区类型 GUID 找。
+detect_esp() {
+    local dev=""
+    dev=$(findmnt -n -o SOURCE -M /esp 2>/dev/null | grep '^/dev/' | head -1 || true)
+    [ -n "$dev" ] || dev=$(findmnt -n -o SOURCE -M /boot/efi 2>/dev/null | grep '^/dev/' | head -1 || true)
+    if [ -z "$dev" ] || [ ! -b "$dev" ]; then
+        dev=$(lsblk -P -n -o PATH,PARTTYPE 2>/dev/null \
+            | awk -F'"' '/PARTTYPE="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"/{print $2; exit}' || true)
+    fi
+    [ -n "$dev" ] && [ -b "$dev" ] || return 1
+    ESP_DEV="$dev"
+    ESP_PARENT=$(lsblk -n -o PKNAME "$dev" 2>/dev/null | head -1 || true)
+    ESP_DISK="/dev/${ESP_PARENT}"
+    ESP_PARTN=$(lsblk -n -o PARTN "$dev" 2>/dev/null | head -1 || true)
+    [ -n "$ESP_PARTN" ] || ESP_PARTN=1
+    return 0
+}
+
+if ! detect_esp; then
+    echo "❌ Cannot identify the EFI system partition (ESP), aborted, no changes were made to the system."
+    exit 1
+fi
+echo "ESP partition detected: $ESP_DEV (disk $ESP_DISK, partition number $ESP_PARTN)"
+
+# Compute free space from the detected ESP device; the ESP variable is in KB
+ESP=$(df --output=avail "$ESP_DEV" 2>/dev/null | tail -n1 | tr -d ' ' || true)
+if ! [[ "$ESP" =~ ^[0-9]+$ ]]; then
+    echo "❌ Cannot read the free space of the ESP partition, aborted."
+    exit 1
+fi
+
+# ===== SteamOS read-only mode guard =====
+# In the old script, if the rEFInd branch disabled read-only and then exited midway, the system stayed writable.
+# Use an EXIT trap to restore uniformly: only restore if this script really did disable it successfully.
+# Note: the trap must be installed before any disable (the rEFInd branch runs earlier than the old install point).
+RO_DISABLED_BY_US=0
+restore_readonly() {
+    if [ "${RO_DISABLED_BY_US:-0}" -eq 1 ]; then
+        if sudo -n steamos-readonly enable 2>/dev/null; then
+            echo "SteamOS read-only mode restored."
+        else
+            echo "⚠️ Cannot restore read-only mode automatically, please run manually: sudo steamos-readonly enable"
+        fi
+        RO_DISABLED_BY_US=0
+    fi
+    return 0
+}
+enable_readonly_mode() {
+    sudo -n steamos-readonly enable 2>/dev/null || true
+    RO_DISABLED_BY_US=0
+}
+# ISO/temp directory cleanup flag, merged into the same EXIT hook as the read-only restore
+# (two separate EXIT traps would overwrite each other, only the last one installed survives).
+ISO_CLEANED=0
+cleanup_iso() {
+    [ "${ISO_CLEANED:-0}" -eq 1 ] && return 0
+    ISO_CLEANED=1
+    if [ "${ISO_MOUNTED:-0}" -eq 1 ]; then
+        sudo -n umount ~/temp-clover &> /dev/null || true
+        rmdir ~/temp-clover 2>/dev/null || true
+        ISO_MOUNTED=0
+    fi
+    rm -f "${CLOVER_FILE:-}" "${CLOVER_BASE:-}"
+}
+clover_exit_hook() {
+    local rc=$?
+    cleanup_iso
+    restore_readonly
+    exit "$rc"
+}
+trap clover_exit_hook EXIT
+CLOVER_VERSION=5172
+CLOVER_EFI=\\EFI\\clover\\cloverx64.efi
+BOARD_NAME=$(cat /sys/class/dmi/id/board_name)
+PRODUCT_NAME=$(cat /sys/class/dmi/id/product_name)
+
+if [ "$BOARD_NAME" = "Jupiter" ] || [ "$BOARD_NAME" = "Galileo" ]; then
+    echo "Supported device detected - Steam Deck $BOARD_NAME, no need to modify config.plist."
+elif [ "$PRODUCT_NAME" = "83L3" ] || [ "$PRODUCT_NAME" = "83Q2" ] || [ "$PRODUCT_NAME" = "83Q3" ]; then
+    echo "Legion Go S detected, applying the dedicated configuration."
+    sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1200<\/string>' custom/config.plist
+elif [ "$PRODUCT_NAME" = "83N6" ]; then
+    echo "Unsupported device - Legion Go S 83N6, exiting."
+    exit
+elif [ "$PRODUCT_NAME" = "83E1" ]; then
+    echo "Legion Go detected, applying the dedicated configuration."
+    sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>2560x1600<\/string>' custom/config.plist
+elif [ "$BOARD_NAME" = "RC71L" ]; then
+    echo "ROG Ally detected, applying the dedicated configuration."
+    sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1080<\/string>' custom/config.plist
+elif [ "$BOARD_NAME" = "RC72LA" ]; then
+    echo "ROG Ally X detected, applying the dedicated configuration."
+    sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1080<\/string>' custom/config.plist
+elif [ "$PRODUCT_NAME" = "ONEXPLAYER 2 PRO ARP23P" ]; then
+    echo "Onexplayer 2 Pro detected, applying the dedicated configuration."
+    sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>2560x1600<\/string>' custom/config.plist
+else
+    echo "⚠️ Warning: the device is not on the officially supported list, forcing the installation to continue (at your own risk)!"
+fi
+
+if grep -qi bazzite /etc/os-release; then
+    OS=bazzite
+    EFI_PATH=/boot/efi/EFI
+    BOOTX64=$EFI_PATH/BOOT/BOOTX64.EFI
+    echo "Operating system detected: Bazzite"
+else
+    grep -qi SteamOS /etc/os-release || { echo "Neither SteamOS nor Bazzite! Exiting."; exit; }
+    OS=SteamOS
+    EFI_PATH=/esp/efi
+    BOOTX64=$EFI_PATH/boot/bootx64.efi
+    echo "Operating system detected: SteamOS"
+fi
+
+if blkid "$ESP_DEV" 2>/dev/null | grep -qi microsoft; then
+    echo "Unsupported dual-boot configuration detected (Windows installed before SteamOS). Make sure SteamOS is installed before Windows!"
+    exit 1
+else
+    echo "Dual-boot configuration check passed."
+fi
+
+# 密码处理：
+#  - 原写法把密码经 `echo -e "$pw\n"` 放进管道。密码是 shell 变量而非外部命令参数，
+#    实测 ps 里看不到明文；但 `echo -e` 会解释反斜杠，密码里含 `\` 时会被改写/截断
+#    （实测 'p\cw' → 'p'），导致 sudo 认证失败。改用 printf '%s\n' 原样输出。
+#  - 验证成功后立刻 `sudo -v` 取到时间戳，后续统一 `sudo -n`，不再反复喂密码。
+if [ "$(passwd --status "$(whoami)" | tr -s " " | cut -d " " -f 2)" == "P" ]; then
+    read -s -p "Please enter the current sudo password: " current_password < /dev/tty; echo
+    echo "Verifying the sudo password..."
+    if ! printf '%s\n' "$current_password" | sudo -S -v &> /dev/null; then
+        echo "Wrong sudo password! Please run the script again and enter the correct password."
+        exit 1
+    fi
+    echo "sudo password is correct."
+else
+    echo "No sudo password is set! Please set one before running the script."
+    passwd || true
+    exit 1
+fi
+
+# 后续统一走 sudo -n（密码已由上面的 sudo -v 缓存）；失败直接中止而不是继续写 EFI。
+mkdir -p ~/temp-ESP
+if ! sudo -n mount "$ESP_DEV" ~/temp-ESP; then
+    echo "Failed to mount the ESP partition! Aborted, the system was not modified."
+    rmdir ~/temp-ESP 2>/dev/null || true
+    exit 1
+fi
+echo "ESP partition mounted."
+if [ "$ESP" -ge 15000 ]; then
+    echo "ESP partition free space: $ESP KB, sufficient."
+    sudo -n umount ~/temp-ESP || true
+    rmdir ~/temp-ESP 2>/dev/null || true
+else
+    echo "ESP partition free space: $ESP KB, not enough space! Please clean up and try again."
+    # 注意：这里输出“空间不足”，外层成功判定已同步匹配该关键字
+    sudo -n du -hd2 /esp || true
+    sudo -n umount ~/temp-ESP || true
+    rmdir ~/temp-ESP 2>/dev/null || true
+    exit 1
+fi
+
+if efibootmgr | grep -qi refind; then
+    echo "rEFInd detected, trying to uninstall it..."
+    for rEFInd_boot in $REFIND; do
+        sudo -n efibootmgr -b "$rEFInd_boot" -B &> /dev/null || true
+    done
+    sudo -n systemctl disable bootnext-refind.service &> /dev/null || true
+    sudo -n systemctl disable rEFInd_bg_randomizer.service &> /dev/null || true
+    sudo -n rm -rf "$EFI_PATH/refind" &> /dev/null || true
+    if sudo -n steamos-readonly disable; then
+        RO_DISABLED_BY_US=1
+    else
+        echo "⚠️ Cannot disable read-only mode, the rEFInd uninstall may fail."
+    fi
+    sudo -n rm -f /etc/systemd/system/bootnext-refind.service &> /dev/null || true
+    sudo -n rm -f /etc/systemd/system/rEFInd_bg_randomizer.service &> /dev/null || true
+    sudo -n pacman-key --init || true
+    sudo -n pacman-key --populate archlinux || true
+    sudo -n pacman -R --noconfirm SteamDeck_rEFInd || true
+    enable_readonly_mode
+    rm -rf ~/.local/SteamDeck_rEFInd ~/.SteamDeck_rEFInd ~/Desktop/SteamDeck_rEFInd.desktop
+    if efibootmgr | grep -qi refind; then
+        echo "Failed to uninstall rEFInd, please uninstall it manually and try again."
+        exit 1
+    fi
+    echo "rEFInd uninstalled successfully."
+else
+    echo "rEFInd not detected, continuing with the Clover installation."
+fi
+
+CLOVER_FILE="Clover-${CLOVER_VERSION}-X64.iso.7z"
+CLOVER_BASE=$(basename -s .7z "${CLOVER_FILE}")
+
+# Clover ISO 是普通 HTTP 下载（非 git），可用全部下载镜像。
+# 前缀只到「镜像主机/」，后面接完整的 GitHub URL；官方源前缀为空。
+# 注意：此处覆盖了全局 MIRRORS 变量（仅在此内层脚本作用域内）。
+CLOVER_GH_BASE="https://github.com/CloverHackyColor/CloverBootloader"
+MIRRORS=(
+    "https://gh-proxy.com/"
+    "https://gh.3w.pm/"
+    "https://cors.isteed.cc/"
+    "https://ghproxy.net/"
+    ""                            # 官方源：前缀为空，直接用完整 GitHub URL
+)
+MIRROR_LABELS=(
+    "gh-proxy.com (China mirror, fast)"
+    "gh.3w.pm (China mirror, stable)"
+    "cors.isteed.cc (China mirror, stable)"
+    "ghproxy.net (China mirror, slow fallback)"
+    "GitHub (official)"
+)
+
+DOWNLOAD_SUCCESS=0
+while true; do
+    echo ""
+    echo "Please choose a download mirror (enter a number, 0 to cancel):"
+    for i in "${!MIRRORS[@]}"; do
+        echo "  $((i+1)). ${MIRROR_LABELS[$i]:-${MIRRORS[$i]}}"
+    done
+    read -p "Enter your choice: " choice < /dev/tty
+
+    if [[ -z "$choice" ]]; then
+        echo "Invalid input, please choose again."
+        continue
+    fi
+    if [[ "$choice" == "0" ]]; then
+        echo "Operation cancelled."
+        exit 0
+    fi
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#MIRRORS[@]} ]; then
+        mirror="${MIRRORS[$((choice-1))]}"
+        CLOVER_URL="${mirror}${CLOVER_GH_BASE}/releases/download/${CLOVER_VERSION}/${CLOVER_FILE}"
+        echo "Trying to download from ${MIRROR_LABELS[$((choice-1))]:-${mirror}} ..."
+        if curl -# -L --fail --connect-timeout 10 --max-time 120 -o "${CLOVER_FILE}" "${CLOVER_URL}"; then
+            echo "✅ Download successful!"
+            DOWNLOAD_SUCCESS=1
+            break
+        else
+            echo "⚠️ Download failed, please choose another mirror."
+            rm -f "${CLOVER_FILE}"
+        fi
+    else
+        echo "Invalid number, please choose again."
+    fi
+done
+
+if [ ${DOWNLOAD_SUCCESS} -eq 0 ]; then
+    echo "❌ Failed to download Clover! All mirrors are unavailable, please check your network and try again."
+    exit 1
+fi
+
+# 解压失败时清理下载的 7z 与可能残留的 ISO，避免占满 /home
+if ! 7z x "${CLOVER_FILE}" -aoa "${CLOVER_BASE}" &> /dev/null; then
+    echo "Failed to extract the Clover ISO!"
+    rm -f "${CLOVER_FILE}" "${CLOVER_BASE}"
+    exit 1
+fi
+if [ ! -f "${CLOVER_BASE}" ]; then
+    echo "ISO file ${CLOVER_BASE} not found after extraction, aborted."
+    rm -f "${CLOVER_FILE}"
+    exit 1
+fi
+echo "Clover ISO extracted successfully."
+
+# 挂载失败时把临时目录、ISO、7z 一并清理干净
+mkdir -p ~/temp-clover
+if ! sudo -n mount "${CLOVER_BASE}" ~/temp-clover &> /dev/null; then
+    echo "Failed to mount the Clover ISO! Temporary files were cleaned up."
+    sudo -n umount ~/temp-clover &> /dev/null || true
+    rmdir ~/temp-clover 2>/dev/null || true
+    rm -f "${CLOVER_FILE}" "${CLOVER_BASE}"
+    exit 1
+fi
+ISO_MOUNTED=1
+echo "Clover ISO mounted."
+
+# 安装中途任何一步失败都要卸载 ISO、清理临时文件，不留半套环境。
+# 注意：trap ... ERR 在脚本里 `exit 1` 触发的路径上**不会**执行（实测残留 ISO），
+# 所以清理挂在上面已装好的 EXIT 钩子里，用 ISO_MOUNTED 标志决定是否卸载。
+if ! sudo -n cp -Rf ~/temp-clover/efi/clover "$EFI_PATH"; then
+    echo "❌ Failed to copy the Clover EFI files to the ESP (possibly not enough ESP space). Aborted."
+    exit 1
+fi
+sudo -n cp custom/config.plist "$EFI_PATH/clover/config.plist"
+sudo -n cp -Rf custom/themes/. "$EFI_PATH/clover/themes/" \
+    || { echo "❌ Failed to copy the theme files, aborted."; exit 1; }
+sudo -n rm -rf "$EFI_PATH/clover/themes/bgm" "$EFI_PATH/clover/themes/cesium" \
+    "$EFI_PATH/clover/themes/christmas" "$EFI_PATH/clover/themes/glass" \
+    "$EFI_PATH/clover/themes/purple_swirl" "$EFI_PATH/clover/themes/theme-sample.plist" \
+    || true
+
+if [ "$PRODUCT_NAME" = "83N6" ] || [ "$PRODUCT_NAME" = "83L3" ] || [ "$PRODUCT_NAME" = "83Q2" ] || [ "$PRODUCT_NAME" = "83Q3" ] || [ "$PRODUCT_NAME" = "83E1" ] || [ "$BOARD_NAME" = "RC71L" ] || [ "$BOARD_NAME" = "RC72LA" ] || [ "$PRODUCT_NAME" = "ONEXPLAYER 2 PRO ARP23P" ]; then
+    echo "Non-Steam Deck device, installing the Xbox 360 UEFI driver..."
+    if sudo -n cp custom/UsbXbox360Dxe.efi "$EFI_PATH/clover/drivers/uefi"; then
+        echo "Xbox 360 driver installed successfully."
+    else
+        echo "Failed to install the Xbox 360 driver!"
+        exit 1
+    fi
+else
+    echo "Steam Deck does not need the Xbox 360 driver."
+fi
+
+cleanup_iso
+echo "Temporary files cleaned up."
+
+for entry in $CLOVER; do
+    sudo -n efibootmgr -b "$entry" -B &> /dev/null || true
+done
+
+# 修复：原来 efibootmgr -c 硬编码 /dev/nvme0n1 -p 1。eMMC 机型是 /dev/mmcblk0，
+# SATA 机型是 /dev/sda，且 ESP 分区号不一定是 1。改用上面动态探测的 ESP_DISK/ESP_PARTN，
+# 并且把输出留出来（不再 &>/dev/null 丢弃），失败时能中止并回滚。
+if ! sudo -n efibootmgr -c -d "$ESP_DISK" -p "$ESP_PARTN" -L "Clover - GUI Boot Manager" -l "$CLOVER_EFI"; then
+    echo "❌ Failed to create the Clover EFI boot entry (disk $ESP_DISK partition $ESP_PARTN). Installation aborted."
+    exit 1
+fi
+CLOVER=$(efibootmgr | grep -i "Clover - GUI" | colrm 9 | colrm 1 4 || true)
+if [ -z "$CLOVER" ]; then
+    echo "❌ The Clover boot entry still cannot be found after writing the EFI files, installation aborted."
+    exit 1
+fi
+echo "Clover boot entry created: $CLOVER"
+
+# BOOTX64 替换：必须先备份成功再覆盖；任何一步失败立刻回滚到备份。
+if [ ! -e "$BOOTX64" ]; then
+    echo "❌ $BOOTX64 not found, cannot back up/replace. Aborted (the EFI boot entry will be rolled back)."
+    sudo -n efibootmgr -b "$CLOVER" -B &> /dev/null || true
+    exit 1
+fi
+if [ -e "$BOOTX64.orig" ]; then
+    echo "$BOOTX64.orig already exists, no backup needed."
+else
+    echo "Backing up $BOOTX64 to $BOOTX64.orig"
+    if ! sudo -n cp "$BOOTX64" "$BOOTX64.orig"; then
+        echo "❌ Failed to back up $BOOTX64, aborted, the original file was not overwritten."
+        sudo -n efibootmgr -b "$CLOVER" -B &> /dev/null || true
+        exit 1
+    fi
+fi
+if ! sudo -n cp "$EFI_PATH/clover/cloverx64.efi" "$BOOTX64"; then
+    echo "❌ Failed to replace bootx64.efi with the Clover EFI! Rolling back..."
+    if sudo -n cp "$BOOTX64.orig" "$BOOTX64"; then
+        echo "BOOTX64.EFI rolled back to the original version."
+    else
+        echo "⚠️ The rollback also failed! Please run manually: sudo cp $BOOTX64.orig $BOOTX64"
+    fi
+    sudo -n efibootmgr -b "$CLOVER" -B &> /dev/null || true
+    exit 1
+fi
+echo "bootx64.efi replaced with the Clover EFI."
+
+if [ -e "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig" ]; then
+    if [ -e "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" ]; then
+        sudo -n mv "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" "$EFI_PATH/Microsoft/bootmgfw.efi"
+        echo "Windows EFI direct boot disabled."
+    else
+        echo "Windows EFI disabled."
+    fi
+else
+    sudo -n cp "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig"
+    sudo -n mv "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" "$EFI_PATH/Microsoft/bootmgfw.efi"
+    echo "Windows EFI direct boot disabled."
+fi
+
+sudo -n efibootmgr -n "$CLOVER" || true
+sudo -n efibootmgr -o "$CLOVER" || true
+
+if efibootmgr | grep -q "Clover - GUI"; then
+    echo "Clover installed successfully to the EFI system partition!"
+else
+    echo "Oops, something went wrong, Clover was not installed successfully."
+    exit 1
+fi
+
+# 以下属于“EFI 已经写好之后”的附加组件。失败时只警告不中止：
+# 此时 Clover 已可引导，若因工具/SYSTEMD 失败而整体报错，反而会让用户以为没装上。
+mkdir -p ~/1Clover-tools
+rm -f ~/1Clover-tools/* 2>/dev/null || true
+cp custom/Clover-Toolbox.sh ~/1Clover-tools || echo "⚠️ Failed to copy Clover-Toolbox.sh, the desktop toolbox may be unavailable."
+sudo -n cp custom/clover-bootmanager.service custom/clover-bootmanager.sh /etc/systemd/system \
+    || echo "⚠️ Failed to install the clover-bootmanager service files."
+cp -R custom/logos ~/1Clover-tools 2>/dev/null || true
+cp -R custom/efi ~/1Clover-tools 2>/dev/null || true
+
+chmod +x ~/1Clover-tools/Clover-Toolbox.sh 2>/dev/null || true
+sudo -n chmod +x /etc/systemd/system/clover-bootmanager.sh 2>/dev/null || true
+
+sudo -n systemctl daemon-reload || echo "⚠️ systemctl daemon-reload failed."
+sudo -n systemctl enable --now clover-bootmanager.service \
+    || echo "⚠️ Failed to enable clover-bootmanager.service; the next boot will go straight to Clover instead of the last system."
+sudo -n /etc/systemd/system/clover-bootmanager.sh \
+    || echo "⚠️ Failed to run clover-bootmanager.sh, BootNext may not be set."
+
+if [ "$OS" = "SteamOS" ]; then
+    mkdir -p ~/.local/share/kservices5/ServiceMenus
+    cp custom/open_as_root.desktop ~/.local/share/kservices5/ServiceMenus 2>/dev/null || true
+    sudo -n cp custom/clover-whitelist.conf /etc/atomic-update.conf.d \
+        || echo "⚠️ Failed to install clover-whitelist.conf; the Clover config may be reverted after a system update."
+else
+    if ! blkid "$ESP_DEV" 2>/dev/null | grep -qi esp; then
+        sudo -n fatlabel "$ESP_DEV" esp || true
+        echo "ESP partition label set."
+    fi
+    sudo -n sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\efi\\fedora\\shimx64\.efi<\/string>' $EFI_PATH/clover/config.plist
+fi
+
+echo "Clover installation complete on $OS!"
+CLOVER_SCRIPT_EOF
+
+    chmod +x install-Clover.sh || {
+        echo -e "${RED}Cannot set the executable permission of install-Clover.sh.${NC}"
+        read -p "Press Enter to return to the main menu..." < /dev/tty
+        return 1
+    }
+
+    echo -e "${CYAN}About to run the Clover installation script; enter the sudo password when prompted (if needed)...${NC}"
+    sleep 1
+
+    LOG_FILE="/tmp/clover_install.log"
+    # 修复：管道后直接取 $? 拿到的是 tee 的退出码，不是 install-Clover.sh 的
+    # （实测 `false | tee x.log; echo $?` 输出 0）。这里显式取 PIPESTATUS[0]，
+    # 并临时打开 pipefail 兜底，避免将来外层 set 选项被改动后判定静默失效。
+    set -o pipefail
+    ./install-Clover.sh 2>&1 | tee "$LOG_FILE"
+    INSTALL_EXIT=${PIPESTATUS[0]}
+
+    # 修复：原判定 grep 的 "Not enough space on the ESP partition!" 在本脚本里
+    # 根本不存在（内层实际输出的是中文“空间不足”），属于永远不命中的死代码。
+    if grep -q "Not enough space on the ESP partition" "$LOG_FILE" \
+        || grep -q "Not enough space" "$LOG_FILE"; then
+        echo -e "${RED}Installation failed: not enough space on the ESP partition, please clean up and try again.${NC}"
+        read -p "Press Enter to return to the main menu..." < /dev/tty
+        return 1
+    elif [ $INSTALL_EXIT -eq 0 ] && grep -q "Clover install complete" "$LOG_FILE"; then
+        echo -e "${GREEN}Clover installed/reinstalled successfully!${NC}"
+    else
+        echo -e "${RED}Installation/reinstallation failed, please check the output above.${NC}"
+        read -p "Press Enter to return to the main menu..." < /dev/tty
+        return 1
+    fi
+
+    SHORTCUT="$HOME/Desktop/Boot Config.desktop"
+    if [ -f "$SHORTCUT" ]; then
+        echo -e "${GREEN}Desktop shortcut \"Boot Configuration\" already exists, no need to create it.${NC}"
+    else
+        # 修复：原 heredoc 带引号（<< 'EOF'）不会展开变量，Exec 里写死 /home/deck，
+        # 用户名不是 deck 的机器上快捷方式直接失效。这里去掉引号让 $HOME 展开；
+        # 已确认该 heredoc 除路径外没有其它 $ 或反引号。
+        cat > "$SHORTCUT" << EOF
+[Desktop Entry]
+Type=Application
+Name=Boot Config
+Exec=konsole -e bash -c '$HOME/1Clover-tools/Clover-Toolbox.sh; read -p "Press Enter to close..." -n1'
+Icon=kdiamond
+Terminal=false
+Categories=Utility;
+EOF
+        chmod +x "$SHORTCUT"
+        echo -e "${GREEN}Desktop shortcut \"Boot Configuration\" created.${NC}"
+    fi
+
+    cat > ~/1Clover-tools/Clover-Toolbox.sh << 'TOOLBOX_EOF'
+#!/bin/bash
+
+grep -i bazzite /etc/os-release &> /dev/null
+if [ $? -eq 0 ]
+then
+	OS=bazzite
+	EFI_PATH=/boot/efi/EFI
+	BOOTX64=$EFI_PATH/BOOT/BOOTX64.EFI
+else
+	grep -i SteamOS /etc/os-release &> /dev/null
+	if [ $? -eq 0 ]
+	then
+		OS=SteamOS
+		EFI_PATH=/esp/efi
+		BOOTX64=$EFI_PATH/boot/bootx64.efi
+	else
+		exit
+	fi
+fi
+
+current_password=$(zenity --password --title "sudo password verification")
+printf '%s\n' "$current_password" | sudo -S ls &> /dev/null
+if [ $? -ne 0 ]
+then
+	echo "Wrong sudo password!" | \
+		zenity --text-info --title "Clover Toolbox" --width 400 --height 200
+	exit
+fi
+
+while true
+do
+Choice=$(zenity --width 750 --height 450 --list --radiolist --multiple \
+	--title "Clover toolbox - https://github.com/ryanrudolfoba/SteamDeck-clover-dualboot" \
+	--column "Select" \
+	--column "Options" \
+	--column "Notes - please read carefully" \
+	FALSE Status "Use this when submitting a bug report" \
+	FALSE Batocera "Choose Batocera v39 (and newer) or v38 (and older) config" \
+	FALSE Theme "Choose fixed theme or random theme" \
+	FALSE Timeout "Set default timeout (1/5/10/15 sec) before auto-booting the default OS" \
+	FALSE Service "Disable/enable Clover EFI entry and systemd service" \
+	FALSE DefaultBoot "Set the default boot OS" \
+	FALSE NewLogo "Replace BGRT boot logo" \
+	FALSE RestoreLogo "Restore default BGRT boot logo" \
+	FALSE Resolution "Set screen resolution (DeckHD or DeckSight display mod)" \
+	FALSE Custom "Replace Clover EFI with a custom build that hides the OPTIONS button" \
+	FALSE Uninstall "Uninstall Clover and restore all changes" \
+	TRUE Exit "***** Exit Clover toolbox *****")
+
+if [ $? -eq 1 ] || [ "$Choice" == "Exit" ]
+then
+	echo "The user pressed cancel/exit."
+	exit
+
+elif [ "$Choice" == "Status" ]
+then
+	zenity --warning --title "Clover Toolbox" --text "$(fold -w 120 -s ~/1Clover-tools/status.txt)" --width 1000 --height 400
+
+elif [ "$Choice" == "Batocera" ]
+then
+Batocera_Choice=$(zenity --width 550 --height 220 --list --radiolist --multiple --title "Clover Toolbox" --column "Select" \
+	--column "Options" --column "Notes - please read carefully" \
+	FALSE v39 "Configure Clover for Batocera v39 and newer" \
+	FALSE v38 "Configure Clover for Batocera v38 and older" \
+	TRUE Exit "***** Exit Clover toolbox *****")
+
+	if [ $? -eq 1 ] || [ "$Batocera_Choice" == "Exit" ]
+	then
+		echo "The user pressed cancel. Returning to the main menu."
+
+	elif [ "$Batocera_Choice" == "v39" ]
+	then
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<string>os_batocera<\/string>/!b;n;n;c\\t\t\t\t\t<string>\\efi\\batocera\\grubx64\.efi<\/string>' $EFI_PATH/clover/config.plist
+
+		zenity --warning --title "Clover Toolbox" --text "The Clover configuration was updated for Batocera v39 and newer!" --width 450 --height 75
+
+	elif [ "$Batocera_Choice" == "v38" ]
+	then
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<string>os_batocera<\/string>/!b;n;n;c\\t\t\t\t\t<string>\\efi\\boot\\bootx64\.efi<\/string>' $EFI_PATH/clover/config.plist
+
+		zenity --warning --title "Clover Toolbox" --text "The Clover configuration was updated for Batocera v38 and older!" --width 450 --height 75
+
+	fi
+
+elif [ "$Choice" == "Theme" ]
+then
+Theme_Choice=$(zenity --title "Clover Toolbox"	--width 200 --height 325 --list \
+	--column "Theme name" $(printf '%s\n' "$current_password" | sudo -S ls $EFI_PATH/clover/themes) )
+
+	if [ $? -eq 1 ]
+	then
+		echo "The user pressed cancel. Returning to the main menu."
+	else
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>Theme<\/key>/!b;n;c\\t\t<string>'$Theme_Choice'<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover Toolbox" --text "The theme was changed to $Theme_Choice!" --width 400 --height 75
+	fi
+
+elif [ "$Choice" == "Timeout" ]
+then
+Timeout_Choice=$(zenity --width 500 --height 300 --list --radiolist --multiple \
+	--title "Clover Toolbox" --column "Select" --column "Options" --column "Notes - please read carefully" \
+	FALSE 1 "Set default timeout to 1 second" \
+	FALSE 5 "Set default timeout to 5 seconds" \
+	FALSE 10 "Set default timeout to 10 seconds" \
+	FALSE 15 "Set default timeout to 15 seconds" \
+ 	FALSE 60 "Set default timeout to 60 seconds" \
+	TRUE Exit "***** Exit Clover toolbox *****")
+
+	if [ $? -eq 1 ] || [ "$Timeout_Choice" == "Exit" ]
+	then
+		echo "The user pressed cancel. Returning to the main menu."
+	else
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>Timeout<\/key>/!b;n;c\\t\t<integer>'$Timeout_Choice'<\/integer>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover Toolbox" --text "The default timeout was set to $Timeout_Choice seconds!" --width 400 --height 75
+	fi
+
+elif [ "$Choice" == "Service" ]
+then
+Service_Choice=$(zenity --width 650 --height 250 --list --radiolist --multiple --title "Clover Toolbox" \
+	--column "Select" --column "Options" --column "Notes - please read carefully" \
+	FALSE Disable "Disable Clover EFI entry and systemd service" \
+	FALSE Enable "Enable Clover EFI entry and systemd service" \
+	TRUE Exit "***** Exit Clover toolbox *****")
+
+	if [ $? -eq 1 ] || [ "$Service_Choice" == "Exit" ]
+	then
+		echo "The user pressed cancel. Returning to the main menu."
+
+	elif [ "$Service_Choice" == "Disable" ]
+	then
+		printf '%s\n' "$current_password" | sudo -S cp $EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig $EFI_PATH/Microsoft/Boot/bootmgfw.efi
+
+		Windows=$(efibootmgr | grep -i Windows | colrm 9 | colrm 1 4)
+		printf '%s\n' "$current_password" | sudo -S efibootmgr -n $Windows &> /dev/null
+
+		printf '%s\n' "$current_password" | sudo -S systemctl disable --now clover-bootmanager
+		zenity --warning --title "Clover Toolbox" --text "The Clover systemd service was disabled. Windows is now active!" --width 500 --height 75
+
+	elif [ "$Service_Choice" == "Enable" ]
+	then
+		sudo systemctl enable --now clover-bootmanager
+		printf '%s\n' "$current_password" | sudo -S /etc/systemd/system/clover-bootmanager.sh
+		zenity --warning --title "Clover Toolbox" --text "The Clover systemd service was enabled. Windows is now disabled!" --width 500 --height 75
+	fi
+
+elif [ "$Choice" == "Default boot" ]
+then
+Boot_Choice=$(zenity --width 550 --height 300 --list --radiolist --multiple --title "Clover Toolbox" --column "Select" \
+	--column "Options" --column "Notes - please read carefully" \
+	FALSE Windows "Set Windows as the default boot OS" \
+	FALSE SteamOS "Set SteamOS as the default boot OS" \
+	FALSE Bazzite "Set Bazzite as the default boot OS" \
+	FALSE LastOS "Set the last-booted OS as default" \
+	TRUE Exit "***** Exit Clover toolbox *****")
+
+	if [ $? -eq 1 ] || [ "$Boot_Choice" == "Exit" ]
+	then
+		echo "The user pressed cancel. Returning to the main menu."
+
+	elif [ "$Boot_Choice" == "Windows" ]
+	then
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\efi\\microsoft\\bootmgfw\.efi<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>esp<\/string>' $EFI_PATH/clover/config.plist
+
+		zenity --warning --title "Clover Toolbox" --text "Windows is now the default boot entry in Clover!" --width 400 --height 75
+
+	elif [ "$Boot_Choice" == "SteamOS" ]
+	then
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\efi\\steamos\\steamcl\.efi<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>esp<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover Toolbox" --text "SteamOS is now the default boot entry in Clover!" --width 400 --height 75
+
+	elif [ "$Boot_Choice" == "Bazzite" ]
+	then
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultLoader<\/key>/!b;n;c\\t\t<string>\\EFI\\FEDORA\\shimx64\.efi<\/string>' $EFI_PATH/clover/config.plist
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>esp<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover Toolbox" --text "Bazzite is now the default boot entry in Clover!" --width 400 --height 75
+
+	elif [ "$Boot_Choice" == "Last OS" ]
+	then
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>DefaultVolume<\/key>/!b;n;c\\t\t<string>LastBootedVolume<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover Toolbox" --text "The last used system is now the default boot entry in Clover!" --width 425 --height 75
+	fi
+
+elif [ "$Choice" == "New Logo" ]
+then
+Logo_Choice=$(zenity --title "Clover Toolbox" --width 200 --height 350 --list \
+	--column "Logo name" $(ls -l ~/1Clover-tools/logos/*.png | sed s/^.*\\/\//) )
+	if [ $? -eq 1 ]
+	then
+		echo "The user pressed cancel. Returning to the main menu."
+	else
+		printf '%s\n' "$current_password" | sudo -S cp ~/1Clover-tools/logos/$Logo_Choice $EFI_PATH/steamos/steamos.png
+		zenity --warning --title "Clover Toolbox" --text "The BGRT logo was changed to $Logo_Choice!" --width 400 --height 75
+	fi
+
+elif [ "$Choice" == "Restore Logo" ]
+then
+	printf '%s\n' "$current_password" | sudo -S rm $EFI_PATH/steamos/steamos.png &> /dev/null
+	zenity --warning --title "Clover Toolbox" --text "The BGRT logo was restored to the default!" --width 400 --height 75
+
+elif [ "$Choice" == "Resolution" ]
+then
+Resolution_Choice=$(zenity --width 550 --height 250 --list --radiolist --multiple --title "Clover Toolbox" \
+	--column "Select" --column "Options" --column "Notes - please read carefully" \
+	FALSE Default "Use default resolution 1280x800" \
+	FALSE DeckHD "Use DeckHD resolution 1920x1200" \
+	FALSE DeckSight "Use DeckSight resolution 1920x1080" \
+	TRUE Exit "***** Exit Clover toolbox *****")
+
+	if [ $? -eq 1 ] || [ "$Resolution_Choice" == "Exit" ]
+	then
+		echo "The user pressed cancel. Returning to the main menu."
+
+	elif [ "$Resolution_Choice" == "Default" ]
+	then
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1280x800<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover Toolbox" --text "The screen resolution was set to 1280x800." --width 400 --height 75
+
+	elif [ "$Resolution_Choice" == "DeckHD" ]
+	then
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1200<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover Toolbox" --text "The screen resolution was set to 1920x1200." --width 400 --height 75
+
+	elif [ "$Resolution_Choice" == "DeckSight" ]
+	then
+		printf '%s\n' "$current_password" | sudo -S sed -i '/<key>ScreenResolution<\/key>/!b;n;c\\t\t<string>1920x1080<\/string>' $EFI_PATH/clover/config.plist
+		zenity --warning --title "Clover Toolbox" --text "The screen resolution was set to 1920x1080." --width 400 --height 75
+
+	fi
+
+elif [ "$Choice" == "Custom" ]
+then
+	printf '%s\n' "$current_password" | sudo -S cp ~/1Clover-tools/efi/custom_clover_5157.efi $EFI_PATH/clover/cloverx64.efi
+	zenity --warning --title "Clover Toolbox" --text "The custom Clover EFI was installed!" --width 400 --height 75
+
+elif [ "$Choice" == "Uninstall" ]
+then
+	# 修复：卸载前先确认要恢复的文件都存在。原来 .orig 不存在时 mv 失败后
+	# 不做任何检查就继续 rm -rf $EFI_PATH/clover，会留下“Clover 文件删了、
+	# Windows/BOOTX64 又没恢复”的半卸载状态，可能直接无法开机。
+	UNINSTALL_OK=1
+	if [ ! -e "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig" ] \
+		&& [ -e "$EFI_PATH/Microsoft/Boot/bootmgfw.efi" ]; then
+		echo "⚠️ bootmgfw.efi.orig not found, skipping the Windows EFI restore (leaving it as is)."
+	elif [ -e "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig" ]; then
+		if ! sudo -n mv -f "$EFI_PATH/Microsoft/Boot/bootmgfw.efi.orig" "$EFI_PATH/Microsoft/Boot/bootmgfw.efi"; then
+			echo "❌ Failed to restore Windows bootmgfw.efi, uninstall aborted, no other changes were made."
+			UNINSTALL_OK=0
+		fi
+	fi
+	if [ "$UNINSTALL_OK" -eq 1 ] && [ ! -e "$BOOTX64.orig" ]; then
+		echo "⚠️ $BOOTX64.orig not found, skipping the BOOTX64.EFI restore (leaving it as is)."
+	elif [ "$UNINSTALL_OK" -eq 1 ]; then
+		if ! sudo -n mv -f "$BOOTX64.orig" "$BOOTX64"; then
+			echo "❌ Failed to restore BOOTX64.EFI, uninstall aborted, no other changes were made."
+			UNINSTALL_OK=0
+		fi
+	fi
+	if [ "$UNINSTALL_OK" -ne 1 ]; then
+		zenity --error --title "Clover Toolbox" --text "Uninstall aborted: failed to restore the critical boot files.\nPlease check the EFI partition manually and try again." --width 500 --height 100
+		exit 1
+	fi
+
+	printf '%s\n' "$current_password" | sudo -S rm -rf $EFI_PATH/clover
+
+	for entry in $(efibootmgr | grep "Clover - GUI" | colrm 9 | colrm 1 4)
+	do
+		printf '%s\n' "$current_password" | sudo -S efibootmgr -b $entry -B &> /dev/null
+	done
+
+	printf '%s\n' "$current_password" | sudo -S rm $EFI_PATH/steamos/steamos.png &> /dev/null
+
+	# 修复：原逻辑 disable 后若中间任一步失败退出，系统会一直停在可写状态。
+	# 这里用 EXIT trap 保证无论怎么退出都恢复只读。
+	TB_RO_DISABLED=0
+	tb_restore_readonly() {
+		if [ "${TB_RO_DISABLED:-0}" -eq 1 ]; then
+			printf '%s\n' "$current_password" | sudo -S steamos-readonly enable 2>/dev/null \
+				&& echo "Read-only mode restored." \
+				|| echo "⚠️ Cannot restore read-only mode, please run manually: sudo steamos-readonly enable"
+		fi
+	}
+	trap tb_restore_readonly EXIT
+	if printf '%s\n' "$current_password" | sudo -S steamos-readonly disable; then
+		TB_RO_DISABLED=1
+	fi
+
+	printf '%s\n' "$current_password" | sudo -S systemctl stop clover-bootmanager.service
+	printf '%s\n' "$current_password" | sudo -S rm -f /etc/systemd/system/clover-bootmanager*
+	printf '%s\n' "$current_password" | sudo -S systemctl daemon-reload
+
+	printf '%s\n' "$current_password" | sudo -S rm -f /etc/atomic-update.conf.d/clover-whitelist.conf
+
+	printf '%s\n' "$current_password" | sudo -S steamos-readonly enable
+	TB_RO_DISABLED=0
+
+	rm -f ~/.local/share/kservices5/ServiceMenus/open_as_root.desktop
+
+	rm -rf ~/SteamDeck-Clover-dualboot
+	rm -rf ~/1Clover-tools/
+
+	rm -f ~/Desktop/Boot\ Config.desktop
+
+	zenity --warning --title "Clover Toolbox" --text "Clover was uninstalled and the Windows EFI entry is active again!" --width 600 --height 75
+	exit
+fi
+done
+TOOLBOX_EOF
+
+    chmod +x ~/1Clover-tools/Clover-Toolbox.sh
+    echo -e "${GREEN}✓ Updated Clover-Toolbox.sh to the translated version.${NC}"
+
+    echo -e "${YELLOW}It is recommended to reboot the device for the boot changes to take effect.${NC}"
+    echo ""
+}
+
+install_anydesk() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Install/Update AnyDesk ════════════════${NC}"
+
+    local ANYDESK_INSTALL_DIR="$HOME/.local/share/anydesk"
+    local ANYDESK_BIN="$ANYDESK_INSTALL_DIR/anydesk"
+    local DESKTOP_FILE="$HOME/Desktop/AnyDesk.desktop"
+
+    echo "Checking the latest version..."
+    local REMOTE_VERSION=$(curl -s https://anydesk.com.cn/zhs/downloads/linux | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/^v//')
+    if [ -z "$REMOTE_VERSION" ]; then
+        echo -e "${YELLOW}Cannot get the version automatically, trying the default version 8.0.4${NC}"
+        REMOTE_VERSION="8.0.4"
+    fi
+    echo "Latest version: $REMOTE_VERSION"
+
+    local LOCAL_VERSION=""
+    if [ -f "$ANYDESK_BIN" ] && [ -x "$ANYDESK_BIN" ]; then
+        LOCAL_VERSION=$("$ANYDESK_BIN" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        if [ -n "$LOCAL_VERSION" ]; then
+            echo -e "${CYAN}Currently installed version: ${LOCAL_VERSION}${NC}"
+        else
+            echo -e "${YELLOW}Installed, but the version number cannot be read; reinstalling.${NC}"
+        fi
+    else
+        echo -e "${YELLOW}AnyDesk is not installed.${NC}"
+    fi
+
+    local TARGET_VERSION=""
+    if [ -n "$LOCAL_VERSION" ]; then
+        if [ "$LOCAL_VERSION" = "$REMOTE_VERSION" ]; then
+            echo -e "${GREEN}✅ Already the latest version ${LOCAL_VERSION}, no action needed.${NC}"
+            return 0
+        else
+            echo -e "${YELLOW}New version ${REMOTE_VERSION} found (current: ${LOCAL_VERSION})${NC}"
+            read -n1 -p "Press Enter or A to update, any other key to cancel: " confirm < /dev/tty
+            echo
+            if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+                TARGET_VERSION="$REMOTE_VERSION"
+            else
+                echo "Update cancelled."
+                return 0
+            fi
+        fi
+    else
+        TARGET_VERSION="$REMOTE_VERSION"
+    fi
+
+    if [ -z "$TARGET_VERSION" ]; then
+        echo "No target version specified, operation cancelled."
+        return 0
+    fi
+
+    echo "Installing AnyDesk ${TARGET_VERSION}..."
+    cd /tmp || return
+
+    local URL="https://download.anydesk.com/linux/anydesk-${TARGET_VERSION}-amd64.tar.gz"
+    local TARBALL="/tmp/anydesk-${TARGET_VERSION}.tar.gz"
+    local EXTRACT_DIR="/tmp/anydesk-extract.$$"
+    echo "Downloading..."
+
+    # Download and extract the package to a temporary directory first, and only replace the old install after everything succeeded.
+    # The old logic did rm -rf on the old directory before downloading, so a network failure left the user without a working AnyDesk.
+    rm -f "$TARBALL"
+    if ! wget -q --show-progress "$URL" -O "$TARBALL"; then
+        echo -e "${RED}Download failed, please check your network and try again.${NC}"
+        echo -e "${YELLOW}The existing AnyDesk installation (if any) was kept.${NC}"
+        rm -f "$TARBALL"
+        return 1
+    fi
+    rm -rf "$EXTRACT_DIR"; mkdir -p "$EXTRACT_DIR"
+    if ! tar -xzf "$TARBALL" -C "$EXTRACT_DIR" --strip-components=1; then
+        echo -e "${RED}✗ Extraction failed, installation aborted.${NC}"
+        rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+        echo -e "${YELLOW}The existing AnyDesk installation (if any) was kept.${NC}"
+        return 1
+    fi
+    if [ ! -x "$EXTRACT_DIR/anydesk" ]; then
+        echo -e "${RED}✗ The package contents are incomplete (anydesk executable not found), installation aborted.${NC}"
+        rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+        echo -e "${YELLOW}The existing AnyDesk installation (if any) was kept.${NC}"
+        return 1
+    fi
+
+    rm -rf "$ANYDESK_INSTALL_DIR"
+    mkdir -p "$ANYDESK_INSTALL_DIR"
+    if ! cp -a "$EXTRACT_DIR"/. "$ANYDESK_INSTALL_DIR"/; then
+        echo -e "${RED}✗ Failed to copy the installation files.${NC}"
+        rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+        return 1
+    fi
+    rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+    chmod +x "$ANYDESK_BIN" 2>/dev/null
+    if [ ! -x "$ANYDESK_BIN" ]; then
+        echo -e "${RED}✗ The installation files are incomplete (executable not found).${NC}"
+        rm -rf "$ANYDESK_INSTALL_DIR"
+        return 1
+    fi
+    mkdir -p "$HOME/.local/bin"
+    ln -sf "$ANYDESK_BIN" "$HOME/.local/bin/anydesk"
+
+    cat > "$DESKTOP_FILE" << EOF
+[Desktop Entry]
+Name=AnyDesk
+Exec=$ANYDESK_BIN
+Icon=$ANYDESK_INSTALL_DIR/icons/hicolor/256x256/apps/anydesk.png
+Type=Application
+Categories=Network;RemoteAccess;
+EOF
+    chmod +x "$DESKTOP_FILE"
+
+    echo ""
+    echo -e "${GREEN}✅ AnyDesk ${TARGET_VERSION} installed! Desktop shortcut created.${NC}"
+}
+
+uninstall_anydesk() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Uninstall AnyDesk ════════════════${NC}"
+
+    local ANYDESK_INSTALL_DIR="$HOME/.local/share/anydesk"
+    local DESKTOP_FILE="$HOME/Desktop/AnyDesk.desktop"
+    local BIN_LINK="$HOME/.local/bin/anydesk"
+    local flatpak_id="com.anydesk.Anydesk"
+
+    local local_found=false
+    local flatpak_found=false
+    [ -d "$ANYDESK_INSTALL_DIR" ] && local_found=true
+    flatpak info "$flatpak_id" &>/dev/null && flatpak_found=true
+
+    if ! $local_found && ! $flatpak_found; then
+        echo -e "${YELLOW}AnyDesk is not installed.${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}AnyDesk installation detected:${NC}"
+    $local_found && echo "  • Local installation ($ANYDESK_INSTALL_DIR)"
+    $flatpak_found && echo "  • Flatpak installation ($flatpak_id)"
+
+    read -n1 -p "Press Enter or A to confirm uninstalling, any other key to cancel: " confirm < /dev/tty
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "Continuing the uninstall..."
+    else
+        echo "Uninstall cancelled."
+        return 0
+    fi
+
+    if $local_found; then
+        rm -rf "$ANYDESK_INSTALL_DIR" && echo -e "${GREEN}✓ Local installation directory deleted${NC}"
+        rm -f "$DESKTOP_FILE" && echo -e "${GREEN}✓ Local desktop shortcut deleted${NC}"
+        rm -f "$BIN_LINK" && echo -e "${GREEN}✓ Command link deleted${NC}"
+    fi
+
+    if $flatpak_found; then
+        echo "Uninstalling the Flatpak version of AnyDesk..."
+        if flatpak uninstall "$flatpak_id" -y &>/dev/null; then
+            echo -e "${GREEN}✓ Flatpak version uninstalled${NC}"
+            local desktop_dir="$HOME/Desktop"
+            if [ -d "$desktop_dir" ]; then
+                for f in "$desktop_dir"/*.desktop; do
+                    local base=$(basename "$f")
+                    if [ "$base" = "AnyDesk.desktop" ] || \
+                       [ "$base" = "${flatpak_id}.desktop" ] || \
+                       [[ "$base" == *"${flatpak_id//./_}"* ]]; then
+                        rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ Desktop shortcut deleted: $base${NC}"
+                    fi
+                done
+            fi
+
+            local data_dir="$HOME/.var/app/$flatpak_id"
+            if [ -d "$data_dir" ]; then
+                echo ""
+                echo -e "${CYAN}Delete all settings and user data for AnyDesk?${NC}"
+                read -n1 -p "Press Enter or A to confirm deletion, any other key to keep: " del_data < /dev/tty
+                echo
+                if [[ -z "$del_data" || "$del_data" =~ [Aa] ]]; then
+                    rm -rf "$data_dir" && echo -e "${GREEN}✓ User data deleted${NC}"
+                else
+                    echo -e "${YELLOW}User data kept.${NC}"
+                fi
+            else
+                echo -e "${YELLOW}User data directory not found, skipping.${NC}"
+            fi
+
+        else
+            echo -e "${RED}✗ Failed to uninstall the Flatpak version${NC}"
+        fi
+    fi
+
+    echo ""
+    echo -e "${GREEN}✅ AnyDesk uninstalled.${NC}"
+}
+
+install_todesk() {
+    mk_temp_dir; clear
+    echo -e "${YELLOW}════════════════ Install ToDesk ════════════════${NC}"
+    echo ""
+
+    # ToDesk 官方 Arch 包长期停留在 4.1.0，社区（archtodesk）重打包了 4.7.2.0。
+    # 这里不再执行任何第三方 shell 脚本，改为自己取回 .pkg.tar.zst 后用 pacman 直接装：
+    # 少跑一段 root 脚本、不重建 pacman 钥匙环、不装 base-devel、不硬编码 /home/deck。
+    local TODESK_REPO="https://gitee.com/mclanbai/archtodesk.git"
+    local TODESK_PKG="todesk-bin-4.7.2.0-4-x86_64.pkg.tar.zst"
+    local TODESK_VERSION="4.7.2.0"
+    local CLONE_DIR="$TEMP_DIR/archtodesk"
+    local DESKTOP_FILE="$HOME/Desktop/ToDesk.desktop"
+
+    echo "  Source: gitee.com/mclanbai/archtodesk (community-repacked official 4.7.2.0 package)"
+    echo "  This only downloads the .pkg.tar.zst from that repo and installs it with pacman; no other scripts are run."
+    echo ""
+
+    # ---------- 已安装检测 ----------
+    # 三种来源都算「已安装」：pacman 包（todesk-bin / todesk）、/opt/todesk 程序目录、
+    # 以及能直接跑起来的 ToDesk 二进制。只看 pacman 会漏掉包数据库损坏或手动解包的情况。
+    local installed_ver="" installed_src=""
+    if pacman -Q todesk-bin &>/dev/null; then
+        installed_ver=$(pacman -Q todesk-bin 2>/dev/null | awk '{print $2}')
+        installed_src="pacman package todesk-bin"
+    elif pacman -Q todesk &>/dev/null; then
+        installed_ver=$(pacman -Q todesk 2>/dev/null | awk '{print $2}')
+        installed_src="pacman package todesk"
+    elif [ -x /opt/todesk/bin/ToDesk ] || [ -d /opt/todesk ]; then
+        installed_ver="Unknown (not installed via pacman)"
+        installed_src="/opt/todesk directory"
+    fi
+
+    if [ -n "$installed_ver" ]; then
+        echo -e "${GREEN}✓ Installed ToDesk detected${NC}"
+        echo "    Current version: ${installed_ver}"
+        echo "    Install source: ${installed_src}"
+        echo "    Target version: ${TODESK_VERSION}"
+        echo ""
+        echo -e "${YELLOW}Please choose an action:${NC}"
+        echo "  1. Reinstall (uninstall current version, then install ${TODESK_VERSION})"
+        echo "  2. Do not install; exit"
+        echo "  3. Uninstall ToDesk (do not reinstall)"
+        echo ""
+        local choice
+        while true; do
+            if ! read -p "Enter choice [1-3] (Enter defaults to 2): " choice < /dev/tty; then
+                echo ""
+                echo -e "${GREEN}Keeping current install; no changes made.${NC}"
+                return 0
+            fi
+            case "$choice" in
+                1) break ;;
+                3)
+                    echo ""
+                    uninstall_todesk
+                    return $? ;;
+                ""|2)
+                    echo -e "${GREEN}Keeping current install; no changes made.${NC}"
+                    return 0 ;;
+                *) echo -e "${RED}Invalid input; enter 1, 2, or 3.${NC}" ;;
+            esac
+        done
+        echo -e "${CYAN}Will uninstall the current version and reinstall...${NC}"
+    fi
+
+    # ---------- 前置工具 ----------
+    local missing_tools=()
+    command -v git &>/dev/null || missing_tools+=("git")
+    if [ ${#missing_tools[@]} -gt 0 ]; then
+        echo -e "${YELLOW}Missing required tools: ${missing_tools[*]}${NC}"
+        if ! ensure_writable; then return 1; fi
+        if ! sudo pacman -S --needed --noconfirm "${missing_tools[@]}"; then
+            echo -e "${RED}✗ Failed to install ${missing_tools[*]}.${NC}"
+            return 1
+        fi
+    fi
+
+    # ---------- 解除只读（pacman 写系统需要） ----------
+    if ! ensure_writable; then return 1; fi
+
+    # ---------- 运行依赖 ----------
+    echo ""
+    echo -e "${CYAN}Checking runtime dependencies...${NC}"
+    local missing_deps=()
+    for dep in gtk3 libappindicator-gtk3; do
+        pacman -Q "$dep" &>/dev/null || missing_deps+=("$dep")
+    done
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        echo -e "${YELLOW}Missing dependencies: ${missing_deps[*]}; installing...${NC}"
+        if ! sudo pacman -S --needed --noconfirm "${missing_deps[@]}"; then
+            echo -e "${RED}✗ Dependency install failed; aborted.${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}✓ Dependencies installed${NC}"
+    else
+        echo -e "${GREEN}✓ Dependencies satisfied (gtk3, libappindicator-gtk3)${NC}"
+    fi
+
+    # ---------- 取回安装包 ----------
+    # 注意：Gitee 对仓库内 >1MB 的文件禁止匿名 raw 直链（返回 403 large file require
+    # login），所以 80MB 的包只能通过 git clone 取，不能直接 curl 下载。
+    echo ""
+    echo -e "${CYAN}Downloading ToDesk $TODESK_VERSION package (~80MB)...${NC}"
+    echo -e "${YELLOW}(Gitee blocks large direct downloads; cloning the repo instead, please wait)${NC}"
+    rm -rf "$CLONE_DIR"
+    if ! git clone --depth 1 --progress "$TODESK_REPO" "$CLONE_DIR"; then
+        echo -e "${RED}✗ Download failed; check network and retry.${NC}"
+        rm -rf "$CLONE_DIR"
+        return 1
+    fi
+
+    local pkg_path="$CLONE_DIR/$TODESK_PKG"
+    if [ ! -f "$pkg_path" ]; then
+        echo -e "${RED}✗ $TODESK_PKG not found in the repo; upstream layout may have changed.${NC}"
+        echo -e "${YELLOW}  Aborted; system was not modified.${NC}"
+        rm -rf "$CLONE_DIR"
+        return 1
+    fi
+
+    # ---------- 完整性校验 ----------
+    echo ""
+    echo -e "${CYAN}Verifying package integrity...${NC}"
+    local verify_ok=0
+    if command -v zstd &>/dev/null; then
+        zstd -t "$pkg_path" &>/dev/null && verify_ok=1
+    else
+        pacman -Qip "$pkg_path" &>/dev/null && verify_ok=1
+    fi
+    if [ "$verify_ok" -ne 1 ]; then
+        echo -e "${RED}✗ Package checksum failed (corrupt/incomplete); aborted.${NC}"
+        rm -rf "$CLONE_DIR"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Package is intact${NC}"
+
+    # ---------- 清理旧版本 ----------
+    # todesk-bin 声明 conflict=todesk，官方 4.1.0 若还在会挡住安装，先卸掉。
+    if pacman -Q todesk &>/dev/null; then
+        echo -e "${CYAN}Uninstalling old todesk package...${NC}"
+        sudo pacman -R --noconfirm todesk 2>/dev/null || true
+    fi
+    if pacman -Q todesk-bin &>/dev/null; then
+        echo -e "${CYAN}Uninstalling existing todesk-bin...${NC}"
+        sudo pacman -R --noconfirm todesk-bin 2>/dev/null || true
+    fi
+
+    # ---------- 安装 ----------
+    echo ""
+    echo -e "${CYAN}Installing ToDesk $TODESK_VERSION ...${NC}"
+    if ! sudo pacman -U --noconfirm "$pkg_path"; then
+        echo -e "${RED}✗ Install failed; check pacman output above.${NC}"
+        rm -rf "$CLONE_DIR"
+        return 1
+    fi
+
+    # ---------- 服务与快捷方式 ----------
+    sudo systemctl daemon-reload 2>/dev/null || true
+    sudo systemctl enable todeskd.service 2>/dev/null || true
+    sudo systemctl restart todeskd.service 2>/dev/null || true
+
+    if [ -f /usr/share/applications/todesk.desktop ]; then
+        mkdir -p "$HOME/Desktop"
+        if cp -f /usr/share/applications/todesk.desktop "$DESKTOP_FILE" 2>/dev/null; then
+            chmod +x "$DESKTOP_FILE" 2>/dev/null || true
+            echo -e "${GREEN}✓ Desktop shortcut created${NC}"
+        fi
+    fi
+
+    # ---------- 清理旧方案残留 ----------
+    # 旧版本会引导用户执行第三方脚本，在桌面留下这两个「安装/重装」图标，顺手清掉。
+    rm -f "$HOME/Desktop/install-todesk-service.desktop" \
+          "$HOME/Desktop/reinstall-todesk-service.desktop" 2>/dev/null || true
+    sudo rm -rf /tmp/lanbai 2>/dev/null || true
+    rm -rf "$CLONE_DIR"
+
+    # ---------- 结果确认 ----------
+    echo ""
+    if pacman -Q todesk-bin &>/dev/null || [ -x /opt/todesk/bin/ToDesk ]; then
+        echo -e "${GREEN}✅ ToDesk $TODESK_VERSION installed${NC}"
+        echo -e "${YELLOW}Tip: ToDesk supports X11 only, not Wayland.${NC}"
+        echo -e "${YELLOW}      In Gaming Mode, switch to Desktop Mode first; the desktop shortcut is at $DESKTOP_FILE${NC}"
+    else
+        echo -e "${RED}✗ ToDesk not detected after install; check output above.${NC}"
+        return 1
+    fi
+}
+
+uninstall_todesk() {
+    clear
+    echo -e "${YELLOW}════════════════ Uninstall ToDesk ════════════════${NC}"
+    echo ""
+
+    local DESKTOP_FILE="$HOME/Desktop/ToDesk.desktop"
+    local AUTOSTART_FILE="$HOME/.config/autostart/todesk.desktop"
+    local USER_DATA_DIR="$HOME/.local/share/todesk"
+
+    # ---------- 已安装检测 ----------
+    # 与 install_todesk 用同一套判据：pacman 包（todesk-bin / todesk）或 /opt/todesk 目录，
+    # 任一存在就算已安装。只看 pacman 会漏掉「包数据库损坏」和「手动解包安装」这两种情况。
+    local pkg_name="" pkg_ver=""
+    if pacman -Q todesk-bin &>/dev/null; then
+        pkg_name="todesk-bin"
+        pkg_ver=$(pacman -Q todesk-bin 2>/dev/null | awk '{print $2}')
+    elif pacman -Q todesk &>/dev/null; then
+        pkg_name="todesk"
+        pkg_ver=$(pacman -Q todesk 2>/dev/null | awk '{print $2}')
+    fi
+    local has_dir=false
+    [ -d /opt/todesk ] && has_dir=true
+
+    if [ -z "$pkg_name" ] && [ "$has_dir" = false ]; then
+        echo -e "${YELLOW}No installed ToDesk detected; nothing to uninstall.${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}Detected ToDesk install:${NC}"
+    [ -n "$pkg_name" ] && echo "  • pacman package ${pkg_name} ${pkg_ver}"
+    [ "$has_dir" = true ] && echo "  • Program directory /opt/todesk"
+    echo ""
+    echo -e "${YELLOW}The following actions will be performed:${NC}"
+    echo "  1. Stop and disable the todeskd service; kill running ToDesk processes"
+    echo "  2. Uninstall the pacman package (if present) and clean leftover /opt/todesk"
+    echo "  3. Delete desktop shortcut and autostart entries"
+    echo ""
+    read -n1 -p "Press Enter or A to confirm uninstall; any other key cancels: " confirm < /dev/tty
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo -e "${CYAN}Continuing uninstall...${NC}"
+    else
+        echo -e "${GREEN}Cancelled; no changes made.${NC}"
+        return 0
+    fi
+
+    # ---------- 停止服务与进程 ----------
+    echo ""
+    echo -e "${CYAN}Stopping ToDesk service...${NC}"
+    sudo systemctl stop todeskd.service 2>/dev/null || true
+    sudo systemctl disable todeskd.service 2>/dev/null || true
+    echo -e "${GREEN}✓ todeskd service stopped and disabled${NC}"
+    # 卸载前先结束残留进程，否则 /opt/todesk 里的二进制被占用会让删除不干净
+    sudo pkill -f '/opt/todesk/bin/' 2>/dev/null || true
+
+    # ---------- 卸载 pacman 包 ----------
+    if [ -n "$pkg_name" ]; then
+        if ! ensure_writable; then return 1; fi
+        echo ""
+        echo -e "${CYAN}Uninstalling pacman package ${pkg_name} ...${NC}"
+        if sudo pacman -R --noconfirm "$pkg_name"; then
+            echo -e "${GREEN}✓ ${pkg_name} uninstalled${NC}"
+        else
+            echo -e "${RED}✗ Failed to uninstall ${pkg_name}; check pacman output above.${NC}"
+            return 1
+        fi
+    fi
+
+    # ---------- 清理残留目录 ----------
+    # 手动解包安装（不经过 pacman）的设备，/opt/todesk 不在包数据库里，
+    # pacman -R 不会删它，必须自己清掉，否则下次检测仍会判成「已安装」。
+    if [ -d /opt/todesk ]; then
+        if ! ensure_writable; then return 1; fi
+        echo ""
+        echo -e "${CYAN}Cleaning leftover /opt/todesk ...${NC}"
+        sudo rm -rf /opt/todesk 2>/dev/null || true
+        if [ -d /opt/todesk ]; then
+            echo -e "${YELLOW}⚠ /opt/todesk could not be fully removed; run manually: sudo rm -rf /opt/todesk${NC}"
+        else
+            echo -e "${GREEN}✓ /opt/todesk deleted${NC}"
+        fi
+    fi
+    sudo systemctl daemon-reload 2>/dev/null || true
+
+    # ---------- 快捷方式与自启项 ----------
+    # 桌面快捷方式、自启项都不是包内文件（pacman -R 不会删），
+    # 连同旧方案遗留的两个「安装/重装」图标一起清掉。
+    local f
+    for f in "$DESKTOP_FILE" "$HOME/Desktop/todesk.desktop" \
+             "$HOME/Desktop/install-todesk-service.desktop" \
+             "$HOME/Desktop/reinstall-todesk-service.desktop" \
+             "$AUTOSTART_FILE"; do
+        if [ -e "$f" ]; then
+            rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ Deleted $f${NC}"
+        fi
+    done
+
+    # ---------- 用户数据 ----------
+    if [ -d "$USER_DATA_DIR" ]; then
+        echo ""
+        echo -e "${CYAN}Delete ToDesk config and user data ($USER_DATA_DIR)?${NC}"
+        echo -e "${YELLOW}After deletion you must log in again and reconfigure the device list.${NC}"
+        read -n1 -p "Press Enter or A to confirm deletion; any other key keeps it: " del_data < /dev/tty
+        echo
+        if [[ -z "$del_data" || "$del_data" =~ [Aa] ]]; then
+            rm -rf "$USER_DATA_DIR" && echo -e "${GREEN}✓ User data deleted${NC}"
+        else
+            echo -e "${YELLOW}Kept user data ($USER_DATA_DIR).${NC}"
+        fi
+    fi
+
+    # ---------- 结果确认 ----------
+    echo ""
+    if pacman -Q todesk-bin &>/dev/null || pacman -Q todesk &>/dev/null || [ -d /opt/todesk ]; then
+        echo -e "${RED}✗ ToDesk still detected after uninstall; check output above.${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✅ ToDesk uninstall complete${NC}"
+}
+
+install_wps_office() { install_flatpak_app "WPS Office" "WPS Office" "Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"; }
+install_qq() { install_flatpak_app "QQ" "QQ" "Network;Chat" "com.qq.QQ" "com.tencent.qq"; }
+install_wechat() { install_flatpak_app "WeChat" "WeChat" "Network;Chat" "com.tencent.WeChat" "com.qq.weixin"; }
+install_qqmusic() { install_flatpak_app "QQ Music" "QQ Music" "Audio" "com.qq.QQmusic" "com.tencent.QQmusic"; }
+install_baidunetdisk() { install_flatpak_app "Baidu Netdisk" "Baidu Netdisk" "Network;FileTransfer" "com.baidu.NetDisk" "com.baidu.pan"; }
+install_edge() { install_flatpak_app "Microsoft Edge" "Microsoft Edge" "Network;WebBrowser" "com.microsoft.Edge"; }
+install_chrome() { install_flatpak_app "Google Chrome" "Google Chrome" "Network;WebBrowser" "com.google.Chrome"; }
+
+install_fcitx5() {
+    if ! flatpak info org.fcitx.Fcitx5 &>/dev/null; then
+        install_flatpak_app "Fcitx 5" "Fcitx 5" "Utility;Settings" "org.fcitx.Fcitx5"
+    else
+        echo -e "${GREEN}✓ Fcitx 5 main program installed${NC}"
+    fi
+    if ! flatpak info org.fcitx.Fcitx5.Addon.ChineseAddons &>/dev/null; then
+        echo "Installing the Chinese input method add-on..."
+        if flatpak install flathub org.fcitx.Fcitx5.Addon.ChineseAddons -y; then
+            echo -e "${GREEN}✓ Chinese add-on installed${NC}"
+        else
+            echo -e "${RED}✗ Failed to install the Chinese add-on${NC}"
+        fi
+    else
+        echo -e "${GREEN}✓ Chinese add-on already installed${NC}"
+    fi
+}
+update_installed_apps() {
+    mk_temp_dir; clear
+    echo -e "${YELLOW}════════════════ Update all apps ════════════════${NC}"
+    echo ""
+
+    # 为什么不用 flatpak update 一条命令搞定：
+    # update 的顺序是「先查更新 → 再刷新 appstream 元数据」。第二步在 dl.flathub.org
+    # 不通时会卡很久（连接超时 + 最多 5 次重试），用户看到的就是「没有更新。」之后
+    # 长时间不动，像是死机。而 appstream 只是软件介绍/图标的元数据，
+    # 与「能不能更新」无关，完全可以跳过。
+    # 所以这里分开做：用 remote-ls 查更新（只刷新 summary，走镜像站，快），
+    # 跳过 appstream 刷新，再按需执行 update。
+
+    echo -e "${CYAN}Checking for available updates...${NC}"
+    local updates="" check_rc=0
+    updates=$(timeout 120 flatpak remote-ls --updates 2>/dev/null) || check_rc=$?
+
+    if [ $check_rc -ne 0 ]; then
+        # 联网检查失败/超时（常见于镜像站抖动），退回本地缓存再判断一次，
+        # 总比直接报错好——至少能把已知的更新列出来
+        echo -e "${YELLOW}Online check timed out/failed; falling back to local cache...${NC}"
+        updates=$(timeout 30 flatpak remote-ls --updates --cached 2>/dev/null)
+        [ -z "$updates" ] && {
+            echo ""
+            echo -e "${RED}✗ Cannot check for updates: network error, and no pending items in the local cache.${NC}"
+            echo -e "${YELLOW}  Check your network and retry, or pick another mirror under Switch Software Source.${NC}"
+            return 1
+        }
+    fi
+
+    if [ -z "$updates" ]; then
+        echo ""
+        echo -e "${GREEN}✓ All installed apps are up to date; nothing to update.${NC}"
+        echo ""
+        echo -e "${YELLOW}Note: skipped refreshing the appstream catalog.${NC}"
+        echo -e "${YELLOW}      This step only refreshes app descriptions/icons and does not affect updates,${NC}"
+        echo -e "${YELLOW}      and it can hang for a long time when dl.flathub.org is down, so it is skipped.${NC}"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${CYAN}These apps can be updated:${NC}"
+    printf '%s\n' "$updates" | sed 's/^/  · /'
+    echo ""
+
+    # 下载阶段可能较慢（取决于源和包大小），给 20 分钟；但 appstream 卡住不会无限等，
+    # 超时后明确告知而不是静默挂起
+    echo -e "${CYAN}Starting update (large packages may be slow; please wait)...${NC}"
+    echo ""
+    local rc=0
+    timeout 1200 flatpak update -y < /dev/null || rc=$?
+
+    echo ""
+    if [ $rc -eq 124 ]; then
+        echo -e "${RED}✗ Update timed out (20 minutes); aborted.${NC}"
+        echo -e "${YELLOW}  If it hangs on "Updating appstream data", dl.flathub.org is unreachable;${NC}"
+        echo -e "${YELLOW}  Partially downloaded data is kept; retry later or switch mirrors first.${NC}"
+        return 1
+    elif [ $rc -ne 0 ]; then
+        echo -e "${RED}✗ Update failed; check output above.${NC}"
+        return 1
+    fi
+
+    # 用本地缓存复核：update 已经刷新过 summary，这里不会再有额外的网络等待
+    local left
+    left=$(timeout 30 flatpak remote-ls --updates --cached 2>/dev/null)
+    if [ -z "$left" ]; then
+        echo -e "${GREEN}✓ All apps updated; everything is current${NC}"
+        return 0
+    fi
+    echo -e "${YELLOW}⚠ Update command finished, but these apps still show updates:${NC}"
+    printf '%s\n' "$left" | sed 's/^/  · /'
+    echo -e "${YELLOW}  It may have been skipped (e.g. still running) or need a reboot.${NC}"
+    return 1
+}
+
+uninstall_wps_office() { uninstall_flatpak_app "WPS Office" "WPS Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"; }
+uninstall_qq() { uninstall_flatpak_app "QQ" "QQ" "com.qq.QQ" "com.tencent.qq"; }
+uninstall_wechat() { uninstall_flatpak_app "WeChat" "WeChat" "com.tencent.WeChat" "com.qq.weixin"; }
+uninstall_qqmusic() { uninstall_flatpak_app "QQ Music" "QQ Music" "com.qq.QQmusic" "com.tencent.QQmusic"; }
+uninstall_baidunetdisk() { uninstall_flatpak_app "Baidu Netdisk" "Baidu Netdisk" "com.baidu.NetDisk" "com.baidu.pan"; }
+uninstall_edge() { uninstall_flatpak_app "Microsoft Edge" "Microsoft Edge" "com.microsoft.Edge"; }
+uninstall_chrome() { uninstall_flatpak_app "Google Chrome" "Google Chrome" "com.google.Chrome" "org.chromium.Chromium"; }
+uninstall_fcitx5() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Uninstall Fcitx 5 ════════════════${NC}"
+
+    local MAIN_APP="org.fcitx.Fcitx5"
+    local ADDON_APP="org.fcitx.Fcitx5.Addon.ChineseAddons"
+    local DESKTOP_NAME="Fcitx 5"
+
+    if ! flatpak info "$MAIN_APP" &>/dev/null; then
+        echo -e "${YELLOW}Fcitx 5 main program is not installed.${NC}"
+        if flatpak info "$ADDON_APP" &>/dev/null; then
+            echo -e "${CYAN}The Chinese add-on is installed but the main program is missing, uninstall only the add-on?${NC}"
+            read -n1 -p "Press Enter or A to confirm uninstalling the add-on, any other key to cancel: " confirm < /dev/tty
+            echo
+            if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+                flatpak uninstall "$ADDON_APP" -y 2>/dev/null && echo -e "${GREEN}✓ Chinese add-on uninstalled${NC}"
+            else
+                echo "Operation cancelled."
+            fi
+        fi
+        return 0
+    fi
+
+    echo -e "${CYAN}Fcitx 5 main program detected as installed.${NC}"
+    read -n1 -p "Press Enter or A to confirm uninstalling, any other key to cancel: " confirm < /dev/tty
+    echo
+    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
+        echo "Starting the uninstall..."
+    else
+        echo "Uninstall cancelled."
+        return 0
+    fi
+
+    if flatpak info "$ADDON_APP" &>/dev/null; then
+        echo "Uninstalling the Chinese add-on..."
+        flatpak uninstall "$ADDON_APP" -y 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Chinese add-on uninstalled${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Failed to uninstall the Chinese add-on (it may already be removed)${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Chinese add-on is not installed, skipping.${NC}"
+    fi
+
+    echo "Uninstalling the Fcitx 5 main program..."
+    flatpak uninstall "$MAIN_APP" -y 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Fcitx 5 main program uninstalled${NC}"
+    else
+        echo -e "${RED}✗ Failed to uninstall the main program, please check the flatpak status.${NC}"
+        return 1
+    fi
+
+    local desktop_dir="$HOME/Desktop"
+    if [ -d "$desktop_dir" ]; then
+        for f in "$desktop_dir/Fcitx 5.desktop" "$desktop_dir/org.fcitx.Fcitx5.desktop"; do
+            if [ -f "$f" ]; then
+                rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ Desktop shortcut deleted: $(basename "$f")${NC}"
+            fi
+        done
+        find "$desktop_dir" -maxdepth 1 -name "*Fcitx*" -name "*.desktop" -exec rm -f {} \; 2>/dev/null
+    fi
+
+    echo ""
+    echo -e "${GREEN}✅ Fcitx 5 and its related components uninstalled.${NC}"
+}
+
+uninstall_other_flatpak_apps() {
+    if ! command -v zenity &>/dev/null; then
+        echo "zenity not found, please run in a desktop environment."
+        return 1
+    fi
+
+    local exclude_ids=(
+        "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"
+        "com.qq.QQ" "com.tencent.qq"
+        "com.tencent.WeChat" "com.qq.weixin"
+        "com.qq.QQmusic" "com.tencent.QQmusic"
+        "com.baidu.NetDisk" "com.baidu.pan"
+        "com.microsoft.Edge"
+        "com.google.Chrome" "org.chromium.Chromium"
+        "org.fcitx.Fcitx5" "org.fcitx.Fcitx5.Addon.ChineseAddons"
+    )
+
+    _remove_shortcut() {
+        local app_id="$1"
+        local desktop_dir="$HOME/Desktop"
+        [ -d "$desktop_dir" ] || return
+        local id_us="${app_id//./_}"
+        for f in "$desktop_dir"/*.desktop; do
+            [ -e "$f" ] || continue
+            local base=$(basename "$f")
+            # Only match shortcuts whose file name is exactly the app ID (dot/underscore forms),
+            # no substring matching, to avoid deleting unrelated .desktop files
+            if [ "$base" = "${app_id}.desktop" ] || [ "$base" = "${id_us}.desktop" ]; then
+                rm -f "$f" 2>/dev/null && echo "Desktop shortcut deleted: $base"
+            fi
+        done
+    }
+
+    while true; do
+        local installed_apps=()
+        while IFS=$'\t' read -r app_id app_name; do
+            local skip=0
+            for exclude in "${exclude_ids[@]}"; do
+                if [[ "$app_id" == "$exclude" ]]; then
+                    skip=1
+                    break
+                fi
+            done
+            if [ $skip -eq 0 ]; then
+                installed_apps+=("$app_id|$app_name")
+            fi
+        done < <(flatpak list --app --columns=application,name 2>/dev/null)
+
+        if [ ${#installed_apps[@]} -eq 0 ]; then
+            zenity --info --text="There are no other installed Flatpak applications to uninstall." --width=400
+            break
+        fi
+
+        local list_data=()
+        for entry in "${installed_apps[@]}"; do
+            IFS='|' read -r app_id app_name <<< "$entry"
+            list_data+=("FALSE" "$app_name ($app_id)")
+        done
+
+        local selections
+        selections=$(zenity --list --checklist \
+            --title="Uninstall other Flatpak applications" \
+            --text="Please choose the application(s) to uninstall (multiple allowed):" \
+            --column="Select" --column="Application" \
+            "${list_data[@]}" \
+            --width=700 --height=400 \
+            --multiple 2>/dev/null)
+
+        if [ $? -ne 0 ] || [ -z "$selections" ]; then
+            break
+        fi
+
+        IFS='|' read -r -a selected_names <<< "$selections"
+        local selected_ids=()
+        for selected in "${selected_names[@]}"; do
+            for entry in "${installed_apps[@]}"; do
+                IFS='|' read -r app_id app_name <<< "$entry"
+                if [ "$app_name ($app_id)" = "$selected" ]; then
+                    selected_ids+=("$app_id")
+                    break
+                fi
+            done
+        done
+
+        [ ${#selected_ids[@]} -eq 0 ] && continue
+
+        zenity --question \
+            --text="Uninstall the selected applications?\n${#selected_ids[@]} item(s) in total." \
+            --ok-label="Uninstall" --cancel-label="Cancel" 2>/dev/null || continue
+
+        local total=${#selected_ids[@]}
+        local success=0
+        local fail=0
+        local failed_list=""
+        local data_dirs=()
+
+        local pipe="/tmp/zenity_pipe_$$"
+        mkfifo "$pipe"
+        zenity --progress --pulsate --no-cancel --auto-close \
+            --title="Uninstall applications" --text="Getting ready..." --width=500 < "$pipe" &
+        local zenity_pid=$!
+        exec 3> "$pipe"
+
+        for i in "${!selected_ids[@]}"; do
+            local app_id="${selected_ids[$i]}"
+            local idx=$((i+1))
+
+            echo "# Processing item $idx/$total: $app_id (uninstalling...)" >&3
+
+            if flatpak uninstall "$app_id" -y &>/dev/null; then
+                ((success++))
+                _remove_shortcut "$app_id"
+                local data_dir="$HOME/.var/app/$app_id"
+                if [ -d "$data_dir" ]; then
+                    data_dirs+=("$data_dir")
+                fi
+                echo "# Item $idx/$total: $app_id uninstalled successfully" >&3
+            else
+                ((fail++))
+                failed_list+=" $app_id"
+                echo "# Item $idx/$total: $app_id uninstall failed" >&3
+            fi
+            sleep 0.2
+        done
+
+        exec 3>&-
+        wait $zenity_pid 2>/dev/null
+        rm -f "$pipe"
+
+        sleep 1.0
+
+        local result_msg="Uninstall result:\nSucceeded: $success"
+        if [ $fail -gt 0 ]; then
+            result_msg+="\nFailed: $fail\nFailed IDs:${failed_list}"
+        fi
+
+        if [ ${#data_dirs[@]} -gt 0 ]; then
+            local question_msg="$result_msg\n\nThe following application data directories still exist:"
+            for d in "${data_dirs[@]}"; do
+                question_msg+="\n  $d"
+            done
+            question_msg+="\n\nDelete these data directories?"
+
+            if zenity --question --text="$question_msg" --width=600 \
+                --ok-label="Delete data" --cancel-label="Keep" 2>/dev/null; then
+                for d in "${data_dirs[@]}"; do
+                    rm -rf "$d" && echo "Deleted $d"
+                done
+            else
+                :
+            fi
+            continue
+        else
+            zenity --info --text="$result_msg" --width=400 2>/dev/null
+            continue
+        fi
+    done
+}
+
+install_yellow_duck_software() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Install Yellow Duck software ════════════════${NC}"
+    echo ""
+    local LOSS_DIR="$HOME/.local/share/Steam/steamapps/common/Lossless Scaling"
+    if [[ -d "$LOSS_DIR" ]]; then
+        echo -e "${CYAN}Yellow Duck software already installed.${NC}"
+        echo "   Install directory: $LOSS_DIR"
+        echo ""
+        read -p "Uninstall installed Yellow Duck software? (y/N): " -n 1 -r < /dev/tty
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "Starting Yellow Duck uninstall..."
+            if sudo rm -rf "$LOSS_DIR"; then
+                echo -e "${GREEN}✅ Yellow Duck software uninstalled.${NC}"
+                echo "To reinstall, run this feature again."
+            else
+                echo -e "${RED}❌ Uninstall failed; check permissions.${NC}"
+            fi
+            return
+        else
+            echo "Operation cancelled."
+            return
+        fi
+    fi
+
+    echo -e "${CYAN}Yellow Duck software not found; downloading split archives from Gitee...${NC}"
+    local DOWNLOAD_DIR="/tmp/lossless_scaling_download"
+    rm -rf "$DOWNLOAD_DIR"
+    mkdir -p "$DOWNLOAD_DIR"
+    cd "$DOWNLOAD_DIR" || return
+
+    local BASE_URL="https://gitee.com/Zhucy2100/app-backup/raw/master/Lossless%20Scaling/Lossless%20Scaling.zip"
+    local failed=0
+    for i in 001 002 003 004 005 006 007; do
+        echo "Downloading Lossless Scaling.zip.${i} ..."
+        if ! curl -L --fail -o "Lossless Scaling.zip.${i}" "${BASE_URL}.${i}"; then
+            echo -e "${RED}Failed to download Lossless Scaling.zip.${i}.${NC}"
+            failed=1
+            break
+        fi
+    done
+
+    if [ $failed -ne 0 ]; then
+        echo -e "${RED}Download failed; check your network.${NC}"
+        rm -rf "$DOWNLOAD_DIR"
+        return
+    fi
+
+    echo "Merging split archives and extracting..."
+    cat "Lossless Scaling.zip".* > Lossless-Scaling-Combined.zip
+    unzip -o Lossless-Scaling-Combined.zip -d "$HOME/.local/share/Steam/steamapps/common/"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Extraction failed.${NC}"
+        rm -rf "$DOWNLOAD_DIR"
+        return
+    fi
+
+    sudo chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "$HOME/.local/share/Steam/steamapps/common/Lossless Scaling"
+    rm -rf "$DOWNLOAD_DIR"
+    echo -e "${GREEN}✅ Yellow Duck software installed!${NC}"
+}
+
+extract_exe_icon() {
+    local exe_path="$1"
+    local out_dir stem
+    out_dir="$(dirname "$exe_path")"
+    stem="$(basename "$exe_path")"
+    stem="${stem%.*}"
+
+    python3 - "$exe_path" "$out_dir" "$stem" <<'PYEOF'
+import struct, sys, os
+
+RT_ICON = 3
+RT_GROUP_ICON = 14
+
+def u16(b, o): return struct.unpack_from('<H', b, o)[0]
+def u32(b, o): return struct.unpack_from('<I', b, o)[0]
+
+def parse_pe(data):
+    if data[:2] != b'MZ':
+        raise ValueError('not a PE file')
+    pe_off = u32(data, 0x3C)
+    if data[pe_off:pe_off+4] != b'PE\0\0':
+        raise ValueError('bad PE signature')
+    num_sections = u16(data, pe_off + 6)
+    opt_off = pe_off + 24
+    magic = u16(data, opt_off)
+    if magic == 0x10B:
+        dd_off = opt_off + 96
+        sec_off = opt_off + 224
+    elif magic == 0x20B:
+        dd_off = opt_off + 112
+        sec_off = opt_off + 240
+    else:
+        raise ValueError('bad magic')
+    res_rva = u32(data, dd_off + 16)
+    sections = []
+    for i in range(num_sections):
+        s = sec_off + i * 40
+        vaddr = u32(data, s + 12)
+        vsize = u32(data, s + 8)
+        roff = u32(data, s + 20)
+        rsize = u32(data, s + 16)
+        sections.append((vaddr, vsize, roff, rsize))
+    return res_rva, sections
+
+def rva_to_off(rva, sections):
+    for vaddr, vsize, roff, rsize in sections:
+        if vaddr <= rva < vaddr + max(vsize, rsize):
+            return roff + (rva - vaddr)
+    raise ValueError('rva not found')
+
+def read_res_dir(data, base_off, off, depth=0):
+    if depth > 5:
+        return []
+    n_named = u16(data, off + 12)
+    n_id = u16(data, off + 14)
+    entries = []
+    for i in range(n_named + n_id):
+        e = off + 16 + i * 8
+        name_id = u32(data, e)
+        offset_to_data = u32(data, e + 4)
+        if name_id & 0x80000000:
+            name_off = base_off + (name_id & 0x7FFFFFFF)
+            nchars = u16(data, name_off)
+            name = data[name_off+2:name_off+2+nchars*2].decode('utf-16-le', 'replace')
+        else:
+            name = str(name_id)
+        if offset_to_data & 0x80000000:
+            sub = base_off + (offset_to_data & 0x7FFFFFFF)
+            entries.append((name, read_res_dir(data, base_off, sub, depth+1)))
+        else:
+            de = base_off + offset_to_data
+            entries.append((name, (u32(data, de), u32(data, de+4))))
+    return entries
+
+def read_blob(rva, size, data, sections):
+    off = rva_to_off(rva, sections)
+    return data[off:off+size]
+
+def collect(tree, type_id, data, sections):
+    out = {}
+    for t, children in tree:
+        if t != str(type_id):
+            continue
+        for name, val in children:
+            if isinstance(val, tuple):
+                rva, size = val
+                out[name] = read_blob(rva, size, data, sections)
+            else:
+                for name2, val2 in val:
+                    if isinstance(val2, tuple):
+                        rva, size = val2
+                        out[name + '/' + name2] = read_blob(rva, size, data, sections)
+    return out
+
+def main():
+    path, out_dir, stem = sys.argv[1], sys.argv[2], sys.argv[3]
+    with open(path, 'rb') as f:
+        data = f.read()
+    res_rva, sections = parse_pe(data)
+    base_off = rva_to_off(res_rva, sections)
+    tree = read_res_dir(data, base_off, base_off)
+    icons = collect(tree, RT_ICON, data, sections)
+    groups = collect(tree, RT_GROUP_ICON, data, sections)
+    if not groups:
+        sys.exit(1)
+    os.makedirs(out_dir, exist_ok=True)
+    gkey = sorted(groups)[0]
+    g = groups[gkey]
+    count = u16(g, 4)
+    entries = []
+    for i in range(count):
+        e = 6 + i * 14
+        w = g[e] or 256
+        h = g[e+1] or 256
+        colors = g[e+2]
+        planes = u16(g, e+4)
+        bpp = u16(g, e+6)
+        icon_id = u16(g, e+12)
+        blob = None
+        for k, v in icons.items():
+            if k == str(icon_id) or k.startswith(str(icon_id) + '/') or k.endswith('/' + str(icon_id)):
+                blob = v
+                break
+        if blob is None:
+            continue
+        entries.append((w, h, colors, planes, bpp, blob))
+    if not entries:
+        sys.exit(1)
+    n = len(entries)
+    header = struct.pack('<HHH', 0, 1, n)
+    dir_entries = b''
+    blobs = b''
+    offset = 6 + 16 * n
+    for w, h, colors, planes, bpp, blob in entries:
+        dir_entries += struct.pack('<BBBBHHII',
+                                   w if w < 256 else 0,
+                                   h if h < 256 else 0,
+                                   colors, 0, planes, bpp, len(blob), offset)
+        blobs += blob
+        offset += len(blob)
+    ico_path = os.path.join(out_dir, stem + '.ico')
+    with open(ico_path, 'wb') as f:
+        f.write(header + dir_entries + blobs)
+    png_icons = [(k, v) for k, v in icons.items() if v[:8] == b'\x89PNG\r\n\x1a\n']
+    if png_icons:
+        best = max(png_icons, key=lambda kv: len(kv[1]))
+        png_path = os.path.join(out_dir, stem + '.png')
+        with open(png_path, 'wb') as f:
+            f.write(best[1])
+        print(png_path)
+    else:
+        print(ico_path)
+
+try:
+    main()
+except Exception as e:
+    print('Icon extraction failed: %s' % e, file=sys.stderr)
+    sys.exit(1)
+PYEOF
+
+}
+
+install_third_party_platform() {
+    mk_temp_dir
+    while true; do
+        clear
+        echo -e "${YELLOW}═══════════ Install third-party game platforms ═══════════${NC}"
+        echo ""
+
+        local UBISOFT_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+        local EPIC_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+        local BATTLE_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
+        local ubisoft_installed=false
+        local epic_installed=false
+        local battle_installed=false
+        [ -d "$UBISOFT_DIR" ] && ubisoft_installed=true
+        [ -d "$EPIC_DIR" ] && epic_installed=true
+        [ -d "$BATTLE_DIR" ] && battle_installed=true
+
+        echo "Current status:"
+        if $ubisoft_installed; then
+            echo -e "  ${GREEN}✓ Ubisoft platform installed${NC}"
+        else
+            echo -e "  ${YELLOW}✗ Ubisoft platform not installed${NC}"
+        fi
+        if $epic_installed; then
+            echo -e "  ${GREEN}✓ Epic platform installed${NC}"
+        else
+            echo -e "  ${YELLOW}✗ Epic platform not installed${NC}"
+        fi
+        if $battle_installed; then
+            echo -e "  ${GREEN}✓ Battle.net platform installed${NC}"
+        else
+            echo -e "  ${YELLOW}✗ Battle.net platform not installed${NC}"
+        fi
+        echo ""
+
+        echo "Choose platforms to install:"
+        echo "  1) Install Ubisoft platform"
+        echo "  2) Install Epic platform"
+        echo "  3) Install Battle.net platform"
+        read -p "Enter [1-3]: " choice < /dev/tty
+        case $choice in
+            1) install_ubisoft; break ;;
+            2) install_epic; break ;;
+            3) install_battle_net; break ;;
+            *) echo -e "${RED}Invalid option; try again${NC}"; sleep 0.5 ;;
+        esac
+    done
+}
+
+install_ubisoft() {
+    local UBISOFT_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+    if [ -d "$UBISOFT_DIR" ]; then
+        echo -e "${GREEN}✓ Ubisoft platform already installed; nothing to do.${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}Downloading Ubisoft installer...${NC}"
+    cd "$HOME" || return
+    rm -f UbisoftConnectInstaller.exe
+    curl -# -L -o UbisoftConnectInstaller.exe "https://ubistatic3-a.akamaihd.net/orbit/launcher_installer/UbisoftConnectInstaller.exe"
+    if [ $? -ne 0 ] || [ ! -f "UbisoftConnectInstaller.exe" ]; then
+        echo -e "${RED}Download failed; check your network.${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}Quiet-installing via Proton Experimental...${NC}"
+    mkdir -p "$HOME/Applications/third-party-game-platform"
+
+    export STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform"
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
+
+    local PROTON_BIN="$HOME/.steam/root/steamapps/common/Proton - Experimental/proton"
+    if [ ! -x "$PROTON_BIN" ]; then
+        echo -e "${RED}✗ Proton Experimental compatibility tool not found.${NC}"
+        echo "   Please install Proton Experimental from Steam Library → Tools, then retry."
+        return 1
+    fi
+    "$PROTON_BIN" waitforexitandrun \
+        "$HOME/UbisoftConnectInstaller.exe" /S
+
+    echo -e "${CYAN}Waiting for install to finish...${NC}"
+    local WAIT_TIME=0
+    local MAX_WAIT=60
+    while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+        if [ -d "$UBISOFT_DIR" ]; then
+            break
+        fi
+        sleep 2
+        WAIT_TIME=$((WAIT_TIME + 2))
+        echo -n "."
+    done
+    echo ""
+
+    if [ -d "$UBISOFT_DIR" ]; then
+        echo -e "${GREEN}✓ Ubisoft platform installed successfully!${NC}"
+        local EXE_PATH="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe"
+
+        echo -e "${CYAN}Adding to Steam library...${NC}"
+        steamos-add-to-steam "$EXE_PATH"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Steam shortcut added.${NC}"
+            echo -e "${YELLOW}Please set this shortcut's compatibility tool to Proton Experimental in your Steam library.${NC}"
+            echo -e "${YELLOW}Or launch it from the desktop shortcut.${NC}"
+        else
+            echo -e "${YELLOW}⚠️ Failed to add to Steam automatically; add the exe manually.${NC}"
+        fi
+
+        local ICON_PATH=""
+        echo -e "${CYAN}Extracting icon from exe...${NC}"
+        ICON_PATH=$(extract_exe_icon "$EXE_PATH")
+        if [ -n "$ICON_PATH" ] && [ -s "$ICON_PATH" ]; then
+            echo -e "${GREEN}✓ Icon extracted: $ICON_PATH${NC}"
+        else
+            ICON_PATH="applications-games"
+            echo -e "${YELLOW}⚠️ Icon extraction failed; using the system game icon.${NC}"
+        fi
+
+        local DESKTOP_FILE="$HOME/Desktop/Ubisoft Connect.desktop"
+        cat > "$DESKTOP_FILE" << EOF
+[Desktop Entry]
+Type=Application
+Name=Ubisoft Connect
+Comment=Ubisoft Game Launcher
+Exec=env STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform" STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam" "$HOME/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun "$EXE_PATH"
+Icon=${ICON_PATH}
+Terminal=false
+Categories=Game;
+EOF
+        chmod +x "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ Desktop shortcut created: ~/Desktop/Ubisoft Connect.desktop${NC}"
+
+        rm -f "$HOME/UbisoftConnectInstaller.exe"
+    else
+        echo -e "${RED}✗ Install failed (timeout); check the Proton environment or logs.${NC}"
+        echo -e "${YELLOW}Installer kept at $HOME/UbisoftConnectInstaller.exe; you can run it manually.${NC}"
+    fi
+}
+
+install_epic() {
+    local EPIC_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+    if [ -d "$EPIC_DIR" ]; then
+        echo -e "${GREEN}✓ Epic platform already installed; nothing to do.${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}Downloading Epic installer...${NC}"
+    cd "$HOME" || return
+    rm -f EpicGamesLauncherInstaller.msi
+    wget -O EpicGamesLauncherInstaller.msi "https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/installer/download/EpicGamesLauncherInstaller.msi"
+    if [ $? -ne 0 ] || [ ! -f "EpicGamesLauncherInstaller.msi" ]; then
+        echo -e "${RED}Download failed; check your network.${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}Quiet-installing via Proton Experimental...${NC}"
+    mkdir -p "$HOME/Applications/third-party-game-platform"
+
+    export STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform"
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
+
+    MSI_LOG="/tmp/epic_install_msi_$(date +%Y%m%d_%H%M%S).log"
+    echo "Install log will be saved to: $MSI_LOG"
+
+    local PROTON_BIN="$HOME/.steam/root/steamapps/common/Proton - Experimental/proton"
+    if [ ! -x "$PROTON_BIN" ]; then
+        echo -e "${RED}✗ Proton Experimental compatibility tool not found.${NC}"
+        echo "   Please install Proton Experimental from Steam Library → Tools, then retry."
+        return 1
+    fi
+    "$PROTON_BIN" waitforexitandrun \
+        "$HOME/EpicGamesLauncherInstaller.msi" /quiet /log "$MSI_LOG"
+
+    echo -e "${CYAN}Waiting for install to finish...${NC}"
+    local WAIT_TIME=0
+    local MAX_WAIT=60
+    while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+        if [ -d "$EPIC_DIR" ]; then
+            break
+        fi
+        sleep 2
+        WAIT_TIME=$((WAIT_TIME + 2))
+        echo -n "."
+    done
+    echo ""
+
+    if [ -d "$EPIC_DIR" ]; then
+        echo -e "${GREEN}✓ Epic platform installed successfully!${NC}"
+        local EXE_PATH="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
+
+        echo -e "${CYAN}Adding to Steam library...${NC}"
+        steamos-add-to-steam "$EXE_PATH"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Steam shortcut added.${NC}"
+            echo -e "${YELLOW}Please set this shortcut's compatibility tool to Proton Experimental in your Steam library.${NC}"
+            echo -e "${YELLOW}Or launch it from the desktop shortcut.${NC}"
+        else
+            echo -e "${YELLOW}⚠️ Failed to add to Steam automatically; add the exe manually.${NC}"
+        fi
+
+        local ICON_PATH=""
+        echo -e "${CYAN}Extracting icon from exe...${NC}"
+        ICON_PATH=$(extract_exe_icon "$EXE_PATH")
+        if [ -n "$ICON_PATH" ] && [ -s "$ICON_PATH" ]; then
+            echo -e "${GREEN}✓ Icon extracted: $ICON_PATH${NC}"
+        else
+            ICON_PATH="applications-games"
+            echo -e "${YELLOW}⚠️ Icon extraction failed; using the system game icon.${NC}"
+        fi
+
+        local DESKTOP_FILE="$HOME/Desktop/Epic Games Launcher.desktop"
+        cat > "$DESKTOP_FILE" << EOF
+[Desktop Entry]
+Type=Application
+Name=Epic Games Launcher
+Comment=Epic Games Launcher
+Exec=env STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform" STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam" "$HOME/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun "$EXE_PATH"
+Icon=${ICON_PATH}
+Terminal=false
+Categories=Game;
+EOF
+        chmod +x "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ Desktop shortcut created: ~/Desktop/Epic Games Launcher.desktop${NC}"
+
+        rm -f "$HOME/EpicGamesLauncherInstaller.msi"
+        rm -f "$MSI_LOG"
+    else
+        echo -e "${RED}✗ Install failed (timeout); check log: ${MSI_LOG}${NC}"
+        echo -e "${YELLOW}Installer kept at $HOME/EpicGamesLauncherInstaller.msi; you can run it manually.${NC}"
+    fi
+}
+
+install_battle_net() {
+    local BATTLE_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
+    if [ -d "$BATTLE_DIR" ]; then
+        echo -e "${GREEN}✓ Battle.net platform already installed; nothing to do.${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}Downloading Battle.net backup parts from Gitee Release...${NC}"
+    local DOWNLOAD_DIR="/tmp/battlenet_download"
+    rm -rf "$DOWNLOAD_DIR"
+    mkdir -p "$DOWNLOAD_DIR"
+    cd "$DOWNLOAD_DIR" || return
+
+    local BASE_URL="https://gitee.com/Zhucy2100/app-backup/releases/download/v1.0.0/Battle.net_backup.part"
+    local files=("aa" "ab" "ac" "ad")
+    local failed=0
+    local CURL_UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    local CURL_REFERER="https://gitee.com/Zhucy2100/app-backup/releases"
+
+    for part in "${files[@]}"; do
+        echo "Downloading Battle.net_backup.part_${part} ..."
+        if ! curl -L --fail --retry 2 \
+             -H "User-Agent: ${CURL_UA}" \
+             -H "Referer: ${CURL_REFERER}" \
+             -o "Battle.net_backup.part_${part}" "${BASE_URL}_${part}"; then
+            echo -e "${RED}Failed to download Battle.net_backup.part_${part}.${NC}"
+            failed=1
+            break
+        fi
+    done
+
+    if [ $failed -ne 0 ]; then
+        echo -e "${RED}Download failed; check your network.${NC}"
+        rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+
+    echo "Merging split archives..."
+    cat Battle.net_backup.part_* > Battle.net_backup.tar.xz
+
+    echo -e "${CYAN}Extracting to the target directory...${NC}"
+    mkdir -p "$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)"
+    if ! tar -xJf Battle.net_backup.tar.xz -C "$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/"; then
+        echo -e "${RED}Extraction failed.${NC}"
+        rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+
+    local EXE_PATH="$BATTLE_DIR/Battle.net Launcher.exe"
+    if [ ! -f "$EXE_PATH" ]; then
+        echo -e "${RED}Error: Battle.net Launcher.exe not found after extract; install failed.${NC}"
+        rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+
+    echo -e "${CYAN}Adding to Steam library...${NC}"
+    steamos-add-to-steam "$EXE_PATH"
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Steam shortcut added.${NC}"
+        echo -e "${YELLOW}Please set this shortcut's compatibility tool to Proton Experimental in your Steam library.${NC}"
+        echo -e "${YELLOW}Or launch it from the desktop shortcut.${NC}"
+    else
+        echo -e "${YELLOW}⚠️ Failed to add to Steam automatically; add the exe manually.${NC}"
+    fi
+
+    local ICON_PATH=""
+    echo -e "${CYAN}Extracting icon from exe...${NC}"
+    ICON_PATH=$(extract_exe_icon "$EXE_PATH")
+    if [ -n "$ICON_PATH" ] && [ -s "$ICON_PATH" ]; then
+        echo -e "${GREEN}✓ Icon extracted: $ICON_PATH${NC}"
+    else
+        ICON_PATH="applications-games"
+        echo -e "${YELLOW}⚠️ Icon extraction failed; using the system game icon.${NC}"
+    fi
+
+    local DESKTOP_FILE="$HOME/Desktop/Battle.net.desktop"
+    cat > "$DESKTOP_FILE" << EOF
+[Desktop Entry]
+Type=Application
+Name=Battle.net
+Comment=Blizzard Battle.net Launcher
+Exec=env STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform" STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam" "$HOME/.steam/root/steamapps/common/Proton - Experimental/proton" waitforexitandrun "$EXE_PATH"
+Icon=${ICON_PATH}
+Terminal=false
+Categories=Game;
+EOF
+        chmod +x "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ Desktop shortcut created: ~/Desktop/Battle.net.desktop${NC}"
+
+    rm -rf "$DOWNLOAD_DIR"
+    echo -e "${GREEN}✅ Battle.net platform installed!${NC}"
+}
+
+uninstall_third_party_platform() {
+    mk_temp_dir
+    while true; do
+        clear
+        echo -e "${YELLOW}═══════════ Uninstall third-party game platforms ═══════════${NC}"
+        echo ""
+
+        local UBISOFT_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+        local EPIC_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+        local BATTLE_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
+        local ubisoft_installed=false
+        local epic_installed=false
+        local battle_installed=false
+        [ -d "$UBISOFT_DIR" ] && ubisoft_installed=true
+        [ -d "$EPIC_DIR" ] && epic_installed=true
+        [ -d "$BATTLE_DIR" ] && battle_installed=true
+
+        if ! $ubisoft_installed && ! $epic_installed && ! $battle_installed; then
+            echo -e "${YELLOW}No third-party game platforms installed by this tool were found.${NC}"
+            sleep 2
+            return 0
+        fi
+
+        echo "Currently installed platforms:"
+        $ubisoft_installed && echo -e "  ${GREEN}✓ Ubisoft platform${NC}"
+        $epic_installed && echo -e "  ${GREEN}✓ Epic platform${NC}"
+        $battle_installed && echo -e "  ${GREEN}✓ Battle.net platform${NC}"
+        echo ""
+
+        echo "Choose platforms to uninstall:"
+        echo "  1) Uninstall Ubisoft platform"
+        echo "  2) Uninstall Epic platform"
+        echo "  3) Uninstall Battle.net platform"
+        read -p "Enter [1-3]: " choice < /dev/tty
+        case $choice in
+            1) uninstall_ubisoft; break ;;
+            2) uninstall_epic; break ;;
+            3) uninstall_battle_net; break ;;
+            *) echo -e "${RED}Invalid option; try again${NC}"; sleep 0.5 ;;
+        esac
+    done
+}
+
+uninstall_ubisoft() {
+    local UBISOFT_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+    if [ ! -d "$UBISOFT_DIR" ]; then
+        echo -e "${YELLOW}Ubisoft platform not detected; nothing to uninstall.${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}Running Ubisoft official uninstaller...${NC}"
+    export STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform"
+    export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
+    ~/.steam/root/steamapps/common/Proton\ -\ Experimental/proton waitforexitandrun \
+        "$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/Uninstall.exe" /S
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Uninstaller finished; deleting leftover directories...${NC}"
+        rm -rf "$UBISOFT_DIR"
+        if [ ! -d "$UBISOFT_DIR" ]; then
+            echo -e "${GREEN}✓ Ubisoft platform uninstalled.${NC}"
+        else
+            echo -e "${YELLOW}⚠️ Failed to delete leftover directory; remove manually: $UBISOFT_DIR${NC}"
+        fi
+    else
+        echo -e "${RED}✗ Uninstaller failed; try deleting the directory manually.${NC}"
+    fi
+
+    local DESKTOP_FILE="$HOME/Desktop/Ubisoft Connect.desktop"
+    if [ -f "$DESKTOP_FILE" ]; then
+        rm -f "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ Desktop shortcut deleted: Ubisoft Connect.desktop${NC}"
+    else
+        echo -e "${YELLOW}Desktop shortcut not found; skipped.${NC}"
+    fi
+
+    echo ""
+    echo -e "${YELLOW}Please manually remove the corresponding non-Steam shortcut from your Steam library (right-click → Manage → Remove non-Steam game).${NC}"
+}
+
+uninstall_epic() {
+    local EPIC_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
+    local EPIC_DIR_X86="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Epic Games"
+    if [ ! -d "$EPIC_DIR" ] && [ ! -d "$EPIC_DIR_X86" ]; then
+        echo -e "${YELLOW}Epic platform not detected; nothing to uninstall.${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}Deleting Epic platform directory...${NC}"
+    if [ -d "$EPIC_DIR" ]; then
+        rm -rf "$EPIC_DIR"
+        if [ ! -d "$EPIC_DIR" ]; then
+            echo -e "${GREEN}✓ Epic platform directory deleted: $EPIC_DIR${NC}"
+        else
+            echo -e "${RED}✗ Delete failed; remove manually: $EPIC_DIR${NC}"
+        fi
+    fi
+
+    if [ -d "$EPIC_DIR_X86" ]; then
+        rm -rf "$EPIC_DIR_X86"
+        if [ ! -d "$EPIC_DIR_X86" ]; then
+            echo -e "${GREEN}✓ Epic platform directory deleted: $EPIC_DIR_X86${NC}"
+        else
+            echo -e "${RED}✗ Delete failed; remove manually: $EPIC_DIR_X86${NC}"
+        fi
+    fi
+
+    local DESKTOP_FILE="$HOME/Desktop/Epic Games Launcher.desktop"
+    if [ -f "$DESKTOP_FILE" ]; then
+        rm -f "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ Desktop shortcut deleted: Epic Games Launcher.desktop${NC}"
+    else
+        echo -e "${YELLOW}Desktop shortcut not found; skipped.${NC}"
+    fi
+
+    echo ""
+    echo -e "${YELLOW}Please manually remove the corresponding non-Steam shortcut from your Steam library (right-click → Manage → Remove non-Steam game).${NC}"
+}
+
+uninstall_battle_net() {
+    local BATTLE_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
+    if [ ! -d "$BATTLE_DIR" ]; then
+        echo -e "${YELLOW}Battle.net platform not detected; nothing to uninstall.${NC}"
+        return 0
+    fi
+
+    echo -e "${CYAN}Deleting Battle.net platform directory...${NC}"
+    rm -rf "$BATTLE_DIR"
+    if [ ! -d "$BATTLE_DIR" ]; then
+        echo -e "${GREEN}✓ Battle.net platform uninstalled.${NC}"
+    else
+        echo -e "${RED}✗ Delete failed; remove manually: $BATTLE_DIR${NC}"
+    fi
+
+    local DESKTOP_FILE="$HOME/Desktop/Battle.net.desktop"
+    if [ -f "$DESKTOP_FILE" ]; then
+        rm -f "$DESKTOP_FILE"
+        echo -e "${GREEN}✓ Desktop shortcut deleted: Battle.net.desktop${NC}"
+    else
+        echo -e "${YELLOW}Desktop shortcut not found; skipped.${NC}"
+    fi
+
+    echo ""
+    echo -e "${YELLOW}Please manually remove the corresponding non-Steam shortcut from your Steam library (right-click → Manage → Remove non-Steam game).${NC}"
+}
+
+if [ -n "${1:-}" ] && declare -f "$1" > /dev/null; then
+    "$@"
+else
+    echo "This script is an embedded library; call a specific function via arguments."
+fi
+'''
+
+def get_bash_script():
+    """Return embedded shell library for the current UI language."""
+    return BASH_SCRIPT_EN if get_lang() == 'en' else BASH_SCRIPT_ZH
+
+# Back-compat alias; create_temp_script() uses get_bash_script().
+BASH_SCRIPT = BASH_SCRIPT_ZH
+
+
 # ============================================================================
 # Python GUI
 # ============================================================================
 def create_temp_script(extra_content=''):
     fd, path = tempfile.mkstemp(suffix='.sh')
     with os.fdopen(fd, 'w', encoding='utf-8') as f:
-        f.write(BASH_SCRIPT)
+        f.write(get_bash_script())
         if extra_content:
             f.write('\n' + extra_content + '\n')
     os.chmod(path, 0o755)
@@ -7363,17 +15025,17 @@ def create_temp_script(extra_content=''):
 
 class TaskWindow(Gtk.Window):
     def __init__(self, parent, func_key, display_name):
-        super().__init__(title=f"执行任务: {display_name}")
+        super().__init__(title=(f"Running Task: {display_name}" if get_lang() == "en" else f"执行任务: {display_name}"))
         self.set_default_size(760, 520)
         task_header = Gtk.HeaderBar()
         task_header.set_show_close_button(True)
         task_header.props.title = display_name
-        task_header.props.subtitle = "任务运行中"
+        task_header.props.subtitle = t("task_running")
         # HeaderBar 默认只画「关闭」一个按钮，最小化/最大化按钮要自己加
         # （gtk-decoration-layout 只对系统原生装饰生效，对自定义 HeaderBar 无效）
         self._max_btn = Gtk.Button()
         self._max_btn.set_relief(Gtk.ReliefStyle.NONE)
-        self._max_btn.set_tooltip_text("最大化 / 还原")
+        self._max_btn.set_tooltip_text(t("maximize"))
         self._max_btn_image = Gtk.Image.new_from_icon_name(
             "window-maximize-symbolic", Gtk.IconSize.BUTTON)
         self._max_btn.add(self._max_btn_image)
@@ -7397,11 +15059,11 @@ class TaskWindow(Gtk.Window):
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(vbox)
         if self.use_external_terminal:
-            label = Gtk.Label(label="任务已在外部终端中运行，请查看弹出的终端窗口。")
+            label = Gtk.Label(label=t("task_external"))
             label.set_margin_top(20)
             label.set_margin_bottom(20)
             vbox.pack_start(label, True, True, 0)
-            self.action_btn = Gtk.Button(label="关闭")
+            self.action_btn = Gtk.Button(label=t("close"))
             self.action_btn.connect("clicked", lambda btn: self.destroy())
             button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
             button_box.set_margin_bottom(5)
@@ -7448,18 +15110,18 @@ class TaskWindow(Gtk.Window):
             button_box.set_margin_bottom(5)
             button_box.set_margin_start(10)
             button_box.set_margin_end(10)
-            self.timer_label = Gtk.Label(label="已运行 0:00")
+            self.timer_label = Gtk.Label(label=t("elapsed_zero"))
             self.timer_label.set_name("task-timer")
             button_box.pack_start(self.timer_label, False, False, 0)
             button_box.pack_start(Gtk.Label(), True, True, 0)
 
             # 复制按钮：有选中内容时复制选中，否则复制全部输出
-            self.copy_btn = Gtk.Button(label="复制")
-            self.copy_btn.set_tooltip_text("复制选中的终端内容；未选中时复制全部输出")
+            self.copy_btn = Gtk.Button(label=t("copy"))
+            self.copy_btn.set_tooltip_text(t("copy_tooltip"))
             self.copy_btn.connect("clicked", self.on_copy_clicked)
             button_box.pack_start(self.copy_btn, False, False, 0)
 
-            self.action_btn = Gtk.Button(label="取消")
+            self.action_btn = Gtk.Button(label=t("cancel"))
             self.action_btn.connect("clicked", self.on_action_button_clicked)
             button_box.pack_start(self.action_btn, False, False, 0)
             vbox.pack_start(button_box, False, False, 0)
@@ -7483,10 +15145,10 @@ class TaskWindow(Gtk.Window):
         """有选中内容时复制选中，否则复制全部输出，并给出短时反馈。"""
         if self._terminal_has_selection():
             ok = self._copy_selection()
-            msg = "已复制选中内容" if ok else "复制失败"
+            msg = t("copy_sel_ok") if ok else t("copy_fail")
         else:
             ok = self._copy_all_output()
-            msg = "已复制全部输出" if ok else "没有可复制的内容"
+            msg = t("copy_all_ok") if ok else t("copy_empty")
         self._flash_copy_button(msg)
 
     def _on_terminal_key_press(self, widget, event):
@@ -7519,7 +15181,7 @@ class TaskWindow(Gtk.Window):
             self.copy_btn.set_label(msg)
             def restore():
                 try:
-                    self.copy_btn.set_label(old if old else "复制")
+                    self.copy_btn.set_label(old if old else t("copy"))
                 except Exception:
                     pass
                 return False
@@ -7620,22 +15282,22 @@ class TaskWindow(Gtk.Window):
         menu = Gtk.Menu()
         has_sel = self._terminal_has_selection()
 
-        item_copy = Gtk.MenuItem(label="复制选中内容")
+        item_copy = Gtk.MenuItem(label=t("copy_sel"))
         item_copy.set_sensitive(has_sel)
         item_copy.connect("activate", lambda *_: self._copy_selection())
         menu.append(item_copy)
 
-        item_copy_all = Gtk.MenuItem(label="复制全部输出")
+        item_copy_all = Gtk.MenuItem(label=t("copy_all"))
         item_copy_all.connect("activate", lambda *_: self._copy_all_output())
         menu.append(item_copy_all)
 
-        item_paste = Gtk.MenuItem(label="粘贴")
+        item_paste = Gtk.MenuItem(label=t("paste"))
         item_paste.connect("activate", lambda *_: self._paste_to_terminal())
         menu.append(item_paste)
 
         menu.append(Gtk.SeparatorMenuItem())
 
-        item_sel_all = Gtk.MenuItem(label="全选")
+        item_sel_all = Gtk.MenuItem(label=t("select_all"))
         item_sel_all.connect("activate", lambda *_: self.terminal.select_all())
         menu.append(item_sel_all)
 
@@ -7655,12 +15317,14 @@ class TaskWindow(Gtk.Window):
 
     def run_external(self, func_key):
         tmp_path = create_temp_script()
-        cmd = f"bash {tmp_path} {func_key}; read -p '按回车键关闭...' -n1"
+        close_prompt = ("Press Enter to close..." if get_lang() == "en" else "按回车键关闭...")
+        cmd = f"bash {tmp_path} {func_key}; read -p '{close_prompt}' -n1"
         if not launch_terminal(cmd):
             dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
-                                    type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK,
-                                    text="未找到可用的终端模拟器")
-            dlg.format_secondary_text("请安装 konsole 或 xterm 后重试。")
+                                    type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.NONE,
+                                    text=t("no_terminal"))
+            dlg.add_button(t("ok"), Gtk.ResponseType.OK)
+            dlg.format_secondary_text(t("no_terminal_hint"))
             fix_dialog_size(dlg)
             dlg.run(); dlg.destroy()
 
@@ -7676,7 +15340,7 @@ class TaskWindow(Gtk.Window):
             None
         )
         if not ok or not self.child_pid:
-            self.action_btn.set_label("启动失败")
+            self.action_btn.set_label(t("start_fail"))
             self.action_btn.set_sensitive(True)
             return
         self.terminal.connect("child-exited", self.on_child_exited)
@@ -7687,9 +15351,9 @@ class TaskWindow(Gtk.Window):
     def set_completed(self):
         self.completed = True
         self.action_btn.set_sensitive(True)
-        self.action_btn.set_label("完成")
+        self.action_btn.set_label(t("task_complete_btn"))
         try:
-            self._task_header.props.subtitle = "任务已完成"
+            self._task_header.props.subtitle = t("task_done")
         except Exception:
             pass
 
@@ -7698,7 +15362,7 @@ class TaskWindow(Gtk.Window):
             return False
         elapsed = int(time.time() - self.start_time)
         m, s = divmod(elapsed, 60)
-        self.timer_label.set_text(f"已运行 {m}:{s:02d}")
+        self.timer_label.set_text(t("elapsed", m=m, s=s))
         return True
 
     def _kill_task(self):
@@ -7720,7 +15384,7 @@ class TaskWindow(Gtk.Window):
             return
         self._kill_task()
         self.action_btn.set_sensitive(False)
-        self.action_btn.set_label("正在取消...")
+        self.action_btn.set_label(t("cancelling"))
         GLib.timeout_add(500, self.destroy)
 
     def force_kill(self):
@@ -7743,7 +15407,7 @@ class TaskWindow(Gtk.Window):
 
 class MainWindow(Gtk.Window):
     def __init__(self):
-        super().__init__(title="Steam Deck 工具箱")
+        super().__init__(title=t("app_title"))
         self.set_icon_name("input-gamepad-symbolic")
         self.set_default_size(950, 620)
         self.set_position(Gtk.WindowPosition.CENTER)
@@ -7752,19 +15416,20 @@ class MainWindow(Gtk.Window):
 
         header = Gtk.HeaderBar()
         header.set_show_close_button(True)
-        header.props.title = "Steam Deck 工具箱"
-        header.props.subtitle = f"v{VERSION}  ·  {self.system_type}"
+        header.props.title = t("app_title")
+        header.props.subtitle = f"v{VERSION}  ·  {system_type_display(self.system_type)}"
+        self._header = header
         self.set_titlebar(header)
 
         self.search_entry = Gtk.SearchEntry()
-        self.search_entry.set_placeholder_text("全局搜索功能...")
+        self.search_entry.set_placeholder_text(t("search_placeholder"))
         self.search_entry.set_width_chars(20)
         self.search_entry.connect("search-changed", self.on_search_changed)
         header.pack_end(self.search_entry)
 
         # 主题切换按钮（深色 / 浅色 / 跟随系统）
         self.theme_button = Gtk.MenuButton()
-        self.theme_button.set_tooltip_text("切换深色 / 浅色模式")
+        self.theme_button.set_tooltip_text(t("theme_tooltip"))
         self.theme_button.set_relief(Gtk.ReliefStyle.NONE)
         self._theme_icon = Gtk.Image.new_from_icon_name("weather-clear-night-symbolic",
                                                         Gtk.IconSize.BUTTON)
@@ -7772,102 +15437,20 @@ class MainWindow(Gtk.Window):
         header.pack_end(self.theme_button)
         self._build_theme_menu()
 
+        # 语言切换（中 / 英）
+        self.lang_button = Gtk.MenuButton()
+        self.lang_button.set_tooltip_text(t("lang_tooltip"))
+        self.lang_button.set_relief(Gtk.ReliefStyle.NONE)
+        self._lang_icon = Gtk.Image.new_from_icon_name("preferences-desktop-locale-symbolic",
+                                                       Gtk.IconSize.BUTTON)
+        self.lang_button.add(self._lang_icon)
+        header.pack_end(self.lang_button)
+        self._build_lang_menu()
+
         self._current_page = "func"
 
-        self.icon_map = {
-            "支持和维护": "pushpin.png", "更新日志": "clipboard_twemoji.png",
-            "系统优化": "hammer_wrench.png", "软件安装": "package.png",
-            "网络工具": "globe.png", "插件相关": "game_controller.png",
-            "引导管理": "refresh.png", "更新和卸载软件": "inbox.png", "其他": "trash.png"
-        }
-
-        self.category_tree = {
-            "支持和维护": [],
-            "更新日志": [],
-            "系统优化": [
-                ("切换软件源（国内/官方）", "install_chinese_source"),
-                ("调整虚拟内存", "adjust_swap"),
-                ("修复磁盘写入错误", "fix_disk_write_error"),
-                ("清理hosts缓存", "clear_hosts_cache"),
-                ("校准设备", [
-                    ("校准摇杆", "calibrate_joystick_stick"),
-                    ("校准扳机", "calibrate_joystick_trigger")
-                ]),
-                ("Steam缓存管理", "steamdeck_cache_manager"),
-                ("GE-Proton 管理", "ge_proton_manager")
-            ],
-            "软件安装": [
-                ("AnyDesk", "install_anydesk"),
-                ("ToDesk", "install_todesk"),
-                ("AskLink远程", "install_asklink"),
-                ("WPS Office", "install_wps_office"),
-                ("QQ", "install_qq"),
-                ("微信", "install_wechat"),
-                ("QQ音乐", "install_qqmusic"),
-                ("百度网盘", "install_baidunetdisk"),
-                ("Edge浏览器", "install_edge"),
-                ("Google浏览器", "install_chrome"),
-                ("Fcitx 5", "install_fcitx5")
-            ],
-            "网络工具": [
-                ("UU加速器插件", "install_uu_accelerator"),
-                ("迅游加速器插件", "install_xunyou_accelerator"),
-                ("奇游联机宝加速插件", "install_qiyou_accelerator"),
-                ("Watt Toolkit (Steam++)", [
-                    ("安装", "watt_toolkit_install"),
-                    ("信任证书", "watt_toolkit_trust_cert"),
-                    ("卸载", "watt_toolkit_uninstall")
-                ])
-            ],
-            "插件相关": [
-                ("安装/卸载插件商店", [
-                    ("安装插件商店", "install_plugin_store"),
-                    ("卸载插件商店", "uninstall_plugin_store")
-                ]),
-                ("ToMoon 插件", [
-                    ("安装/更新 ToMoon", "install_tomoon_install"),
-                    ("卸载 ToMoon", "install_tomoon_uninstall")
-                ]),
-                ("Freedeck 插件", [
-                    ("安装/更新 Freedeck", "install_freedeck_install"),
-                    ("卸载 Freedeck", "install_freedeck_uninstall")
-                ]),
-                ("LSFG-VK插件", [
-                    ("安装/更新 LSFG-VK", "install_decky_lsfg_vk_install"),
-                    ("卸载 LSFG-VK", "install_decky_lsfg_vk_uninstall")
-                ]),
-                ("Framegen插件", [
-                    ("安装/更新 Framegen", "install_decky_framegen_install"),
-                    ("卸载 Framegen", "install_decky_framegen_uninstall")
-                ])
-            ],
-            "引导管理": [
-                ("安装/重装 Clover", "clover_install_or_reinstall")
-            ],
-            "更新和卸载软件": [
-                ("更新已安装应用", "update_installed_apps"),
-                ("卸载已安装应用", [
-                    ("卸载 WPS Office", "uninstall_wps_office"),
-                    ("卸载 QQ", "uninstall_qq"),
-                    ("卸载微信", "uninstall_wechat"),
-                    ("卸载 QQ音乐", "uninstall_qqmusic"),
-                    ("卸载百度网盘", "uninstall_baidunetdisk"),
-                    ("卸载 Edge浏览器", "uninstall_edge"),
-                    ("卸载 Google浏览器", "uninstall_chrome"),
-                    ("卸载 AnyDesk", "uninstall_anydesk"),
-                    ("卸载 ToDesk", "uninstall_todesk"),
-                    ("卸载Fcitx 5", "uninstall_fcitx5"),
-                    ("卸载其他已安装应用", "uninstall_other_flatpak_apps")
-                ])
-            ],
-            "其他": [
-                ("小黄鸭软件", "install_yellow_duck_software"),
-                ("安装/卸载第三方游戏平台", [
-                    ("安装第三方游戏平台", "install_third_party_platform"),
-                    ("卸载第三方游戏平台", "uninstall_third_party_platform")
-                ])
-            ]
-        }
+        self.icon_map = build_icon_map()
+        self.category_tree = build_category_tree()
 
         main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(main_vbox)
@@ -7897,9 +15480,9 @@ class MainWindow(Gtk.Window):
         sidebar_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         sidebar_header.set_name("sidebar-header")
         sidebar_icon = Gtk.Image.new_from_icon_name("input-gamepad-symbolic", Gtk.IconSize.BUTTON)
-        sidebar_title = Gtk.Label(label="功能分类"); sidebar_title.set_halign(Gtk.Align.START)
+        self.sidebar_title = Gtk.Label(label=t("cat_sidebar")); self.sidebar_title.set_halign(Gtk.Align.START)
         sidebar_header.pack_start(sidebar_icon, False, False, 0)
-        sidebar_header.pack_start(sidebar_title, False, False, 0)
+        sidebar_header.pack_start(self.sidebar_title, False, False, 0)
 
         left_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         left_panel.set_size_request(258, -1)
@@ -7913,28 +15496,20 @@ class MainWindow(Gtk.Window):
         # About page
         about_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         about_box.set_margin_top(20); about_box.set_margin_bottom(20); about_box.set_margin_start(20); about_box.set_margin_end(20)
-        about_title = Gtk.Label(); about_title.set_name("page-title"); about_title.set_markup("<big><b>关于本工具</b></big>"); about_title.set_halign(Gtk.Align.START)
-        about_box.pack_start(about_title, False, False, 0)
-        about_textview = Gtk.TextView(); about_textview.set_editable(False); about_textview.set_wrap_mode(Gtk.WrapMode.WORD)
-        about_textview.set_left_margin(16); about_textview.set_right_margin(16); about_textview.set_top_margin(14); about_textview.set_bottom_margin(14)
-        about_textview.get_style_context().add_class("card")
-        about_text = f"""
-steamdeck工具箱 v{VERSION}
-制作人：薯条 & DeepSeek
-发布日期：2026年1月1日
-工具箱介绍：这是一个专为 Steam Deck 设计的工具箱，集成了系统优化、软件安装、网络工具等多种功能。
-使用说明：点击左侧分类查看功能；顶部搜索框可跨分类查找；点击功能将弹出独立任务窗口。
-https://gitee.com/Zhucy2100/steamdeck_toolbox
-"""
-        about_textview.get_buffer().set_text(about_text)
-        scrolled_about = Gtk.ScrolledWindow(); scrolled_about.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC); scrolled_about.set_vexpand(True); scrolled_about.add(about_textview)
+        self.about_title = Gtk.Label(); self.about_title.set_name("page-title"); self.about_title.set_markup(f"<big><b>{t('about_title')}</b></big>"); self.about_title.set_halign(Gtk.Align.START)
+        about_box.pack_start(self.about_title, False, False, 0)
+        self.about_textview = Gtk.TextView(); self.about_textview.set_editable(False); self.about_textview.set_wrap_mode(Gtk.WrapMode.WORD)
+        self.about_textview.set_left_margin(16); self.about_textview.set_right_margin(16); self.about_textview.set_top_margin(14); self.about_textview.set_bottom_margin(14)
+        self.about_textview.get_style_context().add_class("card")
+        self.about_textview.get_buffer().set_text(about_body_text())
+        scrolled_about = Gtk.ScrolledWindow(); scrolled_about.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC); scrolled_about.set_vexpand(True); scrolled_about.add(self.about_textview)
         about_box.pack_start(scrolled_about, True, True, 0)
         self.stack.add_named(about_box, "about")
 
         changelog_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         changelog_box.set_margin_top(20); changelog_box.set_margin_bottom(20); changelog_box.set_margin_start(20); changelog_box.set_margin_end(20)
-        changelog_title = Gtk.Label(); changelog_title.set_name("page-title"); changelog_title.set_markup("<big><b>更新日志</b></big>"); changelog_title.set_halign(Gtk.Align.START)
-        changelog_box.pack_start(changelog_title, False, False, 0)
+        self.changelog_title = Gtk.Label(); self.changelog_title.set_name("page-title"); self.changelog_title.set_markup(f"<big><b>{t('cat_changelog')}</b></big>"); self.changelog_title.set_halign(Gtk.Align.START)
+        changelog_box.pack_start(self.changelog_title, False, False, 0)
         self.changelog_textview = Gtk.TextView(); self.changelog_textview.set_editable(False); self.changelog_textview.set_wrap_mode(Gtk.WrapMode.WORD)
         self.changelog_textview.set_cursor_visible(False)
         self.changelog_textview.set_left_margin(16); self.changelog_textview.set_right_margin(16); self.changelog_textview.set_top_margin(14); self.changelog_textview.set_bottom_margin(14)
@@ -7943,6 +15518,7 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.changelog_textview.get_style_context().add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         scrolled_changelog = Gtk.ScrolledWindow(); scrolled_changelog.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC); scrolled_changelog.set_vexpand(True); scrolled_changelog.add(self.changelog_textview)
         changelog_box.pack_start(scrolled_changelog, True, True, 0)
+        self.changelog_textview.get_buffer().set_text(changelog_body_text())
         self.stack.add_named(changelog_box, "changelog")
 
         func_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
@@ -7972,9 +15548,9 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.search_store = Gtk.ListStore(str, str, str)
         self.search_view = Gtk.TreeView(model=self.search_store)
         self.search_view.set_name("func-list")
-        col_name = Gtk.TreeViewColumn("功能"); r_name = Gtk.CellRendererText(); r_name.set_property("ypad", 9); col_name.pack_start(r_name, True); col_name.add_attribute(r_name, "text", 0)
-        col_cat = Gtk.TreeViewColumn("分类"); r_cat = Gtk.CellRendererText(); r_cat.set_property("ypad", 9); col_cat.pack_start(r_cat, True); col_cat.add_attribute(r_cat, "text", 1)
-        self.search_view.append_column(col_name); self.search_view.append_column(col_cat)
+        self.search_col_name = Gtk.TreeViewColumn(t("search_col_func")); r_name = Gtk.CellRendererText(); r_name.set_property("ypad", 9); self.search_col_name.pack_start(r_name, True); self.search_col_name.add_attribute(r_name, "text", 0)
+        self.search_col_cat = Gtk.TreeViewColumn(t("search_col_cat")); r_cat = Gtk.CellRendererText(); r_cat.set_property("ypad", 9); self.search_col_cat.pack_start(r_cat, True); self.search_col_cat.add_attribute(r_cat, "text", 1)
+        self.search_view.append_column(self.search_col_name); self.search_view.append_column(self.search_col_cat)
         self.search_view.set_headers_visible(True)
         self.search_view.set_activate_on_single_click(True)
         self.search_view.connect("row-activated", self.on_search_row_activated)
@@ -7992,8 +15568,8 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         self.status_label.set_name("status-label")
         bottom_bar.pack_start(self.status_label, False, False, 0)
         bottom_bar.pack_start(Gtk.Label(), True, True, 0)
-        help_btn = Gtk.Button(label="帮助"); help_btn.get_style_context().add_class("suggested-action"); help_btn.connect("clicked", self.on_help_clicked); bottom_bar.pack_start(help_btn, False, False, 0)
-        quit_btn = Gtk.Button(label="退出"); quit_btn.get_style_context().add_class("destructive-action"); quit_btn.connect("clicked", lambda b: self.destroy()); bottom_bar.pack_start(quit_btn, False, False, 0)
+        self.help_btn = Gtk.Button(label=t("help")); self.help_btn.get_style_context().add_class("suggested-action"); self.help_btn.connect("clicked", self.on_help_clicked); bottom_bar.pack_start(self.help_btn, False, False, 0)
+        self.quit_btn = Gtk.Button(label=t("quit")); self.quit_btn.get_style_context().add_class("destructive-action"); self.quit_btn.connect("clicked", lambda b: self.destroy()); bottom_bar.pack_start(self.quit_btn, False, False, 0)
         main_vbox.pack_start(bottom_bar, False, False, 0)
         self.update_status()
 
@@ -8024,7 +15600,7 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
             check = Gtk.Image.new_from_icon_name("object-select-symbolic", Gtk.IconSize.MENU)
             check.set_opacity(1.0 if mode == current else 0.0)
             hbox.pack_start(check, False, False, 0)
-            lbl = Gtk.Label(label=THEME_LABELS[mode])
+            lbl = Gtk.Label(label=theme_label(mode))
             hbox.pack_start(lbl, False, False, 0)
             row.add(hbox)
             row.connect("clicked", self.on_theme_row_clicked, mode)
@@ -8085,6 +15661,119 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
                 popover.popdown()
         except Exception:
             pass
+
+
+    # ------------------------------------------------------------------
+    # 语言切换
+    # ------------------------------------------------------------------
+    def _build_lang_menu(self):
+        """构建语言下拉菜单。"""
+        current = get_lang()
+        popover = Gtk.Popover()
+        popover.set_relative_to(self.lang_button)
+        popover.set_position(Gtk.PositionType.BOTTOM)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        box.set_margin_top(6); box.set_margin_bottom(6)
+        box.set_margin_start(6); box.set_margin_end(6)
+        box.get_style_context().add_class("theme-popover")
+        self._lang_items = {}
+        for lang, label_key in (("zh", "lang_zh"), ("en", "lang_en")):
+            row = Gtk.Button()
+            row.set_relief(Gtk.ReliefStyle.NONE)
+            row.get_style_context().add_class("theme-row")
+            h = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            check = Gtk.Image.new_from_icon_name(
+                "object-select-symbolic" if lang == current else "",
+                Gtk.IconSize.BUTTON)
+            lbl = Gtk.Label(label=t(label_key))
+            lbl.set_halign(Gtk.Align.START)
+            h.pack_start(check, False, False, 0)
+            h.pack_start(lbl, True, True, 0)
+            row.add(h)
+            row.connect("clicked", self.on_lang_row_clicked, lang)
+            self._lang_items[lang] = (row, check)
+            box.pack_start(row, False, False, 0)
+        box.show_all()
+        popover.add(box)
+        self.lang_button.set_popover(popover)
+        self._lang_menu = popover
+
+    def on_lang_row_clicked(self, button, lang):
+        if lang == get_lang():
+            try:
+                popover = self.lang_button.get_popover()
+                if popover is not None:
+                    popover.popdown()
+            except Exception:
+                pass
+            return
+        set_lang(lang)
+        save_lang_pref(lang)
+        self._refresh_ui_language()
+        try:
+            popover = self.lang_button.get_popover()
+            if popover is not None:
+                popover.popdown()
+        except Exception:
+            pass
+
+    def _refresh_ui_language(self):
+        """立即刷新可见 UI 文案与分类树。"""
+        # 记住当前选中的分类序号
+        selected_index = 0
+        try:
+            model, it = self.cat_view.get_selection().get_selected()
+            if it is not None:
+                selected_index = model.get_path(it).get_indices()[0]
+        except Exception:
+            selected_index = 0
+        page = getattr(self, "_current_page", "func")
+        search_text = self.search_entry.get_text() if self.search_entry else ""
+
+        self.set_title(t("app_title"))
+        if getattr(self, "_header", None) is not None:
+            self._header.props.title = t("app_title")
+            self._header.props.subtitle = f"v{VERSION}  ·  {system_type_display(self.system_type)}"
+        self.search_entry.set_placeholder_text(t("search_placeholder"))
+        self.theme_button.set_tooltip_text(t("theme_tooltip"))
+        self.lang_button.set_tooltip_text(t("lang_tooltip"))
+        self.sidebar_title.set_text(t("cat_sidebar"))
+        self.help_btn.set_label(t("help"))
+        self.quit_btn.set_label(t("quit"))
+        self.about_title.set_markup(f"<big><b>{t('about_title')}</b></big>")
+        self.about_textview.get_buffer().set_text(about_body_text())
+        self.changelog_title.set_markup(f"<big><b>{t('cat_changelog')}</b></big>")
+        self.changelog_textview.get_buffer().set_text(changelog_body_text())
+        self.search_col_name.set_title(t("search_col_func"))
+        self.search_col_cat.set_title(t("search_col_cat"))
+
+        self.icon_map = build_icon_map()
+        self.category_tree = build_category_tree()
+        self.list_store.clear()
+        self.category_icons = {}
+        for cat in self.category_tree.keys():
+            icon_file = self.icon_map.get(cat)
+            pixbuf = load_icon_pixbuf(icon_file, 28) if icon_file else None
+            self.list_store.append([pixbuf, cat])
+            self.category_icons[cat] = pixbuf
+        self.func_map = {}
+        self.build_func_map()
+        self._build_theme_menu()
+        self._build_lang_menu()
+        self.update_status()
+
+        # 恢复侧栏选中并刷新右侧
+        try:
+            path = Gtk.TreePath.new_from_indices([min(selected_index, max(0, len(self.list_store) - 1))])
+            self.cat_view.get_selection().select_path(path)
+            self.on_category_activated(self.cat_view, path, None)
+        except Exception:
+            pass
+        if search_text.strip():
+            self.search_entry.set_text(search_text)
+            self.on_search_changed(self.search_entry)
+        elif page in ("about", "changelog", "func"):
+            self._current_page = page
 
     def build_func_map(self):
         for items in self.category_tree.values():
@@ -8173,10 +15862,10 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         model = treeview.get_model(); iter_ = model.get_iter(path); category = model.get_value(iter_, 1)
         if self.search_entry.get_text().strip():
             self.search_entry.set_text("")
-        if category == "支持和维护":
+        if category == t("cat_support"):
             self._current_page = "about"
             self.stack.set_visible_child_name("about"); self.title_icon.set_visible(False); self.category_title.set_visible(False); return
-        if category == "更新日志":
+        if category == t("cat_changelog"):
             self._current_page = "changelog"
             self.stack.set_visible_child_name("changelog")
             icon_pixbuf = self.category_icons.get(category)
@@ -8190,19 +15879,19 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         icon_pixbuf = self.category_icons.get(category)
         if icon_pixbuf: self.title_icon.set_from_pixbuf(icon_pixbuf); self.title_icon.set_visible(True)
         else: self.title_icon.set_visible(False)
-        if category == "系统优化": title_text = f"<big><b>{category} [{self.system_type}]</b></big>"
+        if category == t("cat_sysopt"): title_text = f"<big><b>{category} [{system_type_display(self.system_type)}]</b></big>"
         else: title_text = f"<big><b>{category}</b></big>"
         self.category_title.set_markup(title_text); self.category_title.set_visible(True)
 
         self.func_store.clear()
         items = list(self.category_tree.get(category, []))
-        if category == "系统优化" and self.system_type == "双系统":
-            items = items[:] + [("系统体检", "health_check"),
-                                ("修复引导", "fix_boot"),
-                                ("修复互通盘", "fix_shared_disk")]
-            self.func_map["系统体检"] = "health_check"
-            self.func_map["修复引导"] = "fix_boot"
-            self.func_map["修复互通盘"] = "fix_shared_disk"
+        if category == t("cat_sysopt") and self.system_type == "双系统":
+            items = items[:] + [(fl("health_check"), "health_check"),
+                                (fl("fix_boot"), "fix_boot"),
+                                (fl("fix_shared_disk"), "fix_shared_disk")]
+            self.func_map[fl("health_check")] = "health_check"
+            self.func_map[fl("fix_boot")] = "fix_boot"
+            self.func_map[fl("fix_shared_disk")] = "fix_shared_disk"
 
         for item in items:
             if isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], str):
@@ -8228,18 +15917,17 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
                         walk(item[1], cat)
             walk(items, cat)
         if self.system_type == "双系统":
-            for name, key in (("系统体检", "health_check"),
-                              ("修复引导", "fix_boot"),
-                              ("修复互通盘", "fix_shared_disk")):
+            for key in ("health_check", "fix_boot", "fix_shared_disk"):
+                name = fl(key)
                 if query in name.lower():
-                    matches.append((name, "系统优化", key))
+                    matches.append((name, t("cat_sysopt"), key))
         self.search_store.clear()
         for name, cat, key in matches:
             self.search_store.append([name, cat, key])
         if matches:
-            self.search_title.set_markup(f"<big><b>搜索结果（{len(matches)} 项）</b></big>")
+            self.search_title.set_markup(f"<big><b>{t('search_results', n=len(matches))}</b></big>")
         else:
-            self.search_title.set_markup("<big><b>搜索结果（无匹配）</b></big>")
+            self.search_title.set_markup(f"<big><b>{t('search_none')}</b></big>")
         self.stack.set_visible_child_name("search")
 
     def on_search_row_activated(self, treeview, path, column):
@@ -8251,9 +15939,11 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
     def run_function(self, func_name, func_key):
         if func_key in DANGEROUS_FUNCS:
             dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
-                                    type=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.YES_NO,
-                                    text=f"危险操作确认：{func_name}")
-            dlg.format_secondary_text(DANGEROUS_HINTS.get(func_key, DEFAULT_DANGEROUS_HINT))
+                                    type=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.NONE,
+                                    text=t("danger_title", name=func_name))
+            dlg.add_button(t("no"), Gtk.ResponseType.NO)
+            dlg.add_button(t("yes"), Gtk.ResponseType.YES)
+            dlg.format_secondary_text(dangerous_hint(func_key))
             # 危险操作默认焦点放在「否」上，避免误按回车直接执行
             try:
                 dlg.set_default_response(Gtk.ResponseType.NO)
@@ -8265,347 +15955,20 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
             if response != Gtk.ResponseType.YES:
                 return
 
-        if func_name in ("Steam缓存管理", "GE-Proton 管理", "卸载其他已安装应用"):
+        if func_key in ("steamdeck_cache_manager", "ge_proton_manager", "uninstall_other_flatpak_apps"):
             self._run_standalone_script(func_key); return
-        if func_name == "UU加速器插件":
+        if func_key == "install_uu_accelerator":
             self.run_external_terminal(func_key); return
 
         if self.task_window: self.task_window.destroy()
         self.task_window = TaskWindow(self, func_key, func_name)
 
     def update_status(self):
-        term = "内嵌终端" if VTE_AVAILABLE else "外部终端"
-        self.status_label.set_text(f"系统: {self.system_type} ｜ 终端: {term} ｜ 版本: v{VERSION}")
+        term = t("term_embedded") if VTE_AVAILABLE else t("term_external")
+        self.status_label.set_text(t("status", sys=system_type_display(self.system_type), term=term, ver=VERSION))
 
     def display_changelog(self):
-        changelog_content = """2026-10-27（v1.9.6）
-【问题修复】
-- 修复「切换软件源」每次都会误报「无法下载 flathub 公钥」的警告：
-  · 原因：原逻辑每次切源都无条件去 dl.flathub.org 重新下载一遍公钥，而该站经常连不上，
-    于是每次都打一条黄字警告。但公钥是「导入一次就长期有效」的，正常设备上早就有了
-    （/var/lib/flatpak/repo/flathub.trustedkeys.gpg），功能完全正常，这条警告纯属误导
-  · 现在先检查本地是否已有可用公钥（并用 gpg 确认里面确实是 Flathub 的密钥，
-    避免损坏的空壳文件误判），有就直接跳过下载，不再打印任何警告
-  · 本地确实没有时才去下载，且按「官方 → 中科大 → CERNET」依次尝试
-  · 只有真的全都拿不到才告警，并明确写出后果（安装/更新会报 Could not find public key）
-    和两条手动修复命令，而不是让用户猜
-
-2026-10-26（v1.9.5）
-【问题修复】
-- 修复「更新全部应用」在提示「没有更新。」之后长时间卡住：
-  · 根因：flatpak update 的流程是「先查更新 → 再刷新 appstream 元数据」。第二步要去
-    dl.flathub.org 拉约 10MB 的 appstream 数据，而该站当前连通率极低（实测 8 次试连
-    只有 1 次成功），连接超时后还会重试 5 轮，于是卡在「正在为远程仓库 flathub 更新
-    appstream 数据」几分钟甚至更久
-  · 但 appstream 只是软件介绍/图标等展示用元数据，和「能不能更新」完全无关，
-    所以现在改为直接跳过它：用 remote-ls 查更新（只刷新 summary，走镜像站，很快），
-    再按需执行 update
-  · 现在没有更新时会明确显示「所有已安装应用均为最新版本，无需更新」，不再卡住
-  · 联网检查失败时先退回本地缓存判断；缓存里也没有才报「无法检查更新」，不会假装最新
-  · 更新下载加了 20 分钟超时，超时会明确提示而不是静默挂起；更新完再用本地缓存复核一遍，
-    还有残留会列出来
-
-【功能改进】
-- 「安装国内源」改为「切换软件源（国内/官方）」，改为菜单选择，不再写死单一镜像：
-  · 新增 4 个国内可选源 + 1 个「恢复官方源」选项，逐个实测确认可用：
-    中科大 (USTC)、中科大-联通节点、中科大-移动节点、CERNET 教育网聚合
-  · 菜单里会先显示当前使用的源，选完再做可用性验证；验证失败会自动回滚到原来的源，
-    并提示「可换一个源再试」
-  · 恢复官方源时若因为网络不通而验证失败，不会误报失败，而是说明「地址已设置成功，
-    网络恢复后即可用」
-  · 顺带纠正原注释里过时的探测结论：sjtu 已 301 跳回官方（等于没加速），
-    nju / sustech / bfsu / tuna / aliyun / tencent / huawei / zju / jlu / iscas /
-    xjtu / scau / qlu 的 flathub 返回 HTML 首页或 404，并非真实镜像
-  · 说明：国内镜像都是 Flathub 的缓存而非完整镜像，未命中的文件会 302 回官方站，
-    因此仍需能基本连通 dl.flathub.org
-
-2026-10-26（v1.9.4）
-【问题修复】
-- 修复「GE-Proton 管理」安装时误报「解压失败（压缩包损坏或解压中断）」：
-  · 根因一（主因）：上游从 GE-Proton11-4 起改了产物命名，压缩包和包内顶层目录都带架构后缀
-    （GE-Proton11-11-x86_64.tar.gz，解开是 GE-Proton11-11-x86_64/），而 release tag 仍是
-    GE-Proton11-11。旧代码解压后写死检查 $STAGE_DIR/GE-Proton11-11，找不到就当成解压失败。
-    实际包是好的，tar 退出码也是 0，纯粹是判据写死了目录名
-  · 根因二：镜像断流时返回 200 + 截断的包，curl 认为成功，tar 一路解到末尾才报 EOF，
-    表现同样是「解压失败」。现在下载后先用文件大小 + sha512 校验，截断/损坏的包在解压前就被拦下
-  · 现在解压后按「stage 里唯一的顶层目录」定位，并用 <tag> 与 <tag>-* 前缀兜底；
-    安装目录名仍保持 <tag>（GE-Proton11-11），已装列表/卸载/Steam 显示名与旧版本一致
-  · 下载失败提示更具体：区分「下载不完整（x/y 字节）」「sha512 校验失败」「压缩包结构异常」，
-    不再一律报「解压失败」，便于判断是网络问题还是上游改名
-  · 安装循环结束后补充清理下载临时目录，用户中途取消不再留 /tmp/ge_proton_* 残留
-
-2026-10-26（v1.9.3）
-【功能改进】
-- 「Watt Toolkit (Steam++)」安装完成后新增一步「信任证书」，不再需要装完再手动敲命令
-  · 把加速插件自签的根证书（~/.local/share/Steam++/Plugins/Accelerator/SteamTools.Certificate.cer）
-    写入系统信任库；把 /etc/hosts 设为可读写，加速改 hosts 时不用每次提权
-  · 证书由 Watt Toolkit 首次运行时生成，安装包里没有；若检测不到会提示先启动软件点一次「加速」，
-    并可代为拉起 Watt Toolkit，之后按回车重新检测（Q 放弃）
-  · 写入前用 openssl 校验证书可解析、未过期，避免把损坏文件写进信任库；已存在则提示为覆盖更新
-  · 明确告知安全影响：信任该根证书等价于允许对应私钥持有者解密本机 https 流量
-- 「网络工具 → Watt Toolkit (Steam++)」新增独立的「信任证书」菜单项，可随时重跑
-  （证书重新生成、换设备后需要再次信任）
-- 卸载 Watt Toolkit 时提示并可选一并清除系统级改动：从信任库移除该根证书、
-  把 /etc/hosts 权限从所有人可写恢复，并刷新系统证书包；跳过则给出手动命令
-
-2026-10-26（v1.9.2）
-【功能改进】
-- 「安装 ToDesk」检测到本机已安装时，选项从两个增加为三个：新增「3. 卸载 ToDesk（不再安装）」，
-  可以直接在安装流程里把 ToDesk 卸掉，不用再绕到「更新和卸载软件」里找（回车默认仍是 2 不安装，
-  不会误触）
-- 新增独立的「卸载 ToDesk」菜单项（更新和卸载软件 → 卸载已安装应用），可单独调用
-- 卸载范围覆盖 ToDesk 的两种安装来源：pacman 包（todesk-bin / todesk）、手动解包安装的
-  /opt/todesk 目录；卸载前先停用 todeskd 服务并结束残留进程，避免二进制被占用导致删不干净
-- 一并清理 pacman 不负责的痕迹：桌面快捷方式、~/.config/autostart 自启项、旧方案遗留的
-  「安装/重装 ToDesk」图标；用户数据（~/.local/share/todesk）单独询问后再删，默认保留
-
-2026-10-25（v1.9.1）
-【功能改进】
-- 「安装 ToDesk」完善已安装检测：安装前先判断本机是否已装，已装则显示当前版本、安装来源、
-  目标版本，并给出「1. 重新安装 / 2. 不安装直接退出」两个明确选项（回车默认选 2，不误装）
-- 检测范围不再只看 pacman 包：pacman 包数据库损坏、或当初是手动解包安装的设备，
-  只要 /opt/todesk 目录或 ToDesk 主程序存在，同样会被识别为已安装（此前会漏判，
-  导致重复安装覆盖）
-- 未安装时不再出现询问，直接进入安装流程
-
-2026-10-25（v1.9.0）
-【功能改进】
-- 重写「安装 ToDesk」：不再下载并执行第三方安装脚本，改为直接取回安装包用 pacman 安装
-  · 原因：原方案执行的 todesk.lanbai.top 脚本里，真正安装的那行 `sh /tmp/lanbai/install.sh`
-    其实是注释掉的（第 14 行 `#sh ...`），它只在桌面丢一个「ToDesk安装」图标，要用户再点一次
-    才会下载另一个脚本执行，属于四段式绕路，而且并不真正完成安装
-  · 新做法：git clone 社区仓库取到 todesk-bin 4.7.2.0 的 .pkg.tar.zst，校验完整性后
-    直接 pacman -U 安装，全程不执行任何第三方 shell 脚本
-  · 顺带不再做这些多余且有风险的操作：重建 pacman 钥匙环（pacman-key --init/--populate）、
-    安装 base-devel 整套编译工具链、硬编码 /home/deck 路径（非 deck 用户名会出错）
-  · 增加了已安装检测（可保持或卸载重装）、依赖自动补齐（gtk3 / libappindicator-gtk3）、
-    旧版 todesk 4.1.0 冲突自动卸载、安装包完整性校验、上游包名变更时安全中止
-  · 自动创建桌面快捷方式并启用 todeskd 服务，同时清理旧方案遗留的桌面「安装/重装」图标
-  · 说明：Gitee 禁止匿名直链下载仓库内 >1MB 的文件（返回 403），所以 80MB 的安装包
-    只能通过 git clone 取回，无法用 curl 直接下载
-
-2026-10-23（v1.8.9）
-【界面修复】
-- 彻底修复「窗口外面多一圈黑色区域」：不再使用「透明圆角 + 投影」这套窗口外观。
-  那套做法要求窗口表面比可见内容大一圈（CSD 透明边距，实测四周 68/60/76px），
-  一旦系统没开桌面特效合成器（按 Alt+Shift+F12 就会关掉），X11 无法做透明混合，
-  这圈透明边距就被渲染成纯黑，也就是那圈黑边
-- 现在窗口改为不透明直角样式：窗口边距恒为 0，无论合成器开还是关都不会出现黑边，
-  也不再有切换时黑边闪一下再消失的过程
-- 对话框、内部卡片的圆角样式保持不变，只是窗口外框改为直角
-
-2026-10-22（v1.8.7）
-【界面修复】
-- 真正修复「点击帮助时主界面闪一下」：根因是 CSS 里窗口「失焦态」的阴影比正常态小，
-  弹出模态对话框后主窗口一失焦，GTK 就会按新阴影重算窗口边距，窗口管理器随之把
-  主窗口重新缩放一遍（实测 1086x806 → 1018x738）。现在两种状态用同样的阴影，
-  主窗口再也不会因为失焦/获焦而改变尺寸
-- 顺带说明：模态对话框打开时系统会把主窗口「压暗」一点点，这是 KDE 的 Dialog Parent
-  效果（所有程序都这样），不属于闪烁
-
-2026-10-22（v1.8.6）
-【界面修复】
-- 彻底修复对话框打开时的闪烁：改为在窗口完成尺寸计算后再显示出来，
-  用户不会再看到「先小后大」的跳变
-- 此前几个版本还修了：深色模式下对话框标题栏白边、窗口四角圆角不一致
-
-2026-10-22（v1.8.5）
-【界面修复】
-- 修复对话框刚打开时尺寸偏小、内容被裁剪、过一会儿才变大的问题
-- 修复点击「帮助」时窗口闪烁一下的问题（去掉了会触发窗口闪现的尺寸处理方式）
-
-2026-10-22（v1.8.4）
-【界面修复】
-- 修复对话框刚打开时尺寸偏小、内容被裁剪，过一会儿才变大的问题：现改为显示前先按内容计算好尺寸，一次性正确显示
-
-2026-10-22（v1.8.3）
-【界面修复】
-- 修复深色模式下对话框顶部出现白色横条：系统为浅色主题时，窗口管理器会用系统主题绘制对话框标题区，导致与深色界面不一致；现改为由程序自己绘制标题栏，配色跟随应用主题
-- 修复窗口四角圆角不一致：原来上方两角圆润、下方两角是直角（底部状态栏的不透明背景盖住了下方圆角），现四角圆角保持一致
-
-2026-10-19（v1.8.2）
-【功能整合】
-- 「系统体检」升级为统一的排障入口：发现引导类问题时内联执行修复（不再跳转到独立的「修复引导」界面导致上下文丢失），发现挂载类问题时内联写入 fstab 自动挂载
-- 「修复引导」补齐关键能力：原来 Clover 启动项缺失时只会报错退出（因此对"掉引导"实际无能为力），现在会先动态探测 ESP，再自动重建 Clover / SteamOS 启动项，并顺带把 Clover 设为第一启动项
-- 「修复引导」不再硬编码 /dev/nvme0n1p1 与 /dev/nvme0n1 分区 1：改用 findmnt + EFI 分区类型 GUID 动态定位，兼容 eMMC / SATA 机型与不同分区号
-- 消除体检与「修复引导」「修复互通盘」的重复实现：启动顺序调整、启动项重建统一走同一套逻辑；体检内联执行时不再清屏、不重开界面
-- 体检的挂载修复写入 fstab 前自动备份（fstab 写坏会导致下次开机进不了系统）
-
-【问题修复】
-- 修复「修复引导」判断 Clover 文件是否存在时无法区分「文件缺失」与「读取失败」，可能误导用户去重装 Clover；现改为三态判断，权限不足时明确提示并继续尝试注册启动项
-- 清理体检中已不再使用的 3 个冗余修复函数（原 hc_fix_clover_entry / hc_fix_steamos_entry / hc_fix_boot_order），避免两套实现并存
-
-2026-10-19（v1.8.1）
-【问题修复】
-- 修复系统体检的结论误导：即使只有「注意」项（如 Windows 启动项被 Clover 接管、ESP 剩余空间偏小等环境差异），也会输出「以上问题需要手动处理」，让人误以为系统有故障；现改为按「异常」数量判定，无异常时明确显示「✅ 结论：未发现异常，引导与挂载均正常」，并说明提示项不影响使用
-- 修复系统体检第 3 项「Clover 引导文件完整性」在已输入 sudo 密码的情况下仍提示「无法读取 EFI 目录」：原代码用普通用户的 [ -d ] 判断 EFI 目录位置，而 /esp 权限为 700 root，普通用户永远看不到，导致路径判断错误后 sudo 探测也失败
-- EFI 目录定位改为依次用 sudo 探测 /esp/EFI 与 /esp/efi/EFI 两个候选路径，兼容不同机型与系统布局；两者都不存在时再区分「目录确实缺失」与「无 sudo 权限」，并给出 ESP 根目录的实际内容供排查
-
-2026-10-19（v1.8.0）
-【新增功能】
-- 新增「系统体检」功能（双系统用户可见）：专用于 SteamOS 更新后排查掉盘、掉引导、挂载失效，覆盖 6 大类共 18 项检查
-  · ESP 分区：是否识别、挂载状态、剩余空间（Clover 需约 15MB）
-  · UEFI 启动项：Clover / SteamOS / Windows 启动项是否存在，Clover 是否为第一启动项
-  · Clover 引导文件：cloverx64.efi、config.plist、BOOTX64.EFI 及其 .orig 备份是否完整
-  · Windows 分区：是否存在、是否挂载、Windows 系统文件结构是否完整
-  · /etc/fstab：条目是否指向仍存在的分区，有无失败的挂载单元
-  · 系统与引导服务：SteamOS 只读模式、Clover 引导守护服务（clover-bootmanager）启用与运行状态
-- 体检为只读检查，发现问题后列出「可自动修复」项，经确认才执行修复
-- 可一键修复：重建丢失的 Clover / SteamOS 启动项、把 Clover 设为第一启动项、启用 Clover 引导守护服务、注释掉 fstab 中的失效条目（修改前自动备份）
-
-【问题修复】
-- 体检中的 ESP 探测不再硬编码 /dev/nvme0n1p1：改用 findmnt + EFI 分区类型 GUID 动态定位，兼容 eMMC/SATA 机型与不同分区号
-- 区分「文件确实缺失」与「无 sudo 权限无法读取」：无权限时明确提示跳过，不再把每个文件都误报为缺失
-
-2026-10-19（v1.7.7）
-【问题修复】
-- 修复双系统被误判为单系统：Clover 安装后会移除/隐藏 Windows 的 EFI 启动项，只看 efibootmgr 里有没有 "Windows" 字样会漏判，导致「修复引导」「修复互通盘」等双系统功能不显示
-- 系统类型检测改为多重判据：① EFI 启动项含 Windows ② 存在标签为 Windows 的 NTFS 分区 ③ NTFS 分区内存在 Windows\\Program Files 或 Windows\\Users 目录结构（即使分区标签被改也能识别）；任一成立即判定为双系统
-- 确保只有 Clover 启动项、没有 Windows 的单系统机器仍正确显示为「单系统」，不会误暴露双系统危险功能
-
-2026-10-19（v1.7.6）
-【界面优化】
-- 内嵌终端窗口新增「复制」按钮：有选中内容时复制选中，未选中时复制全部输出，并有短时状态反馈
-- 内嵌终端新增右键菜单：复制选中内容 / 复制全部输出 / 粘贴 / 全选
-- 内嵌终端新增键盘快捷键：Ctrl+Shift+C 复制、Ctrl+Shift+V 粘贴、Ctrl+Shift+A 全选（Ctrl+C 仍保留用于中断进程）
-- 任务窗口标题栏新增「最大化 / 还原」按钮，可把终端铺满屏幕；窗口不再强制模态，可自由缩放并切换到其他窗口
-
-【问题修复】
-- 修复「安装国内源」完成后提示的恢复官方源命令缺少 sudo、直接复制执行会失败的问题，并注明需在 Konsole 中执行
-
-2026-10-19（v1.7.5）
-【问题修复】
-- 统一全部 GitHub 下载镜像源：原 3 个镜像中 gh.ddlc.top 已 429 限流、mirror.ghproxy.com 域名失效，仅 ghproxy.net 仍可用但很慢，导致插件 / GE-Proton / Clover 下载经常失败
-- 新镜像列表（均经 5 轮稳定性 + 33MB 文件 sha256 完整性 + 实速实测）：gh-proxy.com（速度快）、gh.3w.pm（稳定）、cors.isteed.cc（稳定）、ghproxy.net（慢速备用）、GitHub 官方源
-- 修复下载镜像选择菜单显示空条目：官方源在内部用空前缀（避免 URL 拼成 https://github.com/https://github.com/...），菜单改为显示可读名称
-- 修复 Clover 克隆镜像选择：实测 gh-proxy.com / cors.isteed.cc / ghproxy.net 均不支持 git clone，改为仅提供 gh.3w.pm 与官方源
-- 修复 Flatpak 国内源：原配置的 mirror.sjtu.edu.cn/flathub 已改为 301 跳回官方、实际无效；改用 mirrors.ustc.edu.cn/flathub（实测可正常查询与安装），并自动导入 flathub 签名公钥、切换后验证可用性、失败自动回滚
-- 修复 Flatpak 源配置使用不存在的 `flatpak remote-get-url` 命令获取原地址，改为从 remotes 列表解析
-- 修复 Flatpak 源验证因未指定分支必然失败，以及系统级 remote-modify 缺少 sudo 会卡在密码提示的问题
-- 修复「安装国内源」多余的禁用 SteamOS 只读模式操作：flatpak 配置位于可写的 /var 分区，与只读根分区无关
-
-2026-10-19（v1.7.4）
-【问题修复】
-- 修复「一键应用 CryoByte33 推荐方案」重复执行会在 /etc/fstab 写入重复 swap 条目的问题（sed 分隔符转义错误导致删除失败）
-- 修复退出时无条件把 SteamOS 只读模式改回 enabled：现在只有脚本自己解除过只读才会恢复，不再覆盖用户手动设置的可写状态
-- 修复「调整虚拟内存」替换正在使用的 swapfile 前未先 swapoff（可能导致 device busy 或在内存紧张时 OOM），改为先停用并校验
-- 修复「调整虚拟内存」显示 / 剩余空间、实际预检 /home 的不一致；fstab 判断改为按第一字段精确匹配（不再误判注释行与 swapfile2）
-- 修复「配置ZRAM」设置无法持久化：现写入 /etc/systemd/zram-generator.conf，重启后仍生效，并修正原代码误删该配置的问题
-- 修复「清理虚拟内存配置」在未启用 ZRAM 时误报"ZRAM 重置失败"，且 fstab 改用精确匹配删除
-- 修复「清理hosts缓存」在只读模式下静默失败却仍提示成功，改为先确保可写、失败即中止并给出回滚方法
-- 修复「Steam缓存管理」只扫描默认库（SD 卡/第二块盘的库看不到）、游戏名含分隔符会解析错位、删除前缺少明细确认
-- 修复「安装/重装 Clover」缺少危险操作二次确认；并改为动态探测 ESP 分区（原硬编码 /dev/nvme0n1p1，eMMC/SATA 机型会失败）
-- 修复 Clover 安装中途失败会在 EFI 分区留下半套文件：备份/替换 BOOTX64.EFI 失败现在会中止并回滚，安装脚本失败即停
-- 修复 Clover 安装脚本用 echo -e 传递含反斜杠的 sudo 密码会被截断导致认证失败，改用 printf 原样传递
-- 修复 Clover 相关脚本退出时可能把系统停在可写状态，以及 ISO/7z 临时文件残留
-- 修复自更新先截断自身再写入、中途失败会导致程序损坏：改为写临时文件后原子替换，并增加语法校验
-- 修复版本比较把 1.7 与 1.7.0 判为不同版本，可能反复提示更新
-- 修复「安装/卸载插件」结果只看命令返回值，现在以目录实际状态为准，避免假成功
-- 修复非 deck 用户名的设备上安装插件/小黄鸭后文件属主被改成 deck 的问题
-- 修复「安装ToDesk」直接执行第三方远程脚本：现改为下载到本地、展示内容、语法校验后再询问是否执行，并明确列出该脚本对系统的改动
-- 修复检测系统类型时把 Clover 启动项当成双系统依据（单系统装了 Clover 会误显示"双系统"并暴露危险功能），改为仅以 Windows 启动项判断
-- 修复「安装/更新 GE-Proton」解压中断会在 compatibilitytools.d 留下残缺版本，改为先解压到临时目录校验后再移入
-- 危险操作确认框默认焦点改为「否」，避免误按回车直接执行
-
-2026-10-19（v1.7.3）
-【问题修复】
-- 修复浅色模式下危险操作确认窗口文字看不清：原生对话框底色是浅色而文字仍沿用深色主题配色，出现"白底浅字"；现为对话框显式指定底色与文字色，标题、正文、按钮均随主题正确切换
-- 修复浅色模式下下拉菜单、右键菜单、工具提示等原生浮层的文字配色不随主题变化的问题
-
-2026-10-19（v1.7.2）
-【新增功能】
-- 新增深色 / 浅色主题切换：标题栏图标按钮可切换深色、浅色、跟随系统三种模式，选择自动保存，重启后保持
-- 浅色主题为独立配色的完整主题，并同步 GTK 原生控件（对话框、菜单）配色
-
-【问题修复】
-- 修复 vte3 安装失败（"889B5EBD… 无法在本地签署"）：SteamOS 的 holo 密钥环与 Arch 官方钥匙环相互独立，只执行 pacman-key --populate archlinux 时该密钥不会被导入，导致后续签名必然失败；现同时导入 archlinux 与 holo 两个钥匙环
-- 修复「修复磁盘写入错误」功能检测失效：原逻辑靠 ntfsfix 输出中的 "Volume is dirty" 判断，但 ntfsfix 并不打印该文字，导致所有分区恒显示"正常"；现改为读取 $Volume 的 Volume Flags 脏标志位
-- 修复已挂载 NTFS 分区无法检测：ntfsinfo/ntfsfix 需要独占打开设备，挂载中的分区会报占用；现检查前临时卸载、检查后自动挂回原处
-- 修复「修复磁盘写入错误」的无意义密码提示：单系统无 NTFS 分区时不再索要 sudo 密码，直接给出结论与排查建议
-- 修复有分区被跳过时仍显示"所有 NTFS 分区状态正常"的误导性结论，改为明确提示未检查数量
-- 修复 NTFS 分区编号与实际输入不一致的问题
-- 修复「修复互通盘」重启后失效：原逻辑只要分区当前已挂载就跳过，但 udisks 自动挂载重启后不会保留；现要求"已挂载且已写入 fstab"才算就绪，确保重启后仍自动挂载
-- 修复「修复互通盘」误删用户数据盘：不再强制卸载并删除 /run/media/deck/ 下非 NTFS 分区（ext4/U盘/Btrfs 外置盘）的 fstab 条目
-- 修复 fstab 条目匹配使用子串导致误判（UUID 前缀相同会被当成已存在），改为锚定精确匹配
-- 修复 fstab 写入可能丢失条目：改为原子替换，失败时保留原条目
-- 修复 fstab 删除使用 sed 正则转义不全导致删不掉条目，改用按字段精确比对
-- 修复「修复互通盘」挂载失败时仍显示"全部完成"，现改为显示失败数量
-- 修复「修复互通盘」、UDisks2 修改的假成功提示，改为真实结果反馈
-- 修复主题"跟随系统"读取的是被自己改写过的值（自我污染），现改为启动时记录系统真实配色快照
-
-2026-09-09（v1.7.1）
-【界面优化】
-- 全新 Steam Deck 风格主题：深蓝黑底 + Steam 蓝高亮，圆角卡片与加高的触控友好列表行
-- 左侧分类栏新增面板标题，功能列表与搜索结果改为圆角卡片容器，帮助/退出按钮使用强调色
-- 顶部标题栏副标题显示系统类型，窗口按钮与搜索框统一为圆角样式
-- 任务窗口新增标题栏与深色终端配色，运行时显示计时、完成后显示"任务已完成"
-- 更新日志页补充页面标题，关于/更新日志正文改为圆角卡片
-
-2026-09-06（v1.7.0包含 v1.6.9 的调整）
-【界面优化】
-- 新增顶部标题栏（HeaderBar），显示版本号
-- 新增全局功能搜索：顶部搜索框跨分类查找功能，结果页显示所属分类
-- 任务窗口新增运行计时器，任务状态一目了然
-- 危险操作二次确认：修复引导/修复互通盘/卸载插件商店/清理hosts 执行前弹出确认
-- 底部状态栏显示系统类型、终端模式、版本
-- 全局样式优化：更舒适的列表间距与选中高亮
-
-【问题修复】
-- 修复取消任务无效：任务进程现在会被真正终止（此前点"取消"只是关窗口，进程仍在后台运行）
-- 修复 SteamOS 只读模式禁用后未恢复：所有功能执行完毕自动恢复，避免系统更新异常
-- 修复清理 hosts 误删系统条目：现在只移除 Steam 相关域名并自动备份
-- 修复自更新无内容校验：更新前校验下载内容，防止错误页覆盖脚本
-- 修复版本比较逻辑：数字逐段比较，本地版本更新时不再提示降级
-- 修复 ToMoon/Freedeck 等插件版本获取：排除 build 类无效标签、兼容无 v 前缀标签、智能选择下载资产（跳过源码包）、已装正式版时正确检测更新
-- 修复 GitHub API 检查在管道下误报异常
-- 修复 Watt Toolkit 已安装时静默重复下载：现在会先确认再覆盖
-
-【功能强化】
-- 交换文件创建增加空间预检与 dd/mkswap/swapon 逐级校验，失败时明确报错
-- 加速器/ToDesk/AnyDesk/应用更新增加失败提示
-- 安装育碧/Epic 前置检查 Proton Experimental 是否存在，缺失时给出指引
-- 插件安装器统一为通用逻辑，镜像源全局统一，zip 下载带完整性校验
-- 图标资源内嵌到脚本，离线自包含，无需外部文件夹
-
-【其他】
-- 全面改用 $HOME 变量，减少硬编码路径
-- 桌面快捷方式改用 sys.executable，兼容性更好
-- 终端模拟器缺失时自动回退（konsole → xterm 等）
-2026-08-07（v1.6.8） 调整了从github上安装的部分功能的版本对比逻辑
-2026-08-05（v1.6.7） 修复了部分bug，并完善了部分功能的逻辑
-2026-08-04（v1.6.6包含 v1.6.4-v1.6.5 的调整） 增加了安装第三方游戏平台的功能（目前包含育碧，Epic，战网）
-2026-08-01（v1.6.3包含 v1.6.2 的调整） 完善了卸载已安装应用功能的删除快捷方式的步骤，并增加了询问是否删除应用数据的步骤
-2026-07-31（v1.6.1） 增加了GE-Proton 管理的功能，可以安装/卸载GE兼容层
-2026-07-30（v1.6.0包含 v1.5.7-v1.5.9 的调整） 新增了安装Freedeck插件的功能，并修复了一些bug和优化完善了一些功能
-2026-07-29（v1.5.6包含 v1.5.2-v1.5.5 的调整） 增加了安装Fcitx 5的功能并继续修复了一些bug,并调整了部分功能的逻辑
-2026-07-27（v1.5.1包含 v1.5.0 的调整） 修复了一些bug,并优化完善了一些功能
-2026-07-26（v1.4.9） 增加了安装Asklink远程的功能
-2026-07-25（v1.4.8包含 v1.3.9-v1.4.7 的调整）将文字形式停止更新，替换为图文形式，操作更加便捷，并对功能进行了修改和优化完善
-删除了设置管理员密码的功能，增加了安装奇游联机宝加速插件的功能
-2026-07-18（v1.3.8包含 v1.3.7 的调整） 替换steamcommunity 302功能为安装Watt Toolkit (Steam++)，增加实用性
-调整了安装插件商店以及安装LSFG-VK插件和Framegen插件功能的部分逻辑，将校准摇杆更改为校准设备，增加了校准扳机
-2026-07-09（v1.3.6） 修改了修复互通盘功能的实现逻辑，更具有通用性
-2026-07-08（v1.3.5包含 v1.3.4 的调整） 删除了"远程无法连接点我"功能，调整从 GitHub 安装的功能的镜像顺序
-2026-06-30（v1.3.2） 修复了安装AnyDesk功能的bug
-2026-06-28（v1.3.1） 修复了调整虚拟内存大小功能的bug
-2026-06-27（v1.3.0） 增加"远程无法连接点我"功能
-调整安装 AnyDesk 功能的安装逻辑，改为从官网安装
-2026-06-03（v1.2.7） 增加安装/重装 Clover 引导功能，并进行多项完善
-2026-06-02（v1.2.6） 调整从 GitHub 安装的功能的安装逻辑，支持预发布版本和正式版选择
-2026-05-31（v1.2.4，包含 v1.1.9、v1.2.0、v1.2.1 的调整） 增加安装 LSFG‑VK 插件和 Framegen 插件功能（从 GitHub 安装，并使用镜像下载）
-调整插件商店功能的安装步骤，改用国内镜像加快下载速度，并增加镜像下载失败后的自动重试
-调整 Steam Deck 缓存管理器功能的部分参数
-2026-05-30（v1.1.8） 调整自动更新的逻辑
-2026-05-28（v1.1.8，包含 v1.1.7） 更改插件商店功能，改为从 GitHub 安装
-更新工具箱打开后自动更新的步骤
-2026-03-17（v1.1.2） 由于宝葫芦停止维护，删除"安装＆卸载宝葫芦"功能
-2026-03-05（v1.1.1） 更改安装 ToMoon 功能的实现逻辑，改为从 Gitee 克隆下载安装
-2026-03-02（v1.1.0） 更改安装插件商店功能的实现逻辑，改为从 Gitee 克隆下载安装
-2026-01-21（v1.0.9） 新增安装 Steam 社区 302 功能
-2026-01-16（v1.0.8） 完善调整虚拟内存大小功能的文本展示
-2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
-最初发布在github，没做详细的统计，发布日期为2026-01-01"""
-        self.changelog_textview.get_buffer().set_text(changelog_content)
+        self.changelog_textview.get_buffer().set_text(changelog_body_text())
 
     def on_func_row_activated(self, treeview, path, column):
         model = treeview.get_model(); iter_ = model.get_iter(path); func_name = model.get_value(iter_, 0)
@@ -8625,8 +15988,9 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
         # 所以这里先检查，缺了就直接用对话框明确告知。
         if not shutil.which("zenity"):
             dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
-                                    type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK,
+                                    type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.NONE,
                                     text="缺少 zenity 组件，无法运行该功能")
+            dlg.add_button(t("ok"), Gtk.ResponseType.OK)
             dlg.format_secondary_text(
                 "该功能依赖 zenity 提供图形化选择界面。\n"
                 "请先安装后重试：sudo pacman -S zenity")
@@ -8641,37 +16005,65 @@ https://gitee.com/Zhucy2100/steamdeck_toolbox
                                  stdin=subprocess.DEVNULL, start_new_session=True)
         except Exception as e:
             dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
-                                    type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK,
+                                    type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.NONE,
                                     text="启动任务失败")
+            dlg.add_button(t("ok"), Gtk.ResponseType.OK)
             dlg.format_secondary_text(f"{e}")
             fix_dialog_size(dlg)
             dlg.run(); dlg.destroy()
 
     def run_external_terminal(self, func_key):
         tmp_path = create_temp_script()
-        cmd = f"bash {tmp_path} {func_key}; read -p '按回车键关闭...' -n1"
+        close_prompt = ("Press Enter to close..." if get_lang() == "en" else "按回车键关闭...")
+        cmd = f"bash {tmp_path} {func_key}; read -p '{close_prompt}' -n1"
         if not launch_terminal(cmd):
             dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
-                                    type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.OK,
-                                    text="未找到可用的终端模拟器")
-            dlg.format_secondary_text("请安装 konsole 或 xterm 后重试。")
+                                    type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.NONE,
+                                    text=t("no_terminal"))
+            dlg.add_button(t("ok"), Gtk.ResponseType.OK)
+            dlg.format_secondary_text(t("no_terminal_hint"))
             fix_dialog_size(dlg)
             dlg.run(); dlg.destroy()
 
     def on_help_clicked(self, button):
-        help_dialog = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL, type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="Steam Deck 工具箱")
-        help_dialog.format_secondary_text("本工具集成了系统优化、软件安装、网络工具等功能。\n点击左侧分类，右侧显示功能列表。\n小破站关注up主 AlanWake2100 可以来催更哦~")
+        help_dialog = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
+                                        type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.NONE,
+                                        text=t("app_title"))
+        help_dialog.add_button(t("ok"), Gtk.ResponseType.OK)
+        if get_lang() == "en":
+            # 英文：可点击 X 链接（与 GitHub 英文版一致）
+            help_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            help_box.set_margin_start(12); help_box.set_margin_end(12)
+            help_box.set_margin_top(4); help_box.set_margin_bottom(8)
+            body = Gtk.Label()
+            body.set_markup(t("help_body_en_markup"))
+            body.set_line_wrap(True)
+            body.set_xalign(0.0)
+            body.set_selectable(False)
+            body.connect("activate-link",
+                         lambda lbl, uri: (Gtk.show_uri_on_window(help_dialog, uri, Gtk.get_current_event_time()), True)[1])
+            help_box.pack_start(body, False, False, 0)
+            help_box.show_all()
+            help_dialog.get_message_area().pack_start(help_box, False, False, 0)
+        else:
+            help_dialog.format_secondary_text(t("help_body_zh"))
         fix_dialog_size(help_dialog)
         help_dialog.run(); help_dialog.destroy()
 
 def ensure_desktop_shortcut():
     script_path = os.path.abspath(sys.argv[0])
     desktop_dir = os.path.expanduser("~/Desktop")
-    desktop_file = os.path.join(desktop_dir, "Deck工具箱.desktop")
-    if os.path.exists(desktop_file): return
+    # Prefer language-specific name; skip if either legacy/current shortcut exists.
+    names = ("Deck Toolbox.desktop", "Deck工具箱.desktop")
+    for name in names:
+        if os.path.exists(os.path.join(desktop_dir, name)):
+            return
+    desktop_name = "Deck Toolbox.desktop" if get_lang() == "en" else "Deck工具箱.desktop"
+    app_name = "Deck Toolbox" if get_lang() == "en" else "Deck工具箱"
+    desktop_file = os.path.join(desktop_dir, desktop_name)
     content = f"""[Desktop Entry]
 Type=Application
-Name=Deck工具箱
+Name={app_name}
 Exec={sys.executable} "{script_path}"
 Icon=input-gamepad-symbolic
 Terminal=false
@@ -8681,13 +16073,15 @@ Categories=Utility;
     try:
         with open(desktop_file, 'w') as f: f.write(content)
         os.chmod(desktop_file, 0o755)
-    except Exception as e: print(f"创建桌面快捷方式失败: {e}")
+    except Exception as e:
+        msg = f"Failed to create desktop shortcut: {e}" if get_lang() == "en" else f"创建桌面快捷方式失败: {e}"
+        print(msg)
 
 def ensure_vte_installed():
     if VTE_AVAILABLE: return
-    dialog = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.QUESTION, Gtk.ButtonsType.NONE, "未检测到 VTE 终端组件。\n是否立即安装？(需要 sudo 密码，安装后请手动重启程序)")
-    dialog.format_secondary_text("点击“是”将自动解除只读模式并安装 vte3。")
-    dialog.add_button("是", Gtk.ResponseType.YES); dialog.add_button("否", Gtk.ResponseType.NO)
+    dialog = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.QUESTION, Gtk.ButtonsType.NONE, t("vte_missing"))
+    dialog.format_secondary_text(t("vte_missing_hint"))
+    dialog.add_button(t("yes"), Gtk.ResponseType.YES); dialog.add_button(t("no"), Gtk.ResponseType.NO)
     dialog.set_icon_name("input-gamepad-symbolic")
     fix_dialog_size(dialog)
     response = dialog.run(); dialog.destroy()
@@ -8720,9 +16114,10 @@ def ensure_vte_installed():
             "echo '✓ 安装完成，请手动重启本程序。'; read -n1"
         )
         if not launch_terminal(install_cmd):
-            err = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.ERROR, Gtk.ButtonsType.OK,
-                                    "未找到可用的终端模拟器")
-            err.format_secondary_text("请手动打开终端执行：sudo pacman -S --noconfirm vte3")
+            err = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.ERROR, Gtk.ButtonsType.NONE,
+                                    t("no_terminal"))
+            err.add_button(t("ok"), Gtk.ResponseType.OK)
+            err.format_secondary_text(t("vte_manual"))
             fix_dialog_size(err)
             err.run(); err.destroy()
 
@@ -8789,26 +16184,26 @@ def _perform_update_in_dialog(dialog, remote_version):
     threading.Thread(target=do_download, daemon=True).start()
 
 def _update_dialog_success(dialog, remote_version):
-    dialog.set_markup("<big><b>✅ 更新完成</b></big>")
-    dialog.format_secondary_text(f"新版本 v{remote_version} 已下载。\n程序即将自动重启...")
+    dialog.set_markup(f"<big><b>{t('update_ok')}</b></big>")
+    dialog.format_secondary_text(t("update_ok_hint", ver=remote_version))
     def restart():
         dialog.destroy(); subprocess.Popen([sys.executable, sys.argv[0]]); Gtk.main_quit()
     GLib.timeout_add(500, restart)
 
 def _update_dialog_error(dialog, error_msg):
-    dialog.set_markup("<big><b>❌ 更新失败</b></big>")
-    dialog.format_secondary_text(f"更新过程中发生错误：{error_msg}\n请手动从以下地址下载最新版本：\n{REPO_RAW_URL}")
+    dialog.set_markup(f"<big><b>{t('update_fail')}</b></big>")
+    dialog.format_secondary_text(t("update_fail_hint", err=error_msg, url=REPO_RAW_URL))
     for btn in dialog.get_action_area().get_children(): btn.destroy()
-    dialog.add_button("确定", Gtk.ResponseType.CLOSE)
+    dialog.add_button(t("ok"), Gtk.ResponseType.CLOSE)
     dialog.connect("response", lambda d, r: (dialog.destroy(), show_main_window()))
     dialog.show_all()
 
 class UpdateCheckWindow(Gtk.Window):
     def __init__(self):
-        super().__init__(title="检查更新")
+        super().__init__(title=t("check_update"))
         self.set_icon_name("input-gamepad-symbolic"); self.set_default_size(400, 150); self.set_position(Gtk.WindowPosition.CENTER); self.set_deletable(False)
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10); vbox.set_margin_top(20); vbox.set_margin_bottom(20); vbox.set_margin_start(20); vbox.set_margin_end(20); self.add(vbox)
-        self.label = Gtk.Label(label="正在检查更新..."); self.label.set_justify(Gtk.Justification.CENTER); vbox.pack_start(self.label, True, True, 0)
+        self.label = Gtk.Label(label=t("checking_update")); self.label.set_justify(Gtk.Justification.CENTER); vbox.pack_start(self.label, True, True, 0)
         self.button = None; self.vbox = vbox; self.show_all(); GLib.timeout_add(200, self.perform_check)
 
     def perform_check(self):
@@ -8818,15 +16213,15 @@ class UpdateCheckWindow(Gtk.Window):
 
     def on_check_done(self, remote_version):
         if remote_version is None:
-            self.label.set_text("检查更新失败，请检查网络连接。")
+            self.label.set_text(t("check_update_fail"))
             if self.button is None:
-                self.button = Gtk.Button(label="进入主界面"); self.button.connect("clicked", self.on_button_clicked); self.vbox.pack_start(self.button, False, False, 0)
+                self.button = Gtk.Button(label=t("enter_main")); self.button.connect("clicked", self.on_button_clicked); self.vbox.pack_start(self.button, False, False, 0)
             self.button.show(); return
         if compare_versions(remote_version, VERSION) <= 0:
-            self.label.set_text(f"当前已是最新版本 (v{VERSION})")
+            self.label.set_text(t("already_latest", ver=VERSION))
             if self.button is not None: self.button.hide()
             GLib.timeout_add(300, self.auto_enter_main); return
-        self.label.set_text(f"发现新版本 v{remote_version}\n当前版本: v{VERSION}")
+        self.label.set_text(t("found_new_big", ver=remote_version) + ("\n当前版本: v" if get_lang()=="zh" else "\nCurrent: v") + VERSION)
         if self.button is not None: self.button.hide()
         self.show_update_prompt(remote_version)
 
@@ -8835,14 +16230,14 @@ class UpdateCheckWindow(Gtk.Window):
 
     def show_update_prompt(self, remote_version):
         self.destroy()
-        dialog = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.QUESTION, Gtk.ButtonsType.NONE, "发现新版本")
-        dialog.set_default_size(400, 150); dialog.set_markup(f"<big><b>发现新版本 v{remote_version}</b></big>")
-        dialog.format_secondary_text(f"当前版本: v{VERSION}\n最新版本: v{remote_version}\n\n是否立即更新？")
-        dialog.add_button("是", Gtk.ResponseType.YES); dialog.add_button("否", Gtk.ResponseType.NO); dialog.set_icon_name("input-gamepad-symbolic")
+        dialog = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.QUESTION, Gtk.ButtonsType.NONE, t("found_new"))
+        dialog.set_default_size(400, 150); dialog.set_markup(f"<big><b>{t('found_new_big', ver=remote_version)}</b></big>")
+        dialog.format_secondary_text(t("update_prompt", cur=VERSION, remote=remote_version))
+        dialog.add_button(t("yes"), Gtk.ResponseType.YES); dialog.add_button(t("no"), Gtk.ResponseType.NO); dialog.set_icon_name("input-gamepad-symbolic")
         fix_dialog_size(dialog)
         response = dialog.run()
         if response == Gtk.ResponseType.YES:
-            dialog.set_markup("<big><b>正在更新...</b></big>"); dialog.format_secondary_text("正在下载新版本，请稍候。")
+            dialog.set_markup(f"<big><b>{t('updating')}</b></big>"); dialog.format_secondary_text(t("updating_hint"))
             for btn in dialog.get_action_area().get_children(): btn.destroy()
             dialog.show_all(); _perform_update_in_dialog(dialog, remote_version)
         else:
@@ -8859,7 +16254,8 @@ def main():
     # 关键顺序：必须在 apply_app_css 改写 GTK prefer-dark 之前，
     # 先记录系统真实的配色方案，否则“跟随系统”会读到被自己改过的值。
     reset_system_theme_cache()
-    # 启动时应用用户上次选择的主题（默认跟随系统）
+    # 启动时应用用户上次选择的语言与主题
+    set_lang(load_lang_pref())
     apply_app_css(load_theme_pref())
     update_win = UpdateCheckWindow(); Gtk.main()
 
