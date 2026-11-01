@@ -12,16 +12,8 @@ An all-in-one system management and enhancement toolkit for Steam Deck. It cover
 Run this in Konsole:
 
 ```bash
-curl -L decktool.pages.dev/i | sh
+curl -L https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/install_gui.sh | sh
 ```
-
-(If that fails, use the Gitee installer below.)
-
-```bash
-curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh | sh
-```
-
-> Note: the install commands above are the same ones used by the Chinese README / Gitee distribution. This repository’s primary mirror for China is Gitee; GitHub may lag or differ for some releases.
 
 ## 🔄 Updates
 
