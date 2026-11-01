@@ -12,7 +12,7 @@
 在 Konsole 中执行以下命令即可安装：
 
 ```bash
-curl -L decktools.pages.dev/i | sh
+curl -L decktool.pages.dev/i | sh
 ```
 （如果这个失效就用下面的）
 ```bash
