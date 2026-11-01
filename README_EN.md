@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v1.9.7** | Updated: 2026-11-01
+> **Version: v1.9.8** | Updated: 2026-11-02
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -26,6 +26,16 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - Open the toolbox; it checks for updates on startup (built-in self-update)
 
 ## 📝 Changelog
+
+2026-11-02 (v1.9.8)
+[UI improvements]
+- Main window is now a SteamOS / OLED-style master-detail layout: a persistent left category rail and an immediate right-hand detail pane (no more 3×3 home tiles then a second page)
+- Dark theme uses near-black charcoal with purple/magenta selection and cyan accents; light theme remains fully usable
+- Function row cards no longer sit under the vertical scrollbar (chevron and scrollbar stay apart)
+- On launch, "Support & maintenance" is selected by default and its about/maintenance content is shown right away (same as clicking the rail item)
+[Notes]
+- Language switching, themes, global search, danger confirms, the task window, and script logic are unchanged
+- Made by: Zhucy
 
 2026-11-01 (v1.9.7)
 [New features]

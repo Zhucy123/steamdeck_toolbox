@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.9.7"
+VERSION = "1.9.8"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -53,60 +53,75 @@ EMBEDDED_ICONS = {
 # 全局样式与工具函数
 # ============================================================================
 # ============================================================================
-# 主题（深色 / 浅色）
+# 主题（深色 / 浅色）— Steam Deck OLED 主从布局视觉
 # ============================================================================
 # 配色表：键名相同，两套值不同，CSS 模板通过 {key} 占位符注入。
 THEME_DARK = {
-    "bg": "#0d1219", "bg_alt": "#101720", "panel": "#151d26", "panel_hi": "#1b2531",
-    "border": "#26313e", "accent": "#1a9fff", "accent_dark": "#0f6cbd",
-    "text": "#e6edf4", "dim": "#8b98a6",
-    "header_top": "#1c2733", "header_bottom": "#131a22", "header_border": "#070a0e",
-    "header_backdrop_top": "#161e28", "header_backdrop_bottom": "#11171e",
-    "title": "#ffffff", "search_bg": "#0a0f15",
-    "sidebar_header_top": "#16202a", "sidebar_header_bottom": "#111820",
-    "bottom_top": "#131a22", "bottom_bottom": "#0e141b",
-    "hover": "rgba(255, 255, 255, 0.06)",
-    "scrollbar": "rgba(255, 255, 255, 0.16)",
-    "btn_ghost": "rgba(255, 255, 255, 0.07)", "btn_ghost_border": "rgba(255, 255, 255, 0.09)",
-    "titlebtn": "rgba(255, 255, 255, 0.10)", "titlebtn_border": "rgba(255, 255, 255, 0.16)",
-    "titlebtn_hover": "rgba(255, 255, 255, 0.24)",
-    "shadow": "rgba(0, 0, 0, 0.45)",
-    "sel_text": "#ffffff",
-    "suggested_hover": "#3aaeff",
-    "destructive": "#a63d3c", "destructive_border": "#c95352",
-    "destructive_hover": "#c14948", "destructive_hover_border": "#e06766",
-    "close_hover": "#c0392b", "close_hover_border": "#e05a4a",
-    "alpha_accent_hover": "0.14", "alpha_accent_btn": "0.28", "alpha_accent_head": "0.30",
+    "bg": "#07080c", "bg_alt": "#0e1016", "panel": "#141821", "panel_hi": "#1a2030",
+    "border": "#2a3144", "accent": "#3dd6c6", "accent_dark": "#2bb8a9",
+    "accent_soft": "rgba(61, 214, 198, 0.14)", "accent_mid": "rgba(61, 214, 198, 0.28)",
+    "text": "#e8eef8", "dim": "#8b98a8",
+    "header_top": "#0c0e14", "header_bottom": "#0a0c11", "header_border": "#1e2433",
+    "header_backdrop_top": "#0c0e14", "header_backdrop_bottom": "#090b10",
+    "title": "#f4f7fb", "search_bg": "#0c0f16",
+    "sidebar_header_top": "#12151e", "sidebar_header_bottom": "#0e1118",
+    "bottom_top": "#0c0e14", "bottom_bottom": "#090b10",
+    "hover": "rgba(196, 92, 255, 0.10)",
+    "scrollbar": "rgba(180, 200, 230, 0.22)",
+    "btn_ghost": "rgba(255, 255, 255, 0.05)", "btn_ghost_border": "rgba(255, 255, 255, 0.08)",
+    "titlebtn": "rgba(255, 255, 255, 0.08)", "titlebtn_border": "rgba(255, 255, 255, 0.12)",
+    "titlebtn_hover": "rgba(255, 255, 255, 0.16)",
+    "shadow": "rgba(0, 0, 0, 0.50)",
+    "sel_text": "#061016",
+    "suggested_hover": "#5ee6d6",
+    "destructive": "#e35d6a", "destructive_border": "#c94a56",
+    "destructive_hover": "#f0727d", "destructive_hover_border": "#e35d6a",
+    "close_hover": "#e35d6a", "close_hover_border": "#f0727d",
+    "alpha_accent_hover": "0.14", "alpha_accent_btn": "0.22", "alpha_accent_head": "0.24",
+    "chip_bg": "rgba(61, 214, 198, 0.14)",
+    "success": "#3dd68c",
+    "term_bg": "#06080c", "term_fg": "#e8eef8",
+    "card_glow": "rgba(196, 92, 255, 0.20)",
+    "purple": "#c45cff", "purple_dark": "#9b3fd4",
+    "purple_soft": "rgba(196, 92, 255, 0.16)", "purple_mid": "rgba(196, 92, 255, 0.30)",
+    "rail_bg": "#0c0e15",
 }
 
 THEME_LIGHT = {
-    "bg": "#f2f5f9", "bg_alt": "#e8eef5", "panel": "#ffffff", "panel_hi": "#eef3f9",
-    "border": "#c9d5e3", "accent": "#0a7ddb", "accent_dark": "#085fa8",
-    "text": "#1a2531", "dim": "#5d6b7a",
-    "header_top": "#ffffff", "header_bottom": "#e9eff6", "header_border": "#c2cfdd",
-    "header_backdrop_top": "#f7fafd", "header_backdrop_bottom": "#eef4fa",
-    "title": "#10202e", "search_bg": "#ffffff",
-    "sidebar_header_top": "#eef4fa", "sidebar_header_bottom": "#e3ebf4",
-    "bottom_top": "#e9eff6", "bottom_bottom": "#dde6ef",
-    "hover": "rgba(10, 125, 219, 0.10)",
-    "scrollbar": "rgba(26, 37, 49, 0.22)",
-    "btn_ghost": "rgba(0, 0, 0, 0.05)", "btn_ghost_border": "rgba(0, 0, 0, 0.10)",
-    "titlebtn": "rgba(0, 0, 0, 0.06)", "titlebtn_border": "rgba(0, 0, 0, 0.12)",
-    "titlebtn_hover": "rgba(0, 0, 0, 0.14)",
-    "shadow": "rgba(30, 50, 70, 0.18)",
+    "bg": "#eef2f6", "bg_alt": "#e4eaf1", "panel": "#ffffff", "panel_hi": "#f5f8fb",
+    "border": "#c9d3de", "accent": "#0f9e90", "accent_dark": "#0c8579",
+    "accent_soft": "rgba(15, 158, 144, 0.12)", "accent_mid": "rgba(15, 158, 144, 0.20)",
+    "text": "#15202b", "dim": "#5d6b78",
+    "header_top": "#ffffff", "header_bottom": "#f3f7fa", "header_border": "#d5dee8",
+    "header_backdrop_top": "#f8fafc", "header_backdrop_bottom": "#eef3f7",
+    "title": "#101820", "search_bg": "#ffffff",
+    "sidebar_header_top": "#f5f8fb", "sidebar_header_bottom": "#eef3f7",
+    "bottom_top": "#f5f8fb", "bottom_bottom": "#e8eef4",
+    "hover": "rgba(140, 60, 200, 0.08)",
+    "scrollbar": "rgba(21, 32, 43, 0.18)",
+    "btn_ghost": "rgba(20, 30, 40, 0.04)", "btn_ghost_border": "rgba(20, 30, 40, 0.10)",
+    "titlebtn": "rgba(20, 30, 40, 0.05)", "titlebtn_border": "rgba(20, 30, 40, 0.10)",
+    "titlebtn_hover": "rgba(20, 30, 40, 0.12)",
+    "shadow": "rgba(20, 35, 50, 0.12)",
     "sel_text": "#ffffff",
-    "suggested_hover": "#1a8fe8",
-    "destructive": "#c0392b", "destructive_border": "#a93226",
-    "destructive_hover": "#d0453a", "destructive_hover_border": "#c0392b",
-    "close_hover": "#c0392b", "close_hover_border": "#e05a4a",
-    "alpha_accent_hover": "0.12", "alpha_accent_btn": "0.20", "alpha_accent_head": "0.22",
+    "suggested_hover": "#14b3a3",
+    "destructive": "#d64555", "destructive_border": "#bf3a48",
+    "destructive_hover": "#e35a68", "destructive_hover_border": "#d64555",
+    "close_hover": "#d64555", "close_hover_border": "#e35a68",
+    "alpha_accent_hover": "0.10", "alpha_accent_btn": "0.16", "alpha_accent_head": "0.18",
+    "chip_bg": "rgba(15, 158, 144, 0.10)",
+    "success": "#1fa971",
+    "term_bg": "#f7fafc", "term_fg": "#15202b",
+    "card_glow": "rgba(140, 60, 200, 0.14)",
+    "purple": "#8b3dd9", "purple_dark": "#6f2db0",
+    "purple_soft": "rgba(139, 61, 217, 0.12)", "purple_mid": "rgba(139, 61, 217, 0.22)",
+    "rail_bg": "#f3f6fa",
 }
 
-# CSS 模板：所有颜色来自上面的主题字典，深浅模式共用同一份样式结构
+# CSS 模板：SteamOS / OLED 主从布局（左轨 + 右详情）
 APP_CSS_TEMPLATE = """
 /* =====================================================================
-   Steam Deck 风格主题（深色 / 浅色可切换）
-   圆角卡片 + 触控友好行高
+   Deck Console Master-Detail — OLED purple + cyan, always-on category rail
    ===================================================================== */
 @define-color sd_bg {bg};
 @define-color sd_bg_alt {bg_alt};
@@ -117,19 +132,16 @@ APP_CSS_TEMPLATE = """
 @define-color sd_accent_dark {accent_dark};
 @define-color sd_text {text};
 @define-color sd_dim {dim};
+@define-color sd_purple {purple};
+@define-color sd_purple_dark {purple_dark};
+
+* {{
+    outline-color: alpha(@sd_accent, 0.45);
+}}
 
 window {{ background-color: @sd_bg; color: @sd_text; }}
 .background {{ background-color: @sd_bg; }}
 
-/* ---------- 客户端装饰（CSD）----------
-   系统为浅色主题时，GTK 会用系统主题绘制窗口外框，
-   深色模式下表现为标题栏上方一条白边。这里用应用背景色绘制。
-
-   注意：这里刻意不使用「透明圆角 + 投影」。
-   那套做法要求窗口表面比可见内容大一圈（CSD 透明边距，实测四周
-   68/60/76px），一旦系统没开桌面特效合成器（X11 无法做 alpha 混合），
-   这圈透明边距就会被渲染成纯黑，表现为「窗口外面多一圈黑色区域」。
-   不透明 + 直角 + 无阴影时窗口边距为 0，有没有合成器都不会出现黑边。 */
 decoration {{
     background-color: @sd_bg;
     border-radius: 0;
@@ -160,204 +172,378 @@ window.csd > box, window.csd > .background {{
     background-color: transparent;
 }}
 
-/* ---------- 顶部标题栏 ---------- */
 headerbar {{
-    min-height: 46px;
-    padding: 0 10px;
-    background-image: linear-gradient(to bottom, {header_top}, {header_bottom});
+    min-height: 50px;
+    padding: 0 14px;
+    background-image: none;
+    background-color: {header_top};
     border-bottom: 1px solid {header_border};
     color: @sd_text;
-    box-shadow: 0 2px 6px {shadow};
+    box-shadow: 0 1px 0 alpha(@sd_purple, 0.12);
 }}
-headerbar:backdrop {{ background-image: linear-gradient(to bottom, {header_backdrop_top}, {header_backdrop_bottom}); }}
-headerbar .title {{ font-weight: 700; font-size: 15px; color: {title}; }}
-headerbar .subtitle {{ font-size: 11px; color: @sd_dim; }}
+headerbar:backdrop {{
+    background-image: none;
+    background-color: {header_backdrop_top};
+}}
+headerbar .title {{
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: 0.4px;
+    color: {title};
+}}
+headerbar .subtitle {{
+    font-size: 11px;
+    font-weight: 600;
+    color: @sd_accent;
+}}
 headerbar button {{
     background-image: none;
     background-color: {btn_ghost};
     border: 1px solid {btn_ghost_border};
-    border-radius: 9px;
+    border-radius: 12px;
     color: @sd_text;
-    min-height: 26px;
+    min-height: 30px;
+    min-width: 30px;
     padding: 0 10px;
     box-shadow: none;
     text-shadow: none;
 }}
-headerbar button:hover {{ background-color: alpha(@sd_accent, {alpha_accent_head}); border-color: @sd_accent; }}
-headerbar button:active, headerbar button:checked {{ background-color: @sd_accent_dark; color: {sel_text}; }}
+headerbar button:hover {{
+    background-color: alpha(@sd_accent, {alpha_accent_head});
+    border-color: alpha(@sd_accent, 0.55);
+}}
+headerbar button:active, headerbar button:checked {{
+    background-color: @sd_accent_dark;
+    color: {sel_text};
+}}
 headerbar button.titlebutton {{
     background-image: none;
     background-color: {titlebtn};
     border: 1px solid {titlebtn_border};
-    border-radius: 8px;
+    border-radius: 999px;
     color: {title};
     -gtk-icon-shadow: none;
-    min-width: 24px;
-    min-height: 24px;
+    min-width: 22px;
+    min-height: 22px;
     padding: 0;
     box-shadow: none;
 }}
 headerbar button.titlebutton:hover {{ background-color: {titlebtn_hover}; }}
 headerbar button.titlebutton:active {{ background-color: @sd_accent_dark; }}
-headerbar button.titlebutton.close:hover {{ background-color: {close_hover}; border-color: {close_hover_border}; }}
+headerbar button.titlebutton.close:hover {{
+    background-color: {close_hover};
+    border-color: {close_hover_border};
+}}
 headerbar button.titlebutton image {{ color: {title}; }}
 
-/* ---------- 搜索框 ---------- */
 entry.search, entry.search-entry, searchentry {{
     background-image: none;
     background-color: {search_bg};
     border: 1px solid @sd_border;
-    border-radius: 10px;
+    border-radius: 999px;
     color: @sd_text;
-    min-height: 30px;
-    padding: 0 10px;
-    box-shadow: none;
+    min-height: 34px;
+    padding: 0 16px;
+    box-shadow: inset 0 1px 0 alpha(@sd_text, 0.03);
     caret-color: @sd_accent;
 }}
-entry.search:focus, entry.search-entry:focus, searchentry:focus {{ border-color: @sd_accent; }}
+entry.search:focus, entry.search-entry:focus, searchentry:focus {{
+    border-color: @sd_accent;
+    box-shadow: 0 0 0 2px alpha(@sd_accent, 0.22);
+}}
 entry.search image, entry.search-entry image, searchentry image {{ color: @sd_dim; }}
-/* 深色模式下防止默认主题把搜索框画成白底 */
 headerbar entry, headerbar entry.search {{ color: @sd_text; }}
 headerbar entry text, headerbar entry.search text {{
     background-color: transparent;
     color: @sd_text;
 }}
 
-/* ---------- 左侧分类栏 ---------- */
-#sidebar {{ background-color: @sd_bg_alt; border-right: 1px solid @sd_border; }}
-#sidebar.view {{ background-color: transparent; color: @sd_text; -GtkTreeView-vertical-separator: 3px; }}
-#sidebar.view:hover {{ background-color: {hover}; }}
-#sidebar.view:selected {{
-    background-image: linear-gradient(to right, @sd_accent, @sd_accent_dark);
-    color: {sel_text};
+#content-area {{
+    background-color: @sd_bg;
+}}
+.page-shell {{
+    background-color: transparent;
+}}
+#page-title {{
+    color: {title};
+    font-weight: 800;
+    font-size: 18px;
+}}
+#page-subtitle {{
+    color: @sd_dim;
+    font-size: 13px;
+    font-weight: 500;
+}}
+
+/* ---- Master rail (left) ---- */
+#cat-rail {{
+    background-color: {rail_bg};
+    border-right: 1px solid @sd_border;
+    padding: 10px 10px 12px 10px;
+    min-width: 232px;
 }}
 #sidebar-header {{
-    background-image: linear-gradient(to bottom, {sidebar_header_top}, {sidebar_header_bottom});
-    border-bottom: 1px solid @sd_border;
-    padding: 10px 12px;
-}}
-#sidebar-header label {{ font-weight: 700; color: {title}; font-size: 14px; }}
-
-/* ---------- 功能列表 / 搜索结果列表 ---------- */
-#func-list {{ background-color: transparent; color: @sd_text; -GtkTreeView-vertical-separator: 2px; }}
-#func-list.view:hover {{ background-color: alpha(@sd_accent, {alpha_accent_hover}); }}
-#func-list.view:selected {{
-    background-image: linear-gradient(to right, @sd_accent, @sd_accent_dark);
-    color: {sel_text};
-}}
-treeview button {{
     background-image: none;
-    background-color: @sd_panel_hi;
-    border: none;
-    border-bottom: 1px solid @sd_border;
-    border-radius: 0;
-    color: @sd_dim;
-    min-height: 26px;
+    background-color: transparent;
+    padding: 6px 8px 10px 8px;
+}}
+#sidebar-header label {{
+    font-weight: 800;
+    color: {title};
+    font-size: 13px;
+    letter-spacing: 0.3px;
+}}
+button.nav-item {{
+    background-image: none;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    color: @sd_text;
+    padding: 8px 10px;
+    min-height: 40px;
     box-shadow: none;
     text-shadow: none;
     font-weight: 600;
 }}
+button.nav-item:hover {{
+    background-color: {purple_soft};
+    border-color: alpha(@sd_purple, 0.28);
+}}
+button.nav-item:active {{
+    background-color: {purple_mid};
+}}
+button.nav-item.selected {{
+    background-color: {purple_soft};
+    border-color: alpha(@sd_purple, 0.55);
+    box-shadow: inset 3px 0 0 @sd_purple, 0 0 0 1px alpha(@sd_accent, 0.18);
+}}
+button.nav-item.selected:hover {{
+    background-color: {purple_mid};
+}}
+.nav-item-title {{
+    font-weight: 700;
+    font-size: 13px;
+    color: {title};
+}}
+button.nav-item.selected .nav-item-title {{
+    color: @sd_purple;
+}}
+.nav-icon-wrap {{
+    background-color: {chip_bg};
+    border-radius: 10px;
+    padding: 4px;
+    border: 1px solid alpha(@sd_accent, 0.18);
+}}
+button.nav-item.selected .nav-icon-wrap {{
+    background-color: {purple_soft};
+    border-color: alpha(@sd_purple, 0.35);
+}}
 
-/* ---------- 圆角卡片容器 ---------- */
+/* Detail / function row cards */
+button.func-tile {{
+    background-image: none;
+    background-color: @sd_panel;
+    border: 1px solid @sd_border;
+    border-radius: 14px;
+    color: @sd_text;
+    padding: 14px 22px 14px 16px;
+    min-height: 52px;
+    box-shadow: 0 4px 14px {shadow};
+    text-shadow: none;
+    font-weight: 600;
+    margin-right: 8px;
+}}
+button.func-tile:hover {{
+    background-color: @sd_panel_hi;
+    border-color: alpha(@sd_accent, 0.65);
+}}
+button.func-tile:active {{
+    background-color: {accent_mid};
+}}
+button.func-tile.child-tile {{
+    margin-left: 18px;
+    min-height: 44px;
+    background-color: @sd_panel_hi;
+}}
+.func-group-label {{
+    font-weight: 700;
+    font-size: 12px;
+    color: @sd_accent;
+    letter-spacing: 0.6px;
+    margin-top: 8px;
+    margin-bottom: 2px;
+}}
+
+button.back-btn {{
+    background-image: none;
+    background-color: {btn_ghost};
+    border: 1px solid {btn_ghost_border};
+    border-radius: 999px;
+    color: @sd_text;
+    min-height: 34px;
+    padding: 0 14px;
+    font-weight: 700;
+}}
+button.back-btn:hover {{
+    background-color: alpha(@sd_accent, {alpha_accent_btn});
+    border-color: alpha(@sd_accent, 0.55);
+}}
+
 .card {{
     background-color: @sd_panel;
     border: 1px solid @sd_border;
-    border-radius: 12px;
+    border-radius: 16px;
+    box-shadow: 0 8px 22px {shadow};
+}}
+.page-title-chip {{
+    background-color: {chip_bg};
+    border-radius: 999px;
+    padding: 2px 10px;
+    color: @sd_accent;
+}}
+#detail-panel {{
+    background-color: @sd_bg;
 }}
 
-/* ---------- 页面标题 ---------- */
-#page-title {{ color: {title}; }}
-
-/* ---------- 底部状态栏 ---------- */
 #bottom-bar {{
-    background-image: linear-gradient(to bottom, {bottom_top}, {bottom_bottom});
+    background-image: none;
+    background-color: {bottom_top};
     border-top: 1px solid @sd_border;
-    padding: 6px 10px;
+    padding: 6px 14px;
     border-radius: 0;
 }}
-#status-label {{ font-size: 11px; color: @sd_dim; }}
-#task-timer {{ font-size: 11px; font-weight: bold; color: @sd_accent; }}
+#status-label {{
+    font-size: 11px;
+    font-weight: 500;
+    color: @sd_dim;
+}}
+#task-timer {{
+    font-size: 12px;
+    font-weight: 700;
+    color: @sd_accent;
+}}
+#task-toolbar {{
+    background-color: @sd_bg_alt;
+    border-top: 1px solid @sd_border;
+    padding: 8px 12px;
+}}
 
-/* ---------- 普通按钮 ---------- */
 button {{
     background-image: none;
     background-color: @sd_panel_hi;
     border: 1px solid @sd_border;
-    border-radius: 9px;
+    border-radius: 12px;
     color: @sd_text;
-    min-height: 30px;
-    padding: 2px 14px;
+    min-height: 32px;
+    padding: 2px 16px;
     box-shadow: none;
     text-shadow: none;
+    font-weight: 600;
 }}
-button:hover {{ background-color: alpha(@sd_accent, {alpha_accent_btn}); border-color: @sd_accent; }}
-button:active {{ background-color: @sd_accent_dark; color: {sel_text}; }}
-button:disabled {{ color: @sd_dim; background-color: @sd_panel; border-color: @sd_border; }}
-button.suggested-action {{
-    background-image: linear-gradient(to bottom, @sd_accent, @sd_accent_dark);
-    border-color: @sd_accent;
+button:hover {{
+    background-color: alpha(@sd_accent, {alpha_accent_btn});
+    border-color: alpha(@sd_accent, 0.55);
+}}
+button:active {{
+    background-color: @sd_accent_dark;
     color: {sel_text};
 }}
-button.suggested-action:hover {{ background-image: linear-gradient(to bottom, {suggested_hover}, @sd_accent_dark); }}
-button.destructive-action {{ background-color: {destructive}; border-color: {destructive_border}; color: #ffffff; }}
-button.destructive-action:hover {{ background-color: {destructive_hover}; border-color: {destructive_hover_border}; }}
+button:disabled {{
+    color: @sd_dim;
+    background-color: @sd_panel;
+    border-color: @sd_border;
+    opacity: 0.7;
+}}
+button.suggested-action {{
+    background-image: none;
+    background-color: @sd_accent;
+    border-color: @sd_accent_dark;
+    color: {sel_text};
+}}
+button.suggested-action:hover {{
+    background-image: none;
+    background-color: {suggested_hover};
+}}
+button.destructive-action {{
+    background-color: {destructive};
+    border-color: {destructive_border};
+    color: #ffffff;
+}}
+button.destructive-action:hover {{
+    background-color: {destructive_hover};
+    border-color: {destructive_hover_border};
+}}
+button.flat, button.flat:hover {{
+    background-image: none;
+    box-shadow: none;
+}}
 
-/* ---------- 文本框 ---------- */
-textview, textview text {{ background-color: @sd_panel; color: @sd_text; caret-color: @sd_accent; }}
-textview {{ border-radius: 10px; }}
+textview, textview text {{
+    background-color: @sd_panel;
+    color: @sd_text;
+    caret-color: @sd_accent;
+}}
+textview {{
+    border-radius: 14px;
+}}
 
-/* ---------- 滚动条 ---------- */
-scrollbar {{ background-color: transparent; border: none; }}
+scrollbar {{
+    background-color: transparent;
+    border: none;
+    margin: 0 2px 0 6px;
+}}
+scrollbar.vertical {{
+    min-width: 14px;
+    padding-left: 4px;
+}}
 scrollbar slider {{
     background-color: {scrollbar};
-    border-radius: 6px;
+    border-radius: 999px;
     min-width: 8px;
-    min-height: 8px;
+    min-height: 7px;
 }}
-scrollbar slider:hover {{ background-color: alpha(@sd_accent, 0.6); }}
+scrollbar slider:hover {{ background-color: alpha(@sd_accent, 0.55); }}
+/* keep func tiles clear of the non-overlay scrollbar gutter */
+#detail-panel button.func-tile {{
+    margin-right: 4px;
+}}
 
-/* ---------- 主题切换弹出菜单（Popover 才能跟随主题着色） ---------- */
 popover, popover.background {{
     background-color: @sd_panel;
     border: 1px solid @sd_border;
-    border-radius: 10px;
-    box-shadow: 0 6px 18px {shadow};
+    border-radius: 14px;
+    box-shadow: 0 10px 28px {shadow};
 }}
 popover > box, popover.background > box {{ background-color: transparent; }}
-/* 主题行按钮 */
 .theme-row, button.theme-row {{
     background-image: none;
     background-color: transparent;
     border: none;
-    border-radius: 7px;
+    border-radius: 10px;
     box-shadow: none;
-    padding: 8px 14px;
-    min-height: 24px;
+    padding: 8px 12px;
+    min-height: 26px;
     color: @sd_text;
+    font-weight: 500;
 }}
 .theme-row:hover, button.theme-row:hover {{
     background-image: none;
-    background-color: alpha(@sd_accent, {alpha_accent_btn});
+    background-color: {accent_soft};
     border: none;
     color: @sd_text;
 }}
 .theme-row:active, button.theme-row:active {{
     background-image: none;
-    background-color: alpha(@sd_accent, {alpha_accent_btn});
+    background-color: {accent_mid};
     color: @sd_text;
 }}
 .theme-row label {{ color: @sd_text; }}
 .theme-row image {{ color: @sd_accent; }}
 
-/* ---------- 对话框（危险操作确认等原生 MessageDialog） ---------- */
-/* 原生 Adwaita 对话框纸面是浅色，而它继承的是深色主题的文字色，
-   切到浅色模式后就会出现"白底浅字"。这里显式指定对话框的底色与文字色。 */
 dialog, dialog.background, messagedialog, messagedialog.background {{
     background-color: @sd_panel;
     color: @sd_text;
 }}
-/* 对话框的 CSD 标题栏：由 gtk-dialogs-use-header 自动创建（.titlebar 是一个 Box）。
-   不刷成深色的话，浅色系统主题下会显示为一条白边。 */
 dialog .titlebar, messagedialog .titlebar,
 dialog box.titlebar, messagedialog box.titlebar {{
     background-image: none;
@@ -376,7 +562,7 @@ dialog .titlebar button, messagedialog .titlebar button {{
     background-image: none;
     background-color: {btn_ghost};
     border: 1px solid {btn_ghost_border};
-    border-radius: 8px;
+    border-radius: 10px;
     color: @sd_text;
     box-shadow: none;
     text-shadow: none;
@@ -387,6 +573,7 @@ dialog .titlebar button image, messagedialog .titlebar button image {{
 dialog .dialog-action-area, messagedialog .dialog-action-area {{
     background-color: @sd_bg_alt;
     border-top: 1px solid @sd_border;
+    padding: 8px;
 }}
 dialog label, messagedialog label,
 dialog .label, messagedialog .label {{
@@ -402,24 +589,85 @@ dialog button, messagedialog button {{ color: @sd_text; }}
 dialog button:active, messagedialog button:active,
 dialog button.suggested-action, messagedialog button.suggested-action {{ color: {sel_text}; }}
 
-/* ---------- 下拉菜单 / 工具提示 / 输入法候选窗等原生浮层 ---------- */
 menu, .menu, .context-menu, menuitem, tooltip, tooltip.background {{
     color: @sd_text;
 }}
-menu, .menu, .context-menu {{ background-color: @sd_panel; border: 1px solid @sd_border; }}
-menuitem {{ background-color: transparent; }}
-menuitem:hover {{ background-color: alpha(@sd_accent, {alpha_accent_btn}); }}
-tooltip.background {{ background-color: {panel_hi}; border: 1px solid @sd_border; }}
+menu, .menu, .context-menu {{
+    background-color: @sd_panel;
+    border: 1px solid @sd_border;
+    border-radius: 10px;
+}}
+menuitem {{ background-color: transparent; border-radius: 8px; }}
+menuitem:hover {{ background-color: {accent_soft}; }}
+tooltip.background {{
+    background-color: {panel_hi};
+    border: 1px solid @sd_border;
+    border-radius: 8px;
+}}
 tooltip label {{ color: @sd_text; }}
 
-/* ---------- 终端 ---------- */
-vte-terminal {{ padding: 6px; }}
+vte-terminal {{
+    padding: 10px;
+    border-radius: 10px;
+}}
+.term-card {{
+    background-color: {term_bg};
+    border: 1px solid @sd_border;
+    border-radius: 14px;
+}}
+
+/* keep legacy list ids harmless if referenced */
+#sidebar, #func-list {{
+    background-color: transparent;
+    color: @sd_text;
+}}
+.dash-card-desc {{
+    font-size: 12px;
+    color: @sd_dim;
+    font-weight: 500;
+}}
 """
+
 
 def build_css(theme_name):
     """根据主题名生成对应的 CSS 文本。"""
     palette = THEME_LIGHT if theme_name == "light" else THEME_DARK
     return APP_CSS_TEMPLATE.format(**palette)
+
+def theme_palette(theme_name=None):
+    """返回当前或指定主题的配色字典。"""
+    if theme_name is None:
+        try:
+            theme_name = resolve_theme_mode(load_theme_pref())
+        except Exception:
+            theme_name = "dark"
+    return THEME_LIGHT if theme_name == "light" else THEME_DARK
+
+def apply_terminal_theme(terminal):
+    """按当前主题设置 VTE 前景/背景与基础调色板。"""
+    if terminal is None:
+        return
+    try:
+        pal = theme_palette()
+        fg = Gdk.RGBA(); fg.parse(pal.get("term_fg", "#e8eefc"))
+        bg = Gdk.RGBA(); bg.parse(pal.get("term_bg", "#0b1018"))
+        if pal is THEME_LIGHT:
+            colors = ("#e8edf5", "#d64555", "#1fa971", "#c48a1a",
+                      "#4f6ef7", "#8b5cf6", "#0f9aa8", "#1a2236",
+                      "#c5cede", "#e35a68", "#2cc084", "#e0a428",
+                      "#6782ff", "#a78bfa", "#22b8c8", "#0f1522")
+        else:
+            colors = ("#1a2336", "#e35d6a", "#3dd68c", "#e0c05c",
+                      "#5b8cff", "#b48cff", "#5cc8d0", "#c7d5e0",
+                      "#3a4a5a", "#ff7a8a", "#6be8a8", "#ffd97a",
+                      "#7aa0ff", "#c9a8ff", "#7fe0e8", "#ffffff")
+        palette = []
+        for hex_color in colors:
+            c = Gdk.RGBA(); c.parse(hex_color); palette.append(c)
+        terminal.set_colors(fg, bg, palette)
+    except Exception:
+        pass
+
 
 # 向后兼容：旧代码中若有引用 APP_CSS 的地方，默认使用深色
 APP_CSS = build_css("dark")
@@ -565,6 +813,18 @@ _UI_STRINGS = {
     "lang_en": {"zh": "English", "en": "English"},
     "lang_system": {"zh": "跟随系统", "en": "Follow System"},
     "cat_sidebar": {"zh": "功能分类", "en": "Categories"},
+    "back_home": {"zh": "← 返回首页", "en": "← Home"},
+    "home_title": {"zh": "控制台", "en": "Console"},
+    "home_hint": {"zh": "选择一个分类开始", "en": "Pick a category to get started"},
+    "cat_desc_support": {"zh": "关于本工具与维护信息", "en": "About this tool and maintenance"},
+    "cat_desc_changelog": {"zh": "查看版本更新记录", "en": "See what changed in each version"},
+    "cat_desc_sysopt": {"zh": "源、虚拟内存、校准与缓存", "en": "Repos, swap, calibration and cache"},
+    "cat_desc_software": {"zh": "常用桌面应用一键安装", "en": "One-click desktop app installs"},
+    "cat_desc_network": {"zh": "加速器与网络相关工具", "en": "Accelerators and network utilities"},
+    "cat_desc_plugins": {"zh": "Decky 插件商店与插件", "en": "Decky plugin store and plugins"},
+    "cat_desc_boot": {"zh": "Clover 引导安装与维护", "en": "Clover boot install and upkeep"},
+    "cat_desc_update": {"zh": "更新或卸载已装软件", "en": "Update or uninstall installed apps"},
+    "cat_desc_other": {"zh": "其他实用小工具", "en": "Other handy utilities"},
     "help": {"zh": "帮助", "en": "Help"},
     "quit": {"zh": "退出", "en": "Quit"},
     "ok": {"zh": "确定", "en": "OK"},
@@ -598,12 +858,12 @@ _UI_STRINGS = {
     },
     "help_body_zh": (
         "本工具集成了系统优化、软件安装、网络工具等功能。\n"
-        "点击左侧分类，右侧显示功能列表。\n"
+        "在首页点分类卡片进入功能列表，顶栏可全局搜索。\n"
         "小破站关注up主 AlanWake2100 可以来催更哦~"
     ),
     "help_body_en_markup": (
         "This tool integrates system optimization, software installation, network tools and more.\n"
-        "Click a category on the left to show its function list on the right.\n"
+        "Tap a category card on the home screen to open its tools; use the top search anytime.\n"
         "Follow <a href=\"https://x.com/AlanWake2100\">AlanWake (@AlanWake2100)</a> on X for updates~"
     ),
     "no_terminal": {"zh": "未找到可用的终端模拟器", "en": "No usable terminal emulator found"},
@@ -803,7 +1063,18 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-01（v1.9.7）
+CHANGELOG_BODY_ZH = """2026-11-02（v1.9.8）
+【界面改进】
+- 主界面改为 SteamOS / OLED 风主从布局：左侧常驻分类轨，右侧即时显示对应内容，
+  不再使用首页 3×3 大卡片再钻二级页
+- 深色主题近黑底 + 紫/品红选中与青蓝强调；浅色主题同步可用
+- 功能行卡与右侧滚动条错开，避免 chevron 与滚动条重叠
+- 启动默认选中并打开「支持和维护」，右侧直接显示关于/维护正文（与手动点击一致）
+【说明】
+- 语言切换、主题、全局搜索、危险确认、任务窗与脚本业务逻辑保持不变
+- 制作人：Zhucy
+
+2026-11-01（v1.9.7）
 【新功能】
 - 新增界面语言切换（中文 / English）：顶栏可随时切换，偏好写入
   ~/.config/steamdeck_toolbox/config.json 的 language 字段，下次启动自动恢复
@@ -1144,7 +1415,17 @@ CHANGELOG_BODY_ZH = """2026-11-01（v1.9.7）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-01 (v1.9.7)
+CHANGELOG_BODY_EN = """2026-11-02 (v1.9.8)
+[UI improvements]
+- Main window is now a SteamOS / OLED-style master-detail layout: a persistent left category rail and an immediate right-hand detail pane (no more 3×3 home tiles then a second page)
+- Dark theme uses near-black charcoal with purple/magenta selection and cyan accents; light theme remains fully usable
+- Function row cards no longer sit under the vertical scrollbar (chevron and scrollbar stay apart)
+- On launch, "Support & maintenance" is selected by default and its about/maintenance content is shown right away (same as clicking the rail item)
+[Notes]
+- Language switching, themes, global search, danger confirms, the task window, and script logic are unchanged
+- Made by: Zhucy
+
+2026-11-01 (v1.9.7)
 [New features]
 - Added UI language switching (Chinese / English): switch anytime from the top bar; preference is saved to the language field in ~/.config/steamdeck_toolbox/config.json and restored on next launch
 - In English mode, UI strings, category/feature names, the changelog, dialog buttons (including Yes / No / OK), and user-visible embedded terminal script output are all English; Chinese mode stays Chinese
@@ -1420,6 +1701,22 @@ def build_icon_map():
         t("cat_update"): "inbox.png",
         t("cat_other"): "trash.png",
     }
+
+
+def category_meta():
+    """Stable category order for master-detail rail: (id, title_key, desc_key, icon_file)."""
+    return [
+        ("support", "cat_support", "cat_desc_support", "pushpin.png"),
+        ("changelog", "cat_changelog", "cat_desc_changelog", "clipboard_twemoji.png"),
+        ("sysopt", "cat_sysopt", "cat_desc_sysopt", "hammer_wrench.png"),
+        ("software", "cat_software", "cat_desc_software", "package.png"),
+        ("network", "cat_network", "cat_desc_network", "globe.png"),
+        ("plugins", "cat_plugins", "cat_desc_plugins", "game_controller.png"),
+        ("boot", "cat_boot", "cat_desc_boot", "refresh.png"),
+        ("update", "cat_update", "cat_desc_update", "inbox.png"),
+        ("other", "cat_other", "cat_desc_other", "trash.png"),
+    ]
+
 
 def build_category_tree():
     """按当前语言构建分类树；叶子第二项始终是稳定功能 key。"""
@@ -15124,21 +15421,11 @@ class TaskWindow(Gtk.Window):
                 self.terminal.set_font(Pango.FontDescription("Monospace 11"))
             except Exception:
                 pass
-            try:
-                fg = Gdk.RGBA(); fg.parse("#e6edf4")
-                bg = Gdk.RGBA(); bg.parse("#0b1016")
-                palette = []
-                for hex_color in ("#1b2531", "#e05c5c", "#5cd07a", "#e0c05c",
-                                  "#1a9fff", "#b48cff", "#5cc8d0", "#c7d5e0",
-                                  "#3a4a5a", "#ff7a7a", "#7be89a", "#ffd97a",
-                                  "#4fb8ff", "#c9a8ff", "#7fe0e8", "#ffffff"):
-                    c = Gdk.RGBA(); c.parse(hex_color); palette.append(c)
-                self.terminal.set_colors(fg, bg, palette)
-            except Exception:
-                pass
+            apply_terminal_theme(self.terminal)
             term_frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
             term_frame.get_style_context().add_class("card")
-            term_frame.set_margin_top(10); term_frame.set_margin_bottom(0); term_frame.set_margin_start(10); term_frame.set_margin_end(10)
+            term_frame.get_style_context().add_class("term-card")
+            term_frame.set_margin_top(12); term_frame.set_margin_bottom(0); term_frame.set_margin_start(12); term_frame.set_margin_end(12)
             term_frame.pack_start(self.terminal, True, True, 0)
             vbox.pack_start(term_frame, True, True, 0)
 
@@ -15149,10 +15436,11 @@ class TaskWindow(Gtk.Window):
             self.terminal.connect("key-press-event", self._on_terminal_key_press)
 
             button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-            button_box.set_margin_top(5)
-            button_box.set_margin_bottom(5)
-            button_box.set_margin_start(10)
-            button_box.set_margin_end(10)
+            button_box.set_name("task-toolbar")
+            button_box.set_margin_top(0)
+            button_box.set_margin_bottom(0)
+            button_box.set_margin_start(0)
+            button_box.set_margin_end(0)
             self.timer_label = Gtk.Label(label=t("elapsed_zero"))
             self.timer_label.set_name("task-timer")
             button_box.pack_start(self.timer_label, False, False, 0)
@@ -15452,10 +15740,14 @@ class MainWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title=t("app_title"))
         self.set_icon_name("input-gamepad-symbolic")
-        self.set_default_size(950, 620)
+        self.set_default_size(1100, 720)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.system_type = self.detect_system_type()
         self.task_window = None
+        self._current_page = "func"
+        self._current_cat_id = None
+        self._nav_before_search = "func"
+        self._nav_buttons = {}
 
         header = Gtk.HeaderBar()
         header.set_show_close_button(True)
@@ -15466,11 +15758,10 @@ class MainWindow(Gtk.Window):
 
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_placeholder_text(t("search_placeholder"))
-        self.search_entry.set_width_chars(20)
+        self.search_entry.set_width_chars(24)
         self.search_entry.connect("search-changed", self.on_search_changed)
         header.pack_end(self.search_entry)
 
-        # 主题切换按钮（深色 / 浅色 / 跟随系统）
         self.theme_button = Gtk.MenuButton()
         self.theme_button.set_tooltip_text(t("theme_tooltip"))
         self.theme_button.set_relief(Gtk.ReliefStyle.NONE)
@@ -15480,7 +15771,6 @@ class MainWindow(Gtk.Window):
         header.pack_end(self.theme_button)
         self._build_theme_menu()
 
-        # 语言切换（中 / 英）
         self.lang_button = Gtk.MenuButton()
         self.lang_button.set_tooltip_text(t("lang_tooltip"))
         self.lang_button.set_relief(Gtk.ReliefStyle.NONE)
@@ -15490,134 +15780,199 @@ class MainWindow(Gtk.Window):
         header.pack_end(self.lang_button)
         self._build_lang_menu()
 
-        self._current_page = "func"
-
         self.icon_map = build_icon_map()
         self.category_tree = build_category_tree()
+        self.category_icons = {}
+        for cat_id, title_key, _desc_key, icon_file in category_meta():
+            pix = load_icon_pixbuf(icon_file, 28) if icon_file else None
+            self.category_icons[cat_id] = pix
+            self.category_icons[t(title_key)] = pix
 
         main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(main_vbox)
-        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        hbox.set_vexpand(True)
-        main_vbox.pack_start(hbox, True, True, 0)
 
-        self.list_store = Gtk.ListStore(GdkPixbuf.Pixbuf, str)
-        self.category_icons = {}
-        for cat in self.category_tree.keys():
-            icon_file = self.icon_map.get(cat)
-            pixbuf = load_icon_pixbuf(icon_file, 28) if icon_file else None
-            self.list_store.append([pixbuf, cat])
-            self.category_icons[cat] = pixbuf
+        body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        body.set_vexpand(True)
+        main_vbox.pack_start(body, True, True, 0)
 
-        self.cat_view = Gtk.TreeView(model=self.list_store)
-        self.cat_view.set_name("sidebar")
-        col = Gtk.TreeViewColumn()
-        col.set_spacing(10)
-        renderer_icon = Gtk.CellRendererPixbuf(); col.pack_start(renderer_icon, False); col.add_attribute(renderer_icon, "pixbuf", 0)
-        renderer_text = Gtk.CellRendererText(); renderer_text.set_property("ypad", 9); col.pack_start(renderer_text, True); col.add_attribute(renderer_text, "text", 1)
-        self.cat_view.append_column(col)
-        self.cat_view.set_activate_on_single_click(True)
-        self.cat_view.connect("row-activated", self.on_category_activated)
-        scrolled_left = Gtk.ScrolledWindow(); scrolled_left.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC); scrolled_left.set_vexpand(True); scrolled_left.set_valign(Gtk.Align.FILL); scrolled_left.add(self.cat_view)
+        # ---- Left category rail ----
+        rail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        rail.set_name("cat-rail")
+        rail.set_size_request(248, -1)
+        rail.set_hexpand(False)
+        rail.set_vexpand(True)
 
         sidebar_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         sidebar_header.set_name("sidebar-header")
         sidebar_icon = Gtk.Image.new_from_icon_name("input-gamepad-symbolic", Gtk.IconSize.BUTTON)
-        self.sidebar_title = Gtk.Label(label=t("cat_sidebar")); self.sidebar_title.set_halign(Gtk.Align.START)
+        self.sidebar_title = Gtk.Label(label=t("cat_sidebar"))
+        self.sidebar_title.set_halign(Gtk.Align.START)
         sidebar_header.pack_start(sidebar_icon, False, False, 0)
         sidebar_header.pack_start(self.sidebar_title, False, False, 0)
+        rail.pack_start(sidebar_header, False, False, 0)
 
-        left_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        left_panel.set_size_request(258, -1)
-        left_panel.pack_start(sidebar_header, False, False, 0)
-        left_panel.pack_start(scrolled_left, True, True, 0)
-        hbox.pack_start(left_panel, False, True, 0)
+        nav_scroll = Gtk.ScrolledWindow()
+        nav_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        nav_scroll.set_vexpand(True)
+        self.nav_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.nav_box.set_valign(Gtk.Align.START)
+        nav_scroll.add(self.nav_box)
+        rail.pack_start(nav_scroll, True, True, 0)
+        body.pack_start(rail, False, False, 0)
 
-        self.stack = Gtk.Stack(); self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE); self.stack.set_vexpand(True); self.stack.set_valign(Gtk.Align.FILL)
-        hbox.pack_start(self.stack, True, True, 0)
+        # ---- Right content stack ----
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.stack.set_transition_duration(140)
+        self.stack.set_vexpand(True)
+        self.stack.set_hexpand(True)
+        self.stack.set_name("content-area")
+        body.pack_start(self.stack, True, True, 0)
 
-        # About page
-        about_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        about_box.set_margin_top(20); about_box.set_margin_bottom(20); about_box.set_margin_start(20); about_box.set_margin_end(20)
-        self.about_title = Gtk.Label(); self.about_title.set_name("page-title"); self.about_title.set_markup(f"<big><b>{t('about_title')}</b></big>"); self.about_title.set_halign(Gtk.Align.START)
+        # Detail / function page (no back button)
+        cat_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        cat_page.get_style_context().add_class("page-shell")
+        cat_page.set_name("detail-panel")
+        cat_page.set_margin_top(16); cat_page.set_margin_bottom(16)
+        cat_page.set_margin_start(20); cat_page.set_margin_end(12)
+        title_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        title_box.set_halign(Gtk.Align.START)
+        self.title_icon = Gtk.Image(); self.title_icon.set_visible(False)
+        title_box.pack_start(self.title_icon, False, False, 0)
+        self.category_title = Gtk.Label(); self.category_title.set_name("page-title")
+        self.category_title.set_halign(Gtk.Align.START)
+        title_box.pack_start(self.category_title, False, False, 0)
+        cat_page.pack_start(title_box, False, False, 0)
+
+        self.func_list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.func_list_box.set_valign(Gtk.Align.START)
+        self.func_list_box.set_margin_end(8)
+        func_scroll = Gtk.ScrolledWindow()
+        func_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        func_scroll.set_vexpand(True)
+        try:
+            func_scroll.set_overlay_scrolling(False)
+        except Exception:
+            pass
+        # Viewport child with right padding so chevrons never sit under the scrollbar
+        func_inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        func_inner.set_margin_end(20)
+        func_inner.set_margin_start(0)
+        func_inner.pack_start(self.func_list_box, False, False, 0)
+        func_scroll.add(func_inner)
+        cat_page.pack_start(func_scroll, True, True, 0)
+        self.stack.add_named(cat_page, "func")
+        # keep dummy back_btn for language refresh compatibility
+        self.back_btn = Gtk.Button(label=t("back_home"))
+
+        # About (no back)
+        about_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        about_box.get_style_context().add_class("page-shell")
+        about_box.set_margin_top(16); about_box.set_margin_bottom(16)
+        about_box.set_margin_start(20); about_box.set_margin_end(20)
+        self.about_title = Gtk.Label()
+        self.about_title.set_name("page-title")
+        self.about_title.set_markup(f"<span size='large'><b>{t('about_title')}</b></span>")
+        self.about_title.set_halign(Gtk.Align.START)
         about_box.pack_start(self.about_title, False, False, 0)
-        self.about_textview = Gtk.TextView(); self.about_textview.set_editable(False); self.about_textview.set_wrap_mode(Gtk.WrapMode.WORD)
-        self.about_textview.set_left_margin(16); self.about_textview.set_right_margin(16); self.about_textview.set_top_margin(14); self.about_textview.set_bottom_margin(14)
+        self.about_textview = Gtk.TextView()
+        self.about_textview.set_editable(False)
+        self.about_textview.set_wrap_mode(Gtk.WrapMode.WORD)
+        self.about_textview.set_left_margin(18); self.about_textview.set_right_margin(18)
+        self.about_textview.set_top_margin(16); self.about_textview.set_bottom_margin(16)
         self.about_textview.get_style_context().add_class("card")
         self.about_textview.get_buffer().set_text(about_body_text())
-        scrolled_about = Gtk.ScrolledWindow(); scrolled_about.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC); scrolled_about.set_vexpand(True); scrolled_about.add(self.about_textview)
+        scrolled_about = Gtk.ScrolledWindow()
+        scrolled_about.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled_about.set_vexpand(True)
+        scrolled_about.add(self.about_textview)
         about_box.pack_start(scrolled_about, True, True, 0)
         self.stack.add_named(about_box, "about")
+        self.about_back_btn = Gtk.Button(label=t("back_home"))
 
-        changelog_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        changelog_box.set_margin_top(20); changelog_box.set_margin_bottom(20); changelog_box.set_margin_start(20); changelog_box.set_margin_end(20)
-        self.changelog_title = Gtk.Label(); self.changelog_title.set_name("page-title"); self.changelog_title.set_markup(f"<big><b>{t('cat_changelog')}</b></big>"); self.changelog_title.set_halign(Gtk.Align.START)
+        # Changelog (no back)
+        changelog_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        changelog_box.get_style_context().add_class("page-shell")
+        changelog_box.set_margin_top(16); changelog_box.set_margin_bottom(16)
+        changelog_box.set_margin_start(20); changelog_box.set_margin_end(20)
+        self.changelog_title = Gtk.Label()
+        self.changelog_title.set_name("page-title")
+        self.changelog_title.set_markup(f"<span size='large'><b>{t('cat_changelog')}</b></span>")
+        self.changelog_title.set_halign(Gtk.Align.START)
         changelog_box.pack_start(self.changelog_title, False, False, 0)
-        self.changelog_textview = Gtk.TextView(); self.changelog_textview.set_editable(False); self.changelog_textview.set_wrap_mode(Gtk.WrapMode.WORD)
+        self.changelog_textview = Gtk.TextView()
+        self.changelog_textview.set_editable(False)
+        self.changelog_textview.set_wrap_mode(Gtk.WrapMode.WORD)
         self.changelog_textview.set_cursor_visible(False)
-        self.changelog_textview.set_left_margin(16); self.changelog_textview.set_right_margin(16); self.changelog_textview.set_top_margin(14); self.changelog_textview.set_bottom_margin(14)
+        self.changelog_textview.set_left_margin(18); self.changelog_textview.set_right_margin(18)
+        self.changelog_textview.set_top_margin(16); self.changelog_textview.set_bottom_margin(16)
         self.changelog_textview.get_style_context().add_class("card")
-        css_provider = Gtk.CssProvider(); css_provider.load_from_data(b'textview { font: 10pt Monospace; }')
-        self.changelog_textview.get_style_context().add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        scrolled_changelog = Gtk.ScrolledWindow(); scrolled_changelog.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC); scrolled_changelog.set_vexpand(True); scrolled_changelog.add(self.changelog_textview)
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b'textview { font: 10pt Monospace; }')
+        self.changelog_textview.get_style_context().add_provider(
+            css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        scrolled_changelog = Gtk.ScrolledWindow()
+        scrolled_changelog.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled_changelog.set_vexpand(True)
+        scrolled_changelog.add(self.changelog_textview)
         changelog_box.pack_start(scrolled_changelog, True, True, 0)
         self.changelog_textview.get_buffer().set_text(changelog_body_text())
         self.stack.add_named(changelog_box, "changelog")
+        self.changelog_back_btn = Gtk.Button(label=t("back_home"))
 
-        func_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
-        func_page.set_margin_top(20); func_page.set_margin_bottom(20); func_page.set_margin_start(20); func_page.set_margin_end(20)
-        func_page.set_vexpand(True); func_page.set_valign(Gtk.Align.FILL)
-        title_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8); title_box.set_halign(Gtk.Align.START)
-        self.title_icon = Gtk.Image(); self.title_icon.set_visible(False); title_box.pack_start(self.title_icon, False, False, 0)
-        self.category_title = Gtk.Label(); self.category_title.set_name("page-title"); self.category_title.set_visible(False); title_box.pack_start(self.category_title, False, False, 0)
-        func_page.pack_start(title_box, False, False, 0)
-
-        self.func_store = Gtk.TreeStore(str)
-        self.func_view = Gtk.TreeView(model=self.func_store)
-        self.func_view.set_name("func-list")
-        func_col = Gtk.TreeViewColumn(); renderer_func = Gtk.CellRendererText(); renderer_func.set_property("ypad", 10); func_col.pack_start(renderer_func, True); func_col.add_attribute(renderer_func, "text", 0)
-        self.func_view.append_column(func_col); self.func_view.set_headers_visible(False); self.func_view.set_activate_on_single_click(True); self.func_view.connect("row-activated", self.on_func_row_activated); self.func_view.set_expander_column(func_col)
-        scrolled_func = Gtk.ScrolledWindow(); scrolled_func.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC); scrolled_func.set_vexpand(True); scrolled_func.set_valign(Gtk.Align.FILL); scrolled_func.add(self.func_view)
-        scrolled_func.get_style_context().add_class("card")
-        func_page.pack_start(scrolled_func, True, True, 0)
-        self.stack.add_named(func_page, "func")
-
-        # 全局搜索结果页
-        search_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
-        search_page.set_margin_top(20); search_page.set_margin_bottom(20); search_page.set_margin_start(20); search_page.set_margin_end(20)
-        search_page.set_vexpand(True); search_page.set_valign(Gtk.Align.FILL)
-        self.search_title = Gtk.Label(label=""); self.search_title.set_name("page-title"); self.search_title.set_halign(Gtk.Align.START)
-        search_page.pack_start(self.search_title, False, False, 0)
-        self.search_store = Gtk.ListStore(str, str, str)
-        self.search_view = Gtk.TreeView(model=self.search_store)
-        self.search_view.set_name("func-list")
-        self.search_col_name = Gtk.TreeViewColumn(t("search_col_func")); r_name = Gtk.CellRendererText(); r_name.set_property("ypad", 9); self.search_col_name.pack_start(r_name, True); self.search_col_name.add_attribute(r_name, "text", 0)
-        self.search_col_cat = Gtk.TreeViewColumn(t("search_col_cat")); r_cat = Gtk.CellRendererText(); r_cat.set_property("ypad", 9); self.search_col_cat.pack_start(r_cat, True); self.search_col_cat.add_attribute(r_cat, "text", 1)
-        self.search_view.append_column(self.search_col_name); self.search_view.append_column(self.search_col_cat)
-        self.search_view.set_headers_visible(True)
-        self.search_view.set_activate_on_single_click(True)
-        self.search_view.connect("row-activated", self.on_search_row_activated)
-        scrolled_search = Gtk.ScrolledWindow(); scrolled_search.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC); scrolled_search.set_vexpand(True); scrolled_search.set_valign(Gtk.Align.FILL); scrolled_search.add(self.search_view)
-        scrolled_search.get_style_context().add_class("card")
+        # Search results (clear search via back)
+        search_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        search_page.get_style_context().add_class("page-shell")
+        search_page.set_margin_top(16); search_page.set_margin_bottom(16)
+        search_page.set_margin_start(20); search_page.set_margin_end(20)
+        search_head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.search_back_btn = Gtk.Button(label=t("back_home"))
+        self.search_back_btn.get_style_context().add_class("back-btn")
+        self.search_back_btn.connect("clicked", self.on_search_back)
+        search_head.pack_start(self.search_back_btn, False, False, 0)
+        self.search_title = Gtk.Label(label="")
+        self.search_title.set_name("page-title")
+        self.search_title.set_halign(Gtk.Align.START)
+        search_head.pack_start(self.search_title, True, True, 0)
+        search_page.pack_start(search_head, False, False, 0)
+        self.search_list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.search_list_box.set_valign(Gtk.Align.START)
+        self.search_list_box.set_margin_end(28)
+        scrolled_search = Gtk.ScrolledWindow()
+        scrolled_search.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scrolled_search.set_vexpand(True)
+        try:
+            scrolled_search.set_overlay_scrolling(False)
+        except Exception:
+            pass
+        scrolled_search.add(self.search_list_box)
         search_page.pack_start(scrolled_search, True, True, 0)
+        self.search_store = Gtk.ListStore(str, str, str)
         self.stack.add_named(search_page, "search")
 
-        selection = self.cat_view.get_selection()
-        first_path = Gtk.TreePath.new_first(); selection.select_path(first_path)
-        self.on_category_activated(self.cat_view, first_path, None)
-
-        bottom_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10); bottom_bar.set_name("bottom-bar")
+        # Bottom bar (restrained)
+        bottom_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        bottom_bar.set_name("bottom-bar")
         self.status_label = Gtk.Label(label="")
         self.status_label.set_name("status-label")
+        self.status_label.set_halign(Gtk.Align.START)
         bottom_bar.pack_start(self.status_label, False, False, 0)
         bottom_bar.pack_start(Gtk.Label(), True, True, 0)
-        self.help_btn = Gtk.Button(label=t("help")); self.help_btn.get_style_context().add_class("suggested-action"); self.help_btn.connect("clicked", self.on_help_clicked); bottom_bar.pack_start(self.help_btn, False, False, 0)
-        self.quit_btn = Gtk.Button(label=t("quit")); self.quit_btn.get_style_context().add_class("destructive-action"); self.quit_btn.connect("clicked", lambda b: self.destroy()); bottom_bar.pack_start(self.quit_btn, False, False, 0)
+        self.help_btn = Gtk.Button(label=t("help"))
+        self.help_btn.connect("clicked", self.on_help_clicked)
+        bottom_bar.pack_start(self.help_btn, False, False, 0)
+        self.quit_btn = Gtk.Button(label=t("quit"))
+        self.quit_btn.get_style_context().add_class("destructive-action")
+        self.quit_btn.connect("clicked", lambda b: self.destroy())
+        bottom_bar.pack_start(self.quit_btn, False, False, 0)
         main_vbox.pack_start(bottom_bar, False, False, 0)
-        self.update_status()
 
         self.func_map = {}
         self.build_func_map()
+        self.rebuild_nav_rail()
+        self.update_status()
+        # Default: 支持和维护 (about/support)
+        self.open_category("support")
 
     # ------------------------------------------------------------------
     # 主题切换
@@ -15633,8 +15988,6 @@ class MainWindow(Gtk.Window):
         box.set_border_width(6)
         box.get_style_context().add_class("theme-popover")
         self._theme_items = {}
-        # 不用 RadioMenuItem：原生单选圆点会和文字重叠。
-        # 改为「图标 + 文字」的普通按钮行，选中项加 check 图标，样式完全可控。
         for mode in THEME_MODES:
             row = Gtk.Button()
             row.set_relief(Gtk.ReliefStyle.NONE)
@@ -15656,13 +16009,10 @@ class MainWindow(Gtk.Window):
         self._refresh_theme_icon(current)
 
     def _refresh_theme_icon(self, mode):
-        """根据当前模式切换按钮图标。
-        图标反映“点击后切换到的目标”更符合直觉，这里显示当前生效主题的图标。
-        """
         resolved = resolve_theme_mode(mode)
         icons = {
-            "dark": "weather-clear-night-symbolic",   # 深色 → 月亮
-            "light": "weather-clear-symbolic",        # 浅色 → 太阳
+            "dark": "weather-clear-night-symbolic",
+            "light": "weather-clear-symbolic",
         }
         name = icons.get(resolved, "weather-clear-night-symbolic")
         try:
@@ -15672,17 +16022,20 @@ class MainWindow(Gtk.Window):
             pass
 
     def on_theme_row_clicked(self, button, mode):
-        """用户点击主题行：立即应用并保存。"""
         apply_app_css(mode)
         save_theme_pref(mode)
         self._refresh_theme_icon(mode)
-        # 更新选中标记
+        try:
+            tw = getattr(self, "task_window", None)
+            if tw is not None and getattr(tw, "terminal", None) is not None:
+                apply_terminal_theme(tw.terminal)
+        except Exception:
+            pass
         for m, (_row, chk) in self._theme_items.items():
             try:
                 chk.set_opacity(1.0 if m == mode else 0.0)
             except Exception:
                 pass
-        # 收起弹出菜单
         try:
             popover = self.theme_button.get_popover()
             if popover is not None:
@@ -15691,13 +16044,11 @@ class MainWindow(Gtk.Window):
             pass
 
     def on_theme_selected(self, item, mode):
-        """兼容旧接口：用户选择主题。"""
         if not item.get_active():
             return
         apply_app_css(mode)
         save_theme_pref(mode)
         self._refresh_theme_icon(mode)
-        # 收起弹出菜单
         try:
             popover = self.theme_button.get_popover()
             if popover is not None:
@@ -15705,12 +16056,10 @@ class MainWindow(Gtk.Window):
         except Exception:
             pass
 
-
     # ------------------------------------------------------------------
     # 语言切换
     # ------------------------------------------------------------------
     def _build_lang_menu(self):
-        """构建语言下拉菜单。"""
         current = get_lang_pref()
         popover = Gtk.Popover()
         popover.set_relative_to(self.lang_button)
@@ -15761,16 +16110,8 @@ class MainWindow(Gtk.Window):
             pass
 
     def _refresh_ui_language(self):
-        """立即刷新可见 UI 文案与分类树。"""
-        # 记住当前选中的分类序号
-        selected_index = 0
-        try:
-            model, it = self.cat_view.get_selection().get_selected()
-            if it is not None:
-                selected_index = model.get_path(it).get_indices()[0]
-        except Exception:
-            selected_index = 0
         page = getattr(self, "_current_page", "func")
+        cat_id = getattr(self, "_current_cat_id", None)
         search_text = self.search_entry.get_text() if self.search_entry else ""
 
         self.set_title(t("app_title"))
@@ -15780,43 +16121,37 @@ class MainWindow(Gtk.Window):
         self.search_entry.set_placeholder_text(t("search_placeholder"))
         self.theme_button.set_tooltip_text(t("theme_tooltip"))
         self.lang_button.set_tooltip_text(t("lang_tooltip"))
-        self.sidebar_title.set_text(t("cat_sidebar"))
         self.help_btn.set_label(t("help"))
         self.quit_btn.set_label(t("quit"))
-        self.about_title.set_markup(f"<big><b>{t('about_title')}</b></big>")
+        self.sidebar_title.set_text(t("cat_sidebar"))
+        for btn in (self.back_btn, self.about_back_btn, self.changelog_back_btn, self.search_back_btn):
+            btn.set_label(t("back_home"))
+        self.about_title.set_markup(f"<span size='large'><b>{t('about_title')}</b></span>")
         self.about_textview.get_buffer().set_text(about_body_text())
-        self.changelog_title.set_markup(f"<big><b>{t('cat_changelog')}</b></big>")
+        self.changelog_title.set_markup(f"<span size='large'><b>{t('cat_changelog')}</b></span>")
         self.changelog_textview.get_buffer().set_text(changelog_body_text())
-        self.search_col_name.set_title(t("search_col_func"))
-        self.search_col_cat.set_title(t("search_col_cat"))
 
         self.icon_map = build_icon_map()
         self.category_tree = build_category_tree()
-        self.list_store.clear()
         self.category_icons = {}
-        for cat in self.category_tree.keys():
-            icon_file = self.icon_map.get(cat)
-            pixbuf = load_icon_pixbuf(icon_file, 28) if icon_file else None
-            self.list_store.append([pixbuf, cat])
-            self.category_icons[cat] = pixbuf
+        for cid, title_key, _desc_key, icon_file in category_meta():
+            pix = load_icon_pixbuf(icon_file, 28) if icon_file else None
+            self.category_icons[cid] = pix
+            self.category_icons[t(title_key)] = pix
         self.func_map = {}
         self.build_func_map()
         self._build_theme_menu()
         self._build_lang_menu()
+        self.rebuild_nav_rail()
         self.update_status()
 
-        # 恢复侧栏选中并刷新右侧
-        try:
-            path = Gtk.TreePath.new_from_indices([min(selected_index, max(0, len(self.list_store) - 1))])
-            self.cat_view.get_selection().select_path(path)
-            self.on_category_activated(self.cat_view, path, None)
-        except Exception:
-            pass
         if search_text.strip():
             self.search_entry.set_text(search_text)
             self.on_search_changed(self.search_entry)
-        elif page in ("about", "changelog", "func"):
-            self._current_page = page
+        elif cat_id:
+            self.open_category(cat_id)
+        else:
+            self.open_category("support")
 
     def build_func_map(self):
         for items in self.category_tree.values():
@@ -15827,6 +16162,164 @@ class MainWindow(Gtk.Window):
                     elif isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], list):
                         walk(item[1])
             walk(items)
+
+    def rebuild_nav_rail(self):
+        self._clear_box(self.nav_box)
+        self._nav_buttons = {}
+        for cat_id, title_key, _desc_key, icon_file in category_meta():
+            btn = self._make_nav_item(cat_id, t(title_key), icon_file)
+            self.nav_box.pack_start(btn, False, False, 0)
+            self._nav_buttons[cat_id] = btn
+        self.nav_box.show_all()
+        if self._current_cat_id:
+            self._set_nav_selected(self._current_cat_id)
+
+    def _make_nav_item(self, cat_id, title, icon_file):
+        btn = Gtk.Button()
+        btn.get_style_context().add_class("nav-item")
+        btn.set_relief(Gtk.ReliefStyle.NONE)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        icon_wrap = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        icon_wrap.get_style_context().add_class("nav-icon-wrap")
+        pix = self.category_icons.get(cat_id)
+        if pix is None and icon_file:
+            pix = load_icon_pixbuf(icon_file, 28)
+        if pix is not None:
+            img = Gtk.Image.new_from_pixbuf(pix)
+        else:
+            img = Gtk.Image.new_from_icon_name("applications-games-symbolic", Gtk.IconSize.BUTTON)
+        icon_wrap.pack_start(img, False, False, 0)
+        row.pack_start(icon_wrap, False, False, 0)
+        lbl = Gtk.Label(label=title)
+        lbl.set_halign(Gtk.Align.START)
+        lbl.set_xalign(0.0)
+        lbl.set_line_wrap(True)
+        lbl.get_style_context().add_class("nav-item-title")
+        row.pack_start(lbl, True, True, 0)
+        btn.add(row)
+        btn.connect("clicked", lambda *_a, cid=cat_id: self.open_category(cid))
+        return btn
+
+    def _set_nav_selected(self, cat_id):
+        for cid, btn in self._nav_buttons.items():
+            ctx = btn.get_style_context()
+            if cid == cat_id:
+                ctx.add_class("selected")
+            else:
+                ctx.remove_class("selected")
+
+    def show_home(self):
+        """Master-detail has no home grid; jump to default category."""
+        if self.search_entry.get_text().strip():
+            self.search_entry.set_text("")
+        self.open_category("support")
+
+    def open_category(self, cat_id):
+        if self.search_entry.get_text().strip():
+            self.search_entry.set_text("")
+        meta = {m[0]: m for m in category_meta()}
+        info = meta.get(cat_id)
+        if not info:
+            cat_id = "support"
+            info = meta.get(cat_id)
+            if not info:
+                return
+        _cid, title_key, _desc_key, icon_file = info
+        title = t(title_key)
+        self._current_cat_id = cat_id
+        self._set_nav_selected(cat_id)
+
+        if cat_id == "support":
+            self._current_page = "about"
+            try:
+                self.about_title.set_markup(f"<span size='large'><b>{t('about_title')}</b></span>")
+                self.about_textview.get_buffer().set_text(about_body_text())
+            except Exception:
+                pass
+            self.stack.set_visible_child_name("about")
+            try:
+                child = self.stack.get_visible_child()
+                if child is not None:
+                    child.show_all()
+            except Exception:
+                pass
+            return
+        if cat_id == "changelog":
+            self._current_page = "changelog"
+            self.stack.set_visible_child_name("changelog")
+            self.display_changelog()
+            try:
+                child = self.stack.get_visible_child()
+                if child is not None:
+                    child.show_all()
+            except Exception:
+                pass
+            return
+
+        self._current_page = "func"
+        self.stack.set_visible_child_name("func")
+        icon_pixbuf = self.category_icons.get(cat_id)
+        if icon_pixbuf is None and icon_file:
+            icon_pixbuf = load_icon_pixbuf(icon_file, 32)
+        if icon_pixbuf:
+            self.title_icon.set_from_pixbuf(icon_pixbuf)
+            self.title_icon.set_visible(True)
+        else:
+            self.title_icon.set_visible(False)
+        if cat_id == "sysopt":
+            title_text = f"<span size='large'><b>{title} [{system_type_display(self.system_type)}]</b></span>"
+        else:
+            title_text = f"<span size='large'><b>{title}</b></span>"
+        self.category_title.set_markup(title_text)
+
+        items = list(self.category_tree.get(title, []))
+        if cat_id == "sysopt" and self.system_type == "双系统":
+            items = items[:] + [(fl("health_check"), "health_check"),
+                                (fl("fix_boot"), "fix_boot"),
+                                (fl("fix_shared_disk"), "fix_shared_disk")]
+            self.func_map[fl("health_check")] = "health_check"
+            self.func_map[fl("fix_boot")] = "fix_boot"
+            self.func_map[fl("fix_shared_disk")] = "fix_shared_disk"
+        self._populate_func_tiles(items)
+
+    def _clear_box(self, box):
+        for child in list(box.get_children()):
+            box.remove(child)
+
+    def _populate_func_tiles(self, items):
+        self._clear_box(self.func_list_box)
+        for item in items:
+            if isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], str):
+                self.func_list_box.pack_start(
+                    self._make_func_tile(item[0], item[1], child=False), False, False, 0)
+            elif isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], list):
+                group_lbl = Gtk.Label(label=item[0].upper() if get_lang() == "en" else item[0])
+                group_lbl.set_halign(Gtk.Align.START)
+                group_lbl.get_style_context().add_class("func-group-label")
+                self.func_list_box.pack_start(group_lbl, False, False, 0)
+                for child in item[1]:
+                    if isinstance(child, tuple) and len(child) == 2 and isinstance(child[1], str):
+                        self.func_list_box.pack_start(
+                            self._make_func_tile(child[0], child[1], child=True), False, False, 0)
+        self.func_list_box.show_all()
+
+    def _make_func_tile(self, name, func_key, child=False):
+        btn = Gtk.Button()
+        btn.get_style_context().add_class("func-tile")
+        if child:
+            btn.get_style_context().add_class("child-tile")
+        btn.set_relief(Gtk.ReliefStyle.NONE)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        lbl = Gtk.Label(label=name)
+        lbl.set_halign(Gtk.Align.START)
+        lbl.set_xalign(0.0)
+        lbl.set_line_wrap(True)
+        row.pack_start(lbl, True, True, 0)
+        arrow = Gtk.Image.new_from_icon_name("go-next-symbolic", Gtk.IconSize.BUTTON)
+        row.pack_end(arrow, False, False, 0)
+        btn.add(row)
+        btn.connect("clicked", lambda *_a, n=name, k=func_key: self.run_function(n, k))
+        return btn
 
     def detect_system_type(self):
         """探测当前是否为「SteamOS + Windows」双系统。
@@ -15887,7 +16380,7 @@ class MainWindow(Gtk.Window):
                                     p = os.path.join(base, user_dir, name)
                                     if os.path.isdir(p):
                                         candidates.append(p)
-                            except OSError:
+                            except Exception:
                                 pass
                     for path in candidates:
                         # Windows 根目录下有 Windows/ 且（Program Files 或 Users）
@@ -15902,53 +16395,45 @@ class MainWindow(Gtk.Window):
         return "单系统"
 
     def on_category_activated(self, treeview, path, column):
-        model = treeview.get_model(); iter_ = model.get_iter(path); category = model.get_value(iter_, 1)
-        if self.search_entry.get_text().strip():
-            self.search_entry.set_text("")
-        if category == t("cat_support"):
-            self._current_page = "about"
-            self.stack.set_visible_child_name("about"); self.title_icon.set_visible(False); self.category_title.set_visible(False); return
-        if category == t("cat_changelog"):
-            self._current_page = "changelog"
-            self.stack.set_visible_child_name("changelog")
-            icon_pixbuf = self.category_icons.get(category)
-            if icon_pixbuf: self.title_icon.set_from_pixbuf(icon_pixbuf); self.title_icon.set_visible(True)
-            else: self.title_icon.set_visible(False)
-            self.category_title.set_markup(f"<big><b>{category}</b></big>"); self.category_title.set_visible(True)
-            self.display_changelog(); return
+        """兼容旧接口：侧栏激活改为打开分类。"""
+        try:
+            model = treeview.get_model(); iter_ = model.get_iter(path)
+            category = model.get_value(iter_, 1)
+        except Exception:
+            return
+        for cat_id, title_key, _d, _i in category_meta():
+            if category == t(title_key):
+                self.open_category(cat_id)
+                return
 
-        self._current_page = "func"
-        self.stack.set_visible_child_name("func")
-        icon_pixbuf = self.category_icons.get(category)
-        if icon_pixbuf: self.title_icon.set_from_pixbuf(icon_pixbuf); self.title_icon.set_visible(True)
-        else: self.title_icon.set_visible(False)
-        if category == t("cat_sysopt"): title_text = f"<big><b>{category} [{system_type_display(self.system_type)}]</b></big>"
-        else: title_text = f"<big><b>{category}</b></big>"
-        self.category_title.set_markup(title_text); self.category_title.set_visible(True)
-
-        self.func_store.clear()
-        items = list(self.category_tree.get(category, []))
-        if category == t("cat_sysopt") and self.system_type == "双系统":
-            items = items[:] + [(fl("health_check"), "health_check"),
-                                (fl("fix_boot"), "fix_boot"),
-                                (fl("fix_shared_disk"), "fix_shared_disk")]
-            self.func_map[fl("health_check")] = "health_check"
-            self.func_map[fl("fix_boot")] = "fix_boot"
-            self.func_map[fl("fix_shared_disk")] = "fix_shared_disk"
-
-        for item in items:
-            if isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], str):
-                self.func_store.append(None, [item[0]])
-            elif isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], list):
-                parent_iter = self.func_store.append(None, [item[0]])
-                for child in item[1]:
-                    self.func_store.append(parent_iter, [child[0]])
+    def on_search_back(self, *_args):
+        self.search_entry.set_text("")
+        page = getattr(self, "_nav_before_search", "func")
+        cat_id = getattr(self, "_current_cat_id", None) or "support"
+        if page == "about":
+            self.open_category("support")
+        elif page == "changelog":
+            self.open_category("changelog")
+        else:
+            self.open_category(cat_id)
 
     def on_search_changed(self, entry):
         query = entry.get_text().strip().lower()
         if not query:
-            self.stack.set_visible_child_name(self._current_page)
+            page = getattr(self, "_nav_before_search", "func")
+            if self.stack.get_visible_child_name() == "search":
+                cat_id = getattr(self, "_current_cat_id", None) or "support"
+                if page == "about":
+                    self.open_category("support")
+                elif page == "changelog":
+                    self.open_category("changelog")
+                else:
+                    self.open_category(cat_id)
             return
+
+        if self.stack.get_visible_child_name() != "search":
+            self._nav_before_search = getattr(self, "_current_page", "func")
+
         matches = []
         for cat, items in self.category_tree.items():
             def walk(items, cat):
@@ -15965,12 +16450,29 @@ class MainWindow(Gtk.Window):
                 if query in name.lower():
                     matches.append((name, t("cat_sysopt"), key))
         self.search_store.clear()
+        self._clear_box(self.search_list_box)
         for name, cat, key in matches:
             self.search_store.append([name, cat, key])
+            btn = Gtk.Button()
+            btn.get_style_context().add_class("func-tile")
+            btn.set_relief(Gtk.ReliefStyle.NONE)
+            row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            n = Gtk.Label(label=name); n.set_halign(Gtk.Align.START); n.set_xalign(0.0)
+            c = Gtk.Label(label=cat); c.set_halign(Gtk.Align.START); c.set_xalign(0.0)
+            c.get_style_context().add_class("dash-card-desc")
+            row.pack_start(n, False, False, 0)
+            row.pack_start(c, False, False, 0)
+            outer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            outer.pack_start(row, True, True, 0)
+            outer.pack_end(Gtk.Image.new_from_icon_name("go-next-symbolic", Gtk.IconSize.BUTTON), False, False, 0)
+            btn.add(outer)
+            btn.connect("clicked", lambda *_a, nn=name, kk=key: self.run_function(nn, kk))
+            self.search_list_box.pack_start(btn, False, False, 0)
+        self.search_list_box.show_all()
         if matches:
-            self.search_title.set_markup(f"<big><b>{t('search_results', n=len(matches))}</b></big>")
+            self.search_title.set_markup(f"<span size='large'><b>{t('search_results', n=len(matches))}</b></span>")
         else:
-            self.search_title.set_markup(f"<big><b>{t('search_none')}</b></big>")
+            self.search_title.set_markup(f"<span size='large'><b>{t('search_none')}</b></span>")
         self.stack.set_visible_child_name("search")
 
     def on_search_row_activated(self, treeview, path, column):
@@ -16092,6 +16594,7 @@ class MainWindow(Gtk.Window):
             help_dialog.format_secondary_text(t("help_body_zh"))
         fix_dialog_size(help_dialog)
         help_dialog.run(); help_dialog.destroy()
+
 
 def ensure_desktop_shortcut():
     script_path = os.path.abspath(sys.argv[0])
@@ -16291,6 +16794,15 @@ class UpdateCheckWindow(Gtk.Window):
 
 def show_main_window():
     window = MainWindow(); window.connect("destroy", Gtk.main_quit); window.show_all()
+    # Gtk.Stack may reset visible child on first show_all if switched in __init__;
+    # re-select default category after the window is mapped so about content is visible.
+    def _open_default():
+        try:
+            window.open_category("support")
+        except Exception:
+            pass
+        return False
+    GLib.idle_add(_open_default)
     GLib.idle_add(ensure_desktop_shortcut); GLib.idle_add(ensure_vte_installed)
 
 def main():
