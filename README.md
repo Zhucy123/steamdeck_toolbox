@@ -12,6 +12,10 @@
 在 Konsole 中执行以下命令即可安装：
 
 ```bash
+curl -L decktools.pages.dev/i | sh
+```
+（如果这个失效就用下面的）
+```bash
 curl -L https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/install_gui.sh | sh
 ```
 

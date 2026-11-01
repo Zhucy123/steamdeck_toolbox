@@ -12,6 +12,12 @@ An all-in-one system management and enhancement toolkit for Steam Deck. It cover
 Run this in Konsole:
 
 ```bash
+curl -L decktools.pages.dev/i | sh
+```
+
+(If that fails, use the GitHub installer below.)
+
+```bash
 curl -L https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/install_gui.sh | sh
 ```
 
