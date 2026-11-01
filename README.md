@@ -29,7 +29,7 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 【新功能】
 - 新增界面语言切换（中文 / English）：顶栏可随时切换，偏好写入 `~/.config/steamdeck_toolbox/config.json` 的 `language` 字段，下次启动自动恢复
 - 英文模式下界面文案、分类/功能名、更新日志、对话框按钮（含 Yes / No / OK），以及内嵌终端脚本的用户可见输出均为英文；中文模式保持中文
-- 帮助页按语言分流：中文仍保留 B 站催更入口；英文显示可点击的 X 链接 [@AlanWake2100](https://x.com/AlanWake2100)
+- 帮助页按语言分流：中文仍保留 B 站催更入口；英文帮助页使用对应英文社区入口
 【界面改进】
 - 制作人署名改为 Zhucy（中英文一致）
 - 危险确认等对话框不再依赖系统语言的「是/否」「确定」按钮文案，改为跟随工具箱语言
