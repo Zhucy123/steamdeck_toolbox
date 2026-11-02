@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v1.11.4** | Updated: 2026-11-02
+> **Version: v2.0.0** | Updated: 2026-11-02
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -26,6 +26,18 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - Open the toolbox; it checks for updates on startup (built-in self-update)
 
 ## 📝 Changelog
+
+2026-11-02 (v2.0.0)
+[Bug fixes]
+- Fixed the garbage characters appearing after the "Update all apps" progress line (`^[[20;68R^[[20;68R^[[20;77R`)
+  - Root cause: before drawing its progress bar flatpak sends `ESC[6n` to ask the terminal where the cursor is, and VTE answers with `ESC[row;colR` on the terminal's *input* side. The PTY has ECHO enabled by default, so the kernel echoes that reply back to the screen, where it shows up as visible garbage
+  - Fix: pass `--noninteractive` to `flatpak update` so it emits plain line-by-line text instead of an ANSI progress bar. No progress bar means no cursor query, removing the garbage at the source
+  - Measured on the same machine in the same state (nothing to update): default produced 31 escape sequences including ANSI bold and cursor control; with the flag, 0
+  - Why not simply disable terminal ECHO: that merely hides the reply while its bytes stay in the input buffer, so later reads pick them up (measured: `read -n1` returned ESC instead of the key the user pressed), which is worse than the garbage
+  - Tradeoff: terser output with no percentage progress bar, but every step still prints a line
+
+[Version]
+- Version bumped to **2.0.0**: features and stability have accumulated well beyond 1.x, marking it as a stable release
 
 2026-11-02 (v1.11.4)
 [UX improvements]

@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.11.4"
+VERSION = "2.0.0"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1125,7 +1125,25 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-02（v1.11.4）
+CHANGELOG_BODY_ZH = """2026-11-02（v2.0.0）
+【问题修复】
+- 修复「更新全部应用」进度条后面出现乱码的一串字符（^[[20;68R^[[20;68R^[[20;77R）
+  · 根因：flatpak 画进度条前先发 ESC[6n 问终端「光标在哪」，VTE 按协议把
+    ESC[行;列R 写回终端的输入方向；而终端默认开着 ECHO，内核就把这串应答
+    回显到屏幕上，于是成了看得见的乱码
+  · 修法：给 flatpak update 加上 --noninteractive，让它走纯文本逐行输出、
+    不画 ANSI 进度条。没有进度条就不会发光标查询，从源头消除乱码
+  · 实测对比（同一台机器、同样无更新的状态）：
+    默认 → 转义符 31 个，含 ANSI 加粗与光标控制；加该参数后 → 转义符 0 个
+  · 为什么不用「关掉终端 ECHO」的办法：那只是让应答不显示，字节仍留在输入
+    缓冲区里，后续 read 会读到残留（实测 read -n1 取到的是 ESC 而不是用户
+    按的键），比乱码更严重，故不采用
+  · 代价：输出更精简、不再显示百分比进度条，但每步仍有文字反馈
+
+【版本】
+- 版本号升至 2.0.0：功能与稳定性已较 1.x 有较大积累，标记为正式版
+
+2026-11-02（v1.11.4）
 【体验优化】
 - 「更新全部应用」精简输出提示
   · 移除「已跳过刷新软件目录(appstream)」那三行说明：这是实现细节，用户不需要知道。
@@ -1547,7 +1565,19 @@ CHANGELOG_BODY_ZH = """2026-11-02（v1.11.4）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-02 (v1.11.4)
+CHANGELOG_BODY_EN = """2026-11-02 (v2.0.0)
+[Bug fixes]
+- Fixed the garbage characters appearing after the "Update all apps" progress line (^[[20;68R^[[20;68R^[[20;77R)
+  - Root cause: before drawing its progress bar flatpak sends ESC[6n to ask the terminal where the cursor is, and VTE answers with ESC[row;colR on the terminal's *input* side. The PTY has ECHO enabled by default, so the kernel echoes that reply back to the screen, where it shows up as visible garbage
+  - Fix: pass --noninteractive to flatpak update so it emits plain line-by-line text instead of an ANSI progress bar. No progress bar means no cursor query, removing the garbage at the source
+  - Measured on the same machine in the same state (nothing to update): default produced 31 escape sequences including ANSI bold and cursor control; with the flag, 0
+  - Why not simply disable terminal ECHO: that merely hides the reply while its bytes stay in the input buffer, so later reads pick them up (measured: read -n1 returned ESC instead of the key the user pressed), which is worse than the garbage
+  - Tradeoff: terser output with no percentage progress bar, but every step still prints a line
+
+[Version]
+- Version bumped to 2.0.0: features and stability have accumulated well beyond 1.x, marking it as a stable release
+
+2026-11-02 (v1.11.4)
 [UX improvements]
 - Streamlined the "Update all apps" output
   - Removed the three-line "skipped refreshing the appstream catalog" note: that is an implementation detail users do not need. In practice `flatpak update` does not refresh appstream by default (only with the explicit `--appstream` flag), so the step never existed and the note was redundant
@@ -8702,12 +8732,23 @@ update_installed_apps() {
     printf '%s\n' "$updates" | sed 's/^/  · /'
     echo ""
 
-    # flatpak update 默认不刷新 appstream（那需要显式加 --appstream），
-    # 所以这里无需额外跳过；下载慢只是包大，给 20 分钟足够。
+    # 加 --noninteractive 让 flatpak 走纯文本逐行输出，不用 ANSI 原地刷新的进度条。
+    #
+    # 这解决了之前那个乱码问题（进度条后面冒出的 ^[[20;68R^[[20;68R^[[20;77R）：
+    # flatpak 画进度条前会发 ESC[6n 问终端「光标在哪」，VTE 按协议把 ESC[行;列R
+    # 写回 PTY 的输入方向，而 PTY 默认开着 ECHO，内核就把这串应答回显成了可见文本。
+    # 只要不画进度条，就不会发这个查询，从源头消除乱码，也不去动终端 ECHO
+    # （动 ECHO 会让后续 read 读到残留的应答字节，那更糟）。
+    #
+    # 实测对比（同一台机器、同样无更新的状态）：
+    #   默认              → 转义符 31 个，含 ANSI 加粗/光标控制
+    #   --noninteractive  → 转义符 0 个，纯文本逐行输出
+    # 代价是输出更精简（官方说明「显示最少的输出信息」），不显示百分比进度条，
+    # 但每完成一步仍有文字反馈，对「更新全部应用」这种场景足够。
     echo -e "${CYAN}开始更新（大包可能较慢，请耐心等待）...${NC}"
     echo ""
     local rc=0
-    timeout 1200 flatpak update -y < /dev/null || rc=$?
+    timeout 1200 flatpak update --noninteractive -y < /dev/null || rc=$?
 
     echo ""
     if [ $rc -eq 124 ]; then
@@ -16042,12 +16083,28 @@ update_installed_apps() {
     printf '%s\n' "$updates" | sed 's/^/  · /'
     echo ""
 
-    # flatpak update does not refresh appstream by default (that needs --appstream),
-    # so nothing to skip here; slow downloads are just large packages, 20 min is enough.
+    # --noninteractive makes flatpak emit plain line-by-line text instead of an ANSI
+    # progress bar that refreshes in place.
+    #
+    # This fixes the earlier stray "^[[20;68R^[[20;68R^[[20;77R" after the progress line:
+    # before drawing its progress bar flatpak sends ESC[6n to ask the terminal for the
+    # cursor position, and VTE answers with ESC[row;colR on the PTY *input* side. The PTY
+    # has ECHO enabled by default, so the kernel echoes that reply back to the screen as
+    # visible text. Without a progress bar the query is never sent, which removes the
+    # garbage at the source without touching terminal ECHO.
+    #
+    # Turning ECHO off would be worse: the reply bytes stay in the input buffer and later
+    # reads pick them up (read -n1 would return ESC instead of the key the user pressed).
+    #
+    # Measured on the same machine and state (nothing to update):
+    #   default           -> 31 escape sequences, ANSI bold and cursor control included
+    #   --noninteractive  -> 0 escape sequences, plain text only
+    # The tradeoff is terser output (upstream: "show minimal output"), so no percentage
+    # progress bar, but each step still prints a line, which is enough for this screen.
     echo -e "${CYAN}Starting update (large packages may be slow; please wait)...${NC}"
     echo ""
     local rc=0
-    timeout 1200 flatpak update -y < /dev/null || rc=$?
+    timeout 1200 flatpak update --noninteractive -y < /dev/null || rc=$?
 
     echo ""
     if [ $rc -eq 124 ]; then
