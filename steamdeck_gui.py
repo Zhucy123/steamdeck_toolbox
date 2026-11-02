@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.9.8"
+VERSION = "1.9.9"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1063,7 +1063,20 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-02（v1.9.8）
+CHANGELOG_BODY_ZH = """2026-11-02（v1.9.9）
+【问题修复】
+- 修复「安装 ToDesk」重装时报「无法提交处理 (有冲突的文件) / 文件系统中已存在 /opt/todesk/bin/...」：
+  根因是机器处于「孤儿残留」状态——pacman 数据库里已无 todesk-bin 记录（卸载被中断、
+  手动删过数据库、或当初解包安装），但 /opt/todesk 等文件仍留在系统里。原清理逻辑是
+  「pacman 有记录才卸载」，这种状态下判断为假，清理被整体跳过，于是 pacman -U 发现要写的
+  文件已存在，直接拒绝安装
+- 现在安装前增加孤儿文件清理：包未登记但文件仍在时，先停服务、结束占用进程，
+  再清除 /opt/todesk、/usr/bin/todesk、todeskd.service、todesk.desktop、licenses 目录、
+  hicolor 下 todesk 图标以及 pacman 的 db.lck 残留锁，然后才安装
+- 清理后做了复核：仍有残留会明确列出路径并提示手动删除，不再让 pacman 抛看不懂的冲突错误
+- 只删 todesk 自己的图标，不影响 hicolor 目录下其他软件；pacman 包正常登记的机器不触发此逻辑
+
+2026-11-02（v1.9.8）
 【界面改进】
 - 主界面改为 SteamOS / OLED 风主从布局：左侧常驻分类轨，右侧即时显示对应内容，
   不再使用首页 3×3 大卡片再钻二级页
@@ -1415,7 +1428,14 @@ CHANGELOG_BODY_ZH = """2026-11-02（v1.9.8）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-02 (v1.9.8)
+CHANGELOG_BODY_EN = """2026-11-02 (v1.9.9)
+[Bug fixes]
+- Fixed "Install ToDesk" failing on reinstall with "could not commit transaction (conflicting files) / exists in filesystem /opt/todesk/bin/...": the machine was in an orphaned state where pacman no longer had a todesk-bin record (interrupted uninstall, pruned database, or a manual extraction install) but files such as /opt/todesk were still on disk. The old cleanup only ran "if pacman has a record", which was false here, so cleanup was skipped entirely and `pacman -U` refused because the files it wanted to write already existed
+- The installer now clears orphaned leftovers first: when the package is unregistered but files remain, it stops the service, kills holding processes, then removes /opt/todesk, /usr/bin/todesk, todeskd.service, todesk.desktop, the licenses directory, ToDesk icons under hicolor, and any stale pacman db.lck before installing
+- Cleanup is verified afterwards: any remaining leftovers are listed explicitly with a manual-removal hint instead of letting pacman raise a cryptic conflict
+- Only ToDesk's own icons are removed (other software under hicolor is untouched), and machines with a properly registered pacman package skip this logic entirely
+
+2026-11-02 (v1.9.8)
 [UI improvements]
 - Main window is now a SteamOS / OLED-style master-detail layout: a persistent left category rail and an immediate right-hand detail pane (no more 3×3 home tiles then a second page)
 - Dark theme uses near-black charcoal with purple/magenta selection and cyan accents; light theme remains fully usable
@@ -7490,6 +7510,63 @@ install_todesk() {
     if pacman -Q todesk-bin &>/dev/null; then
         echo -e "${CYAN}卸载现有 todesk-bin...${NC}"
         sudo pacman -R --noconfirm todesk-bin 2>/dev/null || true
+    fi
+
+    # ---------- 清理孤儿文件（关键） ----------
+    # 处理 pacman -R 管不到的脏状态：包记录已经没了（卸载被中断、手动删过数据库、
+    # 或当初是解包安装），但 /opt/todesk 等文件还留在系统里。
+    # 此时 `pacman -U` 会报「文件系统中已存在 xxx」直接拒绝安装，而上面两个
+    # `pacman -Q` 判断都为假，清理被整体跳过 —— 这正是重装失败的根因。
+    # 判据：包未登记 + 文件确实存在 = 无主残留，必须自己清掉。
+    # 注意 db.lck 不参与「是否存在残留」的判断：它是 pacman 的全局锁，
+    # 平时有 pacman 在跑就会存在，与 ToDesk 无关；只有确认要清理时才顺手删。
+    local orphan_paths=(
+        /opt/todesk
+        /usr/bin/todesk
+        /usr/lib/systemd/system/todeskd.service
+        /usr/share/applications/todesk.desktop
+        /usr/share/licenses/todesk-bin
+    )
+    local orphan_found=false
+    for op in "${orphan_paths[@]}"; do
+        if [ -e "$op" ]; then orphan_found=true; break; fi
+    done
+    if [ "$orphan_found" = true ] \
+       && ! pacman -Q todesk-bin &>/dev/null \
+       && ! pacman -Q todesk &>/dev/null; then
+        echo ""
+        echo -e "${YELLOW}检测到 ToDesk 残留文件（包未登记，但文件仍在系统中）${NC}"
+        echo -e "${CYAN}清理残留文件，避免 pacman 报「文件系统中已存在」...${NC}"
+        # 先停服务、杀进程，否则 /opt/todesk 下被占用的二进制删不干净
+        sudo systemctl stop todeskd.service 2>/dev/null || true
+        sudo systemctl disable todeskd.service 2>/dev/null || true
+        sudo pkill -f '/opt/todesk/bin/' 2>/dev/null || true
+        sleep 1
+        for op in "${orphan_paths[@]}"; do
+            [ -e "$op" ] || continue
+            sudo rm -rf "$op" 2>/dev/null || true
+        done
+        # 图标目录：只删 todesk 自己的图标，不动 hicolor 下别家的文件
+        sudo rm -f /usr/share/icons/hicolor/*/apps/todesk.png 2>/dev/null || true
+        # pacman 的数据库锁：上次安装被中断可能留下它，会让后续 pacman 操作一直报
+        # 「无法锁定数据库」。只在没有 pacman 进程运行时才删，避免打断正在进行的操作。
+        if [ -e /usr/lib/holo/pacmandb/db.lck ] && ! pgrep -x pacman &>/dev/null; then
+            sudo rm -f /usr/lib/holo/pacmandb/db.lck 2>/dev/null || true
+        fi
+        sudo systemctl daemon-reload 2>/dev/null || true
+
+        # 复核：还有残留就明确告知，而不是让 pacman 再报一次看不懂的冲突
+        local still_left=""
+        for op in "${orphan_paths[@]}"; do
+            if [ -e "$op" ]; then still_left="$still_left $op"; fi
+        done
+        if [ -n "$still_left" ]; then
+            echo -e "${RED}✗ 以下残留文件未能删除:$still_left${NC}"
+            echo -e "${YELLOW}  请手动执行: sudo rm -rf$still_left${NC}"
+            rm -rf "$CLONE_DIR"
+            return 1
+        fi
+        echo -e "${GREEN}✓ 残留文件已清理${NC}"
     fi
 
     # ---------- 安装 ----------
@@ -14141,6 +14218,68 @@ install_todesk() {
     if pacman -Q todesk-bin &>/dev/null; then
         echo -e "${CYAN}Uninstalling existing todesk-bin...${NC}"
         sudo pacman -R --noconfirm todesk-bin 2>/dev/null || true
+    fi
+
+    # ---------- Clean orphaned files (critical) ----------
+    # Handles a dirty state that `pacman -R` cannot reach: the package record is gone
+    # (interrupted uninstall, manually pruned database, or a manual extraction install),
+    # but files such as /opt/todesk are still on disk.
+    # In that case `pacman -U` refuses with "exists in filesystem" and both `pacman -Q`
+    # checks above are false, so the cleanup is skipped entirely -- this is exactly the
+    # root cause of the reinstall failure.
+    # Rule: package not registered + files present = orphaned leftovers, clear them here.
+    # Note: db.lck is NOT part of the "are there leftovers" test -- it is pacman's global
+    # lock and exists whenever any pacman runs, unrelated to ToDesk. It is only removed
+    # as part of an actual cleanup.
+    local orphan_paths=(
+        /opt/todesk
+        /usr/bin/todesk
+        /usr/lib/systemd/system/todeskd.service
+        /usr/share/applications/todesk.desktop
+        /usr/share/licenses/todesk-bin
+    )
+    local orphan_found=false
+    for op in "${orphan_paths[@]}"; do
+        if [ -e "$op" ]; then orphan_found=true; break; fi
+    done
+    if [ "$orphan_found" = true ] \
+       && ! pacman -Q todesk-bin &>/dev/null \
+       && ! pacman -Q todesk &>/dev/null; then
+        echo ""
+        echo -e "${YELLOW}Found leftover ToDesk files (package not registered, files still present)${NC}"
+        echo -e "${CYAN}Cleaning leftovers so pacman does not report 'exists in filesystem'...${NC}"
+        # Stop the service and kill processes first, otherwise busy binaries under
+        # /opt/todesk cannot be removed cleanly.
+        sudo systemctl stop todeskd.service 2>/dev/null || true
+        sudo systemctl disable todeskd.service 2>/dev/null || true
+        sudo pkill -f '/opt/todesk/bin/' 2>/dev/null || true
+        sleep 1
+        for op in "${orphan_paths[@]}"; do
+            [ -e "$op" ] || continue
+            sudo rm -rf "$op" 2>/dev/null || true
+        done
+        # Icons: remove only ToDesk's own icons, leave other packages in hicolor alone.
+        sudo rm -f /usr/share/icons/hicolor/*/apps/todesk.png 2>/dev/null || true
+        # pacman's database lock: a previously interrupted install may have left it behind,
+        # which makes every later pacman run report "could not lock database". Only remove
+        # it when no pacman process is running, so an in-progress operation is not disturbed.
+        if [ -e /usr/lib/holo/pacmandb/db.lck ] && ! pgrep -x pacman &>/dev/null; then
+            sudo rm -f /usr/lib/holo/pacmandb/db.lck 2>/dev/null || true
+        fi
+        sudo systemctl daemon-reload 2>/dev/null || true
+
+        # Re-check: report clearly instead of letting pacman fail with a cryptic conflict.
+        local still_left=""
+        for op in "${orphan_paths[@]}"; do
+            if [ -e "$op" ]; then still_left="$still_left $op"; fi
+        done
+        if [ -n "$still_left" ]; then
+            echo -e "${RED}✗ Could not remove these leftovers:$still_left${NC}"
+            echo -e "${YELLOW}  Please run manually: sudo rm -rf$still_left${NC}"
+            rm -rf "$CLONE_DIR"
+            return 1
+        fi
+        echo -e "${GREEN}✓ Leftovers cleaned${NC}"
     fi
 
     # ---------- 安装 ----------
