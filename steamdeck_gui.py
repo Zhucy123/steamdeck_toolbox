@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.11.2"
+VERSION = "1.11.3"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1125,7 +1125,11 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-02（v1.11.2）
+CHANGELOG_BODY_ZH = """2026-11-02（v1.11.3）
+【问题修复】
+- 修复启动「检测更新」结束后任务栏图标消失：先显示主窗口再关闭更新检查窗；统一 WM_CLASS=Steamdeck-toolbox，桌面快捷方式补 StartupWMClass；更新闪屏不占任务栏
+
+2026-11-02（v1.11.2）
 【界面改进】
 - 侧栏精简为 7 项：支持和维护、更新日志、系统优化、插件相关、软件安装、网络工具、更新和卸载
   · 兼容层、急救重置、Clover/双系统检修全部收进「系统优化」底部分组（默认折叠）
@@ -1533,7 +1537,11 @@ CHANGELOG_BODY_ZH = """2026-11-02（v1.11.2）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-02 (v1.11.2)
+CHANGELOG_BODY_EN = """2026-11-02 (v1.11.3)
+[Bug fixes]
+- Fixed taskbar icon disappearing after the startup update check: show the main window before closing the splash; unify WM_CLASS=Steamdeck-toolbox and add StartupWMClass to the desktop shortcut; the update splash no longer takes a taskbar slot
+
+2026-11-02 (v1.11.2)
 [UI improvements]
 - Sidebar trimmed to 7 items: Support, Changelog, System Optimization, Plugins, Software, Network, Update & Uninstall
   · Compatibility layers, emergency reset, and Clover/dual-boot repair fold into System Optimization groups (collapsed by default)
@@ -17398,6 +17406,13 @@ class MainWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title=t("app_title"))
         self.set_icon_name("input-gamepad-symbolic")
+        # 明确作为普通应用窗，避免从更新检查窗切换后被 Plasma 当成无任务栏项的临时窗
+        try:
+            self.set_type_hint(Gdk.WindowTypeHint.NORMAL)
+            self.set_skip_taskbar_hint(False)
+            self.set_skip_pager_hint(False)
+        except Exception:
+            pass
         # 按屏幕可用区域自适应窗口尺寸，避免在掌机 1280x800 上底边溢出、
         # 也避免在大屏上窗口过小。详见 compute_window_size()。
         _win_w, _win_h = compute_window_size()
@@ -18333,6 +18348,7 @@ Exec={sys.executable} "{script_path}"
 Icon=input-gamepad-symbolic
 Terminal=false
 StartupNotify=true
+StartupWMClass=Steamdeck-toolbox
 Categories=Utility;
 """
     try:
@@ -18466,53 +18482,120 @@ def _update_dialog_error(dialog, error_msg):
 class UpdateCheckWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title=t("check_update"))
-        self.set_icon_name("input-gamepad-symbolic"); self.set_default_size(400, 150); self.set_position(Gtk.WindowPosition.CENTER); self.set_deletable(False)
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10); vbox.set_margin_top(20); vbox.set_margin_bottom(20); vbox.set_margin_start(20); vbox.set_margin_end(20); self.add(vbox)
-        self.label = Gtk.Label(label=t("checking_update")); self.label.set_justify(Gtk.Justification.CENTER); vbox.pack_start(self.label, True, True, 0)
-        self.button = None; self.vbox = vbox; self.show_all(); GLib.timeout_add(200, self.perform_check)
+        self.set_icon_name("input-gamepad-symbolic")
+        self.set_default_size(400, 150)
+        self.set_position(Gtk.WindowPosition.CENTER)
+        self.set_deletable(False)
+        # 启动闪屏不抢任务栏；真正的任务栏项留给随后出现的 MainWindow
+        try:
+            self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
+            self.set_skip_taskbar_hint(True)
+        except Exception:
+            pass
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        vbox.set_margin_top(20); vbox.set_margin_bottom(20)
+        vbox.set_margin_start(20); vbox.set_margin_end(20)
+        self.add(vbox)
+        self.label = Gtk.Label(label=t("checking_update"))
+        self.label.set_justify(Gtk.Justification.CENTER)
+        vbox.pack_start(self.label, True, True, 0)
+        self.button = None
+        self.vbox = vbox
+        self.show_all()
+        GLib.timeout_add(200, self.perform_check)
 
     def perform_check(self):
         def check_thread():
-            sync_emoji_icons(); remote_version = get_remote_version(); GLib.idle_add(self.on_check_done, remote_version)
-        threading.Thread(target=check_thread, daemon=True).start(); return False
+            sync_emoji_icons()
+            remote_version = get_remote_version()
+            GLib.idle_add(self.on_check_done, remote_version)
+        threading.Thread(target=check_thread, daemon=True).start()
+        return False
 
     def on_check_done(self, remote_version):
         if remote_version is None:
             self.label.set_text(t("check_update_fail"))
             if self.button is None:
-                self.button = Gtk.Button(label=t("enter_main")); self.button.connect("clicked", self.on_button_clicked); self.vbox.pack_start(self.button, False, False, 0)
-            self.button.show(); return
+                self.button = Gtk.Button(label=t("enter_main"))
+                self.button.connect("clicked", self.on_button_clicked)
+                self.vbox.pack_start(self.button, False, False, 0)
+            self.button.show()
+            return
         if compare_versions(remote_version, VERSION) <= 0:
             self.label.set_text(t("already_latest", ver=VERSION))
-            if self.button is not None: self.button.hide()
-            GLib.timeout_add(300, self.auto_enter_main); return
-        self.label.set_text(t("found_new_big", ver=remote_version) + ("\n当前版本: v" if get_lang()=="zh" else "\nCurrent: v") + VERSION)
-        if self.button is not None: self.button.hide()
+            if self.button is not None:
+                self.button.hide()
+            GLib.timeout_add(300, self.auto_enter_main)
+            return
+        self.label.set_text(
+            t("found_new_big", ver=remote_version)
+            + ("\n当前版本: v" if get_lang() == "zh" else "\nCurrent: v")
+            + VERSION
+        )
+        if self.button is not None:
+            self.button.hide()
         self.show_update_prompt(remote_version)
 
+    def _enter_main(self):
+        """先映射主窗口，再关掉更新检查窗。
+
+        旧逻辑是 self.destroy() 再 show_main_window()：在 KDE Plasma（Steam Deck
+        桌面模式）上，最后一个应用窗被销毁时任务栏会立刻摘掉图标，随后新建的
+        MainWindow 经常不再显示任务栏项。必须先让 MainWindow 出现在任务栏里。
+        """
+        show_main_window()
+
     def auto_enter_main(self):
-        self.destroy(); show_main_window(); return False
+        self._enter_main()
+        return False
 
     def show_update_prompt(self, remote_version):
-        self.destroy()
-        dialog = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.QUESTION, Gtk.ButtonsType.NONE, t("found_new"))
-        dialog.set_default_size(400, 150); dialog.set_markup(f"<big><b>{t('found_new_big', ver=remote_version)}</b></big>")
+        # 先隐藏而不是销毁，保留进程内窗口存在，避免任务栏空窗期
+        try:
+            self.hide()
+        except Exception:
+            pass
+        dialog = Gtk.MessageDialog(
+            self, Gtk.DialogFlags.MODAL, Gtk.MessageType.QUESTION,
+            Gtk.ButtonsType.NONE, t("found_new"))
+        dialog.set_default_size(400, 150)
+        dialog.set_markup(f"<big><b>{t('found_new_big', ver=remote_version)}</b></big>")
         dialog.format_secondary_text(t("update_prompt", cur=VERSION, remote=remote_version))
-        dialog.add_button(t("yes"), Gtk.ResponseType.YES); dialog.add_button(t("no"), Gtk.ResponseType.NO); dialog.set_icon_name("input-gamepad-symbolic")
+        dialog.add_button(t("yes"), Gtk.ResponseType.YES)
+        dialog.add_button(t("no"), Gtk.ResponseType.NO)
+        dialog.set_icon_name("input-gamepad-symbolic")
         fix_dialog_size(dialog)
         response = dialog.run()
         if response == Gtk.ResponseType.YES:
-            dialog.set_markup(f"<big><b>{t('updating')}</b></big>"); dialog.format_secondary_text(t("updating_hint"))
-            for btn in dialog.get_action_area().get_children(): btn.destroy()
-            dialog.show_all(); _perform_update_in_dialog(dialog, remote_version)
+            dialog.set_markup(f"<big><b>{t('updating')}</b></big>")
+            dialog.format_secondary_text(t("updating_hint"))
+            for btn in dialog.get_action_area().get_children():
+                btn.destroy()
+            dialog.show_all()
+            # 成功会重启进程；失败对话框回调里会 show_main_window()
+            _perform_update_in_dialog(dialog, remote_version)
         else:
-            dialog.destroy(); show_main_window()
+            dialog.destroy()
+            self._enter_main()
 
     def on_button_clicked(self, button):
-        self.destroy(); show_main_window()
+        self._enter_main()
 
 def show_main_window():
-    window = MainWindow(); window.connect("destroy", Gtk.main_quit); window.show_all()
+    # 关掉仍存活的更新检查闪屏（可能已 hide），避免残留无任务栏对话框窗
+    for w in list(Gtk.Window.list_toplevels()):
+        try:
+            if isinstance(w, UpdateCheckWindow):
+                w.destroy()
+        except Exception:
+            pass
+    window = MainWindow()
+    window.connect("destroy", Gtk.main_quit)
+    window.show_all()
+    try:
+        window.present()
+    except Exception:
+        pass
     # Gtk.Stack may reset visible child on first show_all if switched in __init__;
     # re-select default category after the window is mapped so about content is visible.
     def _open_default():
@@ -18522,16 +18605,25 @@ def show_main_window():
             pass
         return False
     GLib.idle_add(_open_default)
-    GLib.idle_add(ensure_desktop_shortcut); GLib.idle_add(ensure_vte_installed)
+    GLib.idle_add(ensure_desktop_shortcut)
+    GLib.idle_add(ensure_vte_installed)
+    return window
 
 def main():
+    # 统一 WM_CLASS，便于 Plasma 任务栏与桌面 StartupWMClass 对上号
+    try:
+        GLib.set_prgname("steamdeck-toolbox")
+        Gdk.set_program_class("Steamdeck-toolbox")
+    except Exception:
+        pass
     # 关键顺序：必须在 apply_app_css 改写 GTK prefer-dark 之前，
     # 先记录系统真实的配色方案，否则“跟随系统”会读到被自己改过的值。
     reset_system_theme_cache()
     # 启动时应用用户上次选择的语言与主题
     set_lang(load_lang_pref())
     apply_app_css(load_theme_pref())
-    update_win = UpdateCheckWindow(); Gtk.main()
+    UpdateCheckWindow()
+    Gtk.main()
 
 if __name__ == "__main__":
     main()

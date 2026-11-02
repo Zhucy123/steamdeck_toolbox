@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v1.11.2** | Updated: 2026-11-02
+> **Version: v1.11.3** | Updated: 2026-11-02
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -26,6 +26,10 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - Open the toolbox; it checks for updates on startup (built-in self-update)
 
 ## 📝 Changelog
+
+2026-11-02 (v1.11.3)
+[Bug fixes]
+- Fixed taskbar icon disappearing after the startup update check (show main window first; unify WM_CLASS / StartupWMClass)
 
 2026-11-02 (v1.11.2)
 [UI improvements]
