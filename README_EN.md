@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v1.10.0** | Updated: 2026-11-02
+> **Version: v1.11.2** | Updated: 2026-11-02
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -26,6 +26,31 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - Open the toolbox; it checks for updates on startup (built-in self-update)
 
 ## 📝 Changelog
+
+2026-11-02 (v1.11.2)
+[UI improvements]
+- Sidebar trimmed to 7 items: Support, Changelog, System Optimization, Plugins, Software, Network, Update & Uninstall
+  - Compat / emergency / Clover & dual-boot repair fold into System Optimization groups (collapsed by default)
+  - Removed standalone Game Compatibility, Emergency, Boot & Dual Boot, and Other
+  - Yellow Duck moves under Software Installation
+- Launch still defaults to Support & Maintenance
+
+2026-11-02 (v1.11.1)
+[UI improvements]
+- IA reshuffle: daily optimization → game compatibility → plugins → software → network → emergency → boot/dual-boot → uninstall → other
+  - System Optimization no longer holds emergency/compat; new Game Compatibility and Emergency & Recovery
+  - Boot becomes Boot & Dual Boot and hosts dual-boot repair tools
+  - Third-party game platforms move under Software Installation; Other keeps Yellow Duck etc.
+- Groups still start collapsed; launch still opens Support & Maintenance
+
+2026-11-02 (v1.11.0)
+[New features]
+- Expanded GE-Proton Manager into Compatibility Layer Manager (GE / Proton-CachyOS SLR / DW Proton)
+  - CachyOS installs the SLR x86_64 package into compatibilitytools.d
+  - DW Proton uses dawn-winery/dwproton-mirror; anime/specific-game note; separate from CheatDeck
+  - Reuses GE mirrors, checksums, and stage-then-move installs (tar.xz)
+- Plugins: CheatDeck (CheatDeck.zip only), Decky check, Developer mode + ToS disclaimer
+- System Optimization: Emergency Reset for Steam config and Gamescope/Game Mode with backup under ~/steamdeck_toolbox_backups/
 
 2026-11-02 (v1.10.0)
 [UI improvements]

@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.10.0"
+VERSION = "1.11.2"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -366,12 +366,57 @@ button.func-tile.child-tile {{
     background-color: @sd_panel_hi;
 }}
 .func-group-label {{
-    font-weight: 700;
-    font-size: 12px;
+    font-weight: 800;
+    font-size: 15px;
     color: @sd_accent;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.4px;
     margin-top: 8px;
     margin-bottom: 2px;
+}}
+/* Collapsible function groups: big clickable header, default collapsed */
+.func-group {{
+    margin-top: 6px;
+    margin-bottom: 4px;
+    margin-right: 8px;
+}}
+button.func-group-header {{
+    background-image: none;
+    background-color: alpha(@sd_accent, 0.10);
+    border: 1px solid alpha(@sd_accent, 0.55);
+    border-left: 4px solid @sd_accent;
+    border-radius: 12px;
+    color: @sd_accent;
+    padding: 12px 14px;
+    min-height: 48px;
+    box-shadow: 0 2px 10px alpha(@sd_purple, 0.18);
+    text-shadow: none;
+    font-weight: 800;
+}}
+button.func-group-header:hover {{
+    background-color: alpha(@sd_accent, 0.18);
+    border-color: @sd_accent;
+    box-shadow: 0 0 0 1px alpha(@sd_purple, 0.35), 0 4px 14px alpha(@sd_accent, 0.22);
+}}
+button.func-group-header:active {{
+    background-color: alpha(@sd_purple, 0.22);
+}}
+button.func-group-header.expanded {{
+    background-color: alpha(@sd_purple, 0.16);
+    border-color: alpha(@sd_purple, 0.70);
+    border-left-color: @sd_purple;
+}}
+.func-group-header-label {{
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: 0.3px;
+    color: @sd_accent;
+}}
+button.func-group-header.expanded .func-group-header-label {{
+    color: @sd_purple;
+}}
+button.func-group-header image {{
+    color: @sd_accent;
+    opacity: 1;
 }}
 
 button.back-btn {{
@@ -818,13 +863,11 @@ _UI_STRINGS = {
     "home_hint": {"zh": "选择一个分类开始", "en": "Pick a category to get started"},
     "cat_desc_support": {"zh": "关于本工具与维护信息", "en": "About this tool and maintenance"},
     "cat_desc_changelog": {"zh": "查看版本更新记录", "en": "See what changed in each version"},
-    "cat_desc_sysopt": {"zh": "源、虚拟内存、校准与缓存", "en": "Repos, swap, calibration and cache"},
-    "cat_desc_software": {"zh": "常用桌面应用一键安装", "en": "One-click desktop app installs"},
+    "cat_desc_sysopt": {"zh": "日常调校、兼容层、急救与引导", "en": "Daily tweaks, compatibility layers, emergency and boot"},
+    "cat_desc_software": {"zh": "桌面应用、第三方平台与小工具", "en": "Desktop apps, third-party platforms and utilities"},
     "cat_desc_network": {"zh": "加速器与网络相关工具", "en": "Accelerators and network utilities"},
     "cat_desc_plugins": {"zh": "Decky 插件商店与插件", "en": "Decky plugin store and plugins"},
-    "cat_desc_boot": {"zh": "Clover 引导安装与维护", "en": "Clover boot install and upkeep"},
     "cat_desc_update": {"zh": "更新或卸载已装软件", "en": "Update or uninstall installed apps"},
-    "cat_desc_other": {"zh": "其他实用小工具", "en": "Other handy utilities"},
     "help": {"zh": "帮助", "en": "Help"},
     "quit": {"zh": "退出", "en": "Quit"},
     "ok": {"zh": "确定", "en": "OK"},
@@ -834,12 +877,10 @@ _UI_STRINGS = {
     "cat_support": {"zh": "支持和维护", "en": "Support & Maintenance"},
     "cat_changelog": {"zh": "更新日志", "en": "Changelog"},
     "cat_sysopt": {"zh": "系统优化", "en": "System Optimization"},
+    "cat_plugins": {"zh": "插件相关", "en": "Plugins"},
     "cat_software": {"zh": "软件安装", "en": "Software Installation"},
     "cat_network": {"zh": "网络工具", "en": "Network Tools"},
-    "cat_plugins": {"zh": "插件相关", "en": "Plugins"},
-    "cat_boot": {"zh": "引导管理", "en": "Boot Management"},
     "cat_update": {"zh": "更新和卸载软件", "en": "Update & Uninstall"},
-    "cat_other": {"zh": "其他", "en": "Other"},
     "sys_dual": {"zh": "双系统", "en": "Dual Boot"},
     "sys_single": {"zh": "单系统", "en": "Single System"},
     "about_title": {"zh": "关于本工具", "en": "About This Tool"},
@@ -930,7 +971,7 @@ _FUNC_LABELS = {
     "calibrate_joystick_stick": {"zh": "校准摇杆", "en": "Calibrate Joystick"},
     "calibrate_joystick_trigger": {"zh": "校准扳机", "en": "Calibrate Triggers"},
     "steamdeck_cache_manager": {"zh": "Steam缓存管理", "en": "Steam Cache Manager"},
-    "ge_proton_manager": {"zh": "GE-Proton 管理", "en": "GE-Proton Manager"},
+    "ge_proton_manager": {"zh": "兼容层管理", "en": "Compatibility Layer Manager"},
     "health_check": {"zh": "系统体检", "en": "System Health Check"},
     "fix_boot": {"zh": "修复引导", "en": "Fix Boot"},
     "fix_shared_disk": {"zh": "修复互通盘", "en": "Fix Shared Disk"},
@@ -981,6 +1022,13 @@ _FUNC_LABELS = {
     "uninstall_todesk": {"zh": "卸载 ToDesk", "en": "Uninstall ToDesk"},
     "uninstall_fcitx5": {"zh": "卸载Fcitx 5", "en": "Uninstall Fcitx 5"},
     "uninstall_other_flatpak_apps": {"zh": "卸载其他已安装应用", "en": "Uninstall Other Installed Apps"},
+    "grp_cheatdeck": {"zh": "CheatDeck 插件", "en": "CheatDeck Plugin"},
+    "install_cheatdeck_install": {"zh": "安装/更新 CheatDeck", "en": "Install/Update CheatDeck"},
+    "install_cheatdeck_uninstall": {"zh": "卸载 CheatDeck", "en": "Uninstall CheatDeck"},
+    "grp_emergency": {"zh": "急救重置", "en": "Emergency Reset"},
+    "grp_boot": {"zh": "引导与双系统", "en": "Boot & Dual Boot"},
+    "emergency_steam_reset": {"zh": "重置 Steam 配置", "en": "Reset Steam Config"},
+    "emergency_gamescope_reset": {"zh": "重置 Gamescope/游戏模式", "en": "Reset Gamescope / Game Mode"},
     "install_yellow_duck_software": {"zh": "小黄鸭软件", "en": "Yellow Duck Software"},
     "grp_third_party": {"zh": "安装/卸载第三方游戏平台", "en": "Install/Uninstall Third-party Game Platforms"},
     "install_third_party_platform": {"zh": "安装第三方游戏平台", "en": "Install Third-party Game Platform"},
@@ -1011,6 +1059,20 @@ _DANGER_HINTS_I18N = {
     "clear_hosts_cache": {
         "zh": "该功能会修改系统 /etc/hosts 文件（会自动备份）。",
         "en": "This will modify the system /etc/hosts file (a backup is created automatically).",
+    },
+    "emergency_steam_reset": {
+        "zh": ("将备份并重置 Steam 客户端配置/启动缓存，用于卡启动、配置损坏等急救。\n"
+               "不会删除 steamapps 游戏本体；本地 Steam 设置可能丢失。操作前会自动备份到\n"
+               "~/steamdeck_toolbox_backups/。"),
+        "en": ("Backs up then resets Steam client config / launch caches for startup hangs or broken config.\n"
+               "Does not delete steamapps game installs; local Steam settings may be lost.\n"
+               "An automatic backup is written under ~/steamdeck_toolbox_backups/."),
+    },
+    "emergency_gamescope_reset": {
+        "zh": ("将备份并清理 Gamescope / 游戏模式相关本地状态与部分 Steam UI 缓存，\n"
+               "用于黑屏、进不去游戏模式等。不删游戏本体；操作前自动备份。"),
+        "en": ("Backs up then clears Gamescope / Game Mode local state and some Steam UI caches\n"
+               "for black screens or Game Mode boot issues. Games are not deleted; auto-backup first."),
     },
     "health_check": {
         "zh": ("该功能会检查 ESP 分区、UEFI 启动项、Clover 引导文件与 /etc/fstab。\n"
@@ -1063,7 +1125,34 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-02（v1.10.0）
+CHANGELOG_BODY_ZH = """2026-11-02（v1.11.2）
+【界面改进】
+- 侧栏精简为 7 项：支持和维护、更新日志、系统优化、插件相关、软件安装、网络工具、更新和卸载
+  · 兼容层、急救重置、Clover/双系统检修全部收进「系统优化」底部分组（默认折叠）
+  · 去掉独立的游戏兼容 / 急救与恢复 / 引导与双系统 / 其他
+  · 小黄鸭并入「软件安装」；第三方游戏平台仍在软件安装分组内
+- 启动默认仍为「支持和维护」
+
+2026-11-02（v1.11.1）
+【界面改进】
+- 信息架构重排：侧栏按「日常优化 → 游戏兼容 → 插件 → 装软 → 网络 → 急救 → 引导/双系统 → 卸载 → 其他」组织
+  · 系统优化只保留源/虚拟内存/磁盘/hosts/校准/Steam 缓存
+  · 新增「游戏兼容」承载兼容层管理（GE / CachyOS / DW）
+  · 新增「急救与恢复」：Steam / Gamescope 重置
+  · 「引导管理」改为「引导与双系统」，双系统体检/修引导/互通盘归入此分类
+  · 第三方游戏平台并入「软件安装」；「其他」仅保留小黄鸭等杂项
+- 分组折叠默认仍收起；启动默认仍打开「支持和维护」
+
+2026-11-02（v1.11.0）
+【新功能】
+- 「GE-Proton 管理」扩展为「兼容层管理」：同一入口管理 GE-Proton、Proton-CachyOS(SLR)、DW Proton
+  · CachyOS 仅安装 SLR 的 x86_64 包到 ~/.local/share/Steam/compatibilitytools.d/
+  · DW Proton 走 dawn-winery/dwproton-mirror；文案标明偏二次元/特定游戏，与 CheatDeck 分开展示
+  · 复用 GE 的镜像源选择、体积/sha512 校验、先解压到临时目录再迁入的安全安装流程（tar.xz）
+- 插件相关新增 CheatDeck：只下载资产 CheatDeck.zip；安装前检查 Decky、提示开发者模式与 ToS 免责，不附带修改器
+- 系统优化新增「急救重置」：Steam 配置重置、Gamescope/游戏模式重置；强制确认，操作前自动备份到 ~/steamdeck_toolbox_backups/
+
+2026-11-02（v1.10.0）
 【界面改进】
 - 主窗口尺寸改为按屏幕自适应，不再固定 1100x720
   · 原因：原尺寸在 Steam Deck（1280x800，可用工作区 1280x746）上，
@@ -1444,7 +1533,34 @@ CHANGELOG_BODY_ZH = """2026-11-02（v1.10.0）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-02 (v1.10.0)
+CHANGELOG_BODY_EN = """2026-11-02 (v1.11.2)
+[UI improvements]
+- Sidebar trimmed to 7 items: Support, Changelog, System Optimization, Plugins, Software, Network, Update & Uninstall
+  · Compatibility layers, emergency reset, and Clover/dual-boot repair fold into System Optimization groups (collapsed by default)
+  · Removed standalone Game Compatibility / Emergency / Boot & Dual Boot / Other categories
+  · Yellow Duck moves under Software Installation; third-party platforms stay there too
+- Launch still defaults to Support & Maintenance
+
+2026-11-02 (v1.11.1)
+[UI improvements]
+- Information architecture reshuffle: sidebar order is daily optimization → game compatibility → plugins → software → network → emergency → boot/dual-boot → uninstall → other
+  · System Optimization keeps repos/swap/disk/hosts/calibration/Steam cache only
+  · New "Game Compatibility" hosts the compatibility-layer manager (GE / CachyOS / DW)
+  · New "Emergency & Recovery" for Steam / Gamescope resets
+  · "Boot Management" becomes "Boot & Dual Boot"; dual-boot health/fix-boot/shared-disk live there
+  · Third-party game platforms move under Software Installation; Other keeps Yellow Duck and similar odds and ends
+- Collapsible groups still start collapsed; launch still opens Support & Maintenance
+
+2026-11-02 (v1.11.0)
+[New features]
+- Expanded "GE-Proton Manager" into "Compatibility Layer Manager": GE-Proton, Proton-CachyOS (SLR), and DW Proton in one place
+  · CachyOS installs the SLR x86_64 package into ~/.local/share/Steam/compatibilitytools.d/
+  · DW Proton uses dawn-winery/dwproton-mirror; copy notes anime/specific-game focus and keeps CheatDeck separate
+  · Reuses GE mirror picking, size/sha512 checks, and stage-then-move installs (tar.xz)
+- Plugins: CheatDeck installs only CheatDeck.zip; checks for Decky, prompts for Developer mode and a ToS disclaimer; no cheat files bundled
+- System Optimization: Emergency Reset for Steam config and Gamescope/Game Mode; strong confirm + auto-backup under ~/steamdeck_toolbox_backups/
+
+2026-11-02 (v1.10.0)
 [UI improvements]
 - Main window now sizes itself to the display instead of a fixed 1100x720
   - Reason: on a Steam Deck (1280x800, usable workarea 1280x746) the content height of 720 plus roughly 40px of title bar totals 760px, exceeding the usable height, so the bottom was pushed off screen
@@ -1742,12 +1858,10 @@ def build_icon_map():
         t("cat_support"): "pushpin.png",
         t("cat_changelog"): "clipboard_twemoji.png",
         t("cat_sysopt"): "hammer_wrench.png",
+        t("cat_plugins"): "game_controller.png",
         t("cat_software"): "package.png",
         t("cat_network"): "globe.png",
-        t("cat_plugins"): "game_controller.png",
-        t("cat_boot"): "refresh.png",
         t("cat_update"): "inbox.png",
-        t("cat_other"): "trash.png",
     }
 
 
@@ -1757,12 +1871,10 @@ def category_meta():
         ("support", "cat_support", "cat_desc_support", "pushpin.png"),
         ("changelog", "cat_changelog", "cat_desc_changelog", "clipboard_twemoji.png"),
         ("sysopt", "cat_sysopt", "cat_desc_sysopt", "hammer_wrench.png"),
+        ("plugins", "cat_plugins", "cat_desc_plugins", "game_controller.png"),
         ("software", "cat_software", "cat_desc_software", "package.png"),
         ("network", "cat_network", "cat_desc_network", "globe.png"),
-        ("plugins", "cat_plugins", "cat_desc_plugins", "game_controller.png"),
-        ("boot", "cat_boot", "cat_desc_boot", "refresh.png"),
         ("update", "cat_update", "cat_desc_update", "inbox.png"),
-        ("other", "cat_other", "cat_desc_other", "trash.png"),
     ]
 
 
@@ -1782,28 +1894,12 @@ def build_category_tree():
             ]),
             (fl("steamdeck_cache_manager"), "steamdeck_cache_manager"),
             (fl("ge_proton_manager"), "ge_proton_manager"),
-        ],
-        t("cat_software"): [
-            (fl("install_anydesk"), "install_anydesk"),
-            (fl("install_todesk"), "install_todesk"),
-            (fl("install_asklink"), "install_asklink"),
-            (fl("install_wps_office"), "install_wps_office"),
-            (fl("install_qq"), "install_qq"),
-            (fl("install_wechat"), "install_wechat"),
-            (fl("install_qqmusic"), "install_qqmusic"),
-            (fl("install_baidunetdisk"), "install_baidunetdisk"),
-            (fl("install_edge"), "install_edge"),
-            (fl("install_chrome"), "install_chrome"),
-            (fl("install_fcitx5"), "install_fcitx5"),
-        ],
-        t("cat_network"): [
-            (fl("install_uu_accelerator"), "install_uu_accelerator"),
-            (fl("install_xunyou_accelerator"), "install_xunyou_accelerator"),
-            (fl("install_qiyou_accelerator"), "install_qiyou_accelerator"),
-            (fl("grp_watt"), [
-                (fl("watt_toolkit_install"), "watt_toolkit_install"),
-                (fl("watt_toolkit_trust_cert"), "watt_toolkit_trust_cert"),
-                (fl("watt_toolkit_uninstall"), "watt_toolkit_uninstall"),
+            (fl("grp_emergency"), [
+                (fl("emergency_steam_reset"), "emergency_steam_reset"),
+                (fl("emergency_gamescope_reset"), "emergency_gamescope_reset"),
+            ]),
+            (fl("grp_boot"), [
+                (fl("clover_install_or_reinstall"), "clover_install_or_reinstall"),
             ]),
         ],
         t("cat_plugins"): [
@@ -1827,9 +1923,38 @@ def build_category_tree():
                 (fl("install_decky_framegen_install"), "install_decky_framegen_install"),
                 (fl("install_decky_framegen_uninstall"), "install_decky_framegen_uninstall"),
             ]),
+            (fl("grp_cheatdeck"), [
+                (fl("install_cheatdeck_install"), "install_cheatdeck_install"),
+                (fl("install_cheatdeck_uninstall"), "install_cheatdeck_uninstall"),
+            ]),
         ],
-        t("cat_boot"): [
-            (fl("clover_install_or_reinstall"), "clover_install_or_reinstall"),
+        t("cat_software"): [
+            (fl("install_anydesk"), "install_anydesk"),
+            (fl("install_todesk"), "install_todesk"),
+            (fl("install_asklink"), "install_asklink"),
+            (fl("install_wps_office"), "install_wps_office"),
+            (fl("install_qq"), "install_qq"),
+            (fl("install_wechat"), "install_wechat"),
+            (fl("install_qqmusic"), "install_qqmusic"),
+            (fl("install_baidunetdisk"), "install_baidunetdisk"),
+            (fl("install_edge"), "install_edge"),
+            (fl("install_chrome"), "install_chrome"),
+            (fl("install_fcitx5"), "install_fcitx5"),
+            (fl("install_yellow_duck_software"), "install_yellow_duck_software"),
+            (fl("grp_third_party"), [
+                (fl("install_third_party_platform"), "install_third_party_platform"),
+                (fl("uninstall_third_party_platform"), "uninstall_third_party_platform"),
+            ]),
+        ],
+        t("cat_network"): [
+            (fl("install_uu_accelerator"), "install_uu_accelerator"),
+            (fl("install_xunyou_accelerator"), "install_xunyou_accelerator"),
+            (fl("install_qiyou_accelerator"), "install_qiyou_accelerator"),
+            (fl("grp_watt"), [
+                (fl("watt_toolkit_install"), "watt_toolkit_install"),
+                (fl("watt_toolkit_trust_cert"), "watt_toolkit_trust_cert"),
+                (fl("watt_toolkit_uninstall"), "watt_toolkit_uninstall"),
+            ]),
         ],
         t("cat_update"): [
             (fl("update_installed_apps"), "update_installed_apps"),
@@ -1845,13 +1970,6 @@ def build_category_tree():
                 (fl("uninstall_todesk"), "uninstall_todesk"),
                 (fl("uninstall_fcitx5"), "uninstall_fcitx5"),
                 (fl("uninstall_other_flatpak_apps"), "uninstall_other_flatpak_apps"),
-            ]),
-        ],
-        t("cat_other"): [
-            (fl("install_yellow_duck_software"), "install_yellow_duck_software"),
-            (fl("grp_third_party"), [
-                (fl("install_third_party_platform"), "install_third_party_platform"),
-                (fl("uninstall_third_party_platform"), "uninstall_third_party_platform"),
             ]),
         ],
     }
@@ -2138,7 +2256,8 @@ def launch_terminal(command_str):
 # clover_install_or_reinstall 会往 EFI 分区写文件、替换 BOOTX64.EFI、改 efibootmgr
 # 启动项，一旦出错可能导致机器无法启动，必须走确认框。
 DANGEROUS_FUNCS = {"fix_boot", "fix_shared_disk", "uninstall_plugin_store", "clear_hosts_cache",
-                   "clover_install_or_reinstall", "health_check"}
+                   "clover_install_or_reinstall", "health_check",
+                   "emergency_steam_reset", "emergency_gamescope_reset"}
 
 # 每个危险功能的额外风险说明（缺省用通用文案）
 DANGEROUS_HINTS = {
@@ -2149,6 +2268,9 @@ DANGEROUS_HINTS = {
     "fix_shared_disk": "该功能会修改 /etc/fstab 与 UDisks2 策略文件，用于自动挂载 Windows 分区。",
     "uninstall_plugin_store": "该功能会删除已安装的插件商店及其插件数据。",
     "clear_hosts_cache": "该功能会修改系统 /etc/hosts 文件（会自动备份）。",
+    "emergency_steam_reset": "将备份并重置 Steam 配置/启动缓存；不删 steamapps。\n"
+                            "本地 Steam 设置可能丢失。",
+    "emergency_gamescope_reset": "将备份并清理 Gamescope/游戏模式相关状态；不删游戏。",
     "health_check": "该功能会检查 ESP 分区、UEFI 启动项、Clover 引导文件与 /etc/fstab。\n"
                     "检查过程为只读，仅在你确认修复后才会修改系统（fstab 修改前会自动备份）。",
 }
@@ -6007,16 +6129,24 @@ get_installed_ge_proton() {
 ge_proton_manager() {
     while true; do
         local choice=$(zenity --list --radiolist \
-            --title="GE-Proton 兼容层管理" \
-            --text="请选择要执行的操作" \
+            --title="兼容层管理" \
+            --text="管理 GE-Proton / Proton-CachyOS(SLR) / DW Proton\nDW Proton 偏二次元与特定游戏；外挂请用独立的 CheatDeck 插件入口。" \
             --column="选择" --column="操作" \
-            FALSE "安装 GE-Proton" \
-            FALSE "卸载 GE-Proton" \
-            --width=400 --height=200 2>/dev/null)
+            FALSE "GE-Proton：安装" \
+            FALSE "GE-Proton：卸载" \
+            FALSE "Proton-CachyOS(SLR)：安装" \
+            FALSE "Proton-CachyOS(SLR)：卸载" \
+            FALSE "DW Proton：安装" \
+            FALSE "DW Proton：卸载" \
+            --width=560 --height=360 2>/dev/null)
         [ $? -eq 1 ] && return 0
         case "$choice" in
-            "安装 GE-Proton") ge_proton_install ;;
-            "卸载 GE-Proton") ge_proton_uninstall ;;
+            "GE-Proton：安装") ge_proton_install ;;
+            "GE-Proton：卸载") ge_proton_uninstall ;;
+            "Proton-CachyOS(SLR)：安装") cachyos_proton_install ;;
+            "Proton-CachyOS(SLR)：卸载") cachyos_proton_uninstall ;;
+            "DW Proton：安装") dwproton_install ;;
+            "DW Proton：卸载") dwproton_uninstall ;;
             *) return 0 ;;
         esac
     done
@@ -6413,6 +6543,657 @@ ge_proton_uninstall() {
 
     rm -f "$pipe"
 }
+
+# ===== 兼容层扩展：Proton-CachyOS / DW Proton + 急救重置 =====
+get_cachyos_versions() {
+    curl -s --connect-timeout 20 --max-time 60 \
+        "https://api.github.com/repos/CachyOS/proton-cachyos/releases?per_page=50" | \
+        python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    tags = []
+    for rel in data:
+        tag = rel.get('tag_name', '') or ''
+        if rel.get('prerelease'):
+            continue
+        if 'slr' in tag.lower() and any(ch.isdigit() for ch in tag):
+            tags.append(tag)
+    print('\n'.join(tags))
+except Exception:
+    pass
+"
+}
+
+get_dwproton_versions() {
+    curl -s --connect-timeout 20 --max-time 60 \
+        "https://api.github.com/repos/dawn-winery/dwproton-mirror/releases?per_page=50" | \
+        python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    tags = []
+    for rel in data:
+        tag = rel.get('tag_name', '') or ''
+        if rel.get('prerelease'):
+            continue
+        if tag.lower().startswith('dwproton') and any(ch.isdigit() for ch in tag):
+            tags.append(tag)
+    print('\n'.join(tags))
+except Exception:
+    pass
+"
+}
+
+get_installed_compat_dirs() {
+    # $1 = regex matched against basename (case-insensitive via grep -Ei)
+    local pattern="$1"
+    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    [ -d "$install_dir" ] || return 0
+    local d base
+    for d in "$install_dir"/*; do
+        [ -d "$d" ] || continue
+        [ -f "$d/compatibilitytool.vdf" ] || continue
+        base=$(basename "$d")
+        echo "$base" | grep -Ei -- "$pattern" >/dev/null && echo "$base"
+    done
+}
+
+compat_pick_mirror() {
+    local mirror_choice
+    mirror_choice=$(zenity --list --radiolist \
+        --title="选择下载镜像源" \
+        --text="所有版本将使用同一镜像源" \
+        --column="选择" --column="镜像源" \
+        FALSE "gh-proxy.com (国内镜像，速度快)" \
+        FALSE "gh.3w.pm (国内镜像，稳定)" \
+        FALSE "cors.isteed.cc (国内镜像，稳定)" \
+        FALSE "ghproxy.net (国内镜像，慢速备用)" \
+        FALSE "GitHub (官方源)" \
+        --width=560 --height=280 2>/dev/null) || true
+    [ -z "$mirror_choice" ] && { echo ""; return 1; }
+    case "$mirror_choice" in
+        "gh-proxy.com (国内镜像，速度快)") echo "https://gh-proxy.com/" ;;
+        "gh.3w.pm (国内镜像，稳定)") echo "https://gh.3w.pm/" ;;
+        "cors.isteed.cc (国内镜像，稳定)") echo "https://cors.isteed.cc/" ;;
+        "ghproxy.net (国内镜像，慢速备用)") echo "https://ghproxy.net/" ;;
+        "GitHub (官方源)") echo "" ;;
+        *) echo ""; return 1 ;;
+    esac
+}
+
+# 通用：从 GitHub release 安装 tar.xz 兼容层（SLR / DW 等）
+# 参数：repo  display_name  tag...
+compat_do_install_tar_xz() {
+    local repo="$1"; shift
+    local display_name="$1"; shift
+    local versions=("$@")
+    local total=${#versions[@]}
+    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    mkdir -p "$install_dir"
+
+    local success_count=0 failed_count=0 failed_list=""
+    local mirror
+    mirror=$(compat_pick_mirror) || return 0
+
+    local pipe="/tmp/zenity_pipe_$$"
+    mkfifo "$pipe"
+    zenity --progress --pulsate --title="安装 ${display_name}" --text="准备开始..." --width=520 < "$pipe" &
+    local zenity_pid=$!
+    exec 3> "$pipe"
+
+    local i version idx asset_info download_url asset_size sha_url dest_name
+    local full_url temp_dir filename curl_ret fsize want_sha got_sha STAGE_DIR tar_ret EXTRACTED top_entries
+    for i in "${!versions[@]}"; do
+        if ! kill -0 $zenity_pid 2>/dev/null; then
+            echo "用户取消安装" >&2
+            break
+        fi
+        version="${versions[$i]}"
+        idx=$((i+1))
+        echo "# 正在处理第 $idx/$total 个: $version (准备下载...)" >&3
+
+        asset_info=$(curl -s --connect-timeout 20 --max-time 60 \
+            "https://api.github.com/repos/${repo}/releases/tags/${version}" | \
+            python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+assets = data.get('assets', [])
+pick = None
+# Deck：优先普通 x86_64，不要 arm64，也不默认 x86_64_v3
+for a in assets:
+    n = a.get('name', '')
+    if n.endswith('.tar.xz') and 'x86_64' in n and 'x86_64_v3' not in n and 'arm64' not in n and 'aarch64' not in n:
+        pick = a
+        break
+if pick is None:
+    for a in assets:
+        n = a.get('name', '')
+        if n.endswith('.tar.xz') and 'arm64' not in n and 'aarch64' not in n:
+            pick = a
+            break
+if pick is None:
+    sys.exit(0)
+sha = ''
+want = pick.get('name', '') + '.sha512sum'
+want2 = pick.get('name', '').replace('.tar.xz', '.sha512sum')
+for a in assets:
+    n = a.get('name', '')
+    if n == want or n == want2:
+        sha = a.get('browser_download_url', '')
+        break
+print(pick.get('browser_download_url', ''))
+print(pick.get('size', 0))
+print(sha)
+print(pick.get('name', ''))
+")
+        download_url=$(printf '%s\n' "$asset_info" | sed -n '1p')
+        asset_size=$(printf '%s\n' "$asset_info" | sed -n '2p')
+        sha_url=$(printf '%s\n' "$asset_info" | sed -n '3p')
+        dest_name=$(printf '%s\n' "$asset_info" | sed -n '4p' | sed 's/\.tar\.xz$//')
+
+        if [ -z "$download_url" ] || [ -z "$dest_name" ]; then
+            echo "# 错误：无法获取 $version 的下载链接，跳过" >&3
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (无法获取下载链接)"
+            continue
+        fi
+
+        full_url="${mirror}${download_url}"
+        temp_dir="/tmp/compat_proton_$$"
+        mkdir -p "$temp_dir"
+        cd "$temp_dir" || continue
+        filename="${dest_name}.tar.xz"
+
+        echo "# 正在处理第 $idx/$total 个: $version (下载中...)" >&3
+        curl -L -f -S --connect-timeout 30 --max-time 900 -o "$filename" "$full_url" 2> /tmp/curl_err_$$.log
+        curl_ret=$?
+        if [ $curl_ret -ne 0 ]; then
+            echo "# 下载失败，错误信息：" >&3
+            tail -n 5 /tmp/curl_err_$$.log >&3
+            rm -f /tmp/curl_err_$$.log "$filename"
+            cd /tmp && rm -rf "$temp_dir"
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (下载失败)"
+            continue
+        fi
+        rm -f /tmp/curl_err_$$.log
+
+        fsize=$(stat -c '%s' "$filename" 2>/dev/null || echo 0)
+        if [ -n "$asset_size" ] && [ "$asset_size" != "0" ] && [ "$fsize" != "$asset_size" ]; then
+            echo "# 第 $idx/$total 个: $version 下载不完整（$fsize / $asset_size 字节），已跳过" >&3
+            rm -f "$filename"; cd /tmp && rm -rf "$temp_dir"
+            ((failed_count++))
+            failed_list="${failed_list}\n  $version (下载不完整: $fsize/$asset_size 字节)"
+            continue
+        fi
+
+        if [ -n "$sha_url" ] && command -v sha512sum &>/dev/null; then
+            want_sha=$(curl -sL --connect-timeout 20 --max-time 60 "${mirror}${sha_url}" 2>/dev/null | awk '{print $1}' | head -1)
+            if [ -n "$want_sha" ]; then
+                got_sha=$(sha512sum "$filename" 2>/dev/null | awk '{print $1}')
+                if [ "$want_sha" != "$got_sha" ]; then
+                    echo "# 第 $idx/$total 个: $version 校验和不匹配，包已损坏，已跳过" >&3
+                    rm -f "$filename"; cd /tmp && rm -rf "$temp_dir"
+                    ((failed_count++))
+                    failed_list="${failed_list}\n  $version (sha512 校验失败)"
+                    continue
+                fi
+            fi
+        fi
+
+        echo "# 正在处理第 $idx/$total 个: $version (解压中...)" >&3
+        STAGE_DIR=$(mktemp -d "$install_dir/.stage.XXXXXX" 2>/dev/null) || STAGE_DIR=""
+        if [ -z "$STAGE_DIR" ]; then
+            echo "# 第 $idx/$total 个: $version 安装失败（无法创建临时目录）" >&3
+            ((failed_count++)); failed_list="${failed_list}\n  $version (无法创建临时目录)"
+            rm -f "$filename"; cd /tmp && rm -rf "$temp_dir"
+            continue
+        fi
+        tar -xJf "$filename" -C "$STAGE_DIR"
+        tar_ret=$?
+        rm -f "$filename"
+        cd /tmp && rm -rf "$temp_dir"
+
+        EXTRACTED=""
+        if [ $tar_ret -eq 0 ]; then
+            top_entries=("$STAGE_DIR"/*)
+            if [ ${#top_entries[@]} -eq 1 ] && [ -d "${top_entries[0]}" ]; then
+                EXTRACTED="${top_entries[0]}"
+            else
+                # 兜底：找带 compatibilitytool.vdf 的目录
+                EXTRACTED=$(find "$STAGE_DIR" -maxdepth 2 -type f -name compatibilitytool.vdf -printf '%h\n' 2>/dev/null | head -1)
+            fi
+        fi
+
+        if [ $tar_ret -ne 0 ] || [ -z "$EXTRACTED" ] || [ ! -f "$EXTRACTED/compatibilitytool.vdf" ]; then
+            rm -rf "$STAGE_DIR"
+            echo "# 第 $idx/$total 个: $version 安装失败（压缩包损坏或结构异常）" >&3
+            ((failed_count++)); failed_list="${failed_list}\n  $version (解压失败/结构异常)"
+            continue
+        fi
+
+        # 目标目录名用资源名（去掉 .tar.xz），避免与 tag 不一致
+        rm -rf "${install_dir:?}/$dest_name"
+        if ! mv "$EXTRACTED" "$install_dir/$dest_name"; then
+            rm -rf "$STAGE_DIR"
+            echo "# 第 $idx/$total 个: $version 安装失败（移动到目标目录失败）" >&3
+            ((failed_count++)); failed_list="${failed_list}\n  $version (移动失败)"
+            continue
+        fi
+        rm -rf "$STAGE_DIR"
+
+        if [ -d "$install_dir/$dest_name" ] && [ -f "$install_dir/$dest_name/compatibilitytool.vdf" ]; then
+            echo "# 第 $idx/$total 个: $version 安装成功 → $dest_name" >&3
+            ((success_count++))
+        else
+            echo "# 第 $idx/$total 个: $version 安装失败" >&3
+            ((failed_count++)); failed_list="${failed_list}\n  $version (安装校验失败)"
+        fi
+    done
+
+    rm -rf /tmp/compat_proton_$$ /tmp/curl_err_$$.log 2>/dev/null || true
+
+    if kill -0 $zenity_pid 2>/dev/null; then
+        local result_msg="\n========== 安装完成 ==========\n成功: $success_count 个"
+        if [ $failed_count -gt 0 ]; then
+            result_msg+="\n失败: $failed_count 个\n失败的版本:${failed_list}"
+        fi
+        if [ $success_count -gt 0 ]; then
+            result_msg+="\n\n建议完全退出并重启 Steam 以刷新兼容层列表。"
+        fi
+        echo "# $result_msg" >&3
+        exec 3>&-
+        wait $zenity_pid 2>/dev/null
+    fi
+    rm -f "$pipe"
+}
+
+compat_uninstall_by_pattern() {
+    local title="$1"
+    local pattern="$2"
+    local installed_list
+    installed_list=$(get_installed_compat_dirs "$pattern")
+    [ -z "$installed_list" ] && {
+        zenity --info --text="未检测到已安装的 ${title}。" --ok-label="返回" --width=420 2>/dev/null
+        return 0
+    }
+    mapfile -t installed_array <<< "$installed_list"
+    local list_args=(
+        --list --checklist
+        --title="卸载 ${title}"
+        --text="请选择要卸载的版本（可多选）"
+        --column="选择" --column="已安装目录"
+        --width=560 --height=360
+        --ok-label="卸载"
+        --cancel-label="返回"
+    )
+    local ver
+    for ver in "${installed_array[@]}"; do
+        list_args+=("FALSE" "$ver")
+    done
+    local selection
+    selection=$(zenity "${list_args[@]}" 2>/dev/null) || return 0
+    [ -z "$selection" ] && return 0
+    IFS='|' read -r -a selected <<< "$selection"
+
+    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    local total=${#selected[@]} success=0 fail=0 failed_list=""
+    local pipe="/tmp/zenity_pipe_$$"
+    mkfifo "$pipe"
+    zenity --progress --pulsate --title="卸载 ${title}" --text="准备开始..." --width=500 < "$pipe" &
+    local zenity_pid=$!
+    exec 3> "$pipe"
+    local i version idx
+    for i in "${!selected[@]}"; do
+        if ! kill -0 $zenity_pid 2>/dev/null; then
+            echo "用户取消卸载" >&2
+            break
+        fi
+        version="${selected[$i]}"
+        idx=$((i+1))
+        echo "# 正在处理第 $idx/$total 个: $version ..." >&3
+        if [ -d "$install_dir/$version" ]; then
+            rm -rf "$install_dir/$version"
+            if [ ! -d "$install_dir/$version" ]; then
+                ((success++)); echo "# 第 $idx/$total 个: $version 已卸载" >&3
+            else
+                ((fail++)); failed_list="${failed_list}\n  $version (删除失败)"
+                echo "# 第 $idx/$total 个: $version 卸载失败" >&3
+            fi
+        else
+            ((success++)); echo "# 第 $idx/$total 个: $version (目录不存在，跳过)" >&3
+        fi
+        sleep 0.2
+    done
+    if kill -0 $zenity_pid 2>/dev/null; then
+        local result_msg="\n========== 卸载完成 ==========\n成功: $success 个"
+        [ $fail -gt 0 ] && result_msg+="\n失败: $fail 个\n失败的版本:${failed_list}"
+        result_msg+="\n\n建议重启 Steam 以使更改生效。"
+        echo "# $result_msg" >&3
+        exec 3>&-
+        wait $zenity_pid 2>/dev/null
+    fi
+    rm -f "$pipe"
+}
+
+cachyos_proton_install() {
+    (
+        echo "10"; echo "# 正在获取 Proton-CachyOS SLR 版本列表..."
+        sleep 0.4
+        echo "100"
+    ) | zenity --progress --pulsate --title="加载中" --text="正在获取版本列表..." --width=400 2>/dev/null &
+    local ZENITY_PID=$!
+    local all_versions
+    all_versions=$(get_cachyos_versions)
+    kill $ZENITY_PID 2>/dev/null; wait $ZENITY_PID 2>/dev/null
+    [ -z "$all_versions" ] && {
+        zenity --error --text="无法获取 Proton-CachyOS 版本列表，请检查网络。" --width=420 2>/dev/null
+        return 1
+    }
+    mapfile -t version_array <<< "$all_versions"
+    local installed_list installed_array=() available_versions=()
+    installed_list=$(get_installed_compat_dirs 'proton-cachyos|cachyos')
+    [ -n "$installed_list" ] && mapfile -t installed_array <<< "$installed_list"
+
+    local ver already inst stem
+    for ver in "${version_array[@]}"; do
+        already=false
+        # tag 形如 cachyos-11.0-20261015-slr → 资源名含 11.0-20261015-slr-x86_64
+        stem=$(echo "$ver" | sed 's/^cachyos-//')
+        for inst in "${installed_array[@]}"; do
+            if echo "$inst" | grep -F -- "$stem" >/dev/null; then
+                already=true; break
+            fi
+        done
+        [ "$already" = false ] && available_versions+=("$ver")
+    done
+    [ ${#available_versions[@]} -eq 0 ] && {
+        zenity --info --text="列表中的 Proton-CachyOS(SLR) 版本均已安装。" --width=420 2>/dev/null
+        return 0
+    }
+    local list_args=(
+        --list --checklist
+        --title="安装 Proton-CachyOS (SLR)"
+        --text="请选择要安装的 SLR 版本（可多选）\nDeck 使用 x86_64 包，解压到 compatibilitytools.d"
+        --column="选择" --column="版本"
+        --width=620 --height=480
+        --ok-label="安装" --cancel-label="返回"
+    )
+    for ver in "${available_versions[@]}"; do
+        list_args+=("FALSE" "$ver")
+    done
+    local selection ret
+    selection=$(zenity "${list_args[@]}" 2>/dev/null)
+    ret=$?
+    [ $ret -ne 0 ] && return 0
+    [ -z "$selection" ] && {
+        zenity --warning --text="请至少选择一个版本。" --width=300 2>/dev/null
+        return 0
+    }
+    local selected
+    IFS='|' read -r -a selected <<< "$selection"
+    compat_do_install_tar_xz "CachyOS/proton-cachyos" "Proton-CachyOS" "${selected[@]}"
+}
+
+cachyos_proton_uninstall() {
+    compat_uninstall_by_pattern "Proton-CachyOS" 'proton-cachyos|cachyos'
+}
+
+dwproton_install() {
+    zenity --info --width=520 --title="关于 DW Proton" \
+        --text="DW Proton（dwproton）偏二次元与特定游戏优化。\n官方不支持外挂/修改器类用途；外挂请走独立的 CheatDeck 插件入口。\n下载源：dawn-winery/dwproton-mirror（GitHub）。" \
+        2>/dev/null || true
+    (
+        echo "10"; echo "# 正在获取 DW Proton 版本列表..."
+        sleep 0.4
+        echo "100"
+    ) | zenity --progress --pulsate --title="加载中" --text="正在获取版本列表..." --width=400 2>/dev/null &
+    local ZENITY_PID=$!
+    local all_versions
+    all_versions=$(get_dwproton_versions)
+    kill $ZENITY_PID 2>/dev/null; wait $ZENITY_PID 2>/dev/null
+    [ -z "$all_versions" ] && {
+        zenity --error --text="无法获取 DW Proton 版本列表，请检查网络。" --width=420 2>/dev/null
+        return 1
+    }
+    mapfile -t version_array <<< "$all_versions"
+    local installed_list installed_array=() available_versions=()
+    installed_list=$(get_installed_compat_dirs 'dwproton|dw-proton')
+    [ -n "$installed_list" ] && mapfile -t installed_array <<< "$installed_list"
+    local ver already inst
+    for ver in "${version_array[@]}"; do
+        already=false
+        for inst in "${installed_array[@]}"; do
+            if echo "$inst" | grep -F -- "$ver" >/dev/null; then
+                already=true; break
+            fi
+        done
+        [ "$already" = false ] && available_versions+=("$ver")
+    done
+    [ ${#available_versions[@]} -eq 0 ] && {
+        zenity --info --text="列表中的 DW Proton 版本均已安装。" --width=420 2>/dev/null
+        return 0
+    }
+    local list_args=(
+        --list --checklist
+        --title="安装 DW Proton"
+        --text="请选择要安装的版本（可多选）\n偏二次元/特定游戏；不含外挂"
+        --column="选择" --column="版本"
+        --width=620 --height=480
+        --ok-label="安装" --cancel-label="返回"
+    )
+    for ver in "${available_versions[@]}"; do
+        list_args+=("FALSE" "$ver")
+    done
+    local selection ret
+    selection=$(zenity "${list_args[@]}" 2>/dev/null)
+    ret=$?
+    [ $ret -ne 0 ] && return 0
+    [ -z "$selection" ] && {
+        zenity --warning --text="请至少选择一个版本。" --width=300 2>/dev/null
+        return 0
+    }
+    local selected
+    IFS='|' read -r -a selected <<< "$selection"
+    compat_do_install_tar_xz "dawn-winery/dwproton-mirror" "DW Proton" "${selected[@]}"
+}
+
+dwproton_uninstall() {
+    compat_uninstall_by_pattern "DW Proton" 'dwproton|dw-proton'
+}
+
+# ===== CheatDeck（Decky 插件）=====
+install_cheatdeck_install() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 安装/更新 CheatDeck ════════════════${NC}"
+    echo ""
+    echo -e "${CYAN}CheatDeck 是 Decky 插件，用于在游戏模式管理第三方修改器入口。${NC}"
+    echo -e "${YELLOW}重要声明：${NC}"
+    echo "  · 本工具只安装插件本体（CheatDeck.zip），不附带任何修改器文件"
+    echo "  · 使用修改器可能违反游戏服务条款（ToS），账号风险自负"
+    echo "  · 与 DW Proton 等兼容层无关，请勿混用场景"
+    echo ""
+    if [ ! -d "$HOME/homebrew" ] || [ ! -e "$HOME/homebrew/services/PluginLoader" ]; then
+        echo -e "${RED}未检测到 Decky Loader（~/homebrew）。请先到「插件相关 → 插件商店」安装 Decky。${NC}"
+        return 1
+    fi
+    echo -e "${CYAN}安装后请在游戏模式打开 Decky：设置 → Developer → 开启开发者模式（Developer mode），${NC}"
+    echo -e "${CYAN}以便插件正常加载；然后重启 Steam 或 PluginLoader。${NC}"
+    echo ""
+    read -n1 -p "已阅读风险说明，继续安装请按回车或 Y，其它键取消: " ans < /dev/tty
+    echo
+    if [[ -n "$ans" && "$ans" != "y" && "$ans" != "Y" ]]; then
+        echo "已取消。"
+        return 0
+    fi
+    # 只装资产 CheatDeck.zip（install_github_plugin 会按插件名优先选非源码 zip）
+    install_github_plugin "SheffeyG/CheatDeck" "CheatDeck" "CheatDeck"
+}
+
+install_cheatdeck_uninstall() {
+    uninstall_plugin_generic "CheatDeck" "CheatDeck"
+}
+
+# ===== 急救：Steam / Gamescope 重置 =====
+_emergency_backup_root() {
+    local stamp
+    stamp=$(date +%Y%m%d_%H%M%S)
+    local root="$HOME/steamdeck_toolbox_backups"
+    mkdir -p "$root"
+    echo "${root}/$1_${stamp}"
+}
+
+_emergency_stop_steam() {
+    echo -e "${CYAN}正在结束 Steam / gamescope 相关进程（如有）...${NC}"
+    # 尽量温和；失败不阻断
+    # 不要在此切换会话；仅结束 Steam 相关进程
+    pkill -TERM -u "$USER" -x steam 2>/dev/null || true
+    pkill -TERM -u "$USER" -f '/steam(\.sh)?$' 2>/dev/null || true
+    sleep 2
+    pkill -KILL -u "$USER" -x steam 2>/dev/null || true
+    sleep 1
+}
+
+emergency_steam_reset() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 急救：Steam 配置重置 ════════════════${NC}"
+    echo ""
+    echo "用途：桌面模式还能进，但 Steam 卡启动、转圈、配置损坏时尝试修复。"
+    echo ""
+    echo -e "${GREEN}会保留：${NC} steamapps（游戏本体）、大部分 userdata 存档云相关目录"
+    echo -e "${YELLOW}会重置/清理（先自动备份）：${NC}"
+    echo "  · ~/.local/share/Steam/config（客户端配置）"
+    echo "  · Steam 启动/登录相关缓存（如 registry.vdf、.cef-cache、htmlcache、steamui 缓存）"
+    echo -e "${RED}不会删除游戏安装目录 steamapps。${NC}"
+    echo ""
+    echo "备份目录示例：~/steamdeck_toolbox_backups/steam_reset_时间戳/"
+    echo ""
+    read -n1 -p "确认执行？输入 Y 继续，其它键取消: " ans < /dev/tty
+    echo
+    [[ "$ans" == "y" || "$ans" == "Y" ]] || { echo "已取消。"; return 0; }
+    read -n1 -p "再次确认：本地 Steam 设置会丢失（游戏本体保留）。输入 Y: " ans2 < /dev/tty
+    echo
+    [[ "$ans2" == "y" || "$ans2" == "Y" ]] || { echo "已取消。"; return 0; }
+
+    _emergency_stop_steam
+    local bak
+    bak=$(_emergency_backup_root "steam_reset")
+    mkdir -p "$bak"
+    echo -e "${CYAN}备份到: $bak${NC}"
+
+    local steam_root="$HOME/.local/share/Steam"
+    # 兼容 ~/.steam/steam 符号链接场景：以真实 Steam 数据根为准
+    if [ -d "$HOME/.steam/steam" ] && [ ! -d "$steam_root" ]; then
+        steam_root="$HOME/.steam/steam"
+    fi
+
+    # 备份并移走配置
+    if [ -d "$steam_root/config" ]; then
+        cp -a "$steam_root/config" "$bak/config" 2>/dev/null || true
+        rm -rf "$steam_root/config"
+        echo -e "${GREEN}✓ 已重置 config${NC}"
+    else
+        echo -e "${YELLOW}- 未找到 config，跳过${NC}"
+    fi
+
+    # 常见启动缓存 / 注册表
+    local f
+    for f in \
+        "$HOME/.steam/registry.vdf" \
+        "$steam_root/registry.vdf" \
+        "$steam_root/.cef-cache" \
+        "$steam_root/config/htmlcache" \
+        "$steam_root/steamui" \
+        "$steam_root/appcache/httpcache"
+    do
+        if [ -e "$f" ]; then
+            local base
+            base=$(basename "$f")
+            # 避免重名
+            if [ -e "$bak/$base" ]; then
+                base="${base}_$(echo "$f" | md5sum | awk '{print $1}' | cut -c1-6)"
+            fi
+            cp -a "$f" "$bak/$base" 2>/dev/null || true
+            rm -rf "$f"
+            echo -e "${GREEN}✓ 已清理 $f${NC}"
+        fi
+    done
+
+    # htmlcache 可能在 config 下，上面已整夹移走；再清用户 HTML 缓存
+    if [ -d "$steam_root/config/htmlcache" ]; then
+        rm -rf "$steam_root/config/htmlcache"
+    fi
+
+    echo ""
+    echo -e "${GREEN}✅ Steam 配置重置完成。${NC}"
+    echo "备份位置: $bak"
+    echo "请重新打开 Steam / 回到游戏模式试一次。若异常，可从备份目录手动拷回。"
+}
+
+emergency_gamescope_reset() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ 急救：Gamescope / 游戏模式重置 ════════════════${NC}"
+    echo ""
+    echo "用途：游戏模式黑屏、进不去、分辨率/缩放异常，但桌面模式正常时尝试修复。"
+    echo ""
+    echo -e "${YELLOW}将备份并清理（不删游戏本体）：${NC}"
+    echo "  · ~/.config/gamescope*（若存在）"
+    echo "  · Steam 相关显示/UI 缓存（htmlcache、.cef-cache、steamui 部分缓存）"
+    echo "  · 用户 gamescope 会话残留（~/.local/share/gamescope 等，若存在）"
+    echo ""
+    read -n1 -p "确认执行？输入 Y 继续，其它键取消: " ans < /dev/tty
+    echo
+    [[ "$ans" == "y" || "$ans" == "Y" ]] || { echo "已取消。"; return 0; }
+    read -n1 -p "再次确认：游戏模式相关本地设置可能丢失。输入 Y: " ans2 < /dev/tty
+    echo
+    [[ "$ans2" == "y" || "$ans2" == "Y" ]] || { echo "已取消。"; return 0; }
+
+    _emergency_stop_steam
+    local bak
+    bak=$(_emergency_backup_root "gamescope_reset")
+    mkdir -p "$bak"
+    echo -e "${CYAN}备份到: $bak${NC}"
+
+    local steam_root="$HOME/.local/share/Steam"
+    [ -d "$HOME/.steam/steam" ] && [ ! -d "$steam_root" ] && steam_root="$HOME/.steam/steam"
+
+    local p
+    for p in \
+        "$HOME/.config/gamescope" \
+        "$HOME/.config/gamescope-session" \
+        "$HOME/.local/share/gamescope" \
+        "$steam_root/.cef-cache" \
+        "$steam_root/config/htmlcache" \
+        "$steam_root/steamui/movies" \
+        "$HOME/.steam/steam.pid"
+    do
+        if [ -e "$p" ]; then
+            local dest
+            dest="$bak/$(echo "$p" | sed 's#^/##; s#/#_#g')"
+            mkdir -p "$(dirname "$dest")"
+            cp -a "$p" "$dest" 2>/dev/null || true
+            rm -rf "$p"
+            echo -e "${GREEN}✓ 已清理 $p${NC}"
+        fi
+    done
+
+    # 清临时 gamescope socket/残留（不备份）
+    rm -rf /tmp/gamescope-*=* 2>/dev/null || true
+    rm -f /tmp/gamescope.* 2>/dev/null || true
+
+    echo ""
+    echo -e "${GREEN}✅ Gamescope / 游戏模式相关状态已重置。${NC}"
+    echo "备份位置: $bak"
+    echo "请从桌面模式切换回游戏模式，或重启后再试。"
+}
+
 
 clover_install_or_reinstall() {
     clear
@@ -12715,16 +13496,24 @@ get_installed_ge_proton() {
 ge_proton_manager() {
     while true; do
         local choice=$(zenity --list --radiolist \
-            --title="GE-Proton compatibility layer management" \
-            --text="Please choose an action" \
+            --title="Compatibility layer manager" \
+            --text="Manage GE-Proton / Proton-CachyOS (SLR) / DW Proton\nDW Proton focuses on anime / specific titles; use the separate CheatDeck plugin for trainers." \
             --column="Select" --column="Action" \
-            FALSE "Install GE-Proton" \
-            FALSE "Uninstall GE-Proton" \
-            --width=400 --height=200 2>/dev/null)
+            FALSE "GE-Proton: Install" \
+            FALSE "GE-Proton: Uninstall" \
+            FALSE "Proton-CachyOS (SLR): Install" \
+            FALSE "Proton-CachyOS (SLR): Uninstall" \
+            FALSE "DW Proton: Install" \
+            FALSE "DW Proton: Uninstall" \
+            --width=560 --height=360 2>/dev/null)
         [ $? -eq 1 ] && return 0
         case "$choice" in
-            "Install GE-Proton") ge_proton_install ;;
-            "Uninstall GE-Proton") ge_proton_uninstall ;;
+            "GE-Proton: Install") ge_proton_install ;;
+            "GE-Proton: Uninstall") ge_proton_uninstall ;;
+            "Proton-CachyOS (SLR): Install") cachyos_proton_install ;;
+            "Proton-CachyOS (SLR): Uninstall") cachyos_proton_uninstall ;;
+            "DW Proton: Install") dwproton_install ;;
+            "DW Proton: Uninstall") dwproton_uninstall ;;
             *) return 0 ;;
         esac
     done
@@ -13121,6 +13910,631 @@ ge_proton_uninstall() {
 
     rm -f "$pipe"
 }
+
+# ===== Compat layer extras: Proton-CachyOS / DW Proton + emergency reset =====
+get_cachyos_versions() {
+    curl -s --connect-timeout 20 --max-time 60 \
+        "https://api.github.com/repos/CachyOS/proton-cachyos/releases?per_page=50" | \
+        python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    tags = []
+    for rel in data:
+        tag = rel.get('tag_name', '') or ''
+        if rel.get('prerelease'):
+            continue
+        if 'slr' in tag.lower() and any(ch.isdigit() for ch in tag):
+            tags.append(tag)
+    print('\n'.join(tags))
+except Exception:
+    pass
+"
+}
+
+get_dwproton_versions() {
+    curl -s --connect-timeout 20 --max-time 60 \
+        "https://api.github.com/repos/dawn-winery/dwproton-mirror/releases?per_page=50" | \
+        python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    tags = []
+    for rel in data:
+        tag = rel.get('tag_name', '') or ''
+        if rel.get('prerelease'):
+            continue
+        if tag.lower().startswith('dwproton') and any(ch.isdigit() for ch in tag):
+            tags.append(tag)
+    print('\n'.join(tags))
+except Exception:
+    pass
+"
+}
+
+get_installed_compat_dirs() {
+    local pattern="$1"
+    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    [ -d "$install_dir" ] || return 0
+    local d base
+    for d in "$install_dir"/*; do
+        [ -d "$d" ] || continue
+        [ -f "$d/compatibilitytool.vdf" ] || continue
+        base=$(basename "$d")
+        echo "$base" | grep -Ei -- "$pattern" >/dev/null && echo "$base"
+    done
+}
+
+compat_pick_mirror() {
+    local mirror_choice
+    mirror_choice=$(zenity --list --radiolist \
+        --title="Choose download mirror" \
+        --text="All versions will use the same download mirror" \
+        --column="Select" --column="Mirror" \
+        FALSE "gh-proxy.com (China mirror, fast)" \
+        FALSE "gh.3w.pm (China mirror, stable)" \
+        FALSE "cors.isteed.cc (China mirror, stable)" \
+        FALSE "ghproxy.net (China mirror, slow fallback)" \
+        FALSE "GitHub (official)" \
+        --width=560 --height=280 2>/dev/null) || true
+    [ -z "$mirror_choice" ] && { echo ""; return 1; }
+    case "$mirror_choice" in
+        "gh-proxy.com (China mirror, fast)") echo "https://gh-proxy.com/" ;;
+        "gh.3w.pm (China mirror, stable)") echo "https://gh.3w.pm/" ;;
+        "cors.isteed.cc (China mirror, stable)") echo "https://cors.isteed.cc/" ;;
+        "ghproxy.net (China mirror, slow fallback)") echo "https://ghproxy.net/" ;;
+        "GitHub (official)") echo "" ;;
+        *) echo ""; return 1 ;;
+    esac
+}
+
+compat_do_install_tar_xz() {
+    local repo="$1"; shift
+    local display_name="$1"; shift
+    local versions=("$@")
+    local total=${#versions[@]}
+    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    mkdir -p "$install_dir"
+
+    local success_count=0 failed_count=0 failed_list=""
+    local mirror
+    mirror=$(compat_pick_mirror) || return 0
+
+    local pipe="/tmp/zenity_pipe_$$"
+    mkfifo "$pipe"
+    zenity --progress --pulsate --title="Install ${display_name}" --text="Getting ready..." --width=520 < "$pipe" &
+    local zenity_pid=$!
+    exec 3> "$pipe"
+
+    local i version idx asset_info download_url asset_size sha_url dest_name
+    local full_url temp_dir filename curl_ret fsize want_sha got_sha STAGE_DIR tar_ret EXTRACTED top_entries
+    for i in "${!versions[@]}"; do
+        if ! kill -0 $zenity_pid 2>/dev/null; then
+            echo "User cancelled install" >&2
+            break
+        fi
+        version="${versions[$i]}"
+        idx=$((i+1))
+        echo "# Processing $idx/$total: $version (preparing download...)" >&3
+
+        asset_info=$(curl -s --connect-timeout 20 --max-time 60 \
+            "https://api.github.com/repos/${repo}/releases/tags/${version}" | \
+            python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+assets = data.get('assets', [])
+pick = None
+for a in assets:
+    n = a.get('name', '')
+    if n.endswith('.tar.xz') and 'x86_64' in n and 'x86_64_v3' not in n and 'arm64' not in n and 'aarch64' not in n:
+        pick = a
+        break
+if pick is None:
+    for a in assets:
+        n = a.get('name', '')
+        if n.endswith('.tar.xz') and 'arm64' not in n and 'aarch64' not in n:
+            pick = a
+            break
+if pick is None:
+    sys.exit(0)
+sha = ''
+want = pick.get('name', '') + '.sha512sum'
+want2 = pick.get('name', '').replace('.tar.xz', '.sha512sum')
+for a in assets:
+    n = a.get('name', '')
+    if n == want or n == want2:
+        sha = a.get('browser_download_url', '')
+        break
+print(pick.get('browser_download_url', ''))
+print(pick.get('size', 0))
+print(sha)
+print(pick.get('name', ''))
+")
+        download_url=$(printf '%s\n' "$asset_info" | sed -n '1p')
+        asset_size=$(printf '%s\n' "$asset_info" | sed -n '2p')
+        sha_url=$(printf '%s\n' "$asset_info" | sed -n '3p')
+        dest_name=$(printf '%s\n' "$asset_info" | sed -n '4p' | sed 's/\.tar\.xz$//')
+
+        if [ -z "$download_url" ] || [ -z "$dest_name" ]; then
+            echo "# Error: cannot resolve download URL for $version, skipped" >&3
+            ((failed_count++)); failed_list="${failed_list}\n  $version (no download URL)"
+            continue
+        fi
+
+        full_url="${mirror}${download_url}"
+        temp_dir="/tmp/compat_proton_$$"
+        mkdir -p "$temp_dir"
+        cd "$temp_dir" || continue
+        filename="${dest_name}.tar.xz"
+
+        echo "# Processing $idx/$total: $version (downloading...)" >&3
+        curl -L -f -S --connect-timeout 30 --max-time 900 -o "$filename" "$full_url" 2> /tmp/curl_err_$$.log
+        curl_ret=$?
+        if [ $curl_ret -ne 0 ]; then
+            echo "# Download failed:" >&3
+            tail -n 5 /tmp/curl_err_$$.log >&3
+            rm -f /tmp/curl_err_$$.log "$filename"
+            cd /tmp && rm -rf "$temp_dir"
+            ((failed_count++)); failed_list="${failed_list}\n  $version (download failed)"
+            continue
+        fi
+        rm -f /tmp/curl_err_$$.log
+
+        fsize=$(stat -c '%s' "$filename" 2>/dev/null || echo 0)
+        if [ -n "$asset_size" ] && [ "$asset_size" != "0" ] && [ "$fsize" != "$asset_size" ]; then
+            echo "# $idx/$total: $version incomplete download ($fsize / $asset_size bytes), skipped" >&3
+            rm -f "$filename"; cd /tmp && rm -rf "$temp_dir"
+            ((failed_count++)); failed_list="${failed_list}\n  $version (incomplete: $fsize/$asset_size)"
+            continue
+        fi
+
+        if [ -n "$sha_url" ] && command -v sha512sum &>/dev/null; then
+            want_sha=$(curl -sL --connect-timeout 20 --max-time 60 "${mirror}${sha_url}" 2>/dev/null | awk '{print $1}' | head -1)
+            if [ -n "$want_sha" ]; then
+                got_sha=$(sha512sum "$filename" 2>/dev/null | awk '{print $1}')
+                if [ "$want_sha" != "$got_sha" ]; then
+                    echo "# $idx/$total: $version sha512 mismatch, skipped" >&3
+                    rm -f "$filename"; cd /tmp && rm -rf "$temp_dir"
+                    ((failed_count++)); failed_list="${failed_list}\n  $version (sha512 failed)"
+                    continue
+                fi
+            fi
+        fi
+
+        echo "# Processing $idx/$total: $version (extracting...)" >&3
+        STAGE_DIR=$(mktemp -d "$install_dir/.stage.XXXXXX" 2>/dev/null) || STAGE_DIR=""
+        if [ -z "$STAGE_DIR" ]; then
+            echo "# $idx/$total: $version failed (cannot create staging dir)" >&3
+            ((failed_count++)); failed_list="${failed_list}\n  $version (staging dir)"
+            rm -f "$filename"; cd /tmp && rm -rf "$temp_dir"
+            continue
+        fi
+        tar -xJf "$filename" -C "$STAGE_DIR"
+        tar_ret=$?
+        rm -f "$filename"
+        cd /tmp && rm -rf "$temp_dir"
+
+        EXTRACTED=""
+        if [ $tar_ret -eq 0 ]; then
+            top_entries=("$STAGE_DIR"/*)
+            if [ ${#top_entries[@]} -eq 1 ] && [ -d "${top_entries[0]}" ]; then
+                EXTRACTED="${top_entries[0]}"
+            else
+                EXTRACTED=$(find "$STAGE_DIR" -maxdepth 2 -type f -name compatibilitytool.vdf -printf '%h\n' 2>/dev/null | head -1)
+            fi
+        fi
+
+        if [ $tar_ret -ne 0 ] || [ -z "$EXTRACTED" ] || [ ! -f "$EXTRACTED/compatibilitytool.vdf" ]; then
+            rm -rf "$STAGE_DIR"
+            echo "# $idx/$total: $version failed (bad archive / structure)" >&3
+            ((failed_count++)); failed_list="${failed_list}\n  $version (extract/structure)"
+            continue
+        fi
+
+        rm -rf "${install_dir:?}/$dest_name"
+        if ! mv "$EXTRACTED" "$install_dir/$dest_name"; then
+            rm -rf "$STAGE_DIR"
+            echo "# $idx/$total: $version failed (move)" >&3
+            ((failed_count++)); failed_list="${failed_list}\n  $version (move failed)"
+            continue
+        fi
+        rm -rf "$STAGE_DIR"
+
+        if [ -d "$install_dir/$dest_name" ] && [ -f "$install_dir/$dest_name/compatibilitytool.vdf" ]; then
+            echo "# $idx/$total: $version installed → $dest_name" >&3
+            ((success_count++))
+        else
+            echo "# $idx/$total: $version failed (verify)" >&3
+            ((failed_count++)); failed_list="${failed_list}\n  $version (verify failed)"
+        fi
+    done
+
+    rm -rf /tmp/compat_proton_$$ /tmp/curl_err_$$.log 2>/dev/null || true
+
+    if kill -0 $zenity_pid 2>/dev/null; then
+        local result_msg="\n========== Install complete ==========\nSucceeded: $success_count"
+        if [ $failed_count -gt 0 ]; then
+            result_msg+="\nFailed: $failed_count\nFailed versions:${failed_list}"
+        fi
+        if [ $success_count -gt 0 ]; then
+            result_msg+="\n\nFully quit and restart Steam to refresh the compatibility tool list."
+        fi
+        echo "# $result_msg" >&3
+        exec 3>&-
+        wait $zenity_pid 2>/dev/null
+    fi
+    rm -f "$pipe"
+}
+
+compat_uninstall_by_pattern() {
+    local title="$1"
+    local pattern="$2"
+    local installed_list
+    installed_list=$(get_installed_compat_dirs "$pattern")
+    [ -z "$installed_list" ] && {
+        zenity --info --text="No installed ${title} detected." --ok-label="Back" --width=420 2>/dev/null
+        return 0
+    }
+    mapfile -t installed_array <<< "$installed_list"
+    local list_args=(
+        --list --checklist
+        --title="Uninstall ${title}"
+        --text="Choose version(s) to uninstall (multiple allowed)"
+        --column="Select" --column="Installed directory"
+        --width=560 --height=360
+        --ok-label="Uninstall"
+        --cancel-label="Back"
+    )
+    local ver
+    for ver in "${installed_array[@]}"; do
+        list_args+=("FALSE" "$ver")
+    done
+    local selection
+    selection=$(zenity "${list_args[@]}" 2>/dev/null) || return 0
+    [ -z "$selection" ] && return 0
+    IFS='|' read -r -a selected <<< "$selection"
+
+    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
+    local total=${#selected[@]} success=0 fail=0 failed_list=""
+    local pipe="/tmp/zenity_pipe_$$"
+    mkfifo "$pipe"
+    zenity --progress --pulsate --title="Uninstall ${title}" --text="Getting ready..." --width=500 < "$pipe" &
+    local zenity_pid=$!
+    exec 3> "$pipe"
+    local i version idx
+    for i in "${!selected[@]}"; do
+        if ! kill -0 $zenity_pid 2>/dev/null; then
+            echo "User cancelled uninstall" >&2
+            break
+        fi
+        version="${selected[$i]}"
+        idx=$((i+1))
+        echo "# Processing $idx/$total: $version ..." >&3
+        if [ -d "$install_dir/$version" ]; then
+            rm -rf "$install_dir/$version"
+            if [ ! -d "$install_dir/$version" ]; then
+                ((success++)); echo "# $idx/$total: $version uninstalled" >&3
+            else
+                ((fail++)); failed_list="${failed_list}\n  $version (delete failed)"
+                echo "# $idx/$total: $version uninstall failed" >&3
+            fi
+        else
+            ((success++)); echo "# $idx/$total: $version (missing, skipped)" >&3
+        fi
+        sleep 0.2
+    done
+    if kill -0 $zenity_pid 2>/dev/null; then
+        local result_msg="\n========== Uninstall complete ==========\nSucceeded: $success"
+        [ $fail -gt 0 ] && result_msg+="\nFailed: $fail\nFailed versions:${failed_list}"
+        result_msg+="\n\nRestart Steam for the changes to take effect."
+        echo "# $result_msg" >&3
+        exec 3>&-
+        wait $zenity_pid 2>/dev/null
+    fi
+    rm -f "$pipe"
+}
+
+cachyos_proton_install() {
+    (
+        echo "10"; echo "# Fetching Proton-CachyOS SLR versions..."
+        sleep 0.4
+        echo "100"
+    ) | zenity --progress --pulsate --title="Loading" --text="Fetching version list..." --width=400 2>/dev/null &
+    local ZENITY_PID=$!
+    local all_versions
+    all_versions=$(get_cachyos_versions)
+    kill $ZENITY_PID 2>/dev/null; wait $ZENITY_PID 2>/dev/null
+    [ -z "$all_versions" ] && {
+        zenity --error --text="Cannot fetch Proton-CachyOS versions. Check your network." --width=420 2>/dev/null
+        return 1
+    }
+    mapfile -t version_array <<< "$all_versions"
+    local installed_list installed_array=() available_versions=()
+    installed_list=$(get_installed_compat_dirs 'proton-cachyos|cachyos')
+    [ -n "$installed_list" ] && mapfile -t installed_array <<< "$installed_list"
+    local ver already inst stem
+    for ver in "${version_array[@]}"; do
+        already=false
+        stem=$(echo "$ver" | sed 's/^cachyos-//')
+        for inst in "${installed_array[@]}"; do
+            if echo "$inst" | grep -F -- "$stem" >/dev/null; then
+                already=true; break
+            fi
+        done
+        [ "$already" = false ] && available_versions+=("$ver")
+    done
+    [ ${#available_versions[@]} -eq 0 ] && {
+        zenity --info --text="All listed Proton-CachyOS (SLR) versions are already installed." --width=420 2>/dev/null
+        return 0
+    }
+    local list_args=(
+        --list --checklist
+        --title="Install Proton-CachyOS (SLR)"
+        --text="Choose SLR version(s) to install\nDeck uses the x86_64 package into compatibilitytools.d"
+        --column="Select" --column="Version"
+        --width=620 --height=480
+        --ok-label="Install" --cancel-label="Back"
+    )
+    for ver in "${available_versions[@]}"; do
+        list_args+=("FALSE" "$ver")
+    done
+    local selection ret
+    selection=$(zenity "${list_args[@]}" 2>/dev/null)
+    ret=$?
+    [ $ret -ne 0 ] && return 0
+    [ -z "$selection" ] && {
+        zenity --warning --text="Please select at least one version." --width=300 2>/dev/null
+        return 0
+    }
+    local selected
+    IFS='|' read -r -a selected <<< "$selection"
+    compat_do_install_tar_xz "CachyOS/proton-cachyos" "Proton-CachyOS" "${selected[@]}"
+}
+
+cachyos_proton_uninstall() {
+    compat_uninstall_by_pattern "Proton-CachyOS" 'proton-cachyos|cachyos'
+}
+
+dwproton_install() {
+    zenity --info --width=520 --title="About DW Proton" \
+        --text="DW Proton (dwproton) targets anime / specific titles.\nUpstream does not support cheat/trainer use; use the separate CheatDeck plugin for that.\nDownloads: dawn-winery/dwproton-mirror on GitHub." \
+        2>/dev/null || true
+    (
+        echo "10"; echo "# Fetching DW Proton versions..."
+        sleep 0.4
+        echo "100"
+    ) | zenity --progress --pulsate --title="Loading" --text="Fetching version list..." --width=400 2>/dev/null &
+    local ZENITY_PID=$!
+    local all_versions
+    all_versions=$(get_dwproton_versions)
+    kill $ZENITY_PID 2>/dev/null; wait $ZENITY_PID 2>/dev/null
+    [ -z "$all_versions" ] && {
+        zenity --error --text="Cannot fetch DW Proton versions. Check your network." --width=420 2>/dev/null
+        return 1
+    }
+    mapfile -t version_array <<< "$all_versions"
+    local installed_list installed_array=() available_versions=()
+    installed_list=$(get_installed_compat_dirs 'dwproton|dw-proton')
+    [ -n "$installed_list" ] && mapfile -t installed_array <<< "$installed_list"
+    local ver already inst
+    for ver in "${version_array[@]}"; do
+        already=false
+        for inst in "${installed_array[@]}"; do
+            if echo "$inst" | grep -F -- "$ver" >/dev/null; then
+                already=true; break
+            fi
+        done
+        [ "$already" = false ] && available_versions+=("$ver")
+    done
+    [ ${#available_versions[@]} -eq 0 ] && {
+        zenity --info --text="All listed DW Proton versions are already installed." --width=420 2>/dev/null
+        return 0
+    }
+    local list_args=(
+        --list --checklist
+        --title="Install DW Proton"
+        --text="Choose version(s) to install\nAnime / specific-game focused; no cheats bundled"
+        --column="Select" --column="Version"
+        --width=620 --height=480
+        --ok-label="Install" --cancel-label="Back"
+    )
+    for ver in "${available_versions[@]}"; do
+        list_args+=("FALSE" "$ver")
+    done
+    local selection ret
+    selection=$(zenity "${list_args[@]}" 2>/dev/null)
+    ret=$?
+    [ $ret -ne 0 ] && return 0
+    [ -z "$selection" ] && {
+        zenity --warning --text="Please select at least one version." --width=300 2>/dev/null
+        return 0
+    }
+    local selected
+    IFS='|' read -r -a selected <<< "$selection"
+    compat_do_install_tar_xz "dawn-winery/dwproton-mirror" "DW Proton" "${selected[@]}"
+}
+
+dwproton_uninstall() {
+    compat_uninstall_by_pattern "DW Proton" 'dwproton|dw-proton'
+}
+
+install_cheatdeck_install() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Install/Update CheatDeck ════════════════${NC}"
+    echo ""
+    echo -e "${CYAN}CheatDeck is a Decky plugin for managing third-party trainer entry points in Game Mode.${NC}"
+    echo -e "${YELLOW}Disclaimer:${NC}"
+    echo "  · This toolbox only installs the plugin package (CheatDeck.zip); no cheat files are bundled"
+    echo "  · Trainers may violate a game ToS; you accept the account risk"
+    echo "  · Separate from DW Proton / other compatibility layers"
+    echo ""
+    if [ ! -d "$HOME/homebrew" ] || [ ! -e "$HOME/homebrew/services/PluginLoader" ]; then
+        echo -e "${RED}Decky Loader not detected (~/homebrew). Install Decky under Plugins → Plugin Store first.${NC}"
+        return 1
+    fi
+    echo -e "${CYAN}After install, in Game Mode open Decky → Settings → Developer → enable Developer mode,${NC}"
+    echo -e "${CYAN}then restart Steam or PluginLoader so the plugin can load.${NC}"
+    echo ""
+    read -n1 -p "Press Enter or Y to continue, any other key to cancel: " ans < /dev/tty
+    echo
+    if [[ -n "$ans" && "$ans" != "y" && "$ans" != "Y" ]]; then
+        echo "Cancelled."
+        return 0
+    fi
+    install_github_plugin "SheffeyG/CheatDeck" "CheatDeck" "CheatDeck"
+}
+
+install_cheatdeck_uninstall() {
+    uninstall_plugin_generic "CheatDeck" "CheatDeck"
+}
+
+_emergency_backup_root() {
+    local stamp
+    stamp=$(date +%Y%m%d_%H%M%S)
+    local root="$HOME/steamdeck_toolbox_backups"
+    mkdir -p "$root"
+    echo "${root}/$1_${stamp}"
+}
+
+_emergency_stop_steam() {
+    echo -e "${CYAN}Stopping Steam / related processes if running...${NC}"
+    # 不要在此切换会话；仅结束 Steam 相关进程
+    pkill -TERM -u "$USER" -x steam 2>/dev/null || true
+    pkill -TERM -u "$USER" -f '/steam(\.sh)?$' 2>/dev/null || true
+    sleep 2
+    pkill -KILL -u "$USER" -x steam 2>/dev/null || true
+    sleep 1
+}
+
+emergency_steam_reset() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Emergency: Steam config reset ════════════════${NC}"
+    echo ""
+    echo "Use when Desktop Mode still works but Steam hangs, spins, or has a broken config."
+    echo ""
+    echo -e "${GREEN}Kept:${NC} steamapps (game installs), most userdata save-related trees"
+    echo -e "${YELLOW}Reset/cleared (auto-backed up first):${NC}"
+    echo "  · ~/.local/share/Steam/config"
+    echo "  · Steam launch/login caches (registry.vdf, .cef-cache, htmlcache, steamui caches)"
+    echo -e "${RED}Does NOT delete steamapps game libraries.${NC}"
+    echo ""
+    echo "Backup example: ~/steamdeck_toolbox_backups/steam_reset_TIMESTAMP/"
+    echo ""
+    read -n1 -p "Type Y to continue, anything else cancels: " ans < /dev/tty
+    echo
+    [[ "$ans" == "y" || "$ans" == "Y" ]] || { echo "Cancelled."; return 0; }
+    read -n1 -p "Confirm again: local Steam settings will be lost (games kept). Type Y: " ans2 < /dev/tty
+    echo
+    [[ "$ans2" == "y" || "$ans2" == "Y" ]] || { echo "Cancelled."; return 0; }
+
+    _emergency_stop_steam
+    local bak
+    bak=$(_emergency_backup_root "steam_reset")
+    mkdir -p "$bak"
+    echo -e "${CYAN}Backup dir: $bak${NC}"
+
+    local steam_root="$HOME/.local/share/Steam"
+    if [ -d "$HOME/.steam/steam" ] && [ ! -d "$steam_root" ]; then
+        steam_root="$HOME/.steam/steam"
+    fi
+
+    if [ -d "$steam_root/config" ]; then
+        cp -a "$steam_root/config" "$bak/config" 2>/dev/null || true
+        rm -rf "$steam_root/config"
+        echo -e "${GREEN}✓ Reset config${NC}"
+    else
+        echo -e "${YELLOW}- config not found, skipped${NC}"
+    fi
+
+    local f
+    for f in \
+        "$HOME/.steam/registry.vdf" \
+        "$steam_root/registry.vdf" \
+        "$steam_root/.cef-cache" \
+        "$steam_root/config/htmlcache" \
+        "$steam_root/steamui" \
+        "$steam_root/appcache/httpcache"
+    do
+        if [ -e "$f" ]; then
+            local base
+            base=$(basename "$f")
+            if [ -e "$bak/$base" ]; then
+                base="${base}_$(echo "$f" | md5sum | awk '{print $1}' | cut -c1-6)"
+            fi
+            cp -a "$f" "$bak/$base" 2>/dev/null || true
+            rm -rf "$f"
+            echo -e "${GREEN}✓ Cleared $f${NC}"
+        fi
+    done
+
+    echo ""
+    echo -e "${GREEN}✅ Steam config reset finished.${NC}"
+    echo "Backup: $bak"
+    echo "Relaunch Steam / Game Mode. Restore from the backup folder if needed."
+}
+
+emergency_gamescope_reset() {
+    mk_temp_dir
+    clear
+    echo -e "${YELLOW}════════════════ Emergency: Gamescope / Game Mode reset ════════════════${NC}"
+    echo ""
+    echo "Use for Game Mode black screens, boot loops, or bad scaling when Desktop Mode still works."
+    echo ""
+    echo -e "${YELLOW}Will backup then clear (games are not deleted):${NC}"
+    echo "  · ~/.config/gamescope* if present"
+    echo "  · Steam UI/display caches (htmlcache, .cef-cache, some steamui caches)"
+    echo "  · User gamescope session leftovers if present"
+    echo ""
+    read -n1 -p "Type Y to continue, anything else cancels: " ans < /dev/tty
+    echo
+    [[ "$ans" == "y" || "$ans" == "Y" ]] || { echo "Cancelled."; return 0; }
+    read -n1 -p "Confirm again: local Game Mode settings may be lost. Type Y: " ans2 < /dev/tty
+    echo
+    [[ "$ans2" == "y" || "$ans2" == "Y" ]] || { echo "Cancelled."; return 0; }
+
+    _emergency_stop_steam
+    local bak
+    bak=$(_emergency_backup_root "gamescope_reset")
+    mkdir -p "$bak"
+    echo -e "${CYAN}Backup dir: $bak${NC}"
+
+    local steam_root="$HOME/.local/share/Steam"
+    [ -d "$HOME/.steam/steam" ] && [ ! -d "$steam_root" ] && steam_root="$HOME/.steam/steam"
+
+    local p
+    for p in \
+        "$HOME/.config/gamescope" \
+        "$HOME/.config/gamescope-session" \
+        "$HOME/.local/share/gamescope" \
+        "$steam_root/.cef-cache" \
+        "$steam_root/config/htmlcache" \
+        "$steam_root/steamui/movies" \
+        "$HOME/.steam/steam.pid"
+    do
+        if [ -e "$p" ]; then
+            local dest
+            dest="$bak/$(echo "$p" | sed 's#^/##; s#/#_#g')"
+            mkdir -p "$(dirname "$dest")"
+            cp -a "$p" "$dest" 2>/dev/null || true
+            rm -rf "$p"
+            echo -e "${GREEN}✓ Cleared $p${NC}"
+        fi
+    done
+
+    rm -rf /tmp/gamescope-*=* 2>/dev/null || true
+    rm -f /tmp/gamescope.* 2>/dev/null || true
+
+    echo ""
+    echo -e "${GREEN}✅ Gamescope / Game Mode related state reset.${NC}"
+    echo "Backup: $bak"
+    echo "Switch back to Game Mode from Desktop, or reboot, then retry."
+}
+
 
 clover_install_or_reinstall() {
     clear
@@ -16521,9 +17935,20 @@ class MainWindow(Gtk.Window):
 
         items = list(self.category_tree.get(title, []))
         if cat_id == "sysopt" and self.system_type == "双系统":
-            items = items[:] + [(fl("health_check"), "health_check"),
-                                (fl("fix_boot"), "fix_boot"),
-                                (fl("fix_shared_disk"), "fix_shared_disk")]
+            # 把双系统检修项并进「引导与双系统」分组，避免再占一个侧栏分类
+            dual_kids = [
+                (fl("health_check"), "health_check"),
+                (fl("fix_boot"), "fix_boot"),
+                (fl("fix_shared_disk"), "fix_shared_disk"),
+            ]
+            merged = []
+            boot_title = fl("grp_boot")
+            for item in items:
+                if isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], list) and item[0] == boot_title:
+                    merged.append((item[0], list(item[1]) + dual_kids))
+                else:
+                    merged.append(item)
+            items = merged
             self.func_map[fl("health_check")] = "health_check"
             self.func_map[fl("fix_boot")] = "fix_boot"
             self.func_map[fl("fix_shared_disk")] = "fix_shared_disk"
@@ -16533,21 +17958,68 @@ class MainWindow(Gtk.Window):
         for child in list(box.get_children()):
             box.remove(child)
 
+    def _make_func_group(self, title, children):
+        """Collapsible group: accent header button + Revealer. Starts collapsed."""
+        wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        wrap.get_style_context().add_class("func-group")
+
+        header = Gtk.Button()
+        header.set_relief(Gtk.ReliefStyle.NONE)
+        header.get_style_context().add_class("func-group-header")
+        header.set_tooltip_text(title)
+        hrow = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        lbl = Gtk.Label(label=title)
+        lbl.set_halign(Gtk.Align.START)
+        lbl.set_xalign(0.0)
+        lbl.set_line_wrap(True)
+        lbl.get_style_context().add_class("func-group-header-label")
+        hrow.pack_start(lbl, True, True, 0)
+        # collapsed: point right; expanded: point down
+        chevron = Gtk.Image.new_from_icon_name("pan-end-symbolic", Gtk.IconSize.BUTTON)
+        hrow.pack_end(chevron, False, False, 0)
+        header.add(hrow)
+
+        revealer = Gtk.Revealer()
+        revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
+        revealer.set_transition_duration(160)
+        revealer.set_reveal_child(False)  # 默认收起
+
+        child_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        child_box.set_margin_top(2)
+        child_box.set_margin_bottom(2)
+        for child in children:
+            if isinstance(child, tuple) and len(child) == 2 and isinstance(child[1], str):
+                child_box.pack_start(
+                    self._make_func_tile(child[0], child[1], child=True), False, False, 0)
+        revealer.add(child_box)
+
+        def _toggle(*_a):
+            open_ = not revealer.get_reveal_child()
+            revealer.set_reveal_child(open_)
+            ctx = header.get_style_context()
+            if open_:
+                ctx.add_class("expanded")
+                chevron.set_from_icon_name("pan-down-symbolic", Gtk.IconSize.BUTTON)
+            else:
+                ctx.remove_class("expanded")
+                chevron.set_from_icon_name("pan-end-symbolic", Gtk.IconSize.BUTTON)
+
+        header.connect("clicked", _toggle)
+        wrap.pack_start(header, False, False, 0)
+        wrap.pack_start(revealer, False, False, 0)
+        return wrap
+
     def _populate_func_tiles(self, items):
+        """Fill the detail list. Nested groups are collapsible and start collapsed."""
         self._clear_box(self.func_list_box)
         for item in items:
             if isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], str):
                 self.func_list_box.pack_start(
                     self._make_func_tile(item[0], item[1], child=False), False, False, 0)
             elif isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], list):
-                group_lbl = Gtk.Label(label=item[0].upper() if get_lang() == "en" else item[0])
-                group_lbl.set_halign(Gtk.Align.START)
-                group_lbl.get_style_context().add_class("func-group-label")
-                self.func_list_box.pack_start(group_lbl, False, False, 0)
-                for child in item[1]:
-                    if isinstance(child, tuple) and len(child) == 2 and isinstance(child[1], str):
-                        self.func_list_box.pack_start(
-                            self._make_func_tile(child[0], child[1], child=True), False, False, 0)
+                title = item[0].upper() if get_lang() == "en" else item[0]
+                self.func_list_box.pack_start(
+                    self._make_func_group(title, item[1]), False, False, 0)
         self.func_list_box.show_all()
 
     def _make_func_tile(self, name, func_key, child=False):
