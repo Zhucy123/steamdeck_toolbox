@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v1.9.8** | Updated: 2026-11-02
+> **Version: v1.10.0** | Updated: 2026-11-02
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -26,6 +26,26 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - Open the toolbox; it checks for updates on startup (built-in self-update)
 
 ## 📝 Changelog
+
+2026-11-02 (v1.10.0)
+[UI improvements]
+- Main window now sizes itself to the display instead of a fixed 1100x720
+  - Reason: on a Steam Deck (1280x800, usable workarea 1280x746) the content height of 720 plus roughly 40px of title bar totals 760px, exceeding the usable height, so the bottom was pushed off screen
+  - On startup it reads the monitor workarea (panel already excluded) and picks one of three tiers by usable height:
+    - Small/handheld (usable height < 900): 86% x 92%, cap 1400x820
+    - 1K (usable height < 1150): 82% x 88%, cap 1700x1000
+    - 2K/4K large screens: 72% x 78%, cap 2000x1300
+  - Results: handheld 1100x686, 1K 1574x915, 2K 1843x1092, 4K 2000x1300 -- neither full-screen nor too small to read
+- The task window (terminal) follows the same adaptive sizing, one notch smaller than the main window (scale factor 0.8): handheld 880x549, 1K 1259x732, 2K 1474x873
+- Uses workarea rather than raw resolution, with a fallback so the window never exceeds the usable area even on very small screens; if monitor info is unavailable it falls back to the original 1100x720
+
+2026-11-02 (v1.9.9)
+[Bug fixes]
+- Fixed "Install ToDesk" failing on reinstall with "could not commit transaction (conflicting files) / exists in filesystem /opt/todesk/bin/..."
+  - Root cause: the machine was in an orphaned state where pacman no longer had a todesk-bin record (interrupted uninstall, pruned database, or a manual extraction install) but files such as /opt/todesk were still on disk. The old cleanup only ran "if pacman has a record", which was false here, so cleanup was skipped entirely and `pacman -U` refused because the files it wanted to write already existed
+  - The installer now clears orphaned leftovers first: when the package is unregistered but files remain, it stops the service, kills holding processes, then removes /opt/todesk, /usr/bin/todesk, todeskd.service, todesk.desktop, the licenses directory, ToDesk icons under hicolor, and any stale pacman db.lck before installing
+  - Cleanup is verified afterwards: any remaining leftovers are listed explicitly with a manual-removal hint instead of letting pacman raise a cryptic conflict
+  - Only ToDesk's own icons are removed (other software under hicolor is untouched), and machines with a properly registered pacman package skip this logic entirely
 
 2026-11-02 (v1.9.8)
 [UI improvements]
