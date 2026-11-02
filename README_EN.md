@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v1.11.3** | Updated: 2026-11-02
+> **Version: v1.11.4** | Updated: 2026-11-02
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -26,6 +26,13 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - Open the toolbox; it checks for updates on startup (built-in self-update)
 
 ## 📝 Changelog
+
+2026-11-02 (v1.11.4)
+[UX improvements]
+- Streamlined the "Update all apps" output
+  - Removed the three-line "skipped refreshing the appstream catalog" note. In practice `flatpak update` does not refresh appstream by default (only with the explicit `--appstream` flag), so the step never existed and the note was redundant
+  - When updates exist, appstream is likewise not involved; the "If it hangs on Updating appstream data" line in the timeout message is gone too, keeping only useful info such as partially downloaded data being kept
+  - The completion message is now just "✓ All apps updated"
 
 2026-11-02 (v1.11.3)
 [Bug fixes]

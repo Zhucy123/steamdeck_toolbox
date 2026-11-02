@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.11.3"
+VERSION = "1.11.4"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1125,7 +1125,17 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-02（v1.11.3）
+CHANGELOG_BODY_ZH = """2026-11-02（v1.11.4）
+【体验优化】
+- 「更新全部应用」精简输出提示
+  · 移除「已跳过刷新软件目录(appstream)」那三行说明：这是实现细节，用户不需要知道。
+    实测 flatpak update 默认并不刷新 appstream（只有显式加 --appstream 参数才会），
+    所以本来就不存在该步骤，提示属于多余
+  · 有更新时同样不涉及 appstream 刷新，超时提示里那句「若卡在更新 appstream 数据」
+    也一并删掉，只保留「已下载部分不会丢失」这类有用信息
+  · 更新完成提示精简为「✓ 所有应用更新完成」，不再附带「当前均为最新版本」等赘述
+
+2026-11-02（v1.11.3）
 【问题修复】
 - 修复启动「检测更新」结束后任务栏图标消失：先显示主窗口再关闭更新检查窗；统一 WM_CLASS=Steamdeck-toolbox，桌面快捷方式补 StartupWMClass；更新闪屏不占任务栏
 
@@ -1537,7 +1547,14 @@ CHANGELOG_BODY_ZH = """2026-11-02（v1.11.3）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-02 (v1.11.3)
+CHANGELOG_BODY_EN = """2026-11-02 (v1.11.4)
+[UX improvements]
+- Streamlined the "Update all apps" output
+  - Removed the three-line "skipped refreshing the appstream catalog" note: that is an implementation detail users do not need. In practice `flatpak update` does not refresh appstream by default (only with the explicit `--appstream` flag), so the step never existed and the note was redundant
+  - When updates exist, appstream is likewise not involved; the "If it hangs on Updating appstream data" line in the timeout message is gone too, keeping only useful info such as partially downloaded data being kept
+  - The completion message is now just "✓ All apps updated" without the extra "everything is current" wording
+
+2026-11-02 (v1.11.3)
 [Bug fixes]
 - Fixed taskbar icon disappearing after the startup update check: show the main window before closing the splash; unify WM_CLASS=Steamdeck-toolbox and add StartupWMClass to the desktop shortcut; the update splash no longer takes a taskbar slot
 
@@ -8651,12 +8668,11 @@ update_installed_apps() {
     echo ""
 
     # 为什么不用 flatpak update 一条命令搞定：
-    # update 的顺序是「先查更新 → 再刷新 appstream 元数据」。第二步在 dl.flathub.org
-    # 不通时会卡很久（连接超时 + 最多 5 次重试），用户看到的就是「没有更新。」之后
-    # 长时间不动，像是死机。而 appstream 只是软件介绍/图标的元数据，
-    # 与「能不能更新」无关，完全可以跳过。
-    # 所以这里分开做：用 remote-ls 查更新（只刷新 summary，走镜像站，快），
-    # 跳过 appstream 刷新，再按需执行 update。
+    # 先查更新这一步如果混在 update 里，用户要等整个流程开始才知道有没有更新。
+    # 所以分开做：用 remote-ls 查更新（只刷新 summary，走镜像站，快）先列出来，
+    # 再按需执行 update。
+    # 另：flatpak update 默认并不刷新 appstream 元数据，只有显式加 --appstream 才会，
+    # 所以这里无需额外跳过，也不会卡在「更新 appstream 数据」。
 
     echo -e "${CYAN}正在检查可用更新...${NC}"
     local updates="" check_rc=0
@@ -8678,10 +8694,6 @@ update_installed_apps() {
     if [ -z "$updates" ]; then
         echo ""
         echo -e "${GREEN}✓ 所有已安装应用均为最新版本，无需更新。${NC}"
-        echo ""
-        echo -e "${YELLOW}说明：已跳过「刷新软件目录(appstream)」这一步。${NC}"
-        echo -e "${YELLOW}      该步骤只更新软件介绍/图标等展示信息，与能否更新无关，${NC}"
-        echo -e "${YELLOW}      且在 dl.flathub.org 不通时会长时间卡住，故不再执行。${NC}"
         return 0
     fi
 
@@ -8690,8 +8702,8 @@ update_installed_apps() {
     printf '%s\n' "$updates" | sed 's/^/  · /'
     echo ""
 
-    # 下载阶段可能较慢（取决于源和包大小），给 20 分钟；但 appstream 卡住不会无限等，
-    # 超时后明确告知而不是静默挂起
+    # flatpak update 默认不刷新 appstream（那需要显式加 --appstream），
+    # 所以这里无需额外跳过；下载慢只是包大，给 20 分钟足够。
     echo -e "${CYAN}开始更新（大包可能较慢，请耐心等待）...${NC}"
     echo ""
     local rc=0
@@ -8700,7 +8712,6 @@ update_installed_apps() {
     echo ""
     if [ $rc -eq 124 ]; then
         echo -e "${RED}✗ 更新超时（20 分钟），已中止。${NC}"
-        echo -e "${YELLOW}  若卡在「更新 appstream 数据」，属于 dl.flathub.org 不通；${NC}"
         echo -e "${YELLOW}  已下载的部分不会丢失，可稍后重试或先切换软件源。${NC}"
         return 1
     elif [ $rc -ne 0 ]; then
@@ -8712,7 +8723,7 @@ update_installed_apps() {
     local left
     left=$(timeout 30 flatpak remote-ls --updates --cached 2>/dev/null)
     if [ -z "$left" ]; then
-        echo -e "${GREEN}✓ 所有应用更新完成，当前均为最新版本${NC}"
+        echo -e "${GREEN}✓ 所有应用更新完成${NC}"
         return 0
     fi
     echo -e "${YELLOW}⚠ 更新命令已结束，但以下应用仍显示有更新：${NC}"
@@ -15997,12 +16008,11 @@ update_installed_apps() {
     echo ""
 
     # 为什么不用 flatpak update 一条命令搞定：
-    # update 的顺序是「先查更新 → 再刷新 appstream 元数据」。第二步在 dl.flathub.org
-    # 不通时会卡很久（连接超时 + 最多 5 次重试），用户看到的就是「没有更新。」之后
-    # 长时间不动，像是死机。而 appstream 只是软件介绍/图标的元数据，
-    # 与「能不能更新」无关，完全可以跳过。
-    # 所以这里分开做：用 remote-ls 查更新（只刷新 summary，走镜像站，快），
-    # 跳过 appstream 刷新，再按需执行 update。
+    # 先查更新这一步如果混在 update 里，用户要等整个流程开始才知道有没有更新。
+    # 所以分开做：用 remote-ls 查更新（只刷新 summary，走镜像站，快）先列出来，
+    # 再按需执行 update。
+    # 另：flatpak update 默认并不刷新 appstream 元数据，只有显式加 --appstream 才会，
+    # 所以这里无需额外跳过，也不会卡在「更新 appstream 数据」。
 
     echo -e "${CYAN}Checking for available updates...${NC}"
     local updates="" check_rc=0
@@ -16024,10 +16034,6 @@ update_installed_apps() {
     if [ -z "$updates" ]; then
         echo ""
         echo -e "${GREEN}✓ All installed apps are up to date; nothing to update.${NC}"
-        echo ""
-        echo -e "${YELLOW}Note: skipped refreshing the appstream catalog.${NC}"
-        echo -e "${YELLOW}      This step only refreshes app descriptions/icons and does not affect updates,${NC}"
-        echo -e "${YELLOW}      and it can hang for a long time when dl.flathub.org is down, so it is skipped.${NC}"
         return 0
     fi
 
@@ -16036,8 +16042,8 @@ update_installed_apps() {
     printf '%s\n' "$updates" | sed 's/^/  · /'
     echo ""
 
-    # 下载阶段可能较慢（取决于源和包大小），给 20 分钟；但 appstream 卡住不会无限等，
-    # 超时后明确告知而不是静默挂起
+    # flatpak update does not refresh appstream by default (that needs --appstream),
+    # so nothing to skip here; slow downloads are just large packages, 20 min is enough.
     echo -e "${CYAN}Starting update (large packages may be slow; please wait)...${NC}"
     echo ""
     local rc=0
@@ -16046,7 +16052,6 @@ update_installed_apps() {
     echo ""
     if [ $rc -eq 124 ]; then
         echo -e "${RED}✗ Update timed out (20 minutes); aborted.${NC}"
-        echo -e "${YELLOW}  If it hangs on "Updating appstream data", dl.flathub.org is unreachable;${NC}"
         echo -e "${YELLOW}  Partially downloaded data is kept; retry later or switch mirrors first.${NC}"
         return 1
     elif [ $rc -ne 0 ]; then
@@ -16058,7 +16063,7 @@ update_installed_apps() {
     local left
     left=$(timeout 30 flatpak remote-ls --updates --cached 2>/dev/null)
     if [ -z "$left" ]; then
-        echo -e "${GREEN}✓ All apps updated; everything is current${NC}"
+        echo -e "${GREEN}✓ All apps updated${NC}"
         return 0
     fi
     echo -e "${YELLOW}⚠ Update command finished, but these apps still show updates:${NC}"
