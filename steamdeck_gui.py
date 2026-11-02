@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "1.9.9"
+VERSION = "1.10.0"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1063,7 +1063,23 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-02（v1.9.9）
+CHANGELOG_BODY_ZH = """2026-11-02（v1.10.0）
+【界面改进】
+- 主窗口尺寸改为按屏幕自适应，不再固定 1100x720
+  · 原因：原尺寸在 Steam Deck（1280x800，可用工作区 1280x746）上，
+    窗口内容 720 + 标题栏约 40 = 760px，超出可用高度，底部被挤出屏幕
+  · 现在启动时读取显示器 workarea（已扣除顶部面板），按可用高度分三档计算：
+    - 小屏/掌机（可用高 < 900）：占比 86%x92%，上限 1400x820
+    - 1K（可用高 < 1150）：占比 82%x88%，上限 1700x1000
+    - 2K/4K 大屏：占比 72%x78%，上限 2000x1300
+  · 实际效果：掌机 1100x686、1K 1574x915、2K 1843x1092、4K 2000x1300，
+    既不会占满整个屏幕，也不会小到看不清
+- 任务窗口（终端）同样跟随自适应，比主窗口小一号（缩放系数 0.8）：
+  掌机 880x549、1K 1259x732、2K 1474x873
+- 用 workarea 而非物理分辨率，且设置了兜底：即使屏幕小于最小尺寸，
+  窗口也不会超出可用区域；取不到显示器信息时退回原来的 1100x720
+
+2026-11-02（v1.9.9）
 【问题修复】
 - 修复「安装 ToDesk」重装时报「无法提交处理 (有冲突的文件) / 文件系统中已存在 /opt/todesk/bin/...」：
   根因是机器处于「孤儿残留」状态——pacman 数据库里已无 todesk-bin 记录（卸载被中断、
@@ -1428,7 +1444,19 @@ CHANGELOG_BODY_ZH = """2026-11-02（v1.9.9）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-02 (v1.9.9)
+CHANGELOG_BODY_EN = """2026-11-02 (v1.10.0)
+[UI improvements]
+- Main window now sizes itself to the display instead of a fixed 1100x720
+  - Reason: on a Steam Deck (1280x800, usable workarea 1280x746) the content height of 720 plus roughly 40px of title bar totals 760px, exceeding the usable height, so the bottom was pushed off screen
+  - On startup it reads the monitor workarea (panel already excluded) and picks one of three tiers by usable height:
+    - Small/handheld (usable height < 900): 86% x 92%, cap 1400x820
+    - 1K (usable height < 1150): 82% x 88%, cap 1700x1000
+    - 2K/4K large screens: 72% x 78%, cap 2000x1300
+  - Results: handheld 1100x686, 1K 1574x915, 2K 1843x1092, 4K 2000x1300 -- neither full-screen nor too small to read
+- The task window (terminal) follows the same adaptive sizing, one notch smaller than the main window (scale factor 0.8): handheld 880x549, 1K 1259x732, 2K 1474x873
+- Uses workarea rather than raw resolution, with a fallback so the window never exceeds the usable area even on very small screens; if monitor info is unavailable it falls back to the original 1100x720
+
+2026-11-02 (v1.9.9)
 [Bug fixes]
 - Fixed "Install ToDesk" failing on reinstall with "could not commit transaction (conflicting files) / exists in filesystem /opt/todesk/bin/...": the machine was in an orphaned state where pacman no longer had a todesk-bin record (interrupted uninstall, pruned database, or a manual extraction install) but files such as /opt/todesk were still on disk. The old cleanup only ran "if pacman has a record", which was false here, so cleanup was skipped entirely and `pacman -U` refused because the files it wanted to write already existed
 - The installer now clears orphaned leftovers first: when the package is unregistered but files remain, it stops the service, kills holding processes, then removes /opt/todesk, /usr/bin/todesk, todeskd.service, todesk.desktop, the licenses directory, ToDesk icons under hicolor, and any stale pacman db.lck before installing
@@ -1877,6 +1905,79 @@ def resolve_theme_mode(mode):
     if _system_theme is None:
         reset_system_theme_cache()
     return _system_theme or "light"
+
+def compute_window_size(fallback_w=1100, fallback_h=720,
+                        min_w=960, min_h=620, scale=1.0):
+    """按屏幕可用工作区算出合适的窗口尺寸，返回 (宽, 高)。
+
+    设计目标：既不占满屏幕，也不至于过小。
+
+    做法：按 workarea 的高度分三档，每档用不同的目标占比与尺寸上限。
+      · 小屏（掌机 1280x800 这类，可用高 < 900）
+        占比 86% x 92%，上限 1400x820。掌机上高度是瓶颈，占比给大些但绝不溢出。
+      · 1K（1920x1080 这类，可用高 < 1150）
+        占比 82% x 88%，上限 1700x1000。
+      · 2K / 4K 大屏
+        占比 72% x 78%，上限 2000x1300。大屏上不再按 86% 铺开，
+        否则窗口会大得离谱；但下限仍保证足够大。
+
+    为什么用 workarea 而不是物理分辨率：
+      workarea 已扣除顶部面板/任务栏，窗口加上标题栏后不会溢出屏幕底部。
+      它返回的是逻辑像素，HiDPI 下已按 scale_factor 折算，
+      所以 4K 屏在 2 倍缩放下与 1K 表现接近，物理观感一致。
+
+    预期结果（括号内为 workarea）：
+      1280x800  掌机    (1280x746)  → 1100x686
+      1920x1080 1K      (1920x1040) → 1574x915
+      2560x1440 2K      (2560x1400) → 1843x1092
+      3840x2160 4K@1x   (3840x2120) → 2000x1300
+      3840x2160 4K@2x   (1920x1060) → 1574x932
+
+    取不到显示器信息时返回 fallback 尺寸，保证窗口一定能显示出来。
+
+    参数 scale：整体缩放系数，默认 1.0 用于主窗口。
+      任务窗等次级窗口传 0.8 左右，就会比主窗口小一号，且同样自适应屏幕。
+    """
+    try:
+        display = Gdk.Display.get_default()
+        if display is None:
+            return fallback_w, fallback_h
+        monitor = display.get_primary_monitor() or display.get_monitor(0)
+        if monitor is None:
+            return fallback_w, fallback_h
+        workarea = monitor.get_workarea()
+        avail_w, avail_h = workarea.width, workarea.height
+        if avail_w <= 0 or avail_h <= 0:
+            return fallback_w, fallback_h
+
+        # 按可用高度分档：小屏给足占比，大屏收敛占比并放大上限
+        if avail_h < 900:
+            width_ratio, height_ratio, max_w, max_h = 0.86, 0.92, 1400, 820
+        elif avail_h < 1150:
+            width_ratio, height_ratio, max_w, max_h = 0.82, 0.88, 1700, 1000
+        else:
+            width_ratio, height_ratio, max_w, max_h = 0.72, 0.78, 2000, 1300
+
+        # 按 scale 整体缩放（任务窗等次级窗口用 <1 的系数，保持比主窗口小一号）
+        width_ratio *= scale
+        height_ratio *= scale
+        max_w = int(max_w * scale)
+        max_h = int(max_h * scale)
+
+        w = int(avail_w * width_ratio)
+        h = int(avail_h * height_ratio)
+
+        # 先夹到上下限之间（保证既不过小也不过宽）
+        w = max(min(w, max_w), min_w)
+        h = max(min(h, max_h), min_h)
+
+        # 最后兜底：即使屏幕小于 min 尺寸，也不能让窗口超出可用区域
+        w = min(w, max(avail_w - 32, 320))
+        h = min(h, max(avail_h - 32, 240))
+
+        return int(w), int(h)
+    except Exception:
+        return fallback_w, fallback_h
 
 def fix_dialog_size(dlg):
     """修正对话框首次显示时「先小后大」的闪烁。
@@ -15505,7 +15606,11 @@ def create_temp_script(extra_content=''):
 class TaskWindow(Gtk.Window):
     def __init__(self, parent, func_key, display_name):
         super().__init__(title=(f"Running Task: {display_name}" if get_lang() == "en" else f"执行任务: {display_name}"))
-        self.set_default_size(760, 520)
+        # 任务窗是终端窗口，比主窗口小一号；同样跟随屏幕自适应，
+        # 避免大屏上终端太小、小屏上又顶到屏幕边缘。
+        _task_w, _task_h = compute_window_size(fallback_w=760, fallback_h=520,
+                                               min_w=700, min_h=460, scale=0.80)
+        self.set_default_size(_task_w, _task_h)
         task_header = Gtk.HeaderBar()
         task_header.set_show_close_button(True)
         task_header.props.title = display_name
@@ -15879,7 +15984,10 @@ class MainWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title=t("app_title"))
         self.set_icon_name("input-gamepad-symbolic")
-        self.set_default_size(1100, 720)
+        # 按屏幕可用区域自适应窗口尺寸，避免在掌机 1280x800 上底边溢出、
+        # 也避免在大屏上窗口过小。详见 compute_window_size()。
+        _win_w, _win_h = compute_window_size()
+        self.set_default_size(_win_w, _win_h)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.system_type = self.detect_system_type()
         self.task_window = None
