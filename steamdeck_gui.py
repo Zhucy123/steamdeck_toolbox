@@ -28,7 +28,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -766,7 +766,7 @@ def save_theme_pref(mode):
 # ---------------------------------------------------------------------------
 LANG_MODES = ("zh", "en", "system")
 _current_lang = "zh"          # 实际生效的界面语言：仅 zh / en
-_lang_pref = "system"         # 用户偏好：zh / en / system
+_lang_pref = "zh"             # 用户偏好：zh / en / system；无已存偏好时默认中文
 
 
 def detect_system_lang():
@@ -801,14 +801,16 @@ def resolve_lang(pref=None):
 
 
 def load_lang_pref():
-    """读取语言偏好，默认跟随系统。失败时不影响启动。"""
+    """读取语言偏好。无配置/无 language 字段时默认中文；已显式保存的偏好仍尊重。"""
     try:
         with open(_config_path(), "r", encoding="utf-8") as f:
             data = json.load(f)
-        lang = data.get("language", "system")
-        return lang if lang in LANG_MODES else "system"
+        if "language" not in data:
+            return "zh"
+        lang = data.get("language")
+        return lang if lang in LANG_MODES else "zh"
     except Exception:
-        return "system"
+        return "zh"
 
 def save_lang_pref(lang):
     """保存语言偏好；失败不影响使用。"""
@@ -854,6 +856,7 @@ _UI_STRINGS = {
     "search_placeholder": {"zh": "全局搜索功能...", "en": "Search all functions..."},
     "theme_tooltip": {"zh": "切换深色 / 浅色模式", "en": "Switch dark / light mode"},
     "lang_tooltip": {"zh": "切换语言 / Language", "en": "Switch language / 语言"},
+    "lang_button": {"zh": "语言", "en": "Language"},
     "lang_zh": {"zh": "中文", "en": "中文"},
     "lang_en": {"zh": "English", "en": "English"},
     "lang_system": {"zh": "跟随系统", "en": "Follow System"},
@@ -912,6 +915,7 @@ _UI_STRINGS = {
                          "en": "Please install konsole or xterm and try again."},
     "task_running": {"zh": "任务运行中", "en": "Running"},
     "task_done": {"zh": "任务已完成", "en": "Task completed"},
+    "task_failed": {"zh": "任务失败", "en": "Task failed"},
     "task_external": {"zh": "任务已在外部终端中运行，请查看弹出的终端窗口。",
                       "en": "The task is running in an external terminal. Check the popup window."},
     "close": {"zh": "关闭", "en": "Close"},
@@ -1125,7 +1129,18 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-02（v2.0.0）
+CHANGELOG_BODY_ZH = """2026-11-03（v2.0.1）
+【问题修复】
+- 修复「AskLink远程」安装 dpkg 时因 /var/lib/dpkg/{available,status} 残留报「文件系统中已存在」冲突：先常规安装，失败再用 --overwrite '/var/lib/dpkg/*' 覆盖残留后重试，并校验 dpkg 可用
+- 修复内嵌脚本 EXIT trap 强制 exit 0，导致失败任务仍显示「任务已完成」：保留真实退出码，任务窗按成功/失败分别显示「任务已完成」/「任务失败」
+
+【体验优化】
+- 无已保存语言偏好时默认中文（显式选过的 zh/en/system 仍尊重）
+- 顶栏语言入口改为直接显示文字「语言」/ Language，一眼能懂
+- Steam Deck 等小屏默认窗口略缩小，边距更舒服
+- 启动检查更新后点「是」的更新过程，复用同一个检查更新窗口（同尺寸，不再跳到另一块对话框）
+
+2026-11-02（v2.0.0）
 【问题修复】
 - 修复「更新全部应用」进度条后面出现乱码的一串字符（^[[20;68R^[[20;68R^[[20;77R）
   · 根因：flatpak 画进度条前先发 ESC[6n 问终端「光标在哪」，VTE 按协议把
@@ -1565,7 +1580,18 @@ CHANGELOG_BODY_ZH = """2026-11-02（v2.0.0）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-02 (v2.0.0)
+CHANGELOG_BODY_EN = """2026-11-03 (v2.0.1)
+[Bug fixes]
+- Fixed AskLink Remote failing to install dpkg when leftover /var/lib/dpkg/{available,status} files already exist: try a normal install first, then retry with --overwrite '/var/lib/dpkg/*', and verify dpkg is usable
+- Fixed the embedded script EXIT trap forcing exit 0 so failed tasks still showed "Task completed": preserve the real exit code and show "Task completed" / "Task failed" accordingly
+
+[UX]
+- Default UI language is Chinese when no saved preference exists (explicit zh/en/system choices are still respected)
+- Top-bar language control now shows the text "语言" / Language instead of an ambiguous icon
+- Slightly smaller default window on Steam Deck-class screens
+- After choosing Yes on a startup update, the download runs in the same update-check window (same size; no jump to a different dialog)
+
+2026-11-02 (v2.0.0)
 [Bug fixes]
 - Fixed the garbage characters appearing after the "Update all apps" progress line (^[[20;68R^[[20;68R^[[20;77R)
   - Root cause: before drawing its progress bar flatpak sends ESC[6n to ask the terminal where the cursor is, and VTE answers with ESC[row;colR on the terminal's *input* side. The PTY has ECHO enabled by default, so the kernel echoes that reply back to the screen, where it shows up as visible garbage
@@ -2079,19 +2105,19 @@ def resolve_theme_mode(mode):
         reset_system_theme_cache()
     return _system_theme or "light"
 
-def compute_window_size(fallback_w=1100, fallback_h=720,
-                        min_w=960, min_h=620, scale=1.0):
+def compute_window_size(fallback_w=1040, fallback_h=680,
+                        min_w=900, min_h=580, scale=1.0):
     """按屏幕可用工作区算出合适的窗口尺寸，返回 (宽, 高)。
 
     设计目标：既不占满屏幕，也不至于过小。
 
     做法：按 workarea 的高度分三档，每档用不同的目标占比与尺寸上限。
       · 小屏（掌机 1280x800 这类，可用高 < 900）
-        占比 86% x 92%，上限 1400x820。掌机上高度是瓶颈，占比给大些但绝不溢出。
+        占比 82% x 88%，上限 1280x760。掌机上略收一点边距，避免默认窗口偏满。
       · 1K（1920x1080 这类，可用高 < 1150）
-        占比 82% x 88%，上限 1700x1000。
+        占比 80% x 86%，上限 1640x980。
       · 2K / 4K 大屏
-        占比 72% x 78%，上限 2000x1300。大屏上不再按 86% 铺开，
+        占比 70% x 76%，上限 1960x1260。大屏上不再按高占比铺开，
         否则窗口会大得离谱；但下限仍保证足够大。
 
     为什么用 workarea 而不是物理分辨率：
@@ -2100,11 +2126,11 @@ def compute_window_size(fallback_w=1100, fallback_h=720,
       所以 4K 屏在 2 倍缩放下与 1K 表现接近，物理观感一致。
 
     预期结果（括号内为 workarea）：
-      1280x800  掌机    (1280x746)  → 1100x686
-      1920x1080 1K      (1920x1040) → 1574x915
-      2560x1440 2K      (2560x1400) → 1843x1092
-      3840x2160 4K@1x   (3840x2120) → 2000x1300
-      3840x2160 4K@2x   (1920x1060) → 1574x932
+      1280x800  掌机    (1280x746)  → 约 1050x657
+      1920x1080 1K      (1920x1040) → 约 1536x894
+      2560x1440 2K      (2560x1400) → 约 1792x1064
+      3840x2160 4K@1x   (3840x2120) → 1960x1260
+      3840x2160 4K@2x   (1920x1060) → 约 1536x912
 
     取不到显示器信息时返回 fallback 尺寸，保证窗口一定能显示出来。
 
@@ -2125,11 +2151,11 @@ def compute_window_size(fallback_w=1100, fallback_h=720,
 
         # 按可用高度分档：小屏给足占比，大屏收敛占比并放大上限
         if avail_h < 900:
-            width_ratio, height_ratio, max_w, max_h = 0.86, 0.92, 1400, 820
+            width_ratio, height_ratio, max_w, max_h = 0.82, 0.88, 1280, 760
         elif avail_h < 1150:
-            width_ratio, height_ratio, max_w, max_h = 0.82, 0.88, 1700, 1000
+            width_ratio, height_ratio, max_w, max_h = 0.80, 0.86, 1640, 980
         else:
-            width_ratio, height_ratio, max_w, max_h = 0.72, 0.78, 2000, 1300
+            width_ratio, height_ratio, max_w, max_h = 0.70, 0.76, 1960, 1260
 
         # 按 scale 整体缩放（任务窗等次级窗口用 <1 的系数，保持比主窗口小一号）
         width_ratio *= scale
@@ -2356,7 +2382,7 @@ restore_readonly() {
     fi
     return 0
 }
-trap 'restore_readonly; cleanup_temp; exit 0' EXIT
+trap 'ec=$?; restore_readonly; cleanup_temp; exit $ec' EXIT
 trap 'echo -e "\n${YELLOW}用户取消操作，关闭窗口。${NC}"; cleanup_temp; exit 0' INT TERM
 
 PYTHON_CMD="python3"
@@ -4933,9 +4959,19 @@ install_asklink() {
     if ! command -v dpkg &>/dev/null; then
         echo -e "${CYAN}未检测到 dpkg，正在安装...${NC}"
         if command -v pacman &>/dev/null; then
-            sudo pacman -S --noconfirm dpkg
-            if [ $? -ne 0 ]; then
-                echo -e "${RED}安装 dpkg 失败，请手动执行 sudo pacman -S dpkg${NC}"
+            # SteamOS/Holo 上常残留 /var/lib/dpkg/{available,status}
+            #（曾手动 dpkg -i 留下，且不属于任何 pacman 包）。
+            # 直接 pacman -S dpkg 会报「文件系统中已存在」冲突。
+            if ! sudo pacman -S --needed --noconfirm dpkg; then
+                echo -e "${YELLOW}常规安装遇到文件冲突，尝试覆盖 /var/lib/dpkg 残留文件...${NC}"
+                if ! sudo pacman -S --needed --noconfirm --overwrite '/var/lib/dpkg/*' dpkg; then
+                    echo -e "${RED}安装 dpkg 失败，请手动执行:${NC}"
+                    echo -e "${RED}  sudo pacman -S --overwrite '/var/lib/dpkg/*' dpkg${NC}"
+                    return 1
+                fi
+            fi
+            if ! command -v dpkg &>/dev/null; then
+                echo -e "${RED}dpkg 安装后仍不可用，请手动检查。${NC}"
                 return 1
             fi
             echo -e "${GREEN}dpkg 安装完成${NC}"
@@ -9732,7 +9768,7 @@ restore_readonly() {
     fi
     return 0
 }
-trap 'restore_readonly; cleanup_temp; exit 0' EXIT
+trap 'ec=$?; restore_readonly; cleanup_temp; exit $ec' EXIT
 trap 'echo -e "\n${YELLOW}User cancelled the operation, closing window.${NC}"; cleanup_temp; exit 0' INT TERM
 
 PYTHON_CMD="python3"
@@ -12305,9 +12341,19 @@ install_asklink() {
     if ! command -v dpkg &>/dev/null; then
         echo -e "${CYAN}dpkg not detected, installing...${NC}"
         if command -v pacman &>/dev/null; then
-            sudo pacman -S --noconfirm dpkg
-            if [ $? -ne 0 ]; then
-                echo -e "${RED}Failed to install dpkg, please run manually: sudo pacman -S dpkg${NC}"
+            # SteamOS/Holo often leaves leftover /var/lib/dpkg/{available,status}
+            # from a previous manual dpkg -i; those files are not owned by any
+            # pacman package, so a plain pacman -S dpkg hits "exists in filesystem".
+            if ! sudo pacman -S --needed --noconfirm dpkg; then
+                echo -e "${YELLOW}Normal install hit file conflicts; retrying with overwrite of /var/lib/dpkg leftovers...${NC}"
+                if ! sudo pacman -S --needed --noconfirm --overwrite '/var/lib/dpkg/*' dpkg; then
+                    echo -e "${RED}Failed to install dpkg, please run manually:${NC}"
+                    echo -e "${RED}  sudo pacman -S --overwrite '/var/lib/dpkg/*' dpkg${NC}"
+                    return 1
+                fi
+            fi
+            if ! command -v dpkg &>/dev/null; then
+                echo -e "${RED}dpkg still unavailable after install; please check manually.${NC}"
                 return 1
             fi
             echo -e "${GREEN}dpkg installation complete${NC}"
@@ -17405,14 +17451,25 @@ class TaskWindow(Gtk.Window):
         self.terminal.connect("child-exited", self.on_child_exited)
 
     def on_child_exited(self, terminal, status):
-        GLib.idle_add(self.set_completed)
+        # VTE 传入 waitpid 风格状态；内嵌脚本 EXIT trap 已保留真实退出码。
+        success = False
+        try:
+            if os.WIFEXITED(status):
+                success = (os.WEXITSTATUS(status) == 0)
+            elif hasattr(os, "WIFSIGNALED") and os.WIFSIGNALED(status):
+                success = False
+            else:
+                success = (status == 0)
+        except Exception:
+            success = (status == 0)
+        GLib.idle_add(self.set_completed, success)
 
-    def set_completed(self):
+    def set_completed(self, success=True):
         self.completed = True
         self.action_btn.set_sensitive(True)
         self.action_btn.set_label(t("task_complete_btn"))
         try:
-            self._task_header.props.subtitle = t("task_done")
+            self._task_header.props.subtitle = t("task_done") if success else t("task_failed")
         except Exception:
             pass
 
@@ -17512,9 +17569,9 @@ class MainWindow(Gtk.Window):
         self.lang_button = Gtk.MenuButton()
         self.lang_button.set_tooltip_text(t("lang_tooltip"))
         self.lang_button.set_relief(Gtk.ReliefStyle.NONE)
-        self._lang_icon = Gtk.Image.new_from_icon_name("preferences-desktop-locale-symbolic",
-                                                       Gtk.IconSize.BUTTON)
-        self.lang_button.add(self._lang_icon)
+        # 顶栏语言入口优先显示文字（中文「语言」/ 英文 Language），一眼能懂
+        self._lang_btn_label = Gtk.Label(label=t("lang_button"))
+        self.lang_button.add(self._lang_btn_label)
         header.pack_end(self.lang_button)
         self._build_lang_menu()
 
@@ -17859,6 +17916,8 @@ class MainWindow(Gtk.Window):
         self.search_entry.set_placeholder_text(t("search_placeholder"))
         self.theme_button.set_tooltip_text(t("theme_tooltip"))
         self.lang_button.set_tooltip_text(t("lang_tooltip"))
+        if getattr(self, "_lang_btn_label", None) is not None:
+            self._lang_btn_label.set_text(t("lang_button"))
         self.help_btn.set_label(t("help"))
         self.quit_btn.set_label(t("quit"))
         self.sidebar_title.set_text(t("cat_sidebar"))
@@ -18491,7 +18550,11 @@ def get_remote_version():
     except Exception as e: print(f"检查更新失败: {e}")
     return None
 
-def _perform_update_in_dialog(dialog, remote_version):
+# 启动闪屏与更新过程共用同一窗口尺寸，避免「检查更新」与「正在更新」一大一小跳动
+UPDATE_SPLASH_SIZE = (400, 150)
+
+def _perform_update_in_window(win, remote_version):
+    """在 UpdateCheckWindow 内下载并替换自身（与检查更新同窗同尺寸）。"""
     def do_download():
         tmp_path = None
         try:
@@ -18517,37 +18580,51 @@ def _perform_update_in_dialog(dialog, remote_version):
             os.chmod(tmp_path, 0o755)
             os.replace(tmp_path, current_path)
             tmp_path = None
-            GLib.idle_add(_update_dialog_success, dialog, remote_version)
+            GLib.idle_add(_update_window_success, win, remote_version)
         except Exception as e:
-            GLib.idle_add(_update_dialog_error, dialog, str(e))
+            GLib.idle_add(_update_window_error, win, str(e))
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 try: os.unlink(tmp_path)
                 except Exception: pass
     threading.Thread(target=do_download, daemon=True).start()
 
-def _update_dialog_success(dialog, remote_version):
-    dialog.set_markup(f"<big><b>{t('update_ok')}</b></big>")
-    dialog.format_secondary_text(t("update_ok_hint", ver=remote_version))
+def _update_window_success(win, remote_version):
+    try:
+        win._clear_action_buttons()
+        win.label.set_text(t("update_ok") + "\n" + t("update_ok_hint", ver=remote_version))
+    except Exception:
+        pass
     def restart():
-        dialog.destroy(); subprocess.Popen([sys.executable, sys.argv[0]]); Gtk.main_quit()
+        try:
+            win.destroy()
+        except Exception:
+            pass
+        subprocess.Popen([sys.executable, sys.argv[0]])
+        Gtk.main_quit()
     GLib.timeout_add(500, restart)
 
-def _update_dialog_error(dialog, error_msg):
-    dialog.set_markup(f"<big><b>{t('update_fail')}</b></big>")
-    dialog.format_secondary_text(t("update_fail_hint", err=error_msg, url=REPO_RAW_URL))
-    for btn in dialog.get_action_area().get_children(): btn.destroy()
-    dialog.add_button(t("ok"), Gtk.ResponseType.CLOSE)
-    dialog.connect("response", lambda d, r: (dialog.destroy(), show_main_window()))
-    dialog.show_all()
+def _update_window_error(win, error_msg):
+    try:
+        win._clear_action_buttons()
+        win.label.set_text(t("update_fail") + "\n" + t("update_fail_hint", err=error_msg, url=REPO_RAW_URL))
+        btn = Gtk.Button(label=t("ok"))
+        btn.connect("clicked", lambda *_: (win.destroy(), show_main_window()))
+        win.vbox.pack_start(btn, False, False, 0)
+        win._action_buttons = [btn]
+        btn.show()
+    except Exception:
+        show_main_window()
 
 class UpdateCheckWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title=t("check_update"))
         self.set_icon_name("input-gamepad-symbolic")
-        self.set_default_size(400, 150)
+        self.set_default_size(*UPDATE_SPLASH_SIZE)
+        self.set_size_request(*UPDATE_SPLASH_SIZE)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_deletable(False)
+        self.set_resizable(False)
         # 启动闪屏不抢任务栏；真正的任务栏项留给随后出现的 MainWindow
         try:
             self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
@@ -18560,8 +18637,10 @@ class UpdateCheckWindow(Gtk.Window):
         self.add(vbox)
         self.label = Gtk.Label(label=t("checking_update"))
         self.label.set_justify(Gtk.Justification.CENTER)
+        self.label.set_line_wrap(True)
         vbox.pack_start(self.label, True, True, 0)
         self.button = None
+        self._action_buttons = []
         self.vbox = vbox
         self.show_all()
         GLib.timeout_add(200, self.perform_check)
@@ -18611,34 +18690,52 @@ class UpdateCheckWindow(Gtk.Window):
         self._enter_main()
         return False
 
+    def _clear_action_buttons(self):
+        for btn in list(getattr(self, "_action_buttons", []) or []):
+            try:
+                btn.destroy()
+            except Exception:
+                pass
+        self._action_buttons = []
+        if self.button is not None:
+            try:
+                self.button.hide()
+            except Exception:
+                pass
+
     def show_update_prompt(self, remote_version):
-        # 先隐藏而不是销毁，保留进程内窗口存在，避免任务栏空窗期
+        """发现新版本后仍留在本窗口提问/更新，避免再弹一个不同尺寸的对话框。"""
+        self._clear_action_buttons()
+        self.label.set_text(
+            t("found_new_big", ver=remote_version)
+            + "\n"
+            + t("update_prompt", cur=VERSION, remote=remote_version)
+        )
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        btn_row.set_halign(Gtk.Align.CENTER)
+        yes_btn = Gtk.Button(label=t("yes"))
+        no_btn = Gtk.Button(label=t("no"))
+        yes_btn.connect("clicked", lambda *_: self._on_update_yes(remote_version))
+        no_btn.connect("clicked", lambda *_: self._enter_main())
+        btn_row.pack_start(yes_btn, False, False, 0)
+        btn_row.pack_start(no_btn, False, False, 0)
+        self.vbox.pack_start(btn_row, False, False, 0)
+        self._action_buttons = [btn_row, yes_btn, no_btn]
+        self.set_default_size(*UPDATE_SPLASH_SIZE)
+        self.resize(*UPDATE_SPLASH_SIZE)
+        btn_row.show_all()
         try:
-            self.hide()
+            self.present()
         except Exception:
             pass
-        dialog = Gtk.MessageDialog(
-            self, Gtk.DialogFlags.MODAL, Gtk.MessageType.QUESTION,
-            Gtk.ButtonsType.NONE, t("found_new"))
-        dialog.set_default_size(400, 150)
-        dialog.set_markup(f"<big><b>{t('found_new_big', ver=remote_version)}</b></big>")
-        dialog.format_secondary_text(t("update_prompt", cur=VERSION, remote=remote_version))
-        dialog.add_button(t("yes"), Gtk.ResponseType.YES)
-        dialog.add_button(t("no"), Gtk.ResponseType.NO)
-        dialog.set_icon_name("input-gamepad-symbolic")
-        fix_dialog_size(dialog)
-        response = dialog.run()
-        if response == Gtk.ResponseType.YES:
-            dialog.set_markup(f"<big><b>{t('updating')}</b></big>")
-            dialog.format_secondary_text(t("updating_hint"))
-            for btn in dialog.get_action_area().get_children():
-                btn.destroy()
-            dialog.show_all()
-            # 成功会重启进程；失败对话框回调里会 show_main_window()
-            _perform_update_in_dialog(dialog, remote_version)
-        else:
-            dialog.destroy()
-            self._enter_main()
+
+    def _on_update_yes(self, remote_version):
+        self._clear_action_buttons()
+        self.label.set_text(t("updating") + "\n" + t("updating_hint"))
+        self.set_default_size(*UPDATE_SPLASH_SIZE)
+        self.resize(*UPDATE_SPLASH_SIZE)
+        # 成功会重启进程；失败回调里会 show_main_window()
+        _perform_update_in_window(self, remote_version)
 
     def on_button_clicked(self, button):
         self._enter_main()

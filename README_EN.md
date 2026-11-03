@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v2.0.0** | Updated: 2026-11-02
+> **Version: v2.0.1** | Updated: 2026-11-03
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -26,6 +26,13 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - Open the toolbox; it checks for updates on startup (built-in self-update)
 
 ## 📝 Changelog
+
+2026-11-03 (v2.0.1)
+[Bug fixes]
+- Fixed AskLink dpkg install conflicting with leftover `/var/lib/dpkg` files; failed tasks no longer show "Task completed"
+[UX]
+- Default to Chinese when no language preference is saved; top-bar language control shows "语言" / Language
+- Slightly smaller default window on Deck-class screens; startup update reuses the same check window/size
 
 2026-11-02 (v2.0.0)
 [Bug fixes]
