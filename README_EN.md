@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v2.0.1** | Updated: 2026-11-03
+> **Version: v2.0.2** | Updated: 2026-11-05
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -26,6 +26,73 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - Open the toolbox; it checks for updates on startup (built-in self-update)
 
 ## 📝 Changelog
+
+2026-11-05 (v2.0.2)
+[UI rework: native GTK windows]
+- "Install Flatpak Apps" and "Uninstall Other Installed Apps" are now native GTK windows; zenity is no longer used
+  - The app list, checkboxes, progress bar and results all live in the tool's own window, matching the main UI theme
+  - The "delete local data?" prompt is part of the same window instead of a separate dialog
+  - Fully fixes "install keeps running in the background after cancel/close": Python now starts flatpak directly, so cancelling terminates that very process -- measured 0.5s to exit, with nothing installed
+  - New search box: matches the built-in catalog instantly, and falls back to searching flathub when nothing matches; remote results are installable too
+  - Buttons are reduced to a single primary button that switches with the stage (install / cancel / done / back to list) and hides itself when nothing is selected
+  - After finishing you return to the list and can keep going instead of re-entering the entry each time
+  - The search box hides itself during install; it only matters while picking apps
+  - Selections survive searching, switching queries and late remote results instead of being wiped by a redraw
+- "Steam Cache Manager" is now a native GTK window
+  - Opening it lists shader cache and compat data; pick a type and it scans every Steam library (the default one plus any registered in libraryfolders.vdf)
+  - The list shows app names and sizes, sorted by size, with a live count and total at the bottom
+  - A separate confirmation page lists what will be deleted; during deletion it shows "Deleting 2/3: app name" with live progress and can be cancelled at any point
+- "Compatibility Layer Manager" is now a native GTK window, and one window handles install and uninstall for all three families (GE-Proton, Proton-CachyOS, DW Proton)
+  - Version lists are read from GitHub Releases; the install list skips versions already present and the uninstall list only shows installed directories
+  - The confirmation page offers a download mirror (gh-proxy.com / gh.3w.pm / cors.isteed.cc / ghproxy.net / GitHub official), shared by the whole batch
+  - Downloads show real byte progress (e.g. "128.0 MB / 540.6 MB") instead of an idle animation
+  - Two checks after downloading: compare the file size first, then the sha512 digest. If either fails the version is reported as failed with the reason, and a bad archive is never unpacked into Steam; extraction goes to a temporary directory first and is only moved into place after validation, so cancelling leaves no half-finished folder
+  - Failures are listed one per line ("· version: reason"), e.g. "sha512 mismatch, archive is corrupt" or "this version has no x86_64 package for the Deck"
+  - Cancel responds in about 0.5s (read1 chunked reads plus a socket shutdown)
+  - Mirrors now have failure detection and automatic failover: unreachable hosts, dropped connections,
+    size mismatches and sha512 mismatches all move on to the next mirror; only when every mirror fails
+    does it report an error, listing the specific reason for each one
+  - Cancelling works while fetching the version list, the download info, the archive and the checksum;
+    before this only an in-progress download could be cancelled
+  - Cancelling returns to the version list instead of the first page, keeping the current selection so a
+    different mirror or version can be tried right away
+
+[Install / uninstall consolidation]
+- The 8 Flatpak apps under Software are merged into one "Install Flatpak Apps" entry, and the 8 Flatpak uninstall entries are merged into "Uninstall Other Installed Apps"
+  - Key fix: that uninstall screen used to list those 8 apps as exclusions (because each had its own dedicated uninstall entry). With the dedicated entries gone, leaving the list intact would have made those apps impossible to uninstall forever; the list is now emptied, keeping only the Fcitx 5 Chinese add-on hidden as an internal component removed together with the main program
+  - The listing is now read live from flatpak list instead of a fixed name list, so whatever is installed can be uninstalled
+
+[Feature expansion]
+- "Install Flatpak Apps" grows from 8 apps to 37, covering everyday, office, media, creative, remote and gaming tools
+  - Messaging 7, browsers 3, media 4, cloud storage and downloads 2, office and notes 5, creative tools 6, remote control 2, gaming tools 6, system tools 2
+- All 37 app IDs are built in, so opening the list no longer queries the network; it also shows the full list offline, and opens in under a second instead of over 3
+  - Related fix: `flatpak remote-add` contacts the network (~1.1s) even when flathub already exists, so the code now checks locally first and skips it
+
+[Bug fixes]
+- Fixed installs always failing with "failed IDs: 飞书"
+  - Root cause: the first column of a zenity checklist must be the tick state; omitting it shifts every following column, and without an explicit return column the value returned is the display name rather than the app ID -- so the command run was `flatpak install flathub 飞书`
+  - Fix: put the tick state in column one and the real app ID in a hidden second column so the output is plain IDs; a whitelist check rejects anything unexpected
+- Fixed the bar showing 100% while the download was still running
+  - Root cause: installing one app is split into several subtasks (runtime, locales, the app itself...), each running 0 to 100%; the old code took only the sub-task percentage, so the bar filled during the first one
+  - Fix: parse "step N of M" and fold it into one continuous total
+- Fixed failures showing no reason, or just a single letter
+  - Non-progress output was discarded, hiding flatpak's real error; the window now lists the original message, e.g. "no match for xxx found in remote flathub"
+- Fixed desktop shortcuts not being removed on uninstall
+  - Root cause: shortcuts are named after the display name (飞书.desktop, Google Chrome.desktop) but uninstall matched on the app ID, so they never lined up
+  - Fix: read the Exec line of each .desktop file and delete any that runs `flatpak run <that ID>`, regardless of filename
+- Fixed the whole feature exiting instead of returning to the app list after cancel or closing the progress window
+  - Root cause: the INT/TERM trap at the top of the embedded script (meant for "close the terminal and the tool quits") fired on the signal from closing the progress window
+- Fixed flatpak not actually being terminated after cancel, leaving it downloading in the background (now cleans up the whole process group, grandchildren included)
+- Fixed the list going blank after "back to list" on uninstall (rows were rebuilt without calling show_all, so new rows stayed hidden)
+- Fixed "No such file or directory" when creating a shortcut and the desktop directory does not exist (now resolves it per XDG and creates it)
+- Fixed an empty percentage, a duplicated percentage and a progress bar that went backwards
+- Fixed every app being treated as "missing" and hidden when offline (an empty screen that looks broken)
+
+[Other]
+- Removed the "System Health Check" feature (not needed for now): its sidebar entry, search index and dangerous-operation confirmation are gone too, along with the six check groups and their repair flows in the embedded scripts; "Fix Boot" and "Fix Shared Disk" are unaffected
+- Deleted 50 bash functions superseded by the GTK windows (100 definitions across both language scripts, about 4,160 lines)
+  - 14 health check, 19 Flatpak install/uninstall, 1 Steam cache manager, 16 compatibility layer
+  - Python now opens the corresponding GTK window directly, so these functions can no longer be reached
 
 2026-11-03 (v2.0.1)
 [Bug fixes]
@@ -194,7 +261,16 @@ Older entries (UI polish for dialogs/CSD, system health check, etc.) are availab
 - AnyDesk / ToDesk / AskLink remote assistance
 
 ### Common software
-- WPS Office, QQ, WeChat, QQ Music, Baidu Netdisk, Microsoft Edge, Google Chrome, Fcitx 5, and more
+- Install Flatpak Apps: tick several apps in one GUI; already-installed ones are hidden (37 apps)
+  - Chat: WeChat, QQ, DingTalk, Feishu, Wemeet, Telegram, Discord
+  - Browsers: Microsoft Edge, Google Chrome, Firefox
+  - Media: QQ Music, NetEase Cloud Music, VLC, Spotify
+  - Cloud & download: Baidu Netdisk, Thunder
+  - Office & notes: WPS Office, LibreOffice, Thunderbird, Obsidian, Joplin
+  - Creator tools: OBS Studio, GIMP, Krita, Inkscape, Audacity, Blender
+  - Remote access: RustDesk, Remmina
+  - Gaming: Lutris, Heroic, Prism Launcher, RetroArch, PCSX2, Dolphin
+  - System tools: Flatseal, Fcitx 5 (incl. the Chinese input-method add-on)
 
 ### Game extras & Decky plugins
 - Decky Loader plugin store install / uninstall
@@ -206,7 +282,7 @@ Older entries (UI polish for dialogs/CSD, system health check, etc.) are availab
 
 ### App management
 - Update installed Flatpak apps
-- Uninstall installed apps (WPS / QQ / WeChat / QQ Music / Baidu Netdisk / Edge / Chrome / AnyDesk / ToDesk / Fcitx 5 and other Flatpaks)
+- Uninstall installed apps: AnyDesk and ToDesk have dedicated entries; every other Flatpak app (incl. WPS / QQ / WeChat / QQ Music / Baidu Netdisk / Edge / Chrome / Fcitx 5) is ticked and removed from the unified "Uninstall Other Installed Apps" GUI
 
 ### Toolbox itself
 - UI language switch (Chinese / English, remembered)

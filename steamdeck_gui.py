@@ -21,6 +21,11 @@ import shutil
 import threading
 import time
 import urllib.request
+import urllib.parse
+import hashlib
+import tarfile
+import fnmatch
+import socket
 import atexit
 import base64
 import signal
@@ -28,7 +33,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "2.0.1"
+VERSION = "2.0.2"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -976,20 +981,12 @@ _FUNC_LABELS = {
     "calibrate_joystick_trigger": {"zh": "校准扳机", "en": "Calibrate Triggers"},
     "steamdeck_cache_manager": {"zh": "Steam缓存管理", "en": "Steam Cache Manager"},
     "ge_proton_manager": {"zh": "兼容层管理", "en": "Compatibility Layer Manager"},
-    "health_check": {"zh": "系统体检", "en": "System Health Check"},
     "fix_boot": {"zh": "修复引导", "en": "Fix Boot"},
     "fix_shared_disk": {"zh": "修复互通盘", "en": "Fix Shared Disk"},
     "install_anydesk": {"zh": "AnyDesk", "en": "AnyDesk"},
     "install_todesk": {"zh": "ToDesk", "en": "ToDesk"},
     "install_asklink": {"zh": "AskLink远程", "en": "AskLink Remote"},
-    "install_wps_office": {"zh": "WPS Office", "en": "WPS Office"},
-    "install_qq": {"zh": "QQ", "en": "QQ"},
-    "install_wechat": {"zh": "微信", "en": "WeChat"},
-    "install_qqmusic": {"zh": "QQ音乐", "en": "QQ Music"},
-    "install_baidunetdisk": {"zh": "百度网盘", "en": "Baidu Netdisk"},
-    "install_edge": {"zh": "Edge浏览器", "en": "Edge Browser"},
-    "install_chrome": {"zh": "Google浏览器", "en": "Google Chrome"},
-    "install_fcitx5": {"zh": "Fcitx 5", "en": "Fcitx 5"},
+    "install_flatpak_apps_gui": {"zh": "安装 Flatpak 应用", "en": "Install Flatpak Apps"},
     "install_uu_accelerator": {"zh": "UU加速器插件", "en": "UU Accelerator Plugin"},
     "install_xunyou_accelerator": {"zh": "迅游加速器插件", "en": "Xunyou Accelerator Plugin"},
     "install_qiyou_accelerator": {"zh": "奇游联机宝加速插件", "en": "Qiyou Accelerator Plugin"},
@@ -1015,16 +1012,8 @@ _FUNC_LABELS = {
     "clover_install_or_reinstall": {"zh": "安装/重装 Clover", "en": "Install/Reinstall Clover"},
     "update_installed_apps": {"zh": "更新已安装应用", "en": "Update Installed Apps"},
     "grp_uninstall_apps": {"zh": "卸载已安装应用", "en": "Uninstall Installed Apps"},
-    "uninstall_wps_office": {"zh": "卸载 WPS Office", "en": "Uninstall WPS Office"},
-    "uninstall_qq": {"zh": "卸载 QQ", "en": "Uninstall QQ"},
-    "uninstall_wechat": {"zh": "卸载微信", "en": "Uninstall WeChat"},
-    "uninstall_qqmusic": {"zh": "卸载 QQ音乐", "en": "Uninstall QQ Music"},
-    "uninstall_baidunetdisk": {"zh": "卸载百度网盘", "en": "Uninstall Baidu Netdisk"},
-    "uninstall_edge": {"zh": "卸载 Edge浏览器", "en": "Uninstall Edge Browser"},
-    "uninstall_chrome": {"zh": "卸载 Google浏览器", "en": "Uninstall Google Chrome"},
     "uninstall_anydesk": {"zh": "卸载 AnyDesk", "en": "Uninstall AnyDesk"},
     "uninstall_todesk": {"zh": "卸载 ToDesk", "en": "Uninstall ToDesk"},
-    "uninstall_fcitx5": {"zh": "卸载Fcitx 5", "en": "Uninstall Fcitx 5"},
     "uninstall_other_flatpak_apps": {"zh": "卸载其他已安装应用", "en": "Uninstall Other Installed Apps"},
     "grp_cheatdeck": {"zh": "CheatDeck 插件", "en": "CheatDeck Plugin"},
     "install_cheatdeck_install": {"zh": "安装/更新 CheatDeck", "en": "Install/Update CheatDeck"},
@@ -1078,12 +1067,6 @@ _DANGER_HINTS_I18N = {
         "en": ("Backs up then clears Gamescope / Game Mode local state and some Steam UI caches\n"
                "for black screens or Game Mode boot issues. Games are not deleted; auto-backup first."),
     },
-    "health_check": {
-        "zh": ("该功能会检查 ESP 分区、UEFI 启动项、Clover 引导文件与 /etc/fstab。\n"
-               "检查过程为只读，仅在你确认修复后才会修改系统（fstab 修改前会自动备份）。"),
-        "en": ("This will check the ESP partition, UEFI boot entries, Clover boot files and /etc/fstab.\n"
-               "The check is read-only; the system is only modified after you confirm a fix (fstab is backed up before modification)."),
-    },
 }
 
 def t(key, **kwargs):
@@ -1129,7 +1112,80 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-03（v2.0.1）
+CHANGELOG_BODY_ZH = """2026-11-05（v2.0.2）
+【界面重构：原生 GTK 窗口】
+- 「安装 Flatpak 应用」与「卸载其他已安装应用」改为原生 GTK 窗口，不再调用 zenity
+  · 应用列表、勾选框、进度条、结果全部在主程序自己的窗口里，主题与主界面一致
+  · 卸载时的「是否删除本地数据」也并入同一窗口，不再额外弹窗
+  · 彻底修复「点取消或关窗后安装仍在后台继续」：改由 Python 直接启动 flatpak，
+    点取消就是终止该进程本身，实测 0.5 秒内退出，应用不会被装上
+  · 新增应用搜索框：先匹配内置清单秒出结果，没有匹配时再自动搜索 flathub，远端结果同样可勾选安装
+  · 按钮精简为单一主按钮，按阶段自动切换（安装 / 取消 / 完成 / 返回列表），未勾选时自动隐藏
+  · 装完或卸完回到列表可继续操作，不必反复进出功能入口
+  · 安装过程中搜索框自动隐藏，只在选择应用时有意义
+  · 勾选状态在搜索、切换查询、远端结果返回后都会保留，不会被重绘冲掉
+- 「Steam 缓存管理」改为原生 GTK 窗口
+  · 打开即列出着色器缓存与兼容数据，选类型后自动扫描全部 Steam 库（默认库 + libraryfolders.vdf 登记的其它库）
+  · 列表显示应用名与占用大小并按大小排序，底部实时显示已选数量与总大小
+  · 删除前有独立确认页列出待删条目；删除中显示「正在删除 2/3：应用名」与实时进度，可随时取消
+- 「兼容层管理」改为原生 GTK 窗口，一个窗口管理三套兼容层（GE-Proton、Proton-CachyOS、DW Proton）的安装与卸载
+  · 版本列表联网从 GitHub Releases 读取，安装页自动跳过已装版本，卸载页只列当前已安装的目录
+  · 确认页可选下载镜像（gh-proxy.com / gh.3w.pm / cors.isteed.cc / ghproxy.net / GitHub 官方），整批共用同一镜像
+  · 下载显示真实字节进度（如「128.0 MB / 540.6 MB」），不再是空转动画
+  · 下载完成做双重校验：先比对文件大小，再核对 sha512 摘要，任何一项对不上就判失败并说明原因，
+    绝不把坏包解压进 Steam；解压先落临时目录，校验通过才移入正式目录，中途取消不留半成品
+  · 失败时逐条列出「· 版本号：原因」，如「sha512 校验失败，包已损坏」「这个版本没有适合 Deck 的 x86_64 安装包」
+  · 取消响应约 0.5 秒（改用 read1 逐段读取，取消时直接对底层 socket 做 shutdown）
+  · 镜像源带失败检测与自动换源：连不上、下到一半断开、文件大小或 sha512 对不上，都会自动换下一个镜像重试，
+    全部镜像都失败才报错，并逐条列出每个镜像的具体失败原因
+  · 取消覆盖「获取版本列表」「获取下载信息」「下载」「取校验值」全过程；此前只有下载中能取消，前面几步点取消毫无反应
+  · 取消后回到版本列表而不是初始页，已勾选的版本保留，可直接换镜像或换版本重试
+
+【安装 / 卸载整合】
+- 软件安装分类里通过 Flatpak 安装的 8 个应用合并为一个「安装 Flatpak 应用」入口；
+  卸载已安装应用里的 8 个 Flatpak 卸载入口一并并入「卸载其他已安装应用」
+  · 关键修正：该卸载界面原先把这 8 个应用列在排除名单里（因为它们当时各有专属卸载入口），
+    专属入口删掉后若不清理名单，这 8 个应用将永远无法卸载；现已清空，
+    仅保留 Fcitx 5 中文插件作为内部组件随主程序移除
+  · 卸载列表从固定名单改为实时读取 flatpak list，装了什么就能卸什么
+
+【功能扩充】
+- 「安装 Flatpak 应用」的可选应用从 8 个扩充到 37 个，覆盖日常、办公、影音、创作、远程与游戏工具
+  · 通讯 7 个、浏览器 3 个、影音 4 个、网盘与下载 2 个、办公与笔记 5 个、
+    创作工具 6 个、远程控制 2 个、游戏工具 6 个、系统工具 2 个
+- 37 个应用 ID 全部内置，打开列表不再联网查询，离线也照常完整显示，打开速度从 3 秒多降到 1 秒内
+  · 顺带优化：flatpak remote-add 即使 flathub 已存在也会联网约 1.1 秒，改为先本地检查，已存在就跳过
+
+【问题修复】
+- 修复勾选后提示「失败的 ID: 飞书」这类安装必定失败的问题
+  · 根因：zenity 勾选列表的第一列必须是勾选状态列，遗漏它会让后续列全部错位，
+    且未指定回传列时拿到的值是应用显示名而非应用 ID，于是执行的是 flatpak install flathub 飞书
+  · 修法：第一列放勾选状态，第二列放真实应用 ID 并隐藏，回传即纯 ID；另加白名单校验杜绝脏数据
+- 修复安装进度显示 100% 但实际还在下载
+  · 根因：flatpak 装一个应用会拆成多个子任务（运行时、本地化、主程序…），每段各自 0 到 100%，
+    原实现只取段内百分比，第一段到 100% 进度条就满了
+  · 修法：解析「第几步/共几步」，按已完成子任务数折算真实总进度
+- 修复安装/卸载失败时不显示原因（或只显示一个字母）
+  · 非进度输出行被整体丢弃，flatpak 的真实报错看不到；现在会列出「未在远程仓库 flathub 中发现 xxx 的匹配项」等原始报错
+- 修复卸载后桌面快捷方式没有被删除
+  · 根因：安装时快捷方式用显示名命名（飞书.desktop、Google Chrome.desktop），卸载却按应用 ID 匹配，永远对不上
+  · 修法：改为读 .desktop 的 Exec 行，凡是 flatpak run <该应用ID> 的快捷方式都删除，与文件名无关
+- 修复点取消或关闭进度窗后整个功能直接结束、没有回到应用选择界面
+  · 根因：内嵌脚本开头的 INT/TERM trap（用于关掉终端就结束工具）会被进度窗关闭的信号触发
+- 修复取消后 flatpak 实际没被终止、仍在后台下载（改为整进程组清理，连同孙进程一并带走）
+- 修复卸载完点「返回列表」后列表一片空白（重绘后未调用 show_all，新建行默认隐藏）
+- 修复桌面目录不存在时创建快捷方式报「没有那个文件或目录」（按 XDG 规范解析并自动创建）
+- 修复进度条百分比为空、百分比重复显示、进度条倒退等问题
+- 修复离线时所有应用被误判为「不存在」而全部隐藏（界面变空像是坏了）
+
+【其他】
+- 移除「系统体检」功能（暂时不需要）：侧栏入口、搜索索引、危险操作确认同步清理，
+  内嵌脚本中的 6 类检查与配套修复流程一并删除；「修复引导」「修复互通盘」不受影响
+- 删除被 GTK 窗口取代的 50 个 bash 函数（中英两段共 100 处定义，约 4160 行）
+  · 体检 14 个、Flatpak 安装卸载 19 个、Steam 缓存管理 1 个、兼容层 16 个
+  · Python 侧已直接打开对应 GTK 窗口，这些函数不会再被调用
+
+2026-11-03（v2.0.1）
 【问题修复】
 - 修复「AskLink远程」安装 dpkg 时因 /var/lib/dpkg/{available,status} 残留报「文件系统中已存在」冲突：先常规安装，失败再用 --overwrite '/var/lib/dpkg/*' 覆盖残留后重试，并校验 dpkg 可用
 - 修复内嵌脚本 EXIT trap 强制 exit 0，导致失败任务仍显示「任务已完成」：保留真实退出码，任务窗按成功/失败分别显示「任务已完成」/「任务失败」
@@ -1580,7 +1636,74 @@ CHANGELOG_BODY_ZH = """2026-11-03（v2.0.1）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-03 (v2.0.1)
+CHANGELOG_BODY_EN = """2026-11-05 (v2.0.2)
+[UI rework: native GTK windows]
+- "Install Flatpak Apps" and "Uninstall Other Installed Apps" are now native GTK windows; zenity is no longer used
+  · The app list, checkboxes, progress bar and results all live in the tool's own window, matching the main UI theme
+  · The "delete local data?" prompt is part of the same window instead of a separate dialog
+  · Fully fixes "install keeps running in the background after cancel/close": Python now starts flatpak directly, so cancelling terminates that very process -- measured 0.5s to exit, with nothing installed
+  · New search box: matches the built-in catalog instantly, and falls back to searching flathub when nothing matches; remote results are installable too
+  · Buttons are reduced to a single primary button that switches with the stage (install / cancel / done / back to list) and hides itself when nothing is selected
+  · After finishing you return to the list and can keep going instead of re-entering the entry each time
+  · The search box hides itself during install; it only matters while picking apps
+  · Selections survive searching, switching queries and late remote results instead of being wiped by a redraw
+- "Steam Cache Manager" is now a native GTK window
+  · Opening it lists shader cache and compat data; pick a type and it scans every Steam library (the default one plus any registered in libraryfolders.vdf)
+  · The list shows app names and sizes, sorted by size, with a live count and total at the bottom
+  · A separate confirmation page lists what will be deleted; during deletion it shows "Deleting 2/3: app name" with live progress and can be cancelled at any point
+- "Compatibility Layer Manager" is now a native GTK window, and one window handles install and uninstall for all three families (GE-Proton, Proton-CachyOS, DW Proton)
+  · Version lists are read from GitHub Releases; the install list skips versions already present and the uninstall list only shows installed directories
+  · The confirmation page offers a download mirror (gh-proxy.com / gh.3w.pm / cors.isteed.cc / ghproxy.net / GitHub official), shared by the whole batch
+  · Downloads show real byte progress (e.g. "128.0 MB / 540.6 MB") instead of an idle animation
+  · Two checks after downloading: compare the file size first, then the sha512 digest. If either fails the version is reported as failed with the reason, and a bad archive is never unpacked into Steam; extraction goes to a temporary directory first and is only moved into place after validation, so cancelling leaves no half-finished folder
+  · Failures are listed one per line ("· version: reason"), e.g. "sha512 mismatch, archive is corrupt" or "this version has no x86_64 package for the Deck"
+  · Cancel responds in about 0.5s (read1 chunked reads plus a socket shutdown)
+  · Mirrors now have failure detection and automatic failover: unreachable hosts, dropped connections,
+    size mismatches and sha512 mismatches all move on to the next mirror; only when every mirror fails
+    does it report an error, listing the specific reason for each one
+  · Cancelling works while fetching the version list, the download info, the archive and the checksum;
+    before this only an in-progress download could be cancelled
+  · Cancelling returns to the version list instead of the first page, keeping the current selection so a
+    different mirror or version can be tried right away
+
+[Install / uninstall consolidation]
+- The 8 Flatpak apps under Software are merged into one "Install Flatpak Apps" entry, and the 8 Flatpak uninstall entries are merged into "Uninstall Other Installed Apps"
+  · Key fix: that uninstall screen used to list those 8 apps as exclusions (because each had its own dedicated uninstall entry). With the dedicated entries gone, leaving the list intact would have made those apps impossible to uninstall forever; the list is now emptied, keeping only the Fcitx 5 Chinese add-on hidden as an internal component removed together with the main program
+  · The listing is now read live from flatpak list instead of a fixed name list, so whatever is installed can be uninstalled
+
+[Feature expansion]
+- "Install Flatpak Apps" grows from 8 apps to 37, covering everyday, office, media, creative, remote and gaming tools
+  · Messaging 7, browsers 3, media 4, cloud storage and downloads 2, office and notes 5, creative tools 6, remote control 2, gaming tools 6, system tools 2
+- All 37 app IDs are built in, so opening the list no longer queries the network; it also shows the full list offline, and opens in under a second instead of over 3
+  · Related fix: `flatpak remote-add` contacts the network (~1.1s) even when flathub already exists, so the code now checks locally first and skips it
+
+[Bug fixes]
+- Fixed installs always failing with "failed IDs: 飞书"
+  · Root cause: the first column of a zenity checklist must be the tick state; omitting it shifts every following column, and without an explicit return column the value returned is the display name rather than the app ID -- so the command run was `flatpak install flathub 飞书`
+  · Fix: put the tick state in column one and the real app ID in a hidden second column so the output is plain IDs; a whitelist check rejects anything unexpected
+- Fixed the bar showing 100% while the download was still running
+  · Root cause: installing one app is split into several subtasks (runtime, locales, the app itself...), each running 0 to 100%; the old code took only the sub-task percentage, so the bar filled during the first one
+  · Fix: parse "step N of M" and fold it into one continuous total
+- Fixed failures showing no reason, or just a single letter
+  · Non-progress output was discarded, hiding flatpak's real error; the window now lists the original message, e.g. "no match for xxx found in remote flathub"
+- Fixed desktop shortcuts not being removed on uninstall
+  · Root cause: shortcuts are named after the display name (飞书.desktop, Google Chrome.desktop) but uninstall matched on the app ID, so they never lined up
+  · Fix: read the Exec line of each .desktop file and delete any that runs `flatpak run <that ID>`, regardless of filename
+- Fixed the whole feature exiting instead of returning to the app list after cancel or closing the progress window
+  · Root cause: the INT/TERM trap at the top of the embedded script (meant for "close the terminal and the tool quits") fired on the signal from closing the progress window
+- Fixed flatpak not actually being terminated after cancel, leaving it downloading in the background (now cleans up the whole process group, grandchildren included)
+- Fixed the list going blank after "back to list" on uninstall (rows were rebuilt without calling show_all, so new rows stayed hidden)
+- Fixed "No such file or directory" when creating a shortcut and the desktop directory does not exist (now resolves it per XDG and creates it)
+- Fixed an empty percentage, a duplicated percentage and a progress bar that went backwards
+- Fixed every app being treated as "missing" and hidden when offline (an empty screen that looks broken)
+
+[Other]
+- Removed the "System Health Check" feature (not needed for now): its sidebar entry, search index and dangerous-operation confirmation are gone too, along with the six check groups and their repair flows in the embedded scripts; "Fix Boot" and "Fix Shared Disk" are unaffected
+- Deleted 50 bash functions superseded by the GTK windows (100 definitions across both language scripts, about 4,160 lines)
+  · 14 health check, 19 Flatpak install/uninstall, 1 Steam cache manager, 16 compatibility layer
+  · Python now opens the corresponding GTK window directly, so these functions can no longer be reached
+
+2026-11-03 (v2.0.1)
 [Bug fixes]
 - Fixed AskLink Remote failing to install dpkg when leftover /var/lib/dpkg/{available,status} files already exist: try a normal install first, then retry with --overwrite '/var/lib/dpkg/*', and verify dpkg is usable
 - Fixed the embedded script EXIT trap forcing exit 0 so failed tasks still showed "Task completed": preserve the real exit code and show "Task completed" / "Task failed" accordingly
@@ -2013,14 +2136,7 @@ def build_category_tree():
             (fl("install_anydesk"), "install_anydesk"),
             (fl("install_todesk"), "install_todesk"),
             (fl("install_asklink"), "install_asklink"),
-            (fl("install_wps_office"), "install_wps_office"),
-            (fl("install_qq"), "install_qq"),
-            (fl("install_wechat"), "install_wechat"),
-            (fl("install_qqmusic"), "install_qqmusic"),
-            (fl("install_baidunetdisk"), "install_baidunetdisk"),
-            (fl("install_edge"), "install_edge"),
-            (fl("install_chrome"), "install_chrome"),
-            (fl("install_fcitx5"), "install_fcitx5"),
+            (fl("install_flatpak_apps_gui"), "install_flatpak_apps_gui"),
             (fl("install_yellow_duck_software"), "install_yellow_duck_software"),
             (fl("grp_third_party"), [
                 (fl("install_third_party_platform"), "install_third_party_platform"),
@@ -2040,16 +2156,8 @@ def build_category_tree():
         t("cat_update"): [
             (fl("update_installed_apps"), "update_installed_apps"),
             (fl("grp_uninstall_apps"), [
-                (fl("uninstall_wps_office"), "uninstall_wps_office"),
-                (fl("uninstall_qq"), "uninstall_qq"),
-                (fl("uninstall_wechat"), "uninstall_wechat"),
-                (fl("uninstall_qqmusic"), "uninstall_qqmusic"),
-                (fl("uninstall_baidunetdisk"), "uninstall_baidunetdisk"),
-                (fl("uninstall_edge"), "uninstall_edge"),
-                (fl("uninstall_chrome"), "uninstall_chrome"),
                 (fl("uninstall_anydesk"), "uninstall_anydesk"),
                 (fl("uninstall_todesk"), "uninstall_todesk"),
-                (fl("uninstall_fcitx5"), "uninstall_fcitx5"),
                 (fl("uninstall_other_flatpak_apps"), "uninstall_other_flatpak_apps"),
             ]),
         ],
@@ -2337,7 +2445,7 @@ def launch_terminal(command_str):
 # clover_install_or_reinstall 会往 EFI 分区写文件、替换 BOOTX64.EFI、改 efibootmgr
 # 启动项，一旦出错可能导致机器无法启动，必须走确认框。
 DANGEROUS_FUNCS = {"fix_boot", "fix_shared_disk", "uninstall_plugin_store", "clear_hosts_cache",
-                   "clover_install_or_reinstall", "health_check",
+                   "clover_install_or_reinstall",
                    "emergency_steam_reset", "emergency_gamescope_reset"}
 
 # 每个危险功能的额外风险说明（缺省用通用文案）
@@ -2352,8 +2460,6 @@ DANGEROUS_HINTS = {
     "emergency_steam_reset": "将备份并重置 Steam 配置/启动缓存；不删 steamapps。\n"
                             "本地 Steam 设置可能丢失。",
     "emergency_gamescope_reset": "将备份并清理 Gamescope/游戏模式相关状态；不删游戏。",
-    "health_check": "该功能会检查 ESP 分区、UEFI 启动项、Clover 引导文件与 /etc/fstab。\n"
-                    "检查过程为只读，仅在你确认修复后才会修改系统（fstab 修改前会自动备份）。",
 }
 DEFAULT_DANGEROUS_HINT = "该功能会修改系统引导、挂载或系统文件，请确认已了解风险。"
 
@@ -2529,97 +2635,6 @@ download_with_mirrors() {
             echo -e "${RED}无效编号。${NC}"; sleep 1
         fi
     done
-}
-
-install_flatpak_app() {
-    local app_title="$1" desktop_name="$2" categories="$3"; shift 3
-    local app_ids=("$@")
-    mk_temp_dir; clear
-    echo -e "${YELLOW}════════════════ 安装 ${app_title} ════════════════${NC}"
-
-    local already_installed=""
-    for app_id in "${app_ids[@]}"; do
-        flatpak info "$app_id" &>/dev/null && already_installed="$app_id" && break
-    done
-    if [ -n "$already_installed" ]; then
-        echo -e "${GREEN}✓ ${app_title} 已安装 (${already_installed})，无需重复安装。${NC}"
-        return 0
-    fi
-
-    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null
-
-    local available_id=""
-    for app_id in "${app_ids[@]}"; do
-        if timeout 10 flatpak remote-info flathub "$app_id" &>/dev/null; then
-            available_id="$app_id"; break
-        else
-            echo -e "${YELLOW}${app_id} 不存在或查询超时，尝试下一个...${NC}"
-        fi
-    done
-    [ -z "$available_id" ] && echo -e "${RED}✗ 未找到可安装的 ${app_title} 包。${NC}" && return 1
-
-    echo "正在安装 ${available_id} ..."
-    if flatpak install flathub "$available_id" -y 2>/dev/null; then
-        echo -e "${GREEN}✓ ${app_title} 安装成功${NC}"
-        cat > "$HOME/Desktop/${desktop_name}.desktop" << EOF
-[Desktop Entry]
-Type=Application
-Name=${desktop_name}
-Exec=flatpak run ${available_id}
-Icon=${available_id}
-Terminal=false
-Categories=${categories};
-EOF
-        chmod +x "$HOME/Desktop/${desktop_name}.desktop"
-        echo -e "${GREEN}✓ 桌面快捷方式已创建${NC}"
-    else
-        echo -e "${RED}✗ 安装失败，请检查网络或手动安装。${NC}"
-    fi
-}
-
-uninstall_flatpak_app() {
-    local app_title="$1" desktop_name="$2"; shift 2
-    local app_ids=("$@")
-    mk_temp_dir; clear
-    echo -e "${YELLOW}════════════════ 卸载 ${app_title} ════════════════${NC}"
-    local installed=""
-    for pkg in "${app_ids[@]}"; do flatpak info "$pkg" &>/dev/null && installed="$pkg" && break; done
-    [ -z "$installed" ] && echo -e "${YELLOW}未检测到已安装的 ${app_title}。${NC}" && return 0
-
-    confirm_action || { echo "取消卸载。"; return 0; }
-    if flatpak uninstall "$installed" -y; then
-        echo -e "${GREEN}✓ ${app_title} 卸载完成${NC}"
-        local desktop_dir="$HOME/Desktop"
-        if [ -d "$desktop_dir" ]; then
-            local deleted_any=false
-            for f in "$desktop_dir"/*.desktop; do
-                # Desktop 目录为空时 glob 不展开，跳过字面量，避免 basename 得到 "*.desktop"
-                [ -e "$f" ] || continue
-                local base=$(basename "$f")
-                # 只认两件事：①与显示名/应用 ID 完全同名的 .desktop
-                #           ②文件名里带完整应用 ID（点或下划线写法都算，如 com_qq_QQ.desktop）
-                # 不能只用 ${installed//./_} 做子串匹配：com.qq.QQ 会把
-                # com_qq_QQ_something.desktop 这类无关快捷方式一起删掉。
-                local id_us="${installed//./_}"
-                if [ "$base" = "${desktop_name}.desktop" ] || [ "$base" = "${installed}.desktop" ] \
-                   || [ "$base" = "${id_us}.desktop" ] || [ "$base" = "${installed//./-}.desktop" ]; then
-                    rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ 桌面快捷方式已删除: $base${NC}" && deleted_any=true
-                fi
-            done
-            $deleted_any || echo -e "${YELLOW}未找到匹配的桌面快捷方式。${NC}"
-        fi
-
-        local data_dir="$HOME/.var/app/$installed"
-        if [ -d "$data_dir" ]; then
-            echo ""
-            echo -e "${CYAN}是否删除该应用的所有设置和用户数据？${NC}"
-            confirm_action && rm -rf "$data_dir" && echo -e "${GREEN}✓ 用户数据已删除${NC}" || echo -e "${YELLOW}已保留用户数据。${NC}"
-        fi
-        echo ""
-        echo -e "${GREEN}${app_title} 卸载流程结束。${NC}"
-    else
-        echo -e "${RED}✗ 卸载失败${NC}"
-    fi
 }
 
 install_chinese_source() {
@@ -3426,165 +3441,6 @@ calibrate_joystick_trigger() {
     if trigger_cal; then echo -e "${GREEN}✓ 扳机校准完成${NC}"; else echo -e "${RED}✗ 扳机校准失败${NC}"; echo "请确保系统中已安装扳机校准工具 (trigger_cal)"; fi
 }
 
-steamdeck_cache_manager() {
-    # 没有 zenity 时原来还去调 zenity 报错，等于什么都不显示；改为写到标准输出
-    if ! command -v zenity &>/dev/null; then
-        echo -e "${RED}✗ 未找到 zenity，无法打开缓存管理器。请先安装：sudo pacman -S zenity${NC}"
-        return 1
-    fi
-    mk_temp_dir
-
-    # 收集所有 Steam 库的 steamapps 目录：默认库 + libraryfolders.vdf 里的其它库。
-    # 原实现只写死 $HOME/.local/share/Steam/steamapps，装在 SD 卡/第二块盘的库
-    # 根本不会出现在列表里（实测本机 VDF 就有 /run/media/deck/Game/SteamLibrary）。
-    local steam_root="$HOME/.local/share/Steam"
-    local -a steamapps_dirs=()
-    [ -d "$steam_root/steamapps" ] && steamapps_dirs+=("$steam_root/steamapps")
-    local vdf="$steam_root/steamapps/libraryfolders.vdf"
-    if [ -f "$vdf" ]; then
-        local lib_path
-        while IFS= read -r lib_path; do
-            [ -n "$lib_path" ] || continue
-            [ -d "$lib_path/steamapps" ] || continue
-            local dup=0 d
-            for d in "${steamapps_dirs[@]}"; do
-                [ "$d" = "$lib_path/steamapps" ] && { dup=1; break; }
-            done
-            [ "$dup" -eq 0 ] && steamapps_dirs+=("$lib_path/steamapps")
-        done < <(awk -F'"' '/"path"/ {print $4}' "$vdf" 2>/dev/null)
-    fi
-    if [ ${#steamapps_dirs[@]} -eq 0 ]; then
-        zenity --error --text="未找到 Steam 库目录，请确认 Steam 已安装并至少登录过一次。"
-        return 1
-    fi
-
-    # 删除 compatdata/着色器缓存前提醒退出 Steam，否则可能损坏正在使用的数据
-    local steam_running=0
-    if pgrep -x steam >/dev/null 2>&1 || pgrep -x steamwebhelper >/dev/null 2>&1; then
-        steam_running=1
-        if ! zenity --question --title="Steam 正在运行" \
-            --text="检测到 Steam 正在运行。删除兼容数据时可能损坏正在使用的 Proton 前缀。建议先退出 Steam 再清理。仍要继续吗？" \
-            --ok-label="继续" --cancel-label="取消"; then
-            return 0
-        fi
-    fi
-
-    while true; do
-        local choice
-        # 单选列表第一列必须有一个 TRUE，否则直接点确定返回空、用户以为没反应
-        choice=$(zenity --list --radiolist \
-            --title="Steam 缓存管理器" \
-            --text="请选择要清理的缓存类型" \
-            --column="选择" --column="类型" --column="说明" \
-            TRUE  "着色器缓存" "shadercache，删掉后会自动重建" \
-            FALSE "兼容数据" "compatdata，含各游戏的 Proton 前缀" \
-            --width=600 --height=240) || break
-        [ -z "$choice" ] && break
-
-        local cache_type title
-        if [ "$choice" = "着色器缓存" ]; then
-            cache_type="shadercache"; title="着色器缓存"
-        else
-            cache_type="compatdata"; title="兼容数据"
-        fi
-
-        # 用平行数组保存，避免把游戏名拼进 | 分隔字符串（名字里带 | 会解析错位）
-        local -a app_ids=() app_names=() app_sizes=() app_dirs=()
-        local sa dir app_id size manifest game_name
-        for sa in "${steamapps_dirs[@]}"; do
-            [ -d "$sa/$cache_type" ] || continue
-            for dir in "$sa/$cache_type"/*; do
-                [ -d "$dir" ] || continue
-                app_id=$(basename "$dir")
-                [[ "$app_id" =~ ^[0-9]+$ ]] || continue
-                size=$(du -sm "$dir" 2>/dev/null | cut -f1)
-                if [ -z "$size" ] || [ "$size" -le 0 ] 2>/dev/null; then
-                    continue
-                fi
-                game_name=""
-                manifest="$sa/appmanifest_${app_id}.acf"
-                [ -f "$manifest" ] && game_name=$(grep -m1 '"name"' "$manifest" 2>/dev/null | cut -d'"' -f4)
-                [ -z "$game_name" ] && game_name="未知应用"
-                app_ids+=("$app_id"); app_names+=("$game_name")
-                app_sizes+=("$size"); app_dirs+=("$dir")
-            done
-        done
-
-        if [ ${#app_ids[@]} -eq 0 ]; then
-            zenity --info --text="没有找到可清理的$title。"
-            continue
-        fi
-
-        local -a list_data=()
-        local i
-        for i in "${!app_ids[@]}"; do
-            list_data+=("FALSE" "${app_ids[$i]}" "${app_names[$i]}" "${app_sizes[$i]}MB")
-        done
-
-        local selections
-        # ID 列隐藏但用它回传匹配：避免按"显示名"匹配（重名/名字带 | 时都会错）
-        selections=$(zenity --list --checklist \
-            --title="选择要删除的$title" \
-            --text="共 ${#app_ids[@]} 项，可勾选多项后点确定。" \
-            --column="选择" --column="ID" --column="应用名" --column="大小" \
-            --hide-column=2 --print-column=2 --separator=$'\n' \
-            "${list_data[@]}" \
-            --width=720 --height=460) || continue
-        [ -z "$selections" ] && continue
-
-        local -a sel_dirs=() sel_labels=()
-        local sel_line
-        while IFS= read -r sel_line; do
-            [ -n "$sel_line" ] || continue
-            for i in "${!app_ids[@]}"; do
-                if [ "${app_ids[$i]}" = "$sel_line" ]; then
-                    sel_dirs+=("${app_dirs[$i]}")
-                    sel_labels+=("${app_names[$i]} (${app_sizes[$i]}MB)")
-                    break
-                fi
-            done
-        done <<< "$selections"
-
-        if [ ${#sel_dirs[@]} -eq 0 ]; then
-            zenity --info --text="未选择任何有效项目。"
-            continue
-        fi
-
-        # 确认框里列出具体条目和总大小，删除前让用户看清楚删的是什么
-        local total_mb=0 label one_mb
-        for i in "${!sel_dirs[@]}"; do
-            label="${sel_labels[$i]}"
-            # du 失败时输出为空，直接参与 $(( )) 会算术语法报错，先兜底成 0
-            one_mb=$(du -sm "${sel_dirs[$i]}" 2>/dev/null | cut -f1)
-            [[ "$one_mb" =~ ^[0-9]+$ ]] || one_mb=0
-            total_mb=$((total_mb + one_mb))
-        done
-        local confirm_text="将永久删除以下 $title："
-        for label in "${sel_labels[@]}"; do
-            confirm_text+=$'\n'"  • $label"
-        done
-        confirm_text+=$'\n\n'"共 ${#sel_dirs[@]} 项，约 ${total_mb}MB，删除后无法恢复。"
-        zenity --question --title="确认删除" --text="$confirm_text" \
-            --ok-label="删除" --cancel-label="取消" || continue
-
-        local deleted=0 failed=0
-        for i in "${!sel_dirs[@]}"; do
-            if rm -rf -- "${sel_dirs[$i]}" 2>/dev/null; then
-                deleted=$((deleted + 1))
-            else
-                failed=$((failed + 1))
-            fi
-        done
-
-        local result_text="删除完成。"
-        result_text+=$'\n'"成功: $deleted 项"
-        result_text+=$'\n'"失败: $failed 项"
-        [ "$failed" -gt 0 ] && result_text+=$'\n\n'"失败项可能正被占用，请退出 Steam 后重试。"
-        [ "$steam_running" -eq 1 ] && result_text+=$'\n'"建议重启 Steam 让缓存重新生成。"
-        zenity --info --text="$result_text"
-    done
-}
-
 fix_boot() {
     mk_temp_dir
     clear
@@ -4204,682 +4060,6 @@ fix_shared_disk() {
     else
         echo -e "${GREEN}════════════════ 全部完成 ════════════════${NC}"
     fi
-}
-
-# ============================================================================
-# 系统体检：SteamOS 更新后可排查「掉盘 / 掉引导 / 挂载失效」
-# 只读检查，除非用户明确选择修复项，否则不修改任何系统配置
-# ============================================================================
-# 动态探测 ESP 分区（不能硬编码 /dev/nvme0n1p1：eMMC 是 mmcblk0，分区号也可能不是 1）
-detect_esp_partition() {
-    local dev="" line
-    ESP_DEV=""; ESP_DISK=""; ESP_PARTN=""; ESP_MOUNT=""
-    # 1) 已挂载的 /esp（SteamOS）或 /boot/efi（Bazzite）
-    #    注意：findmnt -M 也会返回 systemd autofs 的 "systemd-1"，必须过滤出 /dev/ 开头的真实设备
-    for mp in /esp /boot/efi; do
-        dev=$(findmnt -n -o SOURCE -M "$mp" 2>/dev/null | grep '^/dev/' | head -1 || true)
-        if [ -z "$dev" ]; then
-            # 兜底：从 mount 输出里找该挂载点对应的设备
-            dev=$(mount 2>/dev/null | awk -v m="$mp" '$3 == m {print $1; exit}')
-        fi
-        if [ -n "$dev" ] && [ -b "$dev" ]; then
-            ESP_DEV="$dev"; ESP_MOUNT="$mp"; break
-        fi
-    done
-    # 2) 按 EFI 分区类型 GUID 查找（c12a7328-f81f-11d2-ba4b-00a0c93ec93b）
-    if [ -z "$ESP_DEV" ]; then
-        dev=$(lsblk -P -n -o PATH,PARTTYPE 2>/dev/null \
-            | awk -F'"' '/PARTTYPE="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"/{print $2; exit}' || true)
-        [ -n "$dev" ] && [ -b "$dev" ] && ESP_DEV="$dev"
-    fi
-    [ -n "$ESP_DEV" ] || return 1
-    # 注意：lsblk 输出可能带前后空格，必须清理，否则 efibootmgr -p " 1" 会失败
-    ESP_DISK="/dev/$(lsblk -n -o PKNAME "$ESP_DEV" 2>/dev/null | head -1 | tr -d '[:space:]')"
-    ESP_PARTN=$(lsblk -n -o PARTN "$ESP_DEV" 2>/dev/null | head -1 | tr -d '[:space:]')
-    [ -n "$ESP_PARTN" ] || ESP_PARTN=1
-    return 0
-}
-
-# 检查结果累加器
-HC_TOTAL=0; HC_OK=0; HC_WARN=0; HC_FAIL=0
-HC_FIXABLE=()      # 可自动修复的问题编号
-hc_result() {
-    # $1=状态 ok/warn/fail  $2=标题  $3=说明  $4=可修复(1/0)  $5=修复函数名
-    HC_TOTAL=$((HC_TOTAL + 1))
-    case "$1" in
-        ok)   HC_OK=$((HC_OK + 1));   echo -e "  ${GREEN}[正常]${NC} $2";;
-        warn) HC_WARN=$((HC_WARN + 1)); echo -e "  ${YELLOW}[注意]${NC} $2";;
-        fail) HC_FAIL=$((HC_FAIL + 1)); echo -e "  ${RED}[异常]${NC} $2";;
-    esac
-    [ -n "$3" ] && echo -e "         $3"
-    if [ "${4:-0}" -eq 1 ] && [ -n "${5:-}" ]; then
-        HC_FIXABLE+=("$1|$2|$5")
-        echo -e "         ${CYAN}→ 可通过下方「修复」选项处理${NC}"
-    fi
-}
-
-# ---------- 单项检查 ----------
-hc_check_esp() {
-    echo -e "${CYAN}【1/6】ESP（EFI 系统分区）${NC}"
-    if detect_esp_partition; then
-        hc_result ok "ESP 分区已识别" "$ESP_DEV 挂载于 $ESP_MOUNT"
-        # 剩余空间检查（Clover 需要约 15MB）
-        local avail
-        avail=$(df --output=avail "$ESP_DEV" 2>/dev/null | tail -1 | tr -d ' ')
-        if [[ "$avail" =~ ^[0-9]+$ ]]; then
-            if [ "$avail" -ge 15000 ]; then
-                hc_result ok "ESP 剩余空间充足" "约 $((avail / 1024))MB 可用"
-            else
-                hc_result warn "ESP 剩余空间偏小" "仅约 $((avail / 1024))MB，安装 Clover 需要约 15MB"
-            fi
-        fi
-        # EFI 目录可读性（需 root 才能列 /esp/efi/EFI）
-        if sudo -n ls "$ESP_MOUNT/efi/EFI" &>/dev/null || sudo -n ls "$ESP_MOUNT/EFI" &>/dev/null; then
-            hc_result ok "ESP 可正常读取" ""
-        else
-            hc_result warn "无法读取 ESP 内容（需要 sudo）" "请确认 sudo 可用后重试"
-        fi
-    else
-        hc_result fail "无法识别 ESP 分区" "未找到已挂载的 /esp，也未能按 EFI 分区类型定位"
-    fi
-    echo ""
-}
-
-hc_check_efi_entries() {
-    echo -e "${CYAN}【2/6】UEFI 启动项${NC}"
-    if ! command -v efibootmgr &>/dev/null; then
-        hc_result fail "未找到 efibootmgr" "请安装：sudo pacman -S efibootmgr"
-        echo ""; return
-    fi
-    local efi_out
-    efi_out=$(sudo -n efibootmgr 2>/dev/null || efibootmgr 2>/dev/null || true)
-    if [ -z "$efi_out" ]; then
-        hc_result fail "无法读取 UEFI 启动项" "efibootmgr 执行失败"
-        echo ""; return
-    fi
-    # Clover 启动项
-    if echo "$efi_out" | grep -qi "clover"; then
-        local cl_num
-        cl_num=$(echo "$efi_out" | grep -i "clover" | head -1 | grep -o 'Boot[0-9A-Fa-f]\{4\}' | head -1)
-        hc_result ok "Clover 启动项存在" "$cl_num"
-    else
-        hc_result fail "Clover 启动项缺失" "SteamOS 更新或固件重置后常见，将自动从 ESP 重建" 1 "hc_repair_boot"
-    fi
-    # SteamOS 启动项
-    if echo "$efi_out" | grep -qi "steamos\|steamcl"; then
-        hc_result ok "SteamOS 启动项存在" ""
-    else
-        hc_result fail "SteamOS 启动项缺失" "将从 ESP 重建（同时会检查 Clover）" 1 "hc_repair_boot"
-    fi
-    # Windows 启动项（不是必需：Clover 会接管）
-    if echo "$efi_out" | grep -qi "windows"; then
-        hc_result ok "Windows 启动项存在" ""
-    else
-        hc_result warn "Windows 启动项缺失（Clover 会接管，通常正常）" "若要在固件菜单直接启动 Windows 才需要"
-    fi
-    # 启动顺序
-    local order first
-    order=$(echo "$efi_out" | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
-    first=$(echo "$order" | cut -d, -f1)
-    if [ -n "$first" ] && echo "$efi_out" | grep -i "clover" | grep -q "Boot$first"; then
-        hc_result ok "Clover 为第一启动项" "BootOrder: $order"
-    else
-        hc_result warn "Clover 不是第一启动项" "当前顺序: ${order:-未知}" 1 "hc_repair_boot"
-    fi
-    echo ""
-}
-
-hc_check_clover_files() {
-    echo -e "${CYAN}【3/6】Clover 引导文件完整性${NC}"
-    if [ -z "${ESP_DEV:-}" ]; then
-        hc_result warn "跳过：ESP 未识别" ""
-        echo ""; return
-    fi
-    # 若 ESP 未挂载，临时挂到一个只读目录来检查内容
-    local tmp_mount="" efi_root=""
-    if [ -z "${ESP_MOUNT:-}" ]; then
-        tmp_mount=$(mktemp -d 2>/dev/null) || tmp_mount=""
-        if [ -n "$tmp_mount" ] && sudo -n mount -o ro "$ESP_DEV" "$tmp_mount" 2>/dev/null; then
-            ESP_MOUNT="$tmp_mount"
-        else
-            rmdir "$tmp_mount" 2>/dev/null
-            hc_result warn "ESP 未挂载，且无法临时挂载检查" "请先挂载：sudo mount $ESP_DEV /mnt"
-            echo ""; return
-        fi
-    fi
-    # 定位 EFI 目录：不同机型/系统上 EFI 可能在 ESP 根下，也可能在 efi 子目录下
-    # （SteamOS 的 Clover 安装脚本用 /esp/efi，但 efibootmgr 记录的引导路径是 \EFI\...
-    #  相对 ESP 根，两种布局都可能存在）。不能只用普通用户的 [ -d ] 判断——
-    # /esp 权限是 700 root，普通用户永远看不到，会误判成目录不存在。
-    efi_root=""
-    local cand
-    for cand in "$ESP_MOUNT/EFI" "$ESP_MOUNT/efi/EFI"; do
-        if sudo -n ls "$cand" &>/dev/null; then
-            efi_root="$cand"; break
-        fi
-    done
-
-    if [ -z "$efi_root" ]; then
-        # 再尝试上层目录，判断到底是「没权限」还是「真的没有这个目录」
-        if sudo -n ls "$ESP_MOUNT" &>/dev/null; then
-            local top_list
-            top_list=$(sudo -n ls "$ESP_MOUNT" 2>/dev/null || true)
-            hc_result fail "ESP 上没有找到 EFI 引导目录" \
-                "ESP 根目录内容: $(echo "$top_list" | tr '\n' ' ')。引导文件可能已被 SteamOS 更新清除，需要重装 Clover"
-        else
-            hc_result warn "无法读取 ESP 上的 EFI 目录（需要 sudo 密码）" \
-                "本次跳过 Clover 文件检查；请在体检时输入密码，或手动执行：sudo ls $ESP_MOUNT"
-        fi
-        [ -n "$tmp_mount" ] && { sudo -n umount "$tmp_mount" 2>/dev/null; rmdir "$tmp_mount" 2>/dev/null; }
-        echo ""; return
-    fi
-    hc_result ok "已定位 EFI 目录" "$efi_root"
-
-    # 列出实际内容，用于更准确的判断
-    local efi_list
-    efi_list=$(sudo -n ls "$efi_root" 2>/dev/null || true)
-
-    # Clover 主程序
-    if sudo -n test -f "$efi_root/clover/cloverx64.efi" 2>/dev/null; then
-        hc_result ok "Clover EFI 主程序存在" "$efi_root/clover/cloverx64.efi"
-    elif echo "$efi_list" | grep -qx "clover"; then
-        hc_result fail "Clover 目录存在但缺少 cloverx64.efi" "引导文件不完整，需要重装 Clover"
-    else
-        hc_result fail "Clover EFI 主程序缺失" "需要重装 Clover（引导管理 → 安装/重装 Clover）"
-    fi
-    # Clover 配置
-    if sudo -n test -f "$efi_root/clover/config.plist" 2>/dev/null; then
-        hc_result ok "Clover 配置文件存在" ""
-    elif echo "$efi_list" | grep -qx "clover"; then
-        hc_result warn "Clover 配置文件缺失" "重装 Clover 可恢复默认配置"
-    fi
-    # BOOTX64.EFI 是否为 Clover（原始文件应已备份为 .orig）
-    local boot_dir=""
-    for cand in BOOT boot; do
-        if echo "$efi_list" | grep -qx "$cand"; then boot_dir="$cand"; break; fi
-    done
-    if [ -n "$boot_dir" ]; then
-        if sudo -n test -f "$efi_root/$boot_dir/BOOTX64.EFI" 2>/dev/null \
-            || sudo -n test -f "$efi_root/$boot_dir/bootx64.efi" 2>/dev/null; then
-            if sudo -n test -f "$efi_root/$boot_dir/BOOTX64.EFI.orig" 2>/dev/null \
-                || sudo -n test -f "$efi_root/$boot_dir/bootx64.efi.orig" 2>/dev/null; then
-                hc_result ok "BOOTX64.EFI 已被 Clover 接管" "原文件已备份为 .orig"
-            else
-                hc_result warn "未找到 BOOTX64.EFI 备份（.orig）" "若 Clover 仍能启动则通常无妨"
-            fi
-        else
-            hc_result warn "BOOT 目录下未找到 bootx64.efi" ""
-        fi
-    fi
-    # 卸载临时挂载点
-    if [ -n "$tmp_mount" ]; then
-        sudo -n umount "$tmp_mount" 2>/dev/null
-        rmdir "$tmp_mount" 2>/dev/null
-    fi
-    echo ""
-}
-
-hc_check_windows_partition() {
-    echo -e "${CYAN}【4/6】Windows 分区${NC}"
-    local found=0 win_dev="" win_mp=""
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        local nm fs lb mp
-        nm=$(echo "$line" | sed -n 's/.*NAME="\([^"]*\)".*/\1/p')
-        fs=$(echo "$line" | sed -n 's/.*FSTYPE="\([^"]*\)".*/\1/p')
-        lb=$(echo "$line" | sed -n 's/.*LABEL="\([^"]*\)".*/\1/p')
-        mp=$(echo "$line" | sed -n 's/.*MOUNTPOINT="\([^"]*\)".*/\1/p')
-        case "$fs" in
-            ntfs|fuseblk|ntfs3)
-                found=1
-                if [ "$lb" = "Windows" ]; then
-                    win_dev="/dev/$nm"; win_mp="$mp"
-                fi
-                ;;
-        esac
-    done < <(lsblk -P -n -o NAME,FSTYPE,LABEL,MOUNTPOINT 2>/dev/null)
-
-    if [ "$found" -eq 0 ]; then
-        hc_result warn "未发现 NTFS 分区" "若确为 Windows 双系统，请检查硬盘是否松动或分区表异常"
-        echo ""; return
-    fi
-    if [ -n "$win_dev" ]; then
-        hc_result ok "Windows 分区存在" "$win_dev${win_mp:+ 挂载于 $win_mp}"
-        if [ -n "$win_mp" ] && [ -d "$win_mp" ]; then
-            hc_result ok "Windows 分区已挂载" "$win_mp"
-        else
-            hc_result warn "Windows 分区未挂载" "将写入 fstab 实现开机自动挂载" 1 "hc_repair_mount"
-        fi
-        # 检查 Windows 实际文件结构（确认不是空分区）
-        local check_mp="$win_mp"
-        if [ -z "$check_mp" ] || [ ! -d "$check_mp" ]; then
-            for base in /run/media/*/"$nm" /media/*/"$nm"; do
-                [ -d "$base" ] && check_mp="$base" && break
-            done
-        fi
-        if [ -n "$check_mp" ] && [ -d "$check_mp" ]; then
-            if [ -d "$check_mp/Windows" ] && { [ -d "$check_mp/Program Files" ] || [ -d "$check_mp/Users" ]; }; then
-                hc_result ok "Windows 系统文件完整" "检测到 Windows/Program Files/Users"
-            else
-                hc_result warn "分区内未见 Windows 系统文件" "可能是纯数据盘，或 Windows 已被删除"
-            fi
-        fi
-    else
-        hc_result warn "未找到标签为 Windows 的 NTFS 分区" "可能是纯数据盘；如确认有 Windows 请检查分区标签"
-    fi
-    echo ""
-}
-
-hc_check_fstab() {
-    echo -e "${CYAN}【5/6】/etc/fstab 挂载配置${NC}"
-    if [ ! -f /etc/fstab ]; then
-        hc_result fail "找不到 /etc/fstab" ""
-        echo ""; return
-    fi
-    local bad=0 total=0
-    while IFS= read -r line; do
-        # 跳过注释与空行
-        case "$line" in ''|\#*) continue;; esac
-        local dev mp rest uuid
-        dev=$(echo "$line" | awk '{print $1}')
-        mp=$(echo "$line" | awk '{print $2}')
-        [ -z "$dev" ] && continue
-        total=$((total + 1))
-        # UUID= 形式：验证能否在 blkid 中找到
-        case "$dev" in
-            UUID=*)
-                uuid="${dev#UUID=}"
-                if ! lsblk -P -n -o UUID 2>/dev/null | grep -q "UUID=\"$uuid\""; then
-                    # /home/swapfile 这类不是分区，单独判断
-                    if [ "$dev" = "/home/swapfile" ] || echo "$dev" | grep -q "/"; then
-                        :
-                    else
-                        echo -e "  ${RED}[异常]${NC} fstab 条目指向不存在的分区: $dev → $mp"
-                        bad=$((bad + 1))
-                    fi
-                fi
-                ;;
-            /home/swapfile)
-                if [ ! -f /home/swapfile ]; then
-                    echo -e "  ${RED}[异常]${NC} fstab 引用 /home/swapfile 但文件不存在"
-                    bad=$((bad + 1))
-                fi
-                ;;
-        esac
-    done < /etc/fstab
-    if [ "$bad" -eq 0 ]; then
-        hc_result ok "fstab 条目有效" "共 $total 条有效配置"
-    else
-        hc_result fail "fstab 有 $bad 条失效条目" "失效条目可能导致开机变慢或进入救援模式" 1 "hc_fix_fstab_invalid"
-    fi
-    # 检查 systemd 是否报告挂载失败
-    local failed_units
-    failed_units=$(systemctl list-units --state=failed --no-legend --plain 2>/dev/null | grep -cE '\.mount|\.swap' || true)
-    if [ "${failed_units:-0}" -gt 0 ]; then
-        hc_result fail "有 $failed_units 个挂载单元失败" "systemctl --failed 可查看详情"
-    else
-        hc_result ok "无失败的挂载单元" ""
-    fi
-    echo ""
-}
-
-hc_check_system() {
-    echo -e "${CYAN}【6/6】系统与引导服务${NC}"
-    # SteamOS 只读模式
-    if command -v steamos-readonly &>/dev/null; then
-        local ro
-        ro=$(steamos-readonly status 2>/dev/null || true)
-        if echo "$ro" | grep -q "enabled"; then
-            hc_result ok "SteamOS 只读模式正常（enabled）" ""
-        else
-            hc_result warn "SteamOS 只读模式为 disabled" "通常不改文件时会自动恢复；长期保持可写有被更新覆盖的风险"
-        fi
-    fi
-    # clover-bootmanager 服务（这是掉引导后能自愈的关键）
-    local has_clover_svc=0
-    if systemctl list-unit-files --no-legend --plain 2>/dev/null \
-        | awk '$1 == "clover-bootmanager.service" {found=1} END {exit !found}'; then
-        has_clover_svc=1
-    fi
-    if [ "$has_clover_svc" -eq 1 ]; then
-        if systemctl is-enabled clover-bootmanager.service &>/dev/null; then
-            hc_result ok "Clover 引导守护服务已启用" "开机自动重建丢失的启动项"
-        else
-            hc_result fail "Clover 引导守护服务未启用" "启用后可在更新后自动重建启动项" 1 "hc_fix_enable_service"
-        fi
-        if systemctl is-active clover-bootmanager.service &>/dev/null; then
-            hc_result ok "Clover 引导守护服务运行中" ""
-        else
-            hc_result warn "Clover 引导守护服务未运行" "可手动启动"
-        fi
-    else
-        hc_result warn "未安装 Clover 引导守护服务" "安装 Clover 时会一并安装"
-    fi
-    # 内核与系统版本（供排查更新是否刚发生）
-    hc_result ok "当前内核版本: $(uname -r)" ""
-    local os_pretty
-    os_pretty=$(grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"')
-    hc_result ok "系统版本: ${os_pretty:-未知}" ""
-    echo ""
-}
-
-# ---------- 修复动作 ----------
-
-
-
-hc_fix_enable_service() {
-    if sudo systemctl enable --now clover-bootmanager.service 2>/dev/null; then
-        echo -e "${GREEN}✓ Clover 引导守护服务已启用${NC}"
-        return 0
-    fi
-    echo -e "${RED}✗ 启用失败，请手动执行: sudo systemctl enable --now clover-bootmanager.service${NC}"
-    return 1
-}
-
-hc_fix_fstab_invalid() {
-    echo -e "${CYAN}备份 /etc/fstab 并注释掉失效条目...${NC}"
-    local backup="/etc/fstab.backup.$(date +%Y%m%d_%H%M%S)"
-    if ! sudo cp /etc/fstab "$backup" 2>/dev/null; then
-        echo -e "${RED}✗ 备份失败，为保证安全已中止${NC}"
-        return 1
-    fi
-    echo -e "${GREEN}✓ 已备份到 $backup${NC}"
-    local tmp="${TEMP_DIR}/fstab.hc.$$"
-    local changed=0
-    while IFS= read -r line; do
-        case "$line" in
-            ''|\#*) echo "$line"; continue;;
-        esac
-        local dev
-        dev=$(echo "$line" | awk '{print $1}')
-        case "$dev" in
-            UUID=*)
-                local uuid="${dev#UUID=}"
-                if lsblk -P -n -o UUID 2>/dev/null | grep -q "UUID=\"$uuid\""; then
-                    echo "$line"
-                elif [ "$dev" = "UUID=/home/swapfile" ]; then
-                    echo "$line"
-                else
-                    echo "# [体检] 分区不存在，已注释: $line"
-                    changed=$((changed + 1))
-                fi
-                ;;
-            *)
-                echo "$line"
-                ;;
-        esac
-    done < /etc/fstab > "$tmp" 2>/dev/null
-    if [ "$changed" -eq 0 ]; then
-        rm -f "$tmp"
-        echo -e "${YELLOW}未发现需要注释的条目${NC}"
-        return 0
-    fi
-    if sudo cp "$tmp" /etc/fstab; then
-        rm -f "$tmp"
-        sudo systemctl daemon-reload 2>/dev/null
-        echo -e "${GREEN}✓ 已注释 $changed 条失效条目（原文件备份在 $backup）${NC}"
-        return 0
-    fi
-    rm -f "$tmp"
-    echo -e "${RED}✗ 写入失败，/etc/fstab 未被修改${NC}"
-    return 1
-}
-
-# 交互式修复入口
-hc_run_fixes() {
-    if [ ${#HC_FIXABLE[@]} -eq 0 ]; then
-        echo -e "${GREEN}没有发现可自动修复的问题。${NC}"
-        return 0
-    fi
-    if ! sudo -v 2>/dev/null; then
-        echo -e "${RED}✗ 修复需要 sudo 权限，已跳过${NC}"
-        return 1
-    fi
-    echo -e "${YELLOW}════════════════ 开始修复 ════════════════${NC}"
-    local item state title fn
-    for item in "${HC_FIXABLE[@]}"; do
-        state="${item%%|*}"
-        title="${item#*|}"; title="${title%%|*}"
-        fn="${item##*|}"
-        echo ""
-        echo -e "${CYAN}修复: $title${NC}"
-        case "$fn" in
-            fix_boot)
-                hc_repair_boot
-                ;;
-            fix_shared_disk)
-                # 「修复互通盘」会清屏并重开交互界面，这里改为直接执行其核心动作
-                hc_repair_mount
-                ;;
-            *)
-                if declare -f "$fn" >/dev/null; then
-                    "$fn"
-                else
-                    echo -e "${RED}内部错误：修复函数 $fn 不存在${NC}"
-                fi
-                ;;
-        esac
-        if [ $? -ne 0 ]; then
-            echo -e "${YELLOW}该项修复未成功，请查看上方提示${NC}"
-        fi
-    done
-    echo ""
-    echo -e "${YELLOW}提示：建议修复后重新运行一次体检确认结果。${NC}"
-}
-
-# ---------------------------------------------------------------------------
-# 体检内联的引导修复（复用 fix_boot 的探测与重建逻辑，但不重开独立界面）
-# ---------------------------------------------------------------------------
-hc_repair_boot() {
-    if ! detect_esp_partition; then
-        echo -e "${RED}✗ 无法识别 ESP 分区，修复中止${NC}"
-        return 1
-    fi
-    local efi_out
-    efi_out=$(efibootmgr 2>/dev/null || true)
-    local ro_fix_ok=0
-
-    # 1) Clover 启动项
-    if echo "$efi_out" | grep -qi "clover"; then
-        echo -e "${CYAN}Clover 启动项已存在，跳过重建${NC}"
-    else
-        echo -e "${CYAN}正在重建 Clover 启动项（$ESP_DISK 分区 $ESP_PARTN）...${NC}"
-        # 清理残留同名条目
-        local old
-        for old in $(echo "$efi_out" | grep -i "clover" | grep -o 'Boot[0-9A-Fa-f]\{4\}' | sed 's/Boot//'); do
-            sudo efibootmgr -b "$old" -B &>/dev/null || true
-        done
-        if sudo efibootmgr -c -d "$ESP_DISK" -p "$ESP_PARTN" \
-            -L "Clover - GUI Boot Manager" -l '\EFI\clover\cloverx64.efi' &>/dev/null; then
-            echo -e "${GREEN}✓ Clover 启动项已重建${NC}"
-            ro_fix_ok=1
-        else
-            echo -e "${RED}✗ Clover 启动项重建失败${NC}"
-            echo -e "${YELLOW}  ESP 上可能缺少 cloverx64.efi，请用「安装/重装 Clover」${NC}"
-            return 1
-        fi
-    fi
-
-    # 2) SteamOS 启动项
-    if echo "$efi_out" | grep -qi "steamos\|steamcl"; then
-        echo -e "${CYAN}SteamOS 启动项已存在，跳过重建${NC}"
-    else
-        echo -e "${CYAN}正在重建 SteamOS 启动项...${NC}"
-        if sudo efibootmgr -c -d "$ESP_DISK" -p "$ESP_PARTN" \
-            -L "SteamOS" -l '\EFI\steamos\steamcl.efi' &>/dev/null; then
-            echo -e "${GREEN}✓ SteamOS 启动项已重建${NC}"
-            ro_fix_ok=1
-        else
-            echo -e "${RED}✗ SteamOS 启动项重建失败${NC}"
-        fi
-    fi
-
-    # 3) Clover 设为第一启动项
-    local cl
-    cl=$(efibootmgr 2>/dev/null | grep -i "clover" | grep -o 'Boot[0-9A-Fa-f]\{4\}' | head -1 | sed 's/Boot//')
-    if [ -n "$cl" ]; then
-        local cur new
-        cur=$(efibootmgr 2>/dev/null | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
-        new="$cl"
-        if [ -n "$cur" ]; then
-            new="$cl,$(echo "$cur" | tr ',' '\n' | grep -vx "$cl" | tr '\n' ',' | sed 's/,$//')"
-        fi
-        if [ "$cur" = "$new" ]; then
-            echo -e "${CYAN}Clover 已是第一启动项，无需调整${NC}"
-        else
-            echo -e "${CYAN}调整启动顺序: ${cur:-空} → $new${NC}"
-            if sudo efibootmgr -o "$new" &>/dev/null; then
-                echo -e "${GREEN}✓ Clover 已设为第一启动项${NC}"
-            else
-                echo -e "${RED}✗ 调整启动顺序失败${NC}"
-                return 1
-            fi
-        fi
-    else
-        echo -e "${YELLOW}⚠ 未找到 Clover 启动项，无法设置启动顺序${NC}"
-    fi
-    return 0
-}
-
-# ---------------------------------------------------------------------------
-# 体检内联的挂载修复：把 Windows(NTFS) 分区写入 fstab 实现自动挂载
-# ---------------------------------------------------------------------------
-hc_repair_mount() {
-    echo -e "${CYAN}正在为 NTFS 分区配置开机自动挂载...${NC}"
-    # 写 fstab 前必须备份：fstab 写坏会导致下次开机进不了系统
-    local backup="/etc/fstab.backup.$(date +%Y%m%d_%H%M%S)"
-    if ! sudo cp /etc/fstab "$backup" 2>/dev/null; then
-        echo -e "${RED}✗ 无法备份 /etc/fstab，为保证安全已中止修改${NC}"
-        return 1
-    fi
-    echo -e "${GREEN}✓ 已备份 /etc/fstab 到 $backup${NC}"
-    local changed=0 failed=0
-    local line nm fs lb mp uuid
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        nm=$(echo "$line" | sed -n 's/.*NAME="\([^"]*\)".*/\1/p')
-        fs=$(echo "$line" | sed -n 's/.*FSTYPE="\([^"]*\)".*/\1/p')
-        lb=$(echo "$line" | sed -n 's/.*LABEL="\([^"]*\)".*/\1/p')
-        mp=$(echo "$line" | sed -n 's/.*MOUNTPOINT="\([^"]*\)".*/\1/p')
-        uuid=$(echo "$line" | sed -n 's/.*UUID="\([^"]*\)".*/\1/p')
-        case "$fs" in ntfs|fuseblk|ntfs3) ;; *) continue;; esac
-        [ -n "$uuid" ] || continue
-        # 已在 fstab 中精确匹配到该 UUID 则跳过
-        if awk -v k="UUID=$uuid" '$1 == k {found=1} END {exit !found}' /etc/fstab 2>/dev/null; then
-            echo -e "${CYAN}  $nm 已在 fstab 中，跳过${NC}"
-            continue
-        fi
-        # 确定挂载点：优先沿用当前挂载点，否则用 /run/media/<user>/<label>
-        local target="${mp:-}"
-        if [ -z "$target" ] || [ "$target" = "None" ]; then
-            target="/run/media/${CURRENT_USER}/${lb:-$nm}"
-        fi
-        echo -e "${CYAN}  添加 $nm (UUID=$uuid) → $target${NC}"
-        if echo "UUID=$uuid $target ntfs3 defaults,nofail,uid=1000,gid=1000 0 0" | sudo tee -a /etc/fstab >/dev/null; then
-            changed=$((changed + 1))
-        else
-            failed=$((failed + 1))
-        fi
-    done < <(lsblk -P -n -o NAME,FSTYPE,LABEL,MOUNTPOINT,UUID 2>/dev/null)
-
-    if [ "$changed" -gt 0 ]; then
-        sudo systemctl daemon-reload 2>/dev/null
-        echo -e "${GREEN}✓ 已添加 $changed 个自动挂载条目${NC}"
-        echo -e "${CYAN}  立即挂载测试...${NC}"
-        sudo mount -a 2>&1 | head -5 || true
-    else
-        echo -e "${CYAN}没有需要添加的挂载条目${NC}"
-    fi
-    [ "$failed" -gt 0 ] && { echo -e "${RED}✗ $failed 个条目写入失败${NC}"; return 1; }
-    return 0
-}
-
-health_check() {
-    mk_temp_dir
-    clear
-    echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║         SteamOS 系统体检（更新后排障）        ║${NC}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo "用于排查 SteamOS 更新后常见的：掉盘、掉引导、挂载失效。"
-    echo "检查过程为只读，仅在您确认后才执行修复。"
-    echo ""
-    echo "正在检查，需要 sudo 权限读取 EFI 分区内容..."
-    if ! sudo -v 2>/dev/null; then
-        echo -e "${YELLOW}⚠ 未获取 sudo 权限：部分检查（ESP 内容、启动项）将无法完成${NC}"
-    fi
-    echo ""
-    echo -e "${CYAN}──────────────── 检查结果 ────────────────${NC}"
-    echo ""
-    hc_check_esp
-    hc_check_efi_entries
-    hc_check_clover_files
-    hc_check_windows_partition
-    hc_check_fstab
-    hc_check_system
-    echo -e "${CYAN}──────────────── 汇总 ────────────────${NC}"
-    echo -e "  共检查 $HC_TOTAL 项：${GREEN}正常 $HC_OK${NC} ｜ ${YELLOW}注意 $HC_WARN${NC} ｜ ${RED}异常 $HC_FAIL${NC}"
-    echo ""
-
-    # 结论按「异常」数量判定，而不是「注意」：
-    # 「注意」项多为环境差异（如 Windows 启动项被 Clover 接管、ESP 剩余空间偏小），
-    # 并不代表引导或挂载坏了，不该让用户以为系统有毛病。
-    if [ "$HC_FAIL" -eq 0 ]; then
-        if [ "$HC_WARN" -eq 0 ]; then
-            echo -e "${GREEN}✅ 结论：系统状态良好，未发现问题。${NC}"
-        else
-            echo -e "${GREEN}✅ 结论：未发现异常，引导与挂载均正常。${NC}"
-            echo -e "${CYAN}   另有 $HC_WARN 项提示，属于环境差异或可优化项，不影响使用（详见上方 [注意] 条目）。${NC}"
-        fi
-        if [ ${#HC_FIXABLE[@]} -gt 0 ]; then
-            echo ""
-            echo -e "${YELLOW}其中 ${#HC_FIXABLE[@]} 项可以自动优化，是否现在处理？${NC}"
-            local ans
-            if read -p "输入 y 处理，其他键跳过: " -n 1 -r ans < /dev/tty 2>/dev/null; then
-                echo ""
-                if [[ "$ans" =~ ^[Yy]$ ]]; then
-                    hc_run_fixes
-                else
-                    echo "已跳过。可稍后重新运行体检再处理。"
-                fi
-            else
-                echo -e "${YELLOW}无法读取输入（非交互环境），已跳过。${NC}"
-            fi
-        fi
-        echo ""
-        return 0
-    fi
-
-    # 到这里说明确实有「异常」，才提示需要处理
-    echo -e "${RED}❌ 结论：发现 $HC_FAIL 项异常，需要处理。${NC}"
-    if [ ${#HC_FIXABLE[@]} -gt 0 ]; then
-        echo -e "${YELLOW}其中 ${#HC_FIXABLE[@]} 项可以自动修复：${NC}"
-        local item title
-        for item in "${HC_FIXABLE[@]}"; do
-            title="${item#*|}"; title="${title%%|*}"
-            echo "   · $title"
-        done
-        local ans
-        if read -p "是否现在修复？(y/N): " -n 1 -r ans < /dev/tty 2>/dev/null; then
-            echo ""
-            if [[ "$ans" =~ ^[Yy]$ ]]; then
-                hc_run_fixes
-            else
-                echo "已跳过修复。可稍后重新运行体检并选择修复。"
-            fi
-        else
-            echo -e "${YELLOW}无法读取输入（非交互环境），已跳过修复。${NC}"
-            echo "如需修复，请按上方「可自动修复」提示手动处理。"
-        fi
-    else
-        echo -e "${YELLOW}以上异常需要手动处理，请按上方 [异常] 条目的提示操作。${NC}"
-    fi
-    echo ""
-    echo -e "${CYAN}常见原因与建议：${NC}"
-    echo "  · SteamOS 更新后 Clover 启动项消失 → 用本功能「修复」重建，或重装 Clover"
-    echo "  · Windows 分区不再自动挂载 → 运行「修复互通盘」"
-    echo "  · ESP 上 Clover 文件被覆盖 → 需要重装 Clover（引导管理 → 安装/重装 Clover）"
-    echo "  · 完全无法开机 / 进不了系统 → 需要用 SteamOS 恢复 U 盘救援，本工具无法覆盖"
 }
 
 install_uu_accelerator() {
@@ -6190,911 +5370,6 @@ uninstall_plugin_store() {
     fi
     echo -e "${GREEN}✓ 插件商店卸载完成${NC}"
     echo "如需重新安装，请使用 '安装插件商店' 功能。"
-}
-
-get_ge_proton_versions() {
-    curl -s "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases?per_page=100" | \
-        python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    tags = []
-    for rel in data:
-        tag = rel.get('tag_name', '')
-        if tag.startswith('GE-Proton'):
-            tags.append(tag)
-    print('\n'.join(tags))
-except:
-    pass
-"
-}
-
-get_installed_ge_proton() {
-    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
-    [ -d "$install_dir" ] || return
-    for dir in "$install_dir"/GE-Proton*; do
-        [ -d "$dir" ] && basename "$dir"
-    done
-}
-
-ge_proton_manager() {
-    while true; do
-        local choice=$(zenity --list --radiolist \
-            --title="兼容层管理" \
-            --text="管理 GE-Proton / Proton-CachyOS(SLR) / DW Proton\nDW Proton 偏二次元与特定游戏；外挂请用独立的 CheatDeck 插件入口。" \
-            --column="选择" --column="操作" \
-            FALSE "GE-Proton：安装" \
-            FALSE "GE-Proton：卸载" \
-            FALSE "Proton-CachyOS(SLR)：安装" \
-            FALSE "Proton-CachyOS(SLR)：卸载" \
-            FALSE "DW Proton：安装" \
-            FALSE "DW Proton：卸载" \
-            --width=560 --height=360 2>/dev/null)
-        [ $? -eq 1 ] && return 0
-        case "$choice" in
-            "GE-Proton：安装") ge_proton_install ;;
-            "GE-Proton：卸载") ge_proton_uninstall ;;
-            "Proton-CachyOS(SLR)：安装") cachyos_proton_install ;;
-            "Proton-CachyOS(SLR)：卸载") cachyos_proton_uninstall ;;
-            "DW Proton：安装") dwproton_install ;;
-            "DW Proton：卸载") dwproton_uninstall ;;
-            *) return 0 ;;
-        esac
-    done
-}
-
-ge_proton_install() {
-    (
-        echo "10"; echo "# 正在获取版本列表，请稍候..."
-        sleep 0.5
-        echo "50"; echo "# 正在连接 GitHub API..."
-        sleep 0.5
-        echo "100"
-    ) | zenity --progress --pulsate --title="加载中" --text="正在获取版本列表..." --width=400 2>/dev/null &
-    ZENITY_PID=$!
-
-    local all_versions=$(get_ge_proton_versions)
-
-    kill $ZENITY_PID 2>/dev/null
-    wait $ZENITY_PID 2>/dev/null
-
-    [ -z "$all_versions" ] && {
-        zenity --error --text="无法获取版本列表，请检查网络。" --width=400 2>/dev/null
-        return 1
-    }
-    mapfile -t version_array <<< "$all_versions"
-
-    local installed_list=$(get_installed_ge_proton)
-    local installed_array=()
-    [ -n "$installed_list" ] && mapfile -t installed_array <<< "$installed_list"
-
-    local available_versions=()
-    for ver in "${version_array[@]}"; do
-        local already=false
-        for inst in "${installed_array[@]}"; do
-            [ "$ver" = "$inst" ] && { already=true; break; }
-        done
-        [ "$already" = false ] && available_versions+=("$ver")
-    done
-
-    [ ${#available_versions[@]} -eq 0 ] && {
-        zenity --info --text="所有 GE-Proton 版本已安装！" --width=400 2>/dev/null
-        return 0
-    }
-
-    local list_args=(
-        --list --checklist
-        --title="安装 GE-Proton 兼容层"
-        --text="请选择要安装的版本（可多选）\n共 ${#available_versions[@]} 个版本可用，已排除已安装版本"
-        --column="选择" --column="版本"
-        --width=600 --height=500
-        --ok-label="安装"
-        --cancel-label="返回"
-    )
-    for ver in "${available_versions[@]}"; do
-        list_args+=("FALSE" "$ver")
-    done
-
-    local selection
-    selection=$(zenity "${list_args[@]}" 2>/dev/null)
-    local ret=$?
-
-    if [ $ret -eq 1 ] || [ $ret -eq -1 ]; then
-        return 0
-    elif [ $ret -eq 0 ]; then
-        [ -z "$selection" ] && {
-            zenity --warning --text="请至少选择一个版本。" --width=300 2>/dev/null
-            return 0
-        }
-        IFS='|' read -r -a selected <<< "$selection"
-        ge_proton_do_install "${selected[@]}"
-    fi
-}
-
-ge_proton_do_install() {
-    local versions=("$@")
-    local total=${#versions[@]}
-    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
-    mkdir -p "$install_dir"
-
-    local success_count=0
-    local failed_count=0
-    local failed_list=""
-
-    local mirror_choice=$(zenity --list --radiolist \
-        --title="选择下载镜像源" \
-        --text="所有版本将使用同一镜像源" \
-        --column="选择" --column="镜像源" \
-        FALSE "gh-proxy.com (国内镜像，速度快)" \
-        FALSE "gh.3w.pm (国内镜像，稳定)" \
-        FALSE "cors.isteed.cc (国内镜像，稳定)" \
-        FALSE "ghproxy.net (国内镜像，慢速备用)" \
-        FALSE "GitHub (官方源)" \
-        --width=560 --height=280 2>/dev/null)
-    [ -z "$mirror_choice" ] && return 0
-
-    local mirror=""
-    case "$mirror_choice" in
-        "gh-proxy.com (国内镜像，速度快)") mirror="https://gh-proxy.com/" ;;
-        "gh.3w.pm (国内镜像，稳定)") mirror="https://gh.3w.pm/" ;;
-        "cors.isteed.cc (国内镜像，稳定)") mirror="https://cors.isteed.cc/" ;;
-        "ghproxy.net (国内镜像，慢速备用)") mirror="https://ghproxy.net/" ;;
-        # 官方源用空前缀：download_url 本身已是完整的 https://github.com/... 地址，
-        # 若这里也写 https://github.com/ 会拼成 .../https://github.com/... 导致 404
-        "GitHub (官方源)") mirror="" ;;
-    esac
-
-    local pipe="/tmp/zenity_pipe_$$"
-    mkfifo "$pipe"
-    zenity --progress --pulsate --title="安装 GE-Proton" --text="准备开始..." --width=500 < "$pipe" &
-    local zenity_pid=$!
-    exec 3> "$pipe"
-
-    for i in "${!versions[@]}"; do
-        if ! kill -0 $zenity_pid 2>/dev/null; then
-            echo "用户取消安装" >&2
-            break
-        fi
-
-        local version="${versions[$i]}"
-        local idx=$((i+1))
-        echo "# 正在处理第 $idx/$total 个: $version (准备下载...)" >&3
-
-        # ---------- 解析下载地址 ----------
-        # 注意：GE-Proton11-4 起上游改了产物命名，包名和压缩包内顶层目录都带架构后缀
-        # （GE-Proton11-11-x86_64.tar.gz / 解开后是 GE-Proton11-11-x86_64/），
-        # 而 release tag 仍是 GE-Proton11-11。旧版本则是 <tag>.tar.gz、顶层目录就是 <tag>。
-        # 这里同时取回文件大小和 sha512 地址，供下载后校验。
-        local asset_info
-        asset_info=$(curl -s --connect-timeout 20 --max-time 60 \
-            "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/tags/${version}" | \
-            python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-assets = data.get('assets', [])
-pick = None
-for a in assets:
-    n = a.get('name', '')
-    if n.endswith('.tar.gz') and 'aarch64' not in n and 'x86_64' in n:
-        pick = a
-        break
-if pick is None:
-    for a in assets:
-        n = a.get('name', '')
-        if n.endswith('.tar.gz') and 'aarch64' not in n:
-            pick = a
-            break
-if pick is None:
-    sys.exit(0)
-sha = ''
-want = pick.get('name', '').replace('.tar.gz', '.sha512sum')
-for a in assets:
-    if a.get('name', '') == want:
-        sha = a.get('browser_download_url', '')
-        break
-print(pick.get('browser_download_url', ''))
-print(pick.get('size', 0))
-print(sha)
-")
-        local download_url="" asset_size="" sha_url=""
-        download_url=$(printf '%s\n' "$asset_info" | sed -n '1p')
-        asset_size=$(printf '%s\n' "$asset_info" | sed -n '2p')
-        sha_url=$(printf '%s\n' "$asset_info" | sed -n '3p')
-
-        if [ -z "$download_url" ]; then
-            echo "# 错误：无法获取 $version 的下载链接，跳过" >&3
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (无法获取下载链接)"
-            continue
-        fi
-
-        local full_url="${mirror}${download_url}"
-        local temp_dir="/tmp/ge_proton_$$"
-        mkdir -p "$temp_dir"
-        cd "$temp_dir" || continue
-        local filename="${version}.tar.gz"
-
-        echo "# 正在处理第 $idx/$total 个: $version (下载中...)" >&3
-        curl -L -f -S --connect-timeout 30 --max-time 600 -o "$filename" "$full_url" 2> /tmp/curl_err_$$.log
-        local curl_ret=$?
-        if [ $curl_ret -ne 0 ]; then
-            echo "# 下载失败，错误信息：" >&3
-            tail -n 5 /tmp/curl_err_$$.log >&3
-            rm -f /tmp/curl_err_$$.log
-            rm -f "$filename"
-            cd /tmp && rm -rf "$temp_dir"
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (下载失败)"
-            continue
-        fi
-        rm -f /tmp/curl_err_$$.log
-
-        # ---------- 下载完整性校验 ----------
-        # 镜像（gh-proxy 一类）在连接中断时可能返回 200 + 截断的包，
-        # curl 看不出问题，tar 又只在末尾才报 EOF，于是表现为「解压失败」。
-        # 这里先用文件大小和 sha512 两道校验把截断包挡在解压之前。
-        local fsize
-        fsize=$(stat -c '%s' "$filename" 2>/dev/null || echo 0)
-        if [ -n "$asset_size" ] && [ "$asset_size" != "0" ] && [ "$fsize" != "$asset_size" ]; then
-            echo "# 第 $idx/$total 个: $version 下载不完整（$fsize / $asset_size 字节），已跳过" >&3
-            rm -f "$filename"
-            cd /tmp && rm -rf "$temp_dir"
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (下载不完整: $fsize/$asset_size 字节)"
-            continue
-        fi
-
-        if [ -n "$sha_url" ] && command -v sha512sum &>/dev/null; then
-            local want_sha got_sha
-            want_sha=$(curl -sL --connect-timeout 20 --max-time 60 "${mirror}${sha_url}" 2>/dev/null \
-                       | awk '{print $1}' | head -1)
-            if [ -n "$want_sha" ]; then
-                got_sha=$(sha512sum "$filename" 2>/dev/null | awk '{print $1}')
-                if [ "$want_sha" != "$got_sha" ]; then
-                    echo "# 第 $idx/$total 个: $version 校验和不匹配，包已损坏，已跳过" >&3
-                    rm -f "$filename"
-                    cd /tmp && rm -rf "$temp_dir"
-                    ((failed_count++))
-                    failed_list="${failed_list}\n  $version (sha512 校验失败)"
-                    continue
-                fi
-            fi
-        fi
-
-        # 先解压到临时目录校验完整性，成功后再移入 compatibilitytools.d。
-        # 直接解到 install_dir 的问题是：下载包被截断/损坏时，tar 会留下
-        # 半套目录，而 Steam 会把这个残缺版本当成可用的兼容层加载。
-        echo "# 正在处理第 $idx/$total 个: $version (解压中...)" >&3
-        local STAGE_DIR
-        STAGE_DIR=$(mktemp -d "$install_dir/.stage.XXXXXX" 2>/dev/null) || STAGE_DIR=""
-        if [ -z "$STAGE_DIR" ]; then
-            echo "# 第 $idx/$total 个: $version 安装失败（无法创建临时目录）" >&3
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (无法创建临时目录)"
-            rm -f "$filename"
-            cd /tmp && rm -rf "$temp_dir"
-            continue
-        fi
-        tar -xzf "$filename" -C "$STAGE_DIR"
-        local tar_ret=$?
-
-        rm -f "$filename"
-        cd /tmp && rm -rf "$temp_dir"
-
-        # ---------- 定位解压出的顶层目录 ----------
-        # 不写死 "$STAGE_DIR/$version"：GE-Proton11-4 起包内顶层目录是
-        # GE-Proton11-11-x86_64（带架构后缀），与 tag GE-Proton11-11 不一致，
-        # 按旧判据会把解压成功的包误判成「压缩包损坏」。
-        # 这里取 stage 里唯一的顶层目录，再用 <tag> 前缀兜底匹配。
-        local EXTRACTED=""
-        if [ $tar_ret -eq 0 ]; then
-            local top_entries=("$STAGE_DIR"/*)
-            if [ ${#top_entries[@]} -eq 1 ] && [ -d "${top_entries[0]}" ]; then
-                EXTRACTED="${top_entries[0]}"
-            else
-                for d in "$STAGE_DIR/$version" "$STAGE_DIR/$version"-*; do
-                    [ -d "$d" ] && { EXTRACTED="$d"; break; }
-                done
-            fi
-        fi
-
-        if [ $tar_ret -ne 0 ] || [ -z "$EXTRACTED" ]; then
-            # 解压失败：清掉半成品，绝不留到 compatibilitytools.d
-            rm -rf "$STAGE_DIR"
-            if [ $tar_ret -ne 0 ]; then
-                echo "# 第 $idx/$total 个: $version 安装失败（压缩包损坏或解压中断）" >&3
-                failed_list="${failed_list}\n  $version (解压失败)"
-            else
-                echo "# 第 $idx/$total 个: $version 安装失败（压缩包结构异常，未找到版本目录）" >&3
-                failed_list="${failed_list}\n  $version (压缩包结构异常)"
-            fi
-            ((failed_count++))
-            continue
-        fi
-
-        # ---------- 移入目标目录 ----------
-        # 目标目录名保持 <tag>（如 GE-Proton11-11），这样已装列表、卸载、
-        # Steam 显示名都用同一个不带架构后缀的名字，和旧版本保持一致。
-        rm -rf "${install_dir:?}/$version"
-        if ! mv "$EXTRACTED" "$install_dir/$version"; then
-            rm -rf "$STAGE_DIR"
-            echo "# 第 $idx/$total 个: $version 安装失败（移动到目标目录失败）" >&3
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (移动失败)"
-            continue
-        fi
-        rm -rf "$STAGE_DIR"
-
-        if [ -d "$install_dir/$version" ]; then
-            echo "# 第 $idx/$total 个: $version 安装成功" >&3
-            ((success_count++))
-        else
-            echo "# 第 $idx/$total 个: $version 安装失败" >&3
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (安装校验失败)"
-        fi
-    done
-
-    # 用户中途取消时可能留下下载临时目录，统一收尾
-    rm -rf "${temp_dir:-}" /tmp/curl_err_$$.log 2>/dev/null || true
-
-    if kill -0 $zenity_pid 2>/dev/null; then
-        local result_msg="\n========== 安装完成 ==========\n成功: $success_count 个"
-        if [ $failed_count -gt 0 ]; then
-            result_msg+="\n失败: $failed_count 个\n失败的版本:${failed_list}"
-        fi
-        if [ $success_count -gt 0 ]; then
-            result_msg+="\n\n建议重启 Steam 以刷新兼容层列表。"
-        fi
-        echo "# $result_msg" >&3
-        exec 3>&-
-        wait $zenity_pid 2>/dev/null
-    fi
-
-    rm -f "$pipe"
-}
-
-ge_proton_uninstall() {
-    local installed_list=$(get_installed_ge_proton)
-    [ -z "$installed_list" ] && {
-        zenity --info --text="未检测到已安装的 GE-Proton。" --ok-label="返回" --width=400 2>/dev/null
-        return 0
-    }
-    mapfile -t installed_array <<< "$installed_list"
-
-    local list_args=(
-        --list --checklist
-        --title="卸载 GE-Proton 兼容层"
-        --text="请选择要卸载的版本（可多选）"
-        --column="选择" --column="版本"
-        --width=500 --height=350
-        --ok-label="卸载"
-        --cancel-label="返回"
-    )
-    for ver in "${installed_array[@]}"; do
-        list_args+=("FALSE" "$ver")
-    done
-
-    local selection=$(zenity "${list_args[@]}" 2>/dev/null)
-    [ -z "$selection" ] && return 0
-    IFS='|' read -r -a selected <<< "$selection"
-
-    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
-    local total=${#selected[@]}
-    local success=0 fail=0
-    local failed_list=""
-
-    local pipe="/tmp/zenity_pipe_$$"
-    mkfifo "$pipe"
-    zenity --progress --pulsate --title="卸载 GE-Proton" --text="准备开始..." --width=500 < "$pipe" &
-    local zenity_pid=$!
-    exec 3> "$pipe"
-
-    for i in "${!selected[@]}"; do
-        if ! kill -0 $zenity_pid 2>/dev/null; then
-            echo "用户取消卸载" >&2
-            break
-        fi
-
-        local version="${selected[$i]}"
-        local idx=$((i+1))
-
-        echo "# 正在处理第 $idx/$total 个: $version ..." >&3
-
-        if [ -d "$install_dir/$version" ]; then
-            rm -rf "$install_dir/$version"
-            if [ ! -d "$install_dir/$version" ]; then
-                ((success++))
-                echo "# 第 $idx/$total 个: $version 已卸载" >&3
-            else
-                ((fail++))
-                failed_list="${failed_list}\n  $version (删除失败)"
-                echo "# 第 $idx/$total 个: $version 卸载失败" >&3
-            fi
-        else
-            ((success++))
-            echo "# 第 $idx/$total 个: $version (目录不存在，跳过)" >&3
-        fi
-        sleep 0.3
-    done
-
-    if kill -0 $zenity_pid 2>/dev/null; then
-        local result_msg="\n========== 卸载完成 ==========\n成功: $success 个"
-        if [ $fail -gt 0 ]; then
-            result_msg+="\n失败: $fail 个\n失败的版本:${failed_list}"
-        fi
-        result_msg+="\n\n建议重启 Steam 以使更改生效。"
-        echo "# $result_msg" >&3
-        exec 3>&-
-        wait $zenity_pid 2>/dev/null
-    fi
-
-    rm -f "$pipe"
-}
-
-# ===== 兼容层扩展：Proton-CachyOS / DW Proton + 急救重置 =====
-get_cachyos_versions() {
-    curl -s --connect-timeout 20 --max-time 60 \
-        "https://api.github.com/repos/CachyOS/proton-cachyos/releases?per_page=50" | \
-        python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    tags = []
-    for rel in data:
-        tag = rel.get('tag_name', '') or ''
-        if rel.get('prerelease'):
-            continue
-        if 'slr' in tag.lower() and any(ch.isdigit() for ch in tag):
-            tags.append(tag)
-    print('\n'.join(tags))
-except Exception:
-    pass
-"
-}
-
-get_dwproton_versions() {
-    curl -s --connect-timeout 20 --max-time 60 \
-        "https://api.github.com/repos/dawn-winery/dwproton-mirror/releases?per_page=50" | \
-        python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    tags = []
-    for rel in data:
-        tag = rel.get('tag_name', '') or ''
-        if rel.get('prerelease'):
-            continue
-        if tag.lower().startswith('dwproton') and any(ch.isdigit() for ch in tag):
-            tags.append(tag)
-    print('\n'.join(tags))
-except Exception:
-    pass
-"
-}
-
-get_installed_compat_dirs() {
-    # $1 = regex matched against basename (case-insensitive via grep -Ei)
-    local pattern="$1"
-    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
-    [ -d "$install_dir" ] || return 0
-    local d base
-    for d in "$install_dir"/*; do
-        [ -d "$d" ] || continue
-        [ -f "$d/compatibilitytool.vdf" ] || continue
-        base=$(basename "$d")
-        echo "$base" | grep -Ei -- "$pattern" >/dev/null && echo "$base"
-    done
-}
-
-compat_pick_mirror() {
-    local mirror_choice
-    mirror_choice=$(zenity --list --radiolist \
-        --title="选择下载镜像源" \
-        --text="所有版本将使用同一镜像源" \
-        --column="选择" --column="镜像源" \
-        FALSE "gh-proxy.com (国内镜像，速度快)" \
-        FALSE "gh.3w.pm (国内镜像，稳定)" \
-        FALSE "cors.isteed.cc (国内镜像，稳定)" \
-        FALSE "ghproxy.net (国内镜像，慢速备用)" \
-        FALSE "GitHub (官方源)" \
-        --width=560 --height=280 2>/dev/null) || true
-    [ -z "$mirror_choice" ] && { echo ""; return 1; }
-    case "$mirror_choice" in
-        "gh-proxy.com (国内镜像，速度快)") echo "https://gh-proxy.com/" ;;
-        "gh.3w.pm (国内镜像，稳定)") echo "https://gh.3w.pm/" ;;
-        "cors.isteed.cc (国内镜像，稳定)") echo "https://cors.isteed.cc/" ;;
-        "ghproxy.net (国内镜像，慢速备用)") echo "https://ghproxy.net/" ;;
-        "GitHub (官方源)") echo "" ;;
-        *) echo ""; return 1 ;;
-    esac
-}
-
-# 通用：从 GitHub release 安装 tar.xz 兼容层（SLR / DW 等）
-# 参数：repo  display_name  tag...
-compat_do_install_tar_xz() {
-    local repo="$1"; shift
-    local display_name="$1"; shift
-    local versions=("$@")
-    local total=${#versions[@]}
-    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
-    mkdir -p "$install_dir"
-
-    local success_count=0 failed_count=0 failed_list=""
-    local mirror
-    mirror=$(compat_pick_mirror) || return 0
-
-    local pipe="/tmp/zenity_pipe_$$"
-    mkfifo "$pipe"
-    zenity --progress --pulsate --title="安装 ${display_name}" --text="准备开始..." --width=520 < "$pipe" &
-    local zenity_pid=$!
-    exec 3> "$pipe"
-
-    local i version idx asset_info download_url asset_size sha_url dest_name
-    local full_url temp_dir filename curl_ret fsize want_sha got_sha STAGE_DIR tar_ret EXTRACTED top_entries
-    for i in "${!versions[@]}"; do
-        if ! kill -0 $zenity_pid 2>/dev/null; then
-            echo "用户取消安装" >&2
-            break
-        fi
-        version="${versions[$i]}"
-        idx=$((i+1))
-        echo "# 正在处理第 $idx/$total 个: $version (准备下载...)" >&3
-
-        asset_info=$(curl -s --connect-timeout 20 --max-time 60 \
-            "https://api.github.com/repos/${repo}/releases/tags/${version}" | \
-            python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-assets = data.get('assets', [])
-pick = None
-# Deck：优先普通 x86_64，不要 arm64，也不默认 x86_64_v3
-for a in assets:
-    n = a.get('name', '')
-    if n.endswith('.tar.xz') and 'x86_64' in n and 'x86_64_v3' not in n and 'arm64' not in n and 'aarch64' not in n:
-        pick = a
-        break
-if pick is None:
-    for a in assets:
-        n = a.get('name', '')
-        if n.endswith('.tar.xz') and 'arm64' not in n and 'aarch64' not in n:
-            pick = a
-            break
-if pick is None:
-    sys.exit(0)
-sha = ''
-want = pick.get('name', '') + '.sha512sum'
-want2 = pick.get('name', '').replace('.tar.xz', '.sha512sum')
-for a in assets:
-    n = a.get('name', '')
-    if n == want or n == want2:
-        sha = a.get('browser_download_url', '')
-        break
-print(pick.get('browser_download_url', ''))
-print(pick.get('size', 0))
-print(sha)
-print(pick.get('name', ''))
-")
-        download_url=$(printf '%s\n' "$asset_info" | sed -n '1p')
-        asset_size=$(printf '%s\n' "$asset_info" | sed -n '2p')
-        sha_url=$(printf '%s\n' "$asset_info" | sed -n '3p')
-        dest_name=$(printf '%s\n' "$asset_info" | sed -n '4p' | sed 's/\.tar\.xz$//')
-
-        if [ -z "$download_url" ] || [ -z "$dest_name" ]; then
-            echo "# 错误：无法获取 $version 的下载链接，跳过" >&3
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (无法获取下载链接)"
-            continue
-        fi
-
-        full_url="${mirror}${download_url}"
-        temp_dir="/tmp/compat_proton_$$"
-        mkdir -p "$temp_dir"
-        cd "$temp_dir" || continue
-        filename="${dest_name}.tar.xz"
-
-        echo "# 正在处理第 $idx/$total 个: $version (下载中...)" >&3
-        curl -L -f -S --connect-timeout 30 --max-time 900 -o "$filename" "$full_url" 2> /tmp/curl_err_$$.log
-        curl_ret=$?
-        if [ $curl_ret -ne 0 ]; then
-            echo "# 下载失败，错误信息：" >&3
-            tail -n 5 /tmp/curl_err_$$.log >&3
-            rm -f /tmp/curl_err_$$.log "$filename"
-            cd /tmp && rm -rf "$temp_dir"
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (下载失败)"
-            continue
-        fi
-        rm -f /tmp/curl_err_$$.log
-
-        fsize=$(stat -c '%s' "$filename" 2>/dev/null || echo 0)
-        if [ -n "$asset_size" ] && [ "$asset_size" != "0" ] && [ "$fsize" != "$asset_size" ]; then
-            echo "# 第 $idx/$total 个: $version 下载不完整（$fsize / $asset_size 字节），已跳过" >&3
-            rm -f "$filename"; cd /tmp && rm -rf "$temp_dir"
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (下载不完整: $fsize/$asset_size 字节)"
-            continue
-        fi
-
-        if [ -n "$sha_url" ] && command -v sha512sum &>/dev/null; then
-            want_sha=$(curl -sL --connect-timeout 20 --max-time 60 "${mirror}${sha_url}" 2>/dev/null | awk '{print $1}' | head -1)
-            if [ -n "$want_sha" ]; then
-                got_sha=$(sha512sum "$filename" 2>/dev/null | awk '{print $1}')
-                if [ "$want_sha" != "$got_sha" ]; then
-                    echo "# 第 $idx/$total 个: $version 校验和不匹配，包已损坏，已跳过" >&3
-                    rm -f "$filename"; cd /tmp && rm -rf "$temp_dir"
-                    ((failed_count++))
-                    failed_list="${failed_list}\n  $version (sha512 校验失败)"
-                    continue
-                fi
-            fi
-        fi
-
-        echo "# 正在处理第 $idx/$total 个: $version (解压中...)" >&3
-        STAGE_DIR=$(mktemp -d "$install_dir/.stage.XXXXXX" 2>/dev/null) || STAGE_DIR=""
-        if [ -z "$STAGE_DIR" ]; then
-            echo "# 第 $idx/$total 个: $version 安装失败（无法创建临时目录）" >&3
-            ((failed_count++)); failed_list="${failed_list}\n  $version (无法创建临时目录)"
-            rm -f "$filename"; cd /tmp && rm -rf "$temp_dir"
-            continue
-        fi
-        tar -xJf "$filename" -C "$STAGE_DIR"
-        tar_ret=$?
-        rm -f "$filename"
-        cd /tmp && rm -rf "$temp_dir"
-
-        EXTRACTED=""
-        if [ $tar_ret -eq 0 ]; then
-            top_entries=("$STAGE_DIR"/*)
-            if [ ${#top_entries[@]} -eq 1 ] && [ -d "${top_entries[0]}" ]; then
-                EXTRACTED="${top_entries[0]}"
-            else
-                # 兜底：找带 compatibilitytool.vdf 的目录
-                EXTRACTED=$(find "$STAGE_DIR" -maxdepth 2 -type f -name compatibilitytool.vdf -printf '%h\n' 2>/dev/null | head -1)
-            fi
-        fi
-
-        if [ $tar_ret -ne 0 ] || [ -z "$EXTRACTED" ] || [ ! -f "$EXTRACTED/compatibilitytool.vdf" ]; then
-            rm -rf "$STAGE_DIR"
-            echo "# 第 $idx/$total 个: $version 安装失败（压缩包损坏或结构异常）" >&3
-            ((failed_count++)); failed_list="${failed_list}\n  $version (解压失败/结构异常)"
-            continue
-        fi
-
-        # 目标目录名用资源名（去掉 .tar.xz），避免与 tag 不一致
-        rm -rf "${install_dir:?}/$dest_name"
-        if ! mv "$EXTRACTED" "$install_dir/$dest_name"; then
-            rm -rf "$STAGE_DIR"
-            echo "# 第 $idx/$total 个: $version 安装失败（移动到目标目录失败）" >&3
-            ((failed_count++)); failed_list="${failed_list}\n  $version (移动失败)"
-            continue
-        fi
-        rm -rf "$STAGE_DIR"
-
-        if [ -d "$install_dir/$dest_name" ] && [ -f "$install_dir/$dest_name/compatibilitytool.vdf" ]; then
-            echo "# 第 $idx/$total 个: $version 安装成功 → $dest_name" >&3
-            ((success_count++))
-        else
-            echo "# 第 $idx/$total 个: $version 安装失败" >&3
-            ((failed_count++)); failed_list="${failed_list}\n  $version (安装校验失败)"
-        fi
-    done
-
-    rm -rf /tmp/compat_proton_$$ /tmp/curl_err_$$.log 2>/dev/null || true
-
-    if kill -0 $zenity_pid 2>/dev/null; then
-        local result_msg="\n========== 安装完成 ==========\n成功: $success_count 个"
-        if [ $failed_count -gt 0 ]; then
-            result_msg+="\n失败: $failed_count 个\n失败的版本:${failed_list}"
-        fi
-        if [ $success_count -gt 0 ]; then
-            result_msg+="\n\n建议完全退出并重启 Steam 以刷新兼容层列表。"
-        fi
-        echo "# $result_msg" >&3
-        exec 3>&-
-        wait $zenity_pid 2>/dev/null
-    fi
-    rm -f "$pipe"
-}
-
-compat_uninstall_by_pattern() {
-    local title="$1"
-    local pattern="$2"
-    local installed_list
-    installed_list=$(get_installed_compat_dirs "$pattern")
-    [ -z "$installed_list" ] && {
-        zenity --info --text="未检测到已安装的 ${title}。" --ok-label="返回" --width=420 2>/dev/null
-        return 0
-    }
-    mapfile -t installed_array <<< "$installed_list"
-    local list_args=(
-        --list --checklist
-        --title="卸载 ${title}"
-        --text="请选择要卸载的版本（可多选）"
-        --column="选择" --column="已安装目录"
-        --width=560 --height=360
-        --ok-label="卸载"
-        --cancel-label="返回"
-    )
-    local ver
-    for ver in "${installed_array[@]}"; do
-        list_args+=("FALSE" "$ver")
-    done
-    local selection
-    selection=$(zenity "${list_args[@]}" 2>/dev/null) || return 0
-    [ -z "$selection" ] && return 0
-    IFS='|' read -r -a selected <<< "$selection"
-
-    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
-    local total=${#selected[@]} success=0 fail=0 failed_list=""
-    local pipe="/tmp/zenity_pipe_$$"
-    mkfifo "$pipe"
-    zenity --progress --pulsate --title="卸载 ${title}" --text="准备开始..." --width=500 < "$pipe" &
-    local zenity_pid=$!
-    exec 3> "$pipe"
-    local i version idx
-    for i in "${!selected[@]}"; do
-        if ! kill -0 $zenity_pid 2>/dev/null; then
-            echo "用户取消卸载" >&2
-            break
-        fi
-        version="${selected[$i]}"
-        idx=$((i+1))
-        echo "# 正在处理第 $idx/$total 个: $version ..." >&3
-        if [ -d "$install_dir/$version" ]; then
-            rm -rf "$install_dir/$version"
-            if [ ! -d "$install_dir/$version" ]; then
-                ((success++)); echo "# 第 $idx/$total 个: $version 已卸载" >&3
-            else
-                ((fail++)); failed_list="${failed_list}\n  $version (删除失败)"
-                echo "# 第 $idx/$total 个: $version 卸载失败" >&3
-            fi
-        else
-            ((success++)); echo "# 第 $idx/$total 个: $version (目录不存在，跳过)" >&3
-        fi
-        sleep 0.2
-    done
-    if kill -0 $zenity_pid 2>/dev/null; then
-        local result_msg="\n========== 卸载完成 ==========\n成功: $success 个"
-        [ $fail -gt 0 ] && result_msg+="\n失败: $fail 个\n失败的版本:${failed_list}"
-        result_msg+="\n\n建议重启 Steam 以使更改生效。"
-        echo "# $result_msg" >&3
-        exec 3>&-
-        wait $zenity_pid 2>/dev/null
-    fi
-    rm -f "$pipe"
-}
-
-cachyos_proton_install() {
-    (
-        echo "10"; echo "# 正在获取 Proton-CachyOS SLR 版本列表..."
-        sleep 0.4
-        echo "100"
-    ) | zenity --progress --pulsate --title="加载中" --text="正在获取版本列表..." --width=400 2>/dev/null &
-    local ZENITY_PID=$!
-    local all_versions
-    all_versions=$(get_cachyos_versions)
-    kill $ZENITY_PID 2>/dev/null; wait $ZENITY_PID 2>/dev/null
-    [ -z "$all_versions" ] && {
-        zenity --error --text="无法获取 Proton-CachyOS 版本列表，请检查网络。" --width=420 2>/dev/null
-        return 1
-    }
-    mapfile -t version_array <<< "$all_versions"
-    local installed_list installed_array=() available_versions=()
-    installed_list=$(get_installed_compat_dirs 'proton-cachyos|cachyos')
-    [ -n "$installed_list" ] && mapfile -t installed_array <<< "$installed_list"
-
-    local ver already inst stem
-    for ver in "${version_array[@]}"; do
-        already=false
-        # tag 形如 cachyos-11.0-20261015-slr → 资源名含 11.0-20261015-slr-x86_64
-        stem=$(echo "$ver" | sed 's/^cachyos-//')
-        for inst in "${installed_array[@]}"; do
-            if echo "$inst" | grep -F -- "$stem" >/dev/null; then
-                already=true; break
-            fi
-        done
-        [ "$already" = false ] && available_versions+=("$ver")
-    done
-    [ ${#available_versions[@]} -eq 0 ] && {
-        zenity --info --text="列表中的 Proton-CachyOS(SLR) 版本均已安装。" --width=420 2>/dev/null
-        return 0
-    }
-    local list_args=(
-        --list --checklist
-        --title="安装 Proton-CachyOS (SLR)"
-        --text="请选择要安装的 SLR 版本（可多选）\nDeck 使用 x86_64 包，解压到 compatibilitytools.d"
-        --column="选择" --column="版本"
-        --width=620 --height=480
-        --ok-label="安装" --cancel-label="返回"
-    )
-    for ver in "${available_versions[@]}"; do
-        list_args+=("FALSE" "$ver")
-    done
-    local selection ret
-    selection=$(zenity "${list_args[@]}" 2>/dev/null)
-    ret=$?
-    [ $ret -ne 0 ] && return 0
-    [ -z "$selection" ] && {
-        zenity --warning --text="请至少选择一个版本。" --width=300 2>/dev/null
-        return 0
-    }
-    local selected
-    IFS='|' read -r -a selected <<< "$selection"
-    compat_do_install_tar_xz "CachyOS/proton-cachyos" "Proton-CachyOS" "${selected[@]}"
-}
-
-cachyos_proton_uninstall() {
-    compat_uninstall_by_pattern "Proton-CachyOS" 'proton-cachyos|cachyos'
-}
-
-dwproton_install() {
-    zenity --info --width=520 --title="关于 DW Proton" \
-        --text="DW Proton（dwproton）偏二次元与特定游戏优化。\n官方不支持外挂/修改器类用途；外挂请走独立的 CheatDeck 插件入口。\n下载源：dawn-winery/dwproton-mirror（GitHub）。" \
-        2>/dev/null || true
-    (
-        echo "10"; echo "# 正在获取 DW Proton 版本列表..."
-        sleep 0.4
-        echo "100"
-    ) | zenity --progress --pulsate --title="加载中" --text="正在获取版本列表..." --width=400 2>/dev/null &
-    local ZENITY_PID=$!
-    local all_versions
-    all_versions=$(get_dwproton_versions)
-    kill $ZENITY_PID 2>/dev/null; wait $ZENITY_PID 2>/dev/null
-    [ -z "$all_versions" ] && {
-        zenity --error --text="无法获取 DW Proton 版本列表，请检查网络。" --width=420 2>/dev/null
-        return 1
-    }
-    mapfile -t version_array <<< "$all_versions"
-    local installed_list installed_array=() available_versions=()
-    installed_list=$(get_installed_compat_dirs 'dwproton|dw-proton')
-    [ -n "$installed_list" ] && mapfile -t installed_array <<< "$installed_list"
-    local ver already inst
-    for ver in "${version_array[@]}"; do
-        already=false
-        for inst in "${installed_array[@]}"; do
-            if echo "$inst" | grep -F -- "$ver" >/dev/null; then
-                already=true; break
-            fi
-        done
-        [ "$already" = false ] && available_versions+=("$ver")
-    done
-    [ ${#available_versions[@]} -eq 0 ] && {
-        zenity --info --text="列表中的 DW Proton 版本均已安装。" --width=420 2>/dev/null
-        return 0
-    }
-    local list_args=(
-        --list --checklist
-        --title="安装 DW Proton"
-        --text="请选择要安装的版本（可多选）\n偏二次元/特定游戏；不含外挂"
-        --column="选择" --column="版本"
-        --width=620 --height=480
-        --ok-label="安装" --cancel-label="返回"
-    )
-    for ver in "${available_versions[@]}"; do
-        list_args+=("FALSE" "$ver")
-    done
-    local selection ret
-    selection=$(zenity "${list_args[@]}" 2>/dev/null)
-    ret=$?
-    [ $ret -ne 0 ] && return 0
-    [ -z "$selection" ] && {
-        zenity --warning --text="请至少选择一个版本。" --width=300 2>/dev/null
-        return 0
-    }
-    local selected
-    IFS='|' read -r -a selected <<< "$selection"
-    compat_do_install_tar_xz "dawn-winery/dwproton-mirror" "DW Proton" "${selected[@]}"
-}
-
-dwproton_uninstall() {
-    compat_uninstall_by_pattern "DW Proton" 'dwproton|dw-proton'
 }
 
 # ===== CheatDeck（Decky 插件）=====
@@ -8703,31 +6978,6 @@ uninstall_todesk() {
     echo -e "${GREEN}✅ ToDesk 卸载完成${NC}"
 }
 
-install_wps_office() { install_flatpak_app "WPS Office" "WPS Office" "Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"; }
-install_qq() { install_flatpak_app "QQ" "QQ" "Network;Chat" "com.qq.QQ" "com.tencent.qq"; }
-install_wechat() { install_flatpak_app "微信" "微信" "Network;Chat" "com.tencent.WeChat" "com.qq.weixin"; }
-install_qqmusic() { install_flatpak_app "QQ音乐" "QQ音乐" "Audio" "com.qq.QQmusic" "com.tencent.QQmusic"; }
-install_baidunetdisk() { install_flatpak_app "百度网盘" "百度网盘" "Network;FileTransfer" "com.baidu.NetDisk" "com.baidu.pan"; }
-install_edge() { install_flatpak_app "Edge浏览器" "Microsoft Edge" "Network;WebBrowser" "com.microsoft.Edge"; }
-install_chrome() { install_flatpak_app "Google浏览器" "Google Chrome" "Network;WebBrowser" "com.google.Chrome"; }
-
-install_fcitx5() {
-    if ! flatpak info org.fcitx.Fcitx5 &>/dev/null; then
-        install_flatpak_app "Fcitx 5" "Fcitx 5" "Utility;Settings" "org.fcitx.Fcitx5"
-    else
-        echo -e "${GREEN}✓ Fcitx 5 主程序已安装${NC}"
-    fi
-    if ! flatpak info org.fcitx.Fcitx5.Addon.ChineseAddons &>/dev/null; then
-        echo "正在安装中文输入法插件..."
-        if flatpak install flathub org.fcitx.Fcitx5.Addon.ChineseAddons -y; then
-            echo -e "${GREEN}✓ 中文插件安装完成${NC}"
-        else
-            echo -e "${RED}✗ 中文插件安装失败${NC}"
-        fi
-    else
-        echo -e "${GREEN}✓ 中文插件已安装${NC}"
-    fi
-}
 update_installed_apps() {
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 更新全部应用 ════════════════${NC}"
@@ -8807,241 +7057,6 @@ update_installed_apps() {
     printf '%s\n' "$left" | sed 's/^/  · /'
     echo -e "${YELLOW}  可能被跳过（如正在运行）或需要重启后再试。${NC}"
     return 1
-}
-
-uninstall_wps_office() { uninstall_flatpak_app "WPS Office" "WPS Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"; }
-uninstall_qq() { uninstall_flatpak_app "QQ" "QQ" "com.qq.QQ" "com.tencent.qq"; }
-uninstall_wechat() { uninstall_flatpak_app "微信" "微信" "com.tencent.WeChat" "com.qq.weixin"; }
-uninstall_qqmusic() { uninstall_flatpak_app "QQ音乐" "QQ音乐" "com.qq.QQmusic" "com.tencent.QQmusic"; }
-uninstall_baidunetdisk() { uninstall_flatpak_app "百度网盘" "百度网盘" "com.baidu.NetDisk" "com.baidu.pan"; }
-uninstall_edge() { uninstall_flatpak_app "Edge浏览器" "Microsoft Edge" "com.microsoft.Edge"; }
-uninstall_chrome() { uninstall_flatpak_app "Google浏览器" "Google Chrome" "com.google.Chrome" "org.chromium.Chromium"; }
-uninstall_fcitx5() {
-    mk_temp_dir
-    clear
-    echo -e "${YELLOW}════════════════ 卸载 Fcitx 5 ════════════════${NC}"
-
-    local MAIN_APP="org.fcitx.Fcitx5"
-    local ADDON_APP="org.fcitx.Fcitx5.Addon.ChineseAddons"
-    local DESKTOP_NAME="Fcitx 5"
-
-    if ! flatpak info "$MAIN_APP" &>/dev/null; then
-        echo -e "${YELLOW}未检测到已安装的 Fcitx 5 主程序。${NC}"
-        if flatpak info "$ADDON_APP" &>/dev/null; then
-            echo -e "${CYAN}检测到中文插件已安装但主程序缺失，是否只卸载插件？${NC}"
-            read -n1 -p "按回车键或 A 键确认卸载插件，其他键取消: " confirm < /dev/tty
-            echo
-            if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
-                flatpak uninstall "$ADDON_APP" -y 2>/dev/null && echo -e "${GREEN}✓ 中文插件已卸载${NC}"
-            else
-                echo "取消操作。"
-            fi
-        fi
-        return 0
-    fi
-
-    echo -e "${CYAN}检测到 Fcitx 5 主程序已安装。${NC}"
-    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm < /dev/tty
-    echo
-    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
-        echo "开始卸载..."
-    else
-        echo "取消卸载。"
-        return 0
-    fi
-
-    if flatpak info "$ADDON_APP" &>/dev/null; then
-        echo "正在卸载中文插件..."
-        flatpak uninstall "$ADDON_APP" -y 2>/dev/null
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}✓ 中文插件已卸载${NC}"
-        else
-            echo -e "${YELLOW}⚠️  中文插件卸载失败（可能已被移除）${NC}"
-        fi
-    else
-        echo -e "${YELLOW}中文插件未安装，跳过。${NC}"
-    fi
-
-    echo "正在卸载 Fcitx 5 主程序..."
-    flatpak uninstall "$MAIN_APP" -y 2>/dev/null
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ Fcitx 5 主程序已卸载${NC}"
-    else
-        echo -e "${RED}✗ 主程序卸载失败，请检查 flatpak 状态。${NC}"
-        return 1
-    fi
-
-    local desktop_dir="$HOME/Desktop"
-    if [ -d "$desktop_dir" ]; then
-        for f in "$desktop_dir/Fcitx 5.desktop" "$desktop_dir/org.fcitx.Fcitx5.desktop"; do
-            if [ -f "$f" ]; then
-                rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ 已删除桌面快捷方式 $(basename "$f")${NC}"
-            fi
-        done
-        find "$desktop_dir" -maxdepth 1 -name "*Fcitx*" -name "*.desktop" -exec rm -f {} \; 2>/dev/null
-    fi
-
-    echo ""
-    echo -e "${GREEN}✅ Fcitx 5 及其相关组件已卸载完成。${NC}"
-}
-
-uninstall_other_flatpak_apps() {
-    if ! command -v zenity &>/dev/null; then
-        echo "未找到 zenity，请在桌面环境运行。"
-        return 1
-    fi
-
-    local exclude_ids=(
-        "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"
-        "com.qq.QQ" "com.tencent.qq"
-        "com.tencent.WeChat" "com.qq.weixin"
-        "com.qq.QQmusic" "com.tencent.QQmusic"
-        "com.baidu.NetDisk" "com.baidu.pan"
-        "com.microsoft.Edge"
-        "com.google.Chrome" "org.chromium.Chromium"
-        "org.fcitx.Fcitx5" "org.fcitx.Fcitx5.Addon.ChineseAddons"
-    )
-
-    _remove_shortcut() {
-        local app_id="$1"
-        local desktop_dir="$HOME/Desktop"
-        [ -d "$desktop_dir" ] || return
-        local id_us="${app_id//./_}"
-        for f in "$desktop_dir"/*.desktop; do
-            [ -e "$f" ] || continue
-            local base=$(basename "$f")
-            # 只匹配文件名恰好等于应用 ID 的快捷方式（点/下划线两种写法），
-            # 不做子串匹配，避免误删无关 .desktop
-            if [ "$base" = "${app_id}.desktop" ] || [ "$base" = "${id_us}.desktop" ]; then
-                rm -f "$f" 2>/dev/null && echo "已删除桌面快捷方式 $base"
-            fi
-        done
-    }
-
-    while true; do
-        local installed_apps=()
-        while IFS=$'\t' read -r app_id app_name; do
-            local skip=0
-            for exclude in "${exclude_ids[@]}"; do
-                if [[ "$app_id" == "$exclude" ]]; then
-                    skip=1
-                    break
-                fi
-            done
-            if [ $skip -eq 0 ]; then
-                installed_apps+=("$app_id|$app_name")
-            fi
-        done < <(flatpak list --app --columns=application,name 2>/dev/null)
-
-        if [ ${#installed_apps[@]} -eq 0 ]; then
-            zenity --info --text="没有其他已安装的 Flatpak 应用可卸载。" --width=400
-            break
-        fi
-
-        local list_data=()
-        for entry in "${installed_apps[@]}"; do
-            IFS='|' read -r app_id app_name <<< "$entry"
-            list_data+=("FALSE" "$app_name ($app_id)")
-        done
-
-        local selections
-        selections=$(zenity --list --checklist \
-            --title="卸载其他 Flatpak 应用" \
-            --text="请选择要卸载的应用（可多选）：" \
-            --column="选择" --column="应用" \
-            "${list_data[@]}" \
-            --width=700 --height=400 \
-            --multiple 2>/dev/null)
-
-        if [ $? -ne 0 ] || [ -z "$selections" ]; then
-            break
-        fi
-
-        IFS='|' read -r -a selected_names <<< "$selections"
-        local selected_ids=()
-        for selected in "${selected_names[@]}"; do
-            for entry in "${installed_apps[@]}"; do
-                IFS='|' read -r app_id app_name <<< "$entry"
-                if [ "$app_name ($app_id)" = "$selected" ]; then
-                    selected_ids+=("$app_id")
-                    break
-                fi
-            done
-        done
-
-        [ ${#selected_ids[@]} -eq 0 ] && continue
-
-        zenity --question \
-            --text="确定要卸载选中的应用吗？\n共 ${#selected_ids[@]} 项。" \
-            --ok-label="卸载" --cancel-label="取消" 2>/dev/null || continue
-
-        local total=${#selected_ids[@]}
-        local success=0
-        local fail=0
-        local failed_list=""
-        local data_dirs=()
-
-        local pipe="/tmp/zenity_pipe_$$"
-        mkfifo "$pipe"
-        zenity --progress --pulsate --no-cancel --auto-close \
-            --title="卸载应用" --text="准备开始..." --width=500 < "$pipe" &
-        local zenity_pid=$!
-        exec 3> "$pipe"
-
-        for i in "${!selected_ids[@]}"; do
-            local app_id="${selected_ids[$i]}"
-            local idx=$((i+1))
-
-            echo "# 正在处理第 $idx/$total 个: $app_id (卸载中...)" >&3
-
-            if flatpak uninstall "$app_id" -y &>/dev/null; then
-                ((success++))
-                _remove_shortcut "$app_id"
-                local data_dir="$HOME/.var/app/$app_id"
-                if [ -d "$data_dir" ]; then
-                    data_dirs+=("$data_dir")
-                fi
-                echo "# 第 $idx/$total 个: $app_id 卸载成功" >&3
-            else
-                ((fail++))
-                failed_list+=" $app_id"
-                echo "# 第 $idx/$total 个: $app_id 卸载失败" >&3
-            fi
-            sleep 0.2
-        done
-
-        exec 3>&-
-        wait $zenity_pid 2>/dev/null
-        rm -f "$pipe"
-
-        sleep 1.0
-
-        local result_msg="卸载结果：\n成功: $success 个"
-        if [ $fail -gt 0 ]; then
-            result_msg+="\n失败: $fail 个\n失败的 ID:${failed_list}"
-        fi
-
-        if [ ${#data_dirs[@]} -gt 0 ]; then
-            local question_msg="$result_msg\n\n以下应用的用户数据目录仍然存在："
-            for d in "${data_dirs[@]}"; do
-                question_msg+="\n  $d"
-            done
-            question_msg+="\n\n是否删除这些数据目录？"
-
-            if zenity --question --text="$question_msg" --width=600 \
-                --ok-label="删除数据" --cancel-label="保留" 2>/dev/null; then
-                for d in "${data_dirs[@]}"; do
-                    rm -rf "$d" && echo "已删除 $d"
-                done
-            else
-                :
-            fi
-            continue
-        else
-            zenity --info --text="$result_msg" --width=400 2>/dev/null
-            continue
-        fi
-    done
 }
 
 install_yellow_duck_software() {
@@ -9913,97 +7928,6 @@ download_with_mirrors() {
     done
 }
 
-install_flatpak_app() {
-    local app_title="$1" desktop_name="$2" categories="$3"; shift 3
-    local app_ids=("$@")
-    mk_temp_dir; clear
-    echo -e "${YELLOW}════════════════ Installing ${app_title} ════════════════${NC}"
-
-    local already_installed=""
-    for app_id in "${app_ids[@]}"; do
-        flatpak info "$app_id" &>/dev/null && already_installed="$app_id" && break
-    done
-    if [ -n "$already_installed" ]; then
-        echo -e "${GREEN}✓ ${app_title} is already installed (${already_installed}), no need to install again.${NC}"
-        return 0
-    fi
-
-    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null
-
-    local available_id=""
-    for app_id in "${app_ids[@]}"; do
-        if timeout 10 flatpak remote-info flathub "$app_id" &>/dev/null; then
-            available_id="$app_id"; break
-        else
-            echo -e "${YELLOW}${app_id} does not exist or the query timed out, trying the next one...${NC}"
-        fi
-    done
-    [ -z "$available_id" ] && echo -e "${RED}✗ No installable package found for ${app_title}.${NC}" && return 1
-
-    echo "Installing ${available_id} ..."
-    if flatpak install flathub "$available_id" -y 2>/dev/null; then
-        echo -e "${GREEN}✓ ${app_title} installed successfully${NC}"
-        cat > "$HOME/Desktop/${desktop_name}.desktop" << EOF
-[Desktop Entry]
-Type=Application
-Name=${desktop_name}
-Exec=flatpak run ${available_id}
-Icon=${available_id}
-Terminal=false
-Categories=${categories};
-EOF
-        chmod +x "$HOME/Desktop/${desktop_name}.desktop"
-        echo -e "${GREEN}✓ Desktop shortcut created${NC}"
-    else
-        echo -e "${RED}✗ Installation failed, please check your network or install manually.${NC}"
-    fi
-}
-
-uninstall_flatpak_app() {
-    local app_title="$1" desktop_name="$2"; shift 2
-    local app_ids=("$@")
-    mk_temp_dir; clear
-    echo -e "${YELLOW}════════════════ Uninstalling ${app_title} ════════════════${NC}"
-    local installed=""
-    for pkg in "${app_ids[@]}"; do flatpak info "$pkg" &>/dev/null && installed="$pkg" && break; done
-    [ -z "$installed" ] && echo -e "${YELLOW}No installed ${app_title} detected.${NC}" && return 0
-
-    confirm_action || { echo "Uninstall cancelled."; return 0; }
-    if flatpak uninstall "$installed" -y; then
-        echo -e "${GREEN}✓ ${app_title} uninstalled${NC}"
-        local desktop_dir="$HOME/Desktop"
-        if [ -d "$desktop_dir" ]; then
-            local deleted_any=false
-            for f in "$desktop_dir"/*.desktop; do
-                # When the Desktop directory is empty the glob does not expand; skip the literal to avoid basename returning "*.desktop"
-                [ -e "$f" ] || continue
-                local base=$(basename "$f")
-                # Only two things count: (1) a .desktop whose name is exactly the display name / app ID
-                #           (2) a file name containing the full app ID (dot or underscore form, e.g. com_qq_QQ.desktop)
-                # Do not use ${installed//./_} for substring matching: com.qq.QQ would also delete
-                # unrelated shortcuts such as com_qq_QQ_something.desktop.
-                local id_us="${installed//./_}"
-                if [ "$base" = "${desktop_name}.desktop" ] || [ "$base" = "${installed}.desktop" ] \
-                   || [ "$base" = "${id_us}.desktop" ] || [ "$base" = "${installed//./-}.desktop" ]; then
-                    rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ Desktop shortcut deleted: $base${NC}" && deleted_any=true
-                fi
-            done
-            $deleted_any || echo -e "${YELLOW}No matching desktop shortcut found.${NC}"
-        fi
-
-        local data_dir="$HOME/.var/app/$installed"
-        if [ -d "$data_dir" ]; then
-            echo ""
-            echo -e "${CYAN}Delete all settings and user data for this app?${NC}"
-            confirm_action && rm -rf "$data_dir" && echo -e "${GREEN}✓ User data deleted${NC}" || echo -e "${YELLOW}User data kept.${NC}"
-        fi
-        echo ""
-        echo -e "${GREEN}${app_title} uninstall finished.${NC}"
-    else
-        echo -e "${RED}✗ Uninstall failed${NC}"
-    fi
-}
-
 install_chinese_source() {
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════ Switch Flatpak software source ════════════${NC}"
@@ -10808,165 +8732,6 @@ calibrate_joystick_trigger() {
     if trigger_cal; then echo -e "${GREEN}✓ Trigger calibration complete${NC}"; else echo -e "${RED}✗ Trigger calibration failed${NC}"; echo "Please make sure the trigger calibration tool (trigger_cal) is installed"; fi
 }
 
-steamdeck_cache_manager() {
-    # Without zenity the old code still called zenity to report an error, showing nothing at all; now write to standard output
-    if ! command -v zenity &>/dev/null; then
-        echo -e "${RED}✗ zenity not found, cannot open the cache manager. Please install it first: sudo pacman -S zenity${NC}"
-        return 1
-    fi
-    mk_temp_dir
-
-    # Collect the steamapps directory of every Steam library: the default library plus the others listed in libraryfolders.vdf.
-    # The old implementation hard-coded only $HOME/.local/share/Steam/steamapps, so libraries on an SD card / second disk
-    # never appeared in the list (on this machine the VDF really does contain /run/media/deck/Game/SteamLibrary).
-    local steam_root="$HOME/.local/share/Steam"
-    local -a steamapps_dirs=()
-    [ -d "$steam_root/steamapps" ] && steamapps_dirs+=("$steam_root/steamapps")
-    local vdf="$steam_root/steamapps/libraryfolders.vdf"
-    if [ -f "$vdf" ]; then
-        local lib_path
-        while IFS= read -r lib_path; do
-            [ -n "$lib_path" ] || continue
-            [ -d "$lib_path/steamapps" ] || continue
-            local dup=0 d
-            for d in "${steamapps_dirs[@]}"; do
-                [ "$d" = "$lib_path/steamapps" ] && { dup=1; break; }
-            done
-            [ "$dup" -eq 0 ] && steamapps_dirs+=("$lib_path/steamapps")
-        done < <(awk -F'"' '/"path"/ {print $4}' "$vdf" 2>/dev/null)
-    fi
-    if [ ${#steamapps_dirs[@]} -eq 0 ]; then
-        zenity --error --text="Steam library directory not found, please confirm Steam is installed and you have logged in at least once."
-        return 1
-    fi
-
-    # Warn the user to quit Steam before deleting compatdata/shader cache, otherwise data in use may be corrupted
-    local steam_running=0
-    if pgrep -x steam >/dev/null 2>&1 || pgrep -x steamwebhelper >/dev/null 2>&1; then
-        steam_running=1
-        if ! zenity --question --title="Steam is running" \
-            --text="Steam is detected running. Deleting compatibility data may damage Proton prefixes that are in use. It is recommended to quit Steam before cleaning. Continue anyway?" \
-            --ok-label="Continue" --cancel-label="Cancel"; then
-            return 0
-        fi
-    fi
-
-    while true; do
-        local choice
-        # The first column of a radio list must contain one TRUE, otherwise pressing OK returns empty and the user thinks nothing happened
-        choice=$(zenity --list --radiolist \
-            --title="Steam Cache Manager" \
-            --text="Please choose the cache type to clean" \
-            --column="Select" --column="Type" --column="Description" \
-            TRUE  "Shader cache" "shadercache, rebuilt automatically after deletion" \
-            FALSE "Compatibility data" "compatdata, contains each game's Proton prefix" \
-            --width=600 --height=240) || break
-        [ -z "$choice" ] && break
-
-        local cache_type title
-        if [ "$choice" = "Shader cache" ]; then
-            cache_type="shadercache"; title="Shader cache"
-        else
-            cache_type="compatdata"; title="Compatibility data"
-        fi
-
-        # Store in parallel arrays, to avoid joining game names into a |-separated string (names containing | would misalign parsing)
-        local -a app_ids=() app_names=() app_sizes=() app_dirs=()
-        local sa dir app_id size manifest game_name
-        for sa in "${steamapps_dirs[@]}"; do
-            [ -d "$sa/$cache_type" ] || continue
-            for dir in "$sa/$cache_type"/*; do
-                [ -d "$dir" ] || continue
-                app_id=$(basename "$dir")
-                [[ "$app_id" =~ ^[0-9]+$ ]] || continue
-                size=$(du -sm "$dir" 2>/dev/null | cut -f1)
-                if [ -z "$size" ] || [ "$size" -le 0 ] 2>/dev/null; then
-                    continue
-                fi
-                game_name=""
-                manifest="$sa/appmanifest_${app_id}.acf"
-                [ -f "$manifest" ] && game_name=$(grep -m1 '"name"' "$manifest" 2>/dev/null | cut -d'"' -f4)
-                [ -z "$game_name" ] && game_name="Unknown app"
-                app_ids+=("$app_id"); app_names+=("$game_name")
-                app_sizes+=("$size"); app_dirs+=("$dir")
-            done
-        done
-
-        if [ ${#app_ids[@]} -eq 0 ]; then
-            zenity --info --text="Nothing to clean was found for $title."
-            continue
-        fi
-
-        local -a list_data=()
-        local i
-        for i in "${!app_ids[@]}"; do
-            list_data+=("FALSE" "${app_ids[$i]}" "${app_names[$i]}" "${app_sizes[$i]}MB")
-        done
-
-        local selections
-        # The ID column is hidden but used for matching on return: avoid matching by "display name" (breaks on duplicates / names containing |)
-        selections=$(zenity --list --checklist \
-            --title="Choose the $title to delete" \
-            --text="${#app_ids[@]} item(s) in total, check multiple items and click OK." \
-            --column="Select" --column="ID" --column="App name" --column="Size" \
-            --hide-column=2 --print-column=2 --separator=$'\n' \
-            "${list_data[@]}" \
-            --width=720 --height=460) || continue
-        [ -z "$selections" ] && continue
-
-        local -a sel_dirs=() sel_labels=()
-        local sel_line
-        while IFS= read -r sel_line; do
-            [ -n "$sel_line" ] || continue
-            for i in "${!app_ids[@]}"; do
-                if [ "${app_ids[$i]}" = "$sel_line" ]; then
-                    sel_dirs+=("${app_dirs[$i]}")
-                    sel_labels+=("${app_names[$i]} (${app_sizes[$i]}MB)")
-                    break
-                fi
-            done
-        done <<< "$selections"
-
-        if [ ${#sel_dirs[@]} -eq 0 ]; then
-            zenity --info --text="No valid items selected."
-            continue
-        fi
-
-        # List the specific items and total size in the confirmation dialog so the user sees exactly what will be deleted
-        local total_mb=0 label one_mb
-        for i in "${!sel_dirs[@]}"; do
-            label="${sel_labels[$i]}"
-            # When du fails its output is empty, and using it directly in $(( )) raises an arithmetic syntax error; fall back to 0 first
-            one_mb=$(du -sm "${sel_dirs[$i]}" 2>/dev/null | cut -f1)
-            [[ "$one_mb" =~ ^[0-9]+$ ]] || one_mb=0
-            total_mb=$((total_mb + one_mb))
-        done
-        local confirm_text="The following $title will be permanently deleted:"
-        for label in "${sel_labels[@]}"; do
-            confirm_text+=$'\n'"  • $label"
-        done
-        confirm_text+=$'\n\n'"${#sel_dirs[@]} item(s), about ${total_mb}MB, this cannot be undone."
-        zenity --question --title="Confirm deletion" --text="$confirm_text" \
-            --ok-label="Delete" --cancel-label="Cancel" || continue
-
-        local deleted=0 failed=0
-        for i in "${!sel_dirs[@]}"; do
-            if rm -rf -- "${sel_dirs[$i]}" 2>/dev/null; then
-                deleted=$((deleted + 1))
-            else
-                failed=$((failed + 1))
-            fi
-        done
-
-        local result_text="Deletion complete."
-        result_text+=$'\n'"Succeeded: $deleted item(s)"
-        result_text+=$'\n'"Failed: $failed item(s)"
-        [ "$failed" -gt 0 ] && result_text+=$'\n\n'"Failed items may be in use; quit Steam and try again."
-        [ "$steam_running" -eq 1 ] && result_text+=$'\n'"It is recommended to restart Steam so the cache is rebuilt."
-        zenity --info --text="$result_text"
-    done
-}
-
 fix_boot() {
     mk_temp_dir
     clear
@@ -11586,682 +9351,6 @@ fix_shared_disk() {
     else
         echo -e "${GREEN}════════════════ All done ════════════════${NC}"
     fi
-}
-
-# ============================================================================
-# System health check: diagnose "missing disk / missing boot entry / mount failure" after a SteamOS update
-# Read-only checks; no system configuration is modified unless the user explicitly chooses a repair item
-# ============================================================================
-# Dynamically detect the ESP partition (do not hard-code /dev/nvme0n1p1: eMMC is mmcblk0 and the partition number may not be 1)
-detect_esp_partition() {
-    local dev="" line
-    ESP_DEV=""; ESP_DISK=""; ESP_PARTN=""; ESP_MOUNT=""
-    # 1) 已挂载的 /esp（SteamOS）或 /boot/efi（Bazzite）
-    #    注意：findmnt -M 也会返回 systemd autofs 的 "systemd-1"，必须过滤出 /dev/ 开头的真实设备
-    for mp in /esp /boot/efi; do
-        dev=$(findmnt -n -o SOURCE -M "$mp" 2>/dev/null | grep '^/dev/' | head -1 || true)
-        if [ -z "$dev" ]; then
-            # 兜底：从 mount 输出里找该挂载点对应的设备
-            dev=$(mount 2>/dev/null | awk -v m="$mp" '$3 == m {print $1; exit}')
-        fi
-        if [ -n "$dev" ] && [ -b "$dev" ]; then
-            ESP_DEV="$dev"; ESP_MOUNT="$mp"; break
-        fi
-    done
-    # 2) 按 EFI 分区类型 GUID 查找（c12a7328-f81f-11d2-ba4b-00a0c93ec93b）
-    if [ -z "$ESP_DEV" ]; then
-        dev=$(lsblk -P -n -o PATH,PARTTYPE 2>/dev/null \
-            | awk -F'"' '/PARTTYPE="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"/{print $2; exit}' || true)
-        [ -n "$dev" ] && [ -b "$dev" ] && ESP_DEV="$dev"
-    fi
-    [ -n "$ESP_DEV" ] || return 1
-    # 注意：lsblk 输出可能带前后空格，必须清理，否则 efibootmgr -p " 1" 会失败
-    ESP_DISK="/dev/$(lsblk -n -o PKNAME "$ESP_DEV" 2>/dev/null | head -1 | tr -d '[:space:]')"
-    ESP_PARTN=$(lsblk -n -o PARTN "$ESP_DEV" 2>/dev/null | head -1 | tr -d '[:space:]')
-    [ -n "$ESP_PARTN" ] || ESP_PARTN=1
-    return 0
-}
-
-# 检查结果累加器
-HC_TOTAL=0; HC_OK=0; HC_WARN=0; HC_FAIL=0
-HC_FIXABLE=()      # 可自动修复的问题编号
-hc_result() {
-    # $1=status ok/warn/fail  $2=title  $3=description  $4=fixable(1/0)  $5=repair function name
-    HC_TOTAL=$((HC_TOTAL + 1))
-    case "$1" in
-        ok)   HC_OK=$((HC_OK + 1));   echo -e "  ${GREEN}[OK]${NC} $2";;
-        warn) HC_WARN=$((HC_WARN + 1)); echo -e "  ${YELLOW}[Warning]${NC} $2";;
-        fail) HC_FAIL=$((HC_FAIL + 1)); echo -e "  ${RED}[Error]${NC} $2";;
-    esac
-    [ -n "$3" ] && echo -e "         $3"
-    if [ "${4:-0}" -eq 1 ] && [ -n "${5:-}" ]; then
-        HC_FIXABLE+=("$1|$2|$5")
-        echo -e "         ${CYAN}-> Can be handled with the Repair option below${NC}"
-    fi
-}
-
-# ---------- Individual checks ----------
-hc_check_esp() {
-    echo -e "${CYAN}[1/6] ESP (EFI system partition)${NC}"
-    if detect_esp_partition; then
-        hc_result ok "ESP partition identified" "$ESP_DEV mounted at $ESP_MOUNT"
-        # Free space check (Clover needs about 15MB)
-        local avail
-        avail=$(df --output=avail "$ESP_DEV" 2>/dev/null | tail -1 | tr -d ' ')
-        if [[ "$avail" =~ ^[0-9]+$ ]]; then
-            if [ "$avail" -ge 15000 ]; then
-                hc_result ok "ESP free space is sufficient" "about $((avail / 1024))MB available"
-            else
-                hc_result warn "ESP free space is small" "only about $((avail / 1024))MB, installing Clover needs about 15MB"
-            fi
-        fi
-        # EFI directory readability (root needed to list /esp/efi/EFI)
-        if sudo -n ls "$ESP_MOUNT/efi/EFI" &>/dev/null || sudo -n ls "$ESP_MOUNT/EFI" &>/dev/null; then
-            hc_result ok "ESP can be read normally" ""
-        else
-            hc_result warn "Cannot read the ESP contents (sudo required)" "please confirm sudo is available and try again"
-        fi
-    else
-        hc_result fail "Cannot identify the ESP partition" "no mounted /esp found, and it could not be located by EFI partition type either"
-    fi
-    echo ""
-}
-
-hc_check_efi_entries() {
-    echo -e "${CYAN}[2/6] UEFI boot entries${NC}"
-    if ! command -v efibootmgr &>/dev/null; then
-        hc_result fail "efibootmgr not found" "please install: sudo pacman -S efibootmgr"
-        echo ""; return
-    fi
-    local efi_out
-    efi_out=$(sudo -n efibootmgr 2>/dev/null || efibootmgr 2>/dev/null || true)
-    if [ -z "$efi_out" ]; then
-        hc_result fail "Cannot read the UEFI boot entries" "efibootmgr execution failed"
-        echo ""; return
-    fi
-    # Clover boot entry
-    if echo "$efi_out" | grep -qi "clover"; then
-        local cl_num
-        cl_num=$(echo "$efi_out" | grep -i "clover" | head -1 | grep -o 'Boot[0-9A-Fa-f]\{4\}' | head -1)
-        hc_result ok "Clover boot entry exists" "$cl_num"
-    else
-        hc_result fail "Clover boot entry is missing" "common after a SteamOS update or firmware reset; it will be rebuilt from the ESP automatically" 1 "hc_repair_boot"
-    fi
-    # SteamOS boot entry
-    if echo "$efi_out" | grep -qi "steamos\|steamcl"; then
-        hc_result ok "SteamOS boot entry exists" ""
-    else
-        hc_result fail "SteamOS boot entry is missing" "will be rebuilt from the ESP (Clover is checked as well)" 1 "hc_repair_boot"
-    fi
-    # Windows boot entry (not required: Clover takes over)
-    if echo "$efi_out" | grep -qi "windows"; then
-        hc_result ok "Windows boot entry exists" ""
-    else
-        hc_result warn "Windows boot entry is missing (Clover takes over, usually normal)" "only needed to boot Windows directly from the firmware menu"
-    fi
-    # Boot order
-    local order first
-    order=$(echo "$efi_out" | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
-    first=$(echo "$order" | cut -d, -f1)
-    if [ -n "$first" ] && echo "$efi_out" | grep -i "clover" | grep -q "Boot$first"; then
-        hc_result ok "Clover is the first boot entry" "BootOrder: $order"
-    else
-        hc_result warn "Clover is not the first boot entry" "current order: ${order:-unknown}" 1 "hc_repair_boot"
-    fi
-    echo ""
-}
-
-hc_check_clover_files() {
-    echo -e "${CYAN}[3/6] Clover boot file integrity${NC}"
-    if [ -z "${ESP_DEV:-}" ]; then
-        hc_result warn "Skipped: ESP not identified" ""
-        echo ""; return
-    fi
-    # If the ESP is not mounted, mount it temporarily on a read-only directory to check its contents
-    local tmp_mount="" efi_root=""
-    if [ -z "${ESP_MOUNT:-}" ]; then
-        tmp_mount=$(mktemp -d 2>/dev/null) || tmp_mount=""
-        if [ -n "$tmp_mount" ] && sudo -n mount -o ro "$ESP_DEV" "$tmp_mount" 2>/dev/null; then
-            ESP_MOUNT="$tmp_mount"
-        else
-            rmdir "$tmp_mount" 2>/dev/null
-            hc_result warn "ESP is not mounted and cannot be mounted temporarily for the check" "please mount it first: sudo mount $ESP_DEV /mnt"
-            echo ""; return
-        fi
-    fi
-    # Locate the EFI directory: on different models/systems EFI may be at the ESP root or in an efi subdirectory
-    # (the SteamOS Clover install script uses /esp/efi, but the boot path recorded by efibootmgr is \EFI\...
-    #  relative to the ESP root, so both layouts may exist). Do not rely on a normal user's [ -d ] test --
-    # /esp has permissions 700 root, a normal user can never see it, and the directory would be wrongly judged missing.
-    efi_root=""
-    local cand
-    for cand in "$ESP_MOUNT/EFI" "$ESP_MOUNT/efi/EFI"; do
-        if sudo -n ls "$cand" &>/dev/null; then
-            efi_root="$cand"; break
-        fi
-    done
-
-    if [ -z "$efi_root" ]; then
-        # Then try the parent directory to tell "no permission" from "the directory really does not exist"
-        if sudo -n ls "$ESP_MOUNT" &>/dev/null; then
-            local top_list
-            top_list=$(sudo -n ls "$ESP_MOUNT" 2>/dev/null || true)
-            hc_result fail "No EFI boot directory found on the ESP" \
-                "ESP root directory contents: $(echo "$top_list" | tr '\n' ' '). The boot files may have been removed by a SteamOS update; Clover needs to be reinstalled"
-        else
-            hc_result warn "Cannot read the EFI directory on the ESP (sudo password required)" \
-                "Clover file check skipped this time; enter the password during the health check, or run manually: sudo ls $ESP_MOUNT"
-        fi
-        [ -n "$tmp_mount" ] && { sudo -n umount "$tmp_mount" 2>/dev/null; rmdir "$tmp_mount" 2>/dev/null; }
-        echo ""; return
-    fi
-    hc_result ok "EFI directory located" "$efi_root"
-
-    # List the actual contents for a more accurate judgement
-    local efi_list
-    efi_list=$(sudo -n ls "$efi_root" 2>/dev/null || true)
-
-    # Clover main program
-    if sudo -n test -f "$efi_root/clover/cloverx64.efi" 2>/dev/null; then
-        hc_result ok "Clover EFI main program exists" "$efi_root/clover/cloverx64.efi"
-    elif echo "$efi_list" | grep -qx "clover"; then
-        hc_result fail "Clover directory exists but cloverx64.efi is missing" "boot files are incomplete, Clover needs to be reinstalled"
-    else
-        hc_result fail "Clover EFI main program is missing" "Clover needs to be reinstalled (Boot Management -> Install/Reinstall Clover)"
-    fi
-    # Clover config
-    if sudo -n test -f "$efi_root/clover/config.plist" 2>/dev/null; then
-        hc_result ok "Clover config file exists" ""
-    elif echo "$efi_list" | grep -qx "clover"; then
-        hc_result warn "Clover config file is missing" "reinstalling Clover restores the default config"
-    fi
-    # Whether BOOTX64.EFI is Clover (the original file should have been backed up as .orig)
-    local boot_dir=""
-    for cand in BOOT boot; do
-        if echo "$efi_list" | grep -qx "$cand"; then boot_dir="$cand"; break; fi
-    done
-    if [ -n "$boot_dir" ]; then
-        if sudo -n test -f "$efi_root/$boot_dir/BOOTX64.EFI" 2>/dev/null \
-            || sudo -n test -f "$efi_root/$boot_dir/bootx64.efi" 2>/dev/null; then
-            if sudo -n test -f "$efi_root/$boot_dir/BOOTX64.EFI.orig" 2>/dev/null \
-                || sudo -n test -f "$efi_root/$boot_dir/bootx64.efi.orig" 2>/dev/null; then
-                hc_result ok "BOOTX64.EFI is taken over by Clover" "the original file was backed up as .orig"
-            else
-                hc_result warn "No BOOTX64.EFI backup (.orig) found" "usually harmless as long as Clover still boots"
-            fi
-        else
-            hc_result warn "bootx64.efi not found in the BOOT directory" ""
-        fi
-    fi
-    # Unmount the temporary mount point
-    if [ -n "$tmp_mount" ]; then
-        sudo -n umount "$tmp_mount" 2>/dev/null
-        rmdir "$tmp_mount" 2>/dev/null
-    fi
-    echo ""
-}
-
-hc_check_windows_partition() {
-    echo -e "${CYAN}[4/6] Windows partitions${NC}"
-    local found=0 win_dev="" win_mp=""
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        local nm fs lb mp
-        nm=$(echo "$line" | sed -n 's/.*NAME="\([^"]*\)".*/\1/p')
-        fs=$(echo "$line" | sed -n 's/.*FSTYPE="\([^"]*\)".*/\1/p')
-        lb=$(echo "$line" | sed -n 's/.*LABEL="\([^"]*\)".*/\1/p')
-        mp=$(echo "$line" | sed -n 's/.*MOUNTPOINT="\([^"]*\)".*/\1/p')
-        case "$fs" in
-            ntfs|fuseblk|ntfs3)
-                found=1
-                if [ "$lb" = "Windows" ]; then
-                    win_dev="/dev/$nm"; win_mp="$mp"
-                fi
-                ;;
-        esac
-    done < <(lsblk -P -n -o NAME,FSTYPE,LABEL,MOUNTPOINT 2>/dev/null)
-
-    if [ "$found" -eq 0 ]; then
-        hc_result warn "No NTFS partition found" "if this really is a Windows dual-boot, check whether the disk is loose or the partition table is abnormal"
-        echo ""; return
-    fi
-    if [ -n "$win_dev" ]; then
-        hc_result ok "Windows partition exists" "$win_dev${win_mp:+ mounted at $win_mp}"
-        if [ -n "$win_mp" ] && [ -d "$win_mp" ]; then
-            hc_result ok "Windows partition is mounted" "$win_mp"
-        else
-            hc_result warn "Windows partition is not mounted" "it will be written to fstab for automatic mounting at boot" 1 "hc_repair_mount"
-        fi
-        # Check the real Windows file structure (confirm it is not an empty partition)
-        local check_mp="$win_mp"
-        if [ -z "$check_mp" ] || [ ! -d "$check_mp" ]; then
-            for base in /run/media/*/"$nm" /media/*/"$nm"; do
-                [ -d "$base" ] && check_mp="$base" && break
-            done
-        fi
-        if [ -n "$check_mp" ] && [ -d "$check_mp" ]; then
-            if [ -d "$check_mp/Windows" ] && { [ -d "$check_mp/Program Files" ] || [ -d "$check_mp/Users" ]; }; then
-                hc_result ok "Windows system files are complete" "Windows/Program Files/Users detected"
-            else
-                hc_result warn "No Windows system files found in the partition" "it may be a pure data disk, or Windows has been deleted"
-            fi
-        fi
-    else
-        hc_result warn "No NTFS partition labeled Windows found" "it may be a pure data disk; if Windows is confirmed, check the partition label"
-    fi
-    echo ""
-}
-
-hc_check_fstab() {
-    echo -e "${CYAN}[5/6] /etc/fstab mount configuration${NC}"
-    if [ ! -f /etc/fstab ]; then
-        hc_result fail "/etc/fstab not found" ""
-        echo ""; return
-    fi
-    local bad=0 total=0
-    while IFS= read -r line; do
-        # Skip comments and blank lines
-        case "$line" in ''|\#*) continue;; esac
-        local dev mp rest uuid
-        dev=$(echo "$line" | awk '{print $1}')
-        mp=$(echo "$line" | awk '{print $2}')
-        [ -z "$dev" ] && continue
-        total=$((total + 1))
-        # UUID= form: verify it can be found in blkid
-        case "$dev" in
-            UUID=*)
-                uuid="${dev#UUID=}"
-                if ! lsblk -P -n -o UUID 2>/dev/null | grep -q "UUID=\"$uuid\""; then
-                    # /home/swapfile and the like are not partitions; check them separately
-                    if [ "$dev" = "/home/swapfile" ] || echo "$dev" | grep -q "/"; then
-                        :
-                    else
-                        echo -e "  ${RED}[Error]${NC} fstab entry points to a non-existent partition: $dev -> $mp"
-                        bad=$((bad + 1))
-                    fi
-                fi
-                ;;
-            /home/swapfile)
-                if [ ! -f /home/swapfile ]; then
-                    echo -e "  ${RED}[Error]${NC} fstab references /home/swapfile but the file does not exist"
-                    bad=$((bad + 1))
-                fi
-                ;;
-        esac
-    done < /etc/fstab
-    if [ "$bad" -eq 0 ]; then
-        hc_result ok "fstab entries are valid" "$total valid configuration(s) in total"
-    else
-        hc_result fail "fstab has $bad invalid entry/entries" "invalid entries can slow down boot or drop into rescue mode" 1 "hc_fix_fstab_invalid"
-    fi
-    # Check whether systemd reports mount failures
-    local failed_units
-    failed_units=$(systemctl list-units --state=failed --no-legend --plain 2>/dev/null | grep -cE '\.mount|\.swap' || true)
-    if [ "${failed_units:-0}" -gt 0 ]; then
-        hc_result fail "$failed_units mount unit(s) failed" "systemctl --failed shows the details"
-    else
-        hc_result ok "No failed mount units" ""
-    fi
-    echo ""
-}
-
-hc_check_system() {
-    echo -e "${CYAN}[6/6] System and boot services${NC}"
-    # SteamOS read-only mode
-    if command -v steamos-readonly &>/dev/null; then
-        local ro
-        ro=$(steamos-readonly status 2>/dev/null || true)
-        if echo "$ro" | grep -q "enabled"; then
-            hc_result ok "SteamOS read-only mode is normal (enabled)" ""
-        else
-            hc_result warn "SteamOS read-only mode is disabled" "it usually restores itself when no files are changed; staying writable long-term risks being overwritten by updates"
-        fi
-    fi
-    # clover-bootmanager service (the key to self-healing after a lost boot entry)
-    local has_clover_svc=0
-    if systemctl list-unit-files --no-legend --plain 2>/dev/null \
-        | awk '$1 == "clover-bootmanager.service" {found=1} END {exit !found}'; then
-        has_clover_svc=1
-    fi
-    if [ "$has_clover_svc" -eq 1 ]; then
-        if systemctl is-enabled clover-bootmanager.service &>/dev/null; then
-            hc_result ok "Clover boot guard service is enabled" "rebuilds lost boot entries automatically at boot"
-        else
-            hc_result fail "Clover boot guard service is not enabled" "when enabled it rebuilds boot entries automatically after updates" 1 "hc_fix_enable_service"
-        fi
-        if systemctl is-active clover-bootmanager.service &>/dev/null; then
-            hc_result ok "Clover boot guard service is running" ""
-        else
-            hc_result warn "Clover boot guard service is not running" "it can be started manually"
-        fi
-    else
-        hc_result warn "Clover boot guard service is not installed" "it is installed together with Clover"
-    fi
-    # Kernel and system version (to see whether an update just happened)
-    hc_result ok "Current kernel version: $(uname -r)" ""
-    local os_pretty
-    os_pretty=$(grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"')
-    hc_result ok "System version: ${os_pretty:-unknown}" ""
-    echo ""
-}
-
-# ---------- Repair actions ----------
-
-
-
-hc_fix_enable_service() {
-    if sudo systemctl enable --now clover-bootmanager.service 2>/dev/null; then
-        echo -e "${GREEN}✓ Clover boot guard service enabled${NC}"
-        return 0
-    fi
-    echo -e "${RED}✗ Failed to enable, please run manually: sudo systemctl enable --now clover-bootmanager.service${NC}"
-    return 1
-}
-
-hc_fix_fstab_invalid() {
-    echo -e "${CYAN}Backing up /etc/fstab and commenting out invalid entries...${NC}"
-    local backup="/etc/fstab.backup.$(date +%Y%m%d_%H%M%S)"
-    if ! sudo cp /etc/fstab "$backup" 2>/dev/null; then
-        echo -e "${RED}✗ Backup failed, aborted for safety${NC}"
-        return 1
-    fi
-    echo -e "${GREEN}✓ Backed up to $backup${NC}"
-    local tmp="${TEMP_DIR}/fstab.hc.$$"
-    local changed=0
-    while IFS= read -r line; do
-        case "$line" in
-            ''|\#*) echo "$line"; continue;;
-        esac
-        local dev
-        dev=$(echo "$line" | awk '{print $1}')
-        case "$dev" in
-            UUID=*)
-                local uuid="${dev#UUID=}"
-                if lsblk -P -n -o UUID 2>/dev/null | grep -q "UUID=\"$uuid\""; then
-                    echo "$line"
-                elif [ "$dev" = "UUID=/home/swapfile" ]; then
-                    echo "$line"
-                else
-                    echo "# [health check] partition does not exist, commented out: $line"
-                    changed=$((changed + 1))
-                fi
-                ;;
-            *)
-                echo "$line"
-                ;;
-        esac
-    done < /etc/fstab > "$tmp" 2>/dev/null
-    if [ "$changed" -eq 0 ]; then
-        rm -f "$tmp"
-        echo -e "${YELLOW}No entries needed commenting out${NC}"
-        return 0
-    fi
-    if sudo cp "$tmp" /etc/fstab; then
-        rm -f "$tmp"
-        sudo systemctl daemon-reload 2>/dev/null
-        echo -e "${GREEN}✓ Commented out $changed invalid entry/entries (original file backed up at $backup)${NC}"
-        return 0
-    fi
-    rm -f "$tmp"
-    echo -e "${RED}✗ Write failed, /etc/fstab was not modified${NC}"
-    return 1
-}
-
-# Interactive repair entry point
-hc_run_fixes() {
-    if [ ${#HC_FIXABLE[@]} -eq 0 ]; then
-        echo -e "${GREEN}No problems that can be fixed automatically were found.${NC}"
-        return 0
-    fi
-    if ! sudo -v 2>/dev/null; then
-        echo -e "${RED}✗ Repair requires sudo permission, skipped${NC}"
-        return 1
-    fi
-    echo -e "${YELLOW}════════════════ Starting the repair ════════════════${NC}"
-    local item state title fn
-    for item in "${HC_FIXABLE[@]}"; do
-        state="${item%%|*}"
-        title="${item#*|}"; title="${title%%|*}"
-        fn="${item##*|}"
-        echo ""
-        echo -e "${CYAN}Repair: $title${NC}"
-        case "$fn" in
-            fix_boot)
-                hc_repair_boot
-                ;;
-            fix_shared_disk)
-                # "Repair shared drive" clears the screen and reopens an interactive UI; here its core action is executed directly
-                hc_repair_mount
-                ;;
-            *)
-                if declare -f "$fn" >/dev/null; then
-                    "$fn"
-                else
-                    echo -e "${RED}Internal error: repair function $fn does not exist${NC}"
-                fi
-                ;;
-        esac
-        if [ $? -ne 0 ]; then
-            echo -e "${YELLOW}This repair did not succeed, please check the messages above${NC}"
-        fi
-    done
-    echo ""
-    echo -e "${YELLOW}Tip: after repairing, run the health check again to confirm the result.${NC}"
-}
-
-# ---------------------------------------------------------------------------
-# Boot repair inlined in the health check (reuses fix_boot's detection and rebuild logic, without reopening a separate UI)
-# ---------------------------------------------------------------------------
-hc_repair_boot() {
-    if ! detect_esp_partition; then
-        echo -e "${RED}✗ Cannot identify the ESP partition, repair aborted${NC}"
-        return 1
-    fi
-    local efi_out
-    efi_out=$(efibootmgr 2>/dev/null || true)
-    local ro_fix_ok=0
-
-    # 1) Clover boot entry
-    if echo "$efi_out" | grep -qi "clover"; then
-        echo -e "${CYAN}Clover boot entry already exists, skipping the rebuild${NC}"
-    else
-        echo -e "${CYAN}Rebuilding the Clover boot entry ($ESP_DISK partition $ESP_PARTN)...${NC}"
-        # Clean up leftover entries with the same name
-        local old
-        for old in $(echo "$efi_out" | grep -i "clover" | grep -o 'Boot[0-9A-Fa-f]\{4\}' | sed 's/Boot//'); do
-            sudo efibootmgr -b "$old" -B &>/dev/null || true
-        done
-        if sudo efibootmgr -c -d "$ESP_DISK" -p "$ESP_PARTN" \
-            -L "Clover - GUI Boot Manager" -l '\EFI\clover\cloverx64.efi' &>/dev/null; then
-            echo -e "${GREEN}✓ Clover boot entry rebuilt${NC}"
-            ro_fix_ok=1
-        else
-            echo -e "${RED}✗ Failed to rebuild the Clover boot entry${NC}"
-            echo -e "${YELLOW}  cloverx64.efi may be missing on the ESP, please use Install/Reinstall Clover${NC}"
-            return 1
-        fi
-    fi
-
-    # 2) SteamOS boot entry
-    if echo "$efi_out" | grep -qi "steamos\|steamcl"; then
-        echo -e "${CYAN}SteamOS boot entry already exists, skipping the rebuild${NC}"
-    else
-        echo -e "${CYAN}Rebuilding the SteamOS boot entry...${NC}"
-        if sudo efibootmgr -c -d "$ESP_DISK" -p "$ESP_PARTN" \
-            -L "SteamOS" -l '\EFI\steamos\steamcl.efi' &>/dev/null; then
-            echo -e "${GREEN}✓ SteamOS boot entry rebuilt${NC}"
-            ro_fix_ok=1
-        else
-            echo -e "${RED}✗ Failed to rebuild the SteamOS boot entry${NC}"
-        fi
-    fi
-
-    # 3) Make Clover the first boot entry
-    local cl
-    cl=$(efibootmgr 2>/dev/null | grep -i "clover" | grep -o 'Boot[0-9A-Fa-f]\{4\}' | head -1 | sed 's/Boot//')
-    if [ -n "$cl" ]; then
-        local cur new
-        cur=$(efibootmgr 2>/dev/null | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
-        new="$cl"
-        if [ -n "$cur" ]; then
-            new="$cl,$(echo "$cur" | tr ',' '\n' | grep -vx "$cl" | tr '\n' ',' | sed 's/,$//')"
-        fi
-        if [ "$cur" = "$new" ]; then
-            echo -e "${CYAN}Clover is already the first boot entry, no adjustment needed${NC}"
-        else
-            echo -e "${CYAN}Adjusting the boot order: ${cur:-empty} -> $new${NC}"
-            if sudo efibootmgr -o "$new" &>/dev/null; then
-                echo -e "${GREEN}✓ Clover set as the first boot entry${NC}"
-            else
-                echo -e "${RED}✗ Failed to adjust the boot order${NC}"
-                return 1
-            fi
-        fi
-    else
-        echo -e "${YELLOW}⚠ Clover boot entry not found, cannot set the boot order${NC}"
-    fi
-    return 0
-}
-
-# ---------------------------------------------------------------------------
-# Mount repair inlined in the health check: write the Windows (NTFS) partition into fstab for automatic mounting
-# ---------------------------------------------------------------------------
-hc_repair_mount() {
-    echo -e "${CYAN}Configuring automatic mounting at boot for NTFS partitions...${NC}"
-    # fstab must be backed up before writing: a broken fstab can make the next boot fail
-    local backup="/etc/fstab.backup.$(date +%Y%m%d_%H%M%S)"
-    if ! sudo cp /etc/fstab "$backup" 2>/dev/null; then
-        echo -e "${RED}✗ Cannot back up /etc/fstab, modification aborted for safety${NC}"
-        return 1
-    fi
-    echo -e "${GREEN}✓ /etc/fstab backed up to $backup${NC}"
-    local changed=0 failed=0
-    local line nm fs lb mp uuid
-    while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        nm=$(echo "$line" | sed -n 's/.*NAME="\([^"]*\)".*/\1/p')
-        fs=$(echo "$line" | sed -n 's/.*FSTYPE="\([^"]*\)".*/\1/p')
-        lb=$(echo "$line" | sed -n 's/.*LABEL="\([^"]*\)".*/\1/p')
-        mp=$(echo "$line" | sed -n 's/.*MOUNTPOINT="\([^"]*\)".*/\1/p')
-        uuid=$(echo "$line" | sed -n 's/.*UUID="\([^"]*\)".*/\1/p')
-        case "$fs" in ntfs|fuseblk|ntfs3) ;; *) continue;; esac
-        [ -n "$uuid" ] || continue
-        # Skip if this UUID is already matched exactly in fstab
-        if awk -v k="UUID=$uuid" '$1 == k {found=1} END {exit !found}' /etc/fstab 2>/dev/null; then
-            echo -e "${CYAN}  $nm is already in fstab, skipping${NC}"
-            continue
-        fi
-        # Decide the mount point: prefer the current mount point, otherwise /run/media/<user>/<label>
-        local target="${mp:-}"
-        if [ -z "$target" ] || [ "$target" = "None" ]; then
-            target="/run/media/${CURRENT_USER}/${lb:-$nm}"
-        fi
-        echo -e "${CYAN}  Adding $nm (UUID=$uuid) -> $target${NC}"
-        if echo "UUID=$uuid $target ntfs3 defaults,nofail,uid=1000,gid=1000 0 0" | sudo tee -a /etc/fstab >/dev/null; then
-            changed=$((changed + 1))
-        else
-            failed=$((failed + 1))
-        fi
-    done < <(lsblk -P -n -o NAME,FSTYPE,LABEL,MOUNTPOINT,UUID 2>/dev/null)
-
-    if [ "$changed" -gt 0 ]; then
-        sudo systemctl daemon-reload 2>/dev/null
-        echo -e "${GREEN}✓ Added $changed automatic mount entry/entries${NC}"
-        echo -e "${CYAN}  Testing the mount now...${NC}"
-        sudo mount -a 2>&1 | head -5 || true
-    else
-        echo -e "${CYAN}No mount entries need to be added${NC}"
-    fi
-    [ "$failed" -gt 0 ] && { echo -e "${RED}✗ $failed entry/entries failed to write${NC}"; return 1; }
-    return 0
-}
-
-health_check() {
-    mk_temp_dir
-    clear
-    echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║      SteamOS Health Check (post-update)       ║${NC}"
-    echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo "For troubleshooting the common issues after a SteamOS update: missing disk, missing boot entry, mount failure."
-    echo "The checks are read-only; repairs are performed only after your confirmation."
-    echo ""
-    echo "Checking now; sudo permission is needed to read the EFI partition contents..."
-    if ! sudo -v 2>/dev/null; then
-        echo -e "${YELLOW}⚠ No sudo permission: some checks (ESP contents, boot entries) cannot be completed${NC}"
-    fi
-    echo ""
-    echo -e "${CYAN}──────────────── Check results ────────────────${NC}"
-    echo ""
-    hc_check_esp
-    hc_check_efi_entries
-    hc_check_clover_files
-    hc_check_windows_partition
-    hc_check_fstab
-    hc_check_system
-    echo -e "${CYAN}──────────────── Summary ────────────────${NC}"
-    echo -e "  $HC_TOTAL item(s) checked: ${GREEN}OK $HC_OK${NC} | ${YELLOW}Warning $HC_WARN${NC} | ${RED}Error $HC_FAIL${NC}"
-    echo ""
-
-    # The conclusion is based on the number of "fail" items, not "warn":
-    # "warn" items are mostly environment differences (e.g. the Windows boot entry taken over by Clover, small ESP free space),
-    # and do not mean boot or mounting is broken; the user should not be made to think the system is faulty.
-    if [ "$HC_FAIL" -eq 0 ]; then
-        if [ "$HC_WARN" -eq 0 ]; then
-            echo -e "${GREEN}✅ Conclusion: the system is in good shape, no problems found.${NC}"
-        else
-            echo -e "${GREEN}✅ Conclusion: no errors found, boot and mounting are normal.${NC}"
-            echo -e "${CYAN}   There are also $HC_WARN warning item(s), which are environment differences or optional optimizations and do not affect use (see the [Warning] items above).${NC}"
-        fi
-        if [ ${#HC_FIXABLE[@]} -gt 0 ]; then
-            echo ""
-            echo -e "${YELLOW}${#HC_FIXABLE[@]} of them can be optimized automatically. Handle them now?${NC}"
-            local ans
-            if read -p "Press y to handle, any other key to skip: " -n 1 -r ans < /dev/tty 2>/dev/null; then
-                echo ""
-                if [[ "$ans" =~ ^[Yy]$ ]]; then
-                    hc_run_fixes
-                else
-                    echo "Skipped. Run the health check again later to handle them."
-                fi
-            else
-                echo -e "${YELLOW}Cannot read input (non-interactive environment), skipped.${NC}"
-            fi
-        fi
-        echo ""
-        return 0
-    fi
-
-    # Reaching here means there really are "fail" items, so prompt that action is needed
-    echo -e "${RED}❌ Conclusion: $HC_FAIL error item(s) found, action is needed.${NC}"
-    if [ ${#HC_FIXABLE[@]} -gt 0 ]; then
-        echo -e "${YELLOW}${#HC_FIXABLE[@]} of them can be fixed automatically:${NC}"
-        local item title
-        for item in "${HC_FIXABLE[@]}"; do
-            title="${item#*|}"; title="${title%%|*}"
-            echo "   · $title"
-        done
-        local ans
-        if read -p "Repair now? (y/N): " -n 1 -r ans < /dev/tty 2>/dev/null; then
-            echo ""
-            if [[ "$ans" =~ ^[Yy]$ ]]; then
-                hc_run_fixes
-            else
-                echo "Repair skipped. Run the health check again later and choose repair."
-            fi
-        else
-            echo -e "${YELLOW}Cannot read input (non-interactive environment), repair skipped.${NC}"
-            echo "To repair, follow the 'can be fixed automatically' hints above and handle them manually."
-        fi
-    else
-        echo -e "${YELLOW}The above errors need manual handling, please follow the hints of the [Error] items above.${NC}"
-    fi
-    echo ""
-    echo -e "${CYAN}Common causes and suggestions:${NC}"
-    echo "  · Clover boot entry disappeared after a SteamOS update -> rebuild it with Repair in this feature, or reinstall Clover"
-    echo "  · Windows partitions no longer mount automatically -> run Repair shared drive"
-    echo "  · Clover files on the ESP were overwritten -> reinstall Clover (Boot Management -> Install/Reinstall Clover)"
-    echo "  · Completely unbootable / cannot enter the system -> rescue with a SteamOS recovery USB; this tool cannot handle that"
 }
 
 install_uu_accelerator() {
@@ -13572,899 +10661,6 @@ uninstall_plugin_store() {
     fi
     echo -e "${GREEN}✓ Plugin Store uninstalled${NC}"
     echo "To reinstall, use the 'Install Plugin Store' feature."
-}
-
-get_ge_proton_versions() {
-    curl -s "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases?per_page=100" | \
-        python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    tags = []
-    for rel in data:
-        tag = rel.get('tag_name', '')
-        if tag.startswith('GE-Proton'):
-            tags.append(tag)
-    print('\n'.join(tags))
-except:
-    pass
-"
-}
-
-get_installed_ge_proton() {
-    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
-    [ -d "$install_dir" ] || return
-    for dir in "$install_dir"/GE-Proton*; do
-        [ -d "$dir" ] && basename "$dir"
-    done
-}
-
-ge_proton_manager() {
-    while true; do
-        local choice=$(zenity --list --radiolist \
-            --title="Compatibility layer manager" \
-            --text="Manage GE-Proton / Proton-CachyOS (SLR) / DW Proton\nDW Proton focuses on anime / specific titles; use the separate CheatDeck plugin for trainers." \
-            --column="Select" --column="Action" \
-            FALSE "GE-Proton: Install" \
-            FALSE "GE-Proton: Uninstall" \
-            FALSE "Proton-CachyOS (SLR): Install" \
-            FALSE "Proton-CachyOS (SLR): Uninstall" \
-            FALSE "DW Proton: Install" \
-            FALSE "DW Proton: Uninstall" \
-            --width=560 --height=360 2>/dev/null)
-        [ $? -eq 1 ] && return 0
-        case "$choice" in
-            "GE-Proton: Install") ge_proton_install ;;
-            "GE-Proton: Uninstall") ge_proton_uninstall ;;
-            "Proton-CachyOS (SLR): Install") cachyos_proton_install ;;
-            "Proton-CachyOS (SLR): Uninstall") cachyos_proton_uninstall ;;
-            "DW Proton: Install") dwproton_install ;;
-            "DW Proton: Uninstall") dwproton_uninstall ;;
-            *) return 0 ;;
-        esac
-    done
-}
-
-ge_proton_install() {
-    (
-        echo "10"; echo "# Fetching the version list, please wait..."
-        sleep 0.5
-        echo "50"; echo "# Connecting to the GitHub API..."
-        sleep 0.5
-        echo "100"
-    ) | zenity --progress --pulsate --title="Loading" --text="Fetching the version list..." --width=400 2>/dev/null &
-    ZENITY_PID=$!
-
-    local all_versions=$(get_ge_proton_versions)
-
-    kill $ZENITY_PID 2>/dev/null
-    wait $ZENITY_PID 2>/dev/null
-
-    [ -z "$all_versions" ] && {
-        zenity --error --text="Cannot fetch the version list, please check your network." --width=400 2>/dev/null
-        return 1
-    }
-    mapfile -t version_array <<< "$all_versions"
-
-    local installed_list=$(get_installed_ge_proton)
-    local installed_array=()
-    [ -n "$installed_list" ] && mapfile -t installed_array <<< "$installed_list"
-
-    local available_versions=()
-    for ver in "${version_array[@]}"; do
-        local already=false
-        for inst in "${installed_array[@]}"; do
-            [ "$ver" = "$inst" ] && { already=true; break; }
-        done
-        [ "$already" = false ] && available_versions+=("$ver")
-    done
-
-    [ ${#available_versions[@]} -eq 0 ] && {
-        zenity --info --text="All GE-Proton versions are already installed!" --width=400 2>/dev/null
-        return 0
-    }
-
-    local list_args=(
-        --list --checklist
-        --title="Install GE-Proton compatibility layer"
-        --text="Please choose the version(s) to install (multiple allowed)\n${#available_versions[@]} version(s) available, installed versions excluded"
-        --column="Select" --column="Version"
-        --width=600 --height=500
-        --ok-label="Install"
-        --cancel-label="Back"
-    )
-    for ver in "${available_versions[@]}"; do
-        list_args+=("FALSE" "$ver")
-    done
-
-    local selection
-    selection=$(zenity "${list_args[@]}" 2>/dev/null)
-    local ret=$?
-
-    if [ $ret -eq 1 ] || [ $ret -eq -1 ]; then
-        return 0
-    elif [ $ret -eq 0 ]; then
-        [ -z "$selection" ] && {
-            zenity --warning --text="Please select at least one version." --width=300 2>/dev/null
-            return 0
-        }
-        IFS='|' read -r -a selected <<< "$selection"
-        ge_proton_do_install "${selected[@]}"
-    fi
-}
-
-ge_proton_do_install() {
-    local versions=("$@")
-    local total=${#versions[@]}
-    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
-    mkdir -p "$install_dir"
-
-    local success_count=0
-    local failed_count=0
-    local failed_list=""
-
-    local mirror_choice=$(zenity --list --radiolist \
-        --title="Choose download mirror" \
-        --text="All versions will use the same download mirror" \
-        --column="Select" --column="Mirror" \
-        FALSE "gh-proxy.com (China mirror, fast)" \
-        FALSE "gh.3w.pm (China mirror, stable)" \
-        FALSE "cors.isteed.cc (China mirror, stable)" \
-        FALSE "ghproxy.net (China mirror, slow fallback)" \
-        FALSE "GitHub (official)" \
-        --width=560 --height=280 2>/dev/null)
-    [ -z "$mirror_choice" ] && return 0
-
-    local mirror=""
-    case "$mirror_choice" in
-        "gh-proxy.com (China mirror, fast)") mirror="https://gh-proxy.com/" ;;
-        "gh.3w.pm (China mirror, stable)") mirror="https://gh.3w.pm/" ;;
-        "cors.isteed.cc (China mirror, stable)") mirror="https://cors.isteed.cc/" ;;
-        "ghproxy.net (China mirror, slow fallback)") mirror="https://ghproxy.net/" ;;
-        # 官方源用空前缀：download_url 本身已是完整的 https://github.com/... 地址，
-        # 若这里也写 https://github.com/ 会拼成 .../https://github.com/... 导致 404
-        "GitHub (official)") mirror="" ;;
-    esac
-
-    local pipe="/tmp/zenity_pipe_$$"
-    mkfifo "$pipe"
-    zenity --progress --pulsate --title="Install GE-Proton" --text="Getting ready..." --width=500 < "$pipe" &
-    local zenity_pid=$!
-    exec 3> "$pipe"
-
-    for i in "${!versions[@]}"; do
-        if ! kill -0 $zenity_pid 2>/dev/null; then
-            echo "User cancelled install" >&2
-            break
-        fi
-
-        local version="${versions[$i]}"
-        local idx=$((i+1))
-        echo "# Processing $idx/$total: $version (preparing download...)" >&3
-
-        # ---------- 解析下载地址 ----------
-        # 注意：GE-Proton11-4 起上游改了产物命名，包名和压缩包内顶层目录都带架构后缀
-        # （GE-Proton11-11-x86_64.tar.gz / 解开后是 GE-Proton11-11-x86_64/），
-        # 而 release tag 仍是 GE-Proton11-11。旧版本则是 <tag>.tar.gz、顶层目录就是 <tag>。
-        # 这里同时取回文件大小和 sha512 地址，供下载后校验。
-        local asset_info
-        asset_info=$(curl -s --connect-timeout 20 --max-time 60 \
-            "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/tags/${version}" | \
-            python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-assets = data.get('assets', [])
-pick = None
-for a in assets:
-    n = a.get('name', '')
-    if n.endswith('.tar.gz') and 'aarch64' not in n and 'x86_64' in n:
-        pick = a
-        break
-if pick is None:
-    for a in assets:
-        n = a.get('name', '')
-        if n.endswith('.tar.gz') and 'aarch64' not in n:
-            pick = a
-            break
-if pick is None:
-    sys.exit(0)
-sha = ''
-want = pick.get('name', '').replace('.tar.gz', '.sha512sum')
-for a in assets:
-    if a.get('name', '') == want:
-        sha = a.get('browser_download_url', '')
-        break
-print(pick.get('browser_download_url', ''))
-print(pick.get('size', 0))
-print(sha)
-")
-        local download_url="" asset_size="" sha_url=""
-        download_url=$(printf '%s\n' "$asset_info" | sed -n '1p')
-        asset_size=$(printf '%s\n' "$asset_info" | sed -n '2p')
-        sha_url=$(printf '%s\n' "$asset_info" | sed -n '3p')
-
-        if [ -z "$download_url" ]; then
-            echo "# Error: could not get download URL for $version, skipped" >&3
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (cannot get download URL)"
-            continue
-        fi
-
-        local full_url="${mirror}${download_url}"
-        local temp_dir="/tmp/ge_proton_$$"
-        mkdir -p "$temp_dir"
-        cd "$temp_dir" || continue
-        local filename="${version}.tar.gz"
-
-        echo "# Processing $idx/$total: $version (downloading...)" >&3
-        curl -L -f -S --connect-timeout 30 --max-time 600 -o "$filename" "$full_url" 2> /tmp/curl_err_$$.log
-        local curl_ret=$?
-        if [ $curl_ret -ne 0 ]; then
-            echo "# Download failed; error:" >&3
-            tail -n 5 /tmp/curl_err_$$.log >&3
-            rm -f /tmp/curl_err_$$.log
-            rm -f "$filename"
-            cd /tmp && rm -rf "$temp_dir"
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (download failed)"
-            continue
-        fi
-        rm -f /tmp/curl_err_$$.log
-
-        # ---------- 下载完整性校验 ----------
-        # 镜像（gh-proxy 一类）在连接中断时可能返回 200 + 截断的包，
-        # curl 看不出问题，tar 又只在末尾才报 EOF，于是表现为「解压失败」。
-        # 这里先用文件大小和 sha512 两道校验把截断包挡在解压之前。
-        local fsize
-        fsize=$(stat -c '%s' "$filename" 2>/dev/null || echo 0)
-        if [ -n "$asset_size" ] && [ "$asset_size" != "0" ] && [ "$fsize" != "$asset_size" ]; then
-            echo "# Item $idx/$total: $version download incomplete ($fsize / $asset_size bytes), skipped" >&3
-            rm -f "$filename"
-            cd /tmp && rm -rf "$temp_dir"
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (download incomplete: $fsize/$asset_size bytes)"
-            continue
-        fi
-
-        if [ -n "$sha_url" ] && command -v sha512sum &>/dev/null; then
-            local want_sha got_sha
-            want_sha=$(curl -sL --connect-timeout 20 --max-time 60 "${mirror}${sha_url}" 2>/dev/null \
-                       | awk '{print $1}' | head -1)
-            if [ -n "$want_sha" ]; then
-                got_sha=$(sha512sum "$filename" 2>/dev/null | awk '{print $1}')
-                if [ "$want_sha" != "$got_sha" ]; then
-                    echo "# Item $idx/$total: $version checksum mismatch; package corrupt, skipped" >&3
-                    rm -f "$filename"
-                    cd /tmp && rm -rf "$temp_dir"
-                    ((failed_count++))
-                    failed_list="${failed_list}\n  $version (sha512 check failed)"
-                    continue
-                fi
-            fi
-        fi
-
-        # 先解压到临时目录校验完整性，成功后再移入 compatibilitytools.d。
-        # 直接解到 install_dir 的问题是：下载包被截断/损坏时，tar 会留下
-        # 半套目录，而 Steam 会把这个残缺版本当成可用的兼容层加载。
-        echo "# Processing $idx/$total: $version (extracting...)" >&3
-        local STAGE_DIR
-        STAGE_DIR=$(mktemp -d "$install_dir/.stage.XXXXXX" 2>/dev/null) || STAGE_DIR=""
-        if [ -z "$STAGE_DIR" ]; then
-            echo "# Item $idx/$total: $version install failed (cannot create temp dir)" >&3
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (cannot create temp dir)"
-            rm -f "$filename"
-            cd /tmp && rm -rf "$temp_dir"
-            continue
-        fi
-        tar -xzf "$filename" -C "$STAGE_DIR"
-        local tar_ret=$?
-
-        rm -f "$filename"
-        cd /tmp && rm -rf "$temp_dir"
-
-        # ---------- 定位解压出的顶层目录 ----------
-        # 不写死 "$STAGE_DIR/$version"：GE-Proton11-4 起包内顶层目录是
-        # GE-Proton11-11-x86_64（带架构后缀），与 tag GE-Proton11-11 不一致，
-        # 按旧判据会把解压成功的包误判成「压缩包损坏」。
-        # 这里取 stage 里唯一的顶层目录，再用 <tag> 前缀兜底匹配。
-        local EXTRACTED=""
-        if [ $tar_ret -eq 0 ]; then
-            local top_entries=("$STAGE_DIR"/*)
-            if [ ${#top_entries[@]} -eq 1 ] && [ -d "${top_entries[0]}" ]; then
-                EXTRACTED="${top_entries[0]}"
-            else
-                for d in "$STAGE_DIR/$version" "$STAGE_DIR/$version"-*; do
-                    [ -d "$d" ] && { EXTRACTED="$d"; break; }
-                done
-            fi
-        fi
-
-        if [ $tar_ret -ne 0 ] || [ -z "$EXTRACTED" ]; then
-            # 解压失败：清掉半成品，绝不留到 compatibilitytools.d
-            rm -rf "$STAGE_DIR"
-            if [ $tar_ret -ne 0 ]; then
-                echo "# Item $idx/$total: $version install failed (corrupt archive or extract interrupted)" >&3
-                failed_list="${failed_list}\n  $version (extract failed)"
-            else
-                echo "# Item $idx/$total: $version install failed (bad archive layout, version dir missing)" >&3
-                failed_list="${failed_list}\n  $version (bad archive layout)"
-            fi
-            ((failed_count++))
-            continue
-        fi
-
-        # ---------- 移入目标目录 ----------
-        # 目标目录名保持 <tag>（如 GE-Proton11-11），这样已装列表、卸载、
-        # Steam 显示名都用同一个不带架构后缀的名字，和旧版本保持一致。
-        rm -rf "${install_dir:?}/$version"
-        if ! mv "$EXTRACTED" "$install_dir/$version"; then
-            rm -rf "$STAGE_DIR"
-            echo "# Item $idx/$total: $version install failed (move to target dir failed)" >&3
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (move failed)"
-            continue
-        fi
-        rm -rf "$STAGE_DIR"
-
-        if [ -d "$install_dir/$version" ]; then
-            echo "# Item $idx/$total: $version installed successfully" >&3
-            ((success_count++))
-        else
-            echo "# Item $idx/$total: $version install failed" >&3
-            ((failed_count++))
-            failed_list="${failed_list}\n  $version (install verification failed)"
-        fi
-    done
-
-    # 用户中途取消时可能留下下载临时目录，统一收尾
-    rm -rf "${temp_dir:-}" /tmp/curl_err_$$.log 2>/dev/null || true
-
-    if kill -0 $zenity_pid 2>/dev/null; then
-        local result_msg="\n========== Install complete ==========\nSucceeded: $success_count"
-        if [ $failed_count -gt 0 ]; then
-            result_msg+="\nFailed: $failed_count\nFailed versions:${failed_list}"
-        fi
-        if [ $success_count -gt 0 ]; then
-            result_msg+="\n\nRestart Steam to refresh the compatibility tool list."
-        fi
-        echo "# $result_msg" >&3
-        exec 3>&-
-        wait $zenity_pid 2>/dev/null
-    fi
-
-    rm -f "$pipe"
-}
-
-ge_proton_uninstall() {
-    local installed_list=$(get_installed_ge_proton)
-    [ -z "$installed_list" ] && {
-        zenity --info --text="No installed GE-Proton detected." --ok-label="Back" --width=400 2>/dev/null
-        return 0
-    }
-    mapfile -t installed_array <<< "$installed_list"
-
-    local list_args=(
-        --list --checklist
-        --title="Uninstall GE-Proton compatibility layer"
-        --text="Please choose the version(s) to uninstall (multiple allowed)"
-        --column="Select" --column="Version"
-        --width=500 --height=350
-        --ok-label="Uninstall"
-        --cancel-label="Back"
-    )
-    for ver in "${installed_array[@]}"; do
-        list_args+=("FALSE" "$ver")
-    done
-
-    local selection=$(zenity "${list_args[@]}" 2>/dev/null)
-    [ -z "$selection" ] && return 0
-    IFS='|' read -r -a selected <<< "$selection"
-
-    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
-    local total=${#selected[@]}
-    local success=0 fail=0
-    local failed_list=""
-
-    local pipe="/tmp/zenity_pipe_$$"
-    mkfifo "$pipe"
-    zenity --progress --pulsate --title="Uninstall GE-Proton" --text="Getting ready..." --width=500 < "$pipe" &
-    local zenity_pid=$!
-    exec 3> "$pipe"
-
-    for i in "${!selected[@]}"; do
-        if ! kill -0 $zenity_pid 2>/dev/null; then
-            echo "User cancelled the uninstall" >&2
-            break
-        fi
-
-        local version="${selected[$i]}"
-        local idx=$((i+1))
-
-        echo "# Processing item $idx/$total: $version ..." >&3
-
-        if [ -d "$install_dir/$version" ]; then
-            rm -rf "$install_dir/$version"
-            if [ ! -d "$install_dir/$version" ]; then
-                ((success++))
-                echo "# Item $idx/$total: $version uninstalled" >&3
-            else
-                ((fail++))
-                failed_list="${failed_list}\n  $version (deletion failed)"
-                echo "# Item $idx/$total: $version uninstall failed" >&3
-            fi
-        else
-            ((success++))
-            echo "# Item $idx/$total: $version (directory does not exist, skipped)" >&3
-        fi
-        sleep 0.3
-    done
-
-    if kill -0 $zenity_pid 2>/dev/null; then
-        local result_msg="\n========== Uninstall complete ==========\nSucceeded: $success"
-        if [ $fail -gt 0 ]; then
-            result_msg+="\nFailed: $fail\nFailed versions:${failed_list}"
-        fi
-        result_msg+="\n\nIt is recommended to restart Steam for the changes to take effect."
-        echo "# $result_msg" >&3
-        exec 3>&-
-        wait $zenity_pid 2>/dev/null
-    fi
-
-    rm -f "$pipe"
-}
-
-# ===== Compat layer extras: Proton-CachyOS / DW Proton + emergency reset =====
-get_cachyos_versions() {
-    curl -s --connect-timeout 20 --max-time 60 \
-        "https://api.github.com/repos/CachyOS/proton-cachyos/releases?per_page=50" | \
-        python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    tags = []
-    for rel in data:
-        tag = rel.get('tag_name', '') or ''
-        if rel.get('prerelease'):
-            continue
-        if 'slr' in tag.lower() and any(ch.isdigit() for ch in tag):
-            tags.append(tag)
-    print('\n'.join(tags))
-except Exception:
-    pass
-"
-}
-
-get_dwproton_versions() {
-    curl -s --connect-timeout 20 --max-time 60 \
-        "https://api.github.com/repos/dawn-winery/dwproton-mirror/releases?per_page=50" | \
-        python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    tags = []
-    for rel in data:
-        tag = rel.get('tag_name', '') or ''
-        if rel.get('prerelease'):
-            continue
-        if tag.lower().startswith('dwproton') and any(ch.isdigit() for ch in tag):
-            tags.append(tag)
-    print('\n'.join(tags))
-except Exception:
-    pass
-"
-}
-
-get_installed_compat_dirs() {
-    local pattern="$1"
-    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
-    [ -d "$install_dir" ] || return 0
-    local d base
-    for d in "$install_dir"/*; do
-        [ -d "$d" ] || continue
-        [ -f "$d/compatibilitytool.vdf" ] || continue
-        base=$(basename "$d")
-        echo "$base" | grep -Ei -- "$pattern" >/dev/null && echo "$base"
-    done
-}
-
-compat_pick_mirror() {
-    local mirror_choice
-    mirror_choice=$(zenity --list --radiolist \
-        --title="Choose download mirror" \
-        --text="All versions will use the same download mirror" \
-        --column="Select" --column="Mirror" \
-        FALSE "gh-proxy.com (China mirror, fast)" \
-        FALSE "gh.3w.pm (China mirror, stable)" \
-        FALSE "cors.isteed.cc (China mirror, stable)" \
-        FALSE "ghproxy.net (China mirror, slow fallback)" \
-        FALSE "GitHub (official)" \
-        --width=560 --height=280 2>/dev/null) || true
-    [ -z "$mirror_choice" ] && { echo ""; return 1; }
-    case "$mirror_choice" in
-        "gh-proxy.com (China mirror, fast)") echo "https://gh-proxy.com/" ;;
-        "gh.3w.pm (China mirror, stable)") echo "https://gh.3w.pm/" ;;
-        "cors.isteed.cc (China mirror, stable)") echo "https://cors.isteed.cc/" ;;
-        "ghproxy.net (China mirror, slow fallback)") echo "https://ghproxy.net/" ;;
-        "GitHub (official)") echo "" ;;
-        *) echo ""; return 1 ;;
-    esac
-}
-
-compat_do_install_tar_xz() {
-    local repo="$1"; shift
-    local display_name="$1"; shift
-    local versions=("$@")
-    local total=${#versions[@]}
-    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
-    mkdir -p "$install_dir"
-
-    local success_count=0 failed_count=0 failed_list=""
-    local mirror
-    mirror=$(compat_pick_mirror) || return 0
-
-    local pipe="/tmp/zenity_pipe_$$"
-    mkfifo "$pipe"
-    zenity --progress --pulsate --title="Install ${display_name}" --text="Getting ready..." --width=520 < "$pipe" &
-    local zenity_pid=$!
-    exec 3> "$pipe"
-
-    local i version idx asset_info download_url asset_size sha_url dest_name
-    local full_url temp_dir filename curl_ret fsize want_sha got_sha STAGE_DIR tar_ret EXTRACTED top_entries
-    for i in "${!versions[@]}"; do
-        if ! kill -0 $zenity_pid 2>/dev/null; then
-            echo "User cancelled install" >&2
-            break
-        fi
-        version="${versions[$i]}"
-        idx=$((i+1))
-        echo "# Processing $idx/$total: $version (preparing download...)" >&3
-
-        asset_info=$(curl -s --connect-timeout 20 --max-time 60 \
-            "https://api.github.com/repos/${repo}/releases/tags/${version}" | \
-            python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-assets = data.get('assets', [])
-pick = None
-for a in assets:
-    n = a.get('name', '')
-    if n.endswith('.tar.xz') and 'x86_64' in n and 'x86_64_v3' not in n and 'arm64' not in n and 'aarch64' not in n:
-        pick = a
-        break
-if pick is None:
-    for a in assets:
-        n = a.get('name', '')
-        if n.endswith('.tar.xz') and 'arm64' not in n and 'aarch64' not in n:
-            pick = a
-            break
-if pick is None:
-    sys.exit(0)
-sha = ''
-want = pick.get('name', '') + '.sha512sum'
-want2 = pick.get('name', '').replace('.tar.xz', '.sha512sum')
-for a in assets:
-    n = a.get('name', '')
-    if n == want or n == want2:
-        sha = a.get('browser_download_url', '')
-        break
-print(pick.get('browser_download_url', ''))
-print(pick.get('size', 0))
-print(sha)
-print(pick.get('name', ''))
-")
-        download_url=$(printf '%s\n' "$asset_info" | sed -n '1p')
-        asset_size=$(printf '%s\n' "$asset_info" | sed -n '2p')
-        sha_url=$(printf '%s\n' "$asset_info" | sed -n '3p')
-        dest_name=$(printf '%s\n' "$asset_info" | sed -n '4p' | sed 's/\.tar\.xz$//')
-
-        if [ -z "$download_url" ] || [ -z "$dest_name" ]; then
-            echo "# Error: cannot resolve download URL for $version, skipped" >&3
-            ((failed_count++)); failed_list="${failed_list}\n  $version (no download URL)"
-            continue
-        fi
-
-        full_url="${mirror}${download_url}"
-        temp_dir="/tmp/compat_proton_$$"
-        mkdir -p "$temp_dir"
-        cd "$temp_dir" || continue
-        filename="${dest_name}.tar.xz"
-
-        echo "# Processing $idx/$total: $version (downloading...)" >&3
-        curl -L -f -S --connect-timeout 30 --max-time 900 -o "$filename" "$full_url" 2> /tmp/curl_err_$$.log
-        curl_ret=$?
-        if [ $curl_ret -ne 0 ]; then
-            echo "# Download failed:" >&3
-            tail -n 5 /tmp/curl_err_$$.log >&3
-            rm -f /tmp/curl_err_$$.log "$filename"
-            cd /tmp && rm -rf "$temp_dir"
-            ((failed_count++)); failed_list="${failed_list}\n  $version (download failed)"
-            continue
-        fi
-        rm -f /tmp/curl_err_$$.log
-
-        fsize=$(stat -c '%s' "$filename" 2>/dev/null || echo 0)
-        if [ -n "$asset_size" ] && [ "$asset_size" != "0" ] && [ "$fsize" != "$asset_size" ]; then
-            echo "# $idx/$total: $version incomplete download ($fsize / $asset_size bytes), skipped" >&3
-            rm -f "$filename"; cd /tmp && rm -rf "$temp_dir"
-            ((failed_count++)); failed_list="${failed_list}\n  $version (incomplete: $fsize/$asset_size)"
-            continue
-        fi
-
-        if [ -n "$sha_url" ] && command -v sha512sum &>/dev/null; then
-            want_sha=$(curl -sL --connect-timeout 20 --max-time 60 "${mirror}${sha_url}" 2>/dev/null | awk '{print $1}' | head -1)
-            if [ -n "$want_sha" ]; then
-                got_sha=$(sha512sum "$filename" 2>/dev/null | awk '{print $1}')
-                if [ "$want_sha" != "$got_sha" ]; then
-                    echo "# $idx/$total: $version sha512 mismatch, skipped" >&3
-                    rm -f "$filename"; cd /tmp && rm -rf "$temp_dir"
-                    ((failed_count++)); failed_list="${failed_list}\n  $version (sha512 failed)"
-                    continue
-                fi
-            fi
-        fi
-
-        echo "# Processing $idx/$total: $version (extracting...)" >&3
-        STAGE_DIR=$(mktemp -d "$install_dir/.stage.XXXXXX" 2>/dev/null) || STAGE_DIR=""
-        if [ -z "$STAGE_DIR" ]; then
-            echo "# $idx/$total: $version failed (cannot create staging dir)" >&3
-            ((failed_count++)); failed_list="${failed_list}\n  $version (staging dir)"
-            rm -f "$filename"; cd /tmp && rm -rf "$temp_dir"
-            continue
-        fi
-        tar -xJf "$filename" -C "$STAGE_DIR"
-        tar_ret=$?
-        rm -f "$filename"
-        cd /tmp && rm -rf "$temp_dir"
-
-        EXTRACTED=""
-        if [ $tar_ret -eq 0 ]; then
-            top_entries=("$STAGE_DIR"/*)
-            if [ ${#top_entries[@]} -eq 1 ] && [ -d "${top_entries[0]}" ]; then
-                EXTRACTED="${top_entries[0]}"
-            else
-                EXTRACTED=$(find "$STAGE_DIR" -maxdepth 2 -type f -name compatibilitytool.vdf -printf '%h\n' 2>/dev/null | head -1)
-            fi
-        fi
-
-        if [ $tar_ret -ne 0 ] || [ -z "$EXTRACTED" ] || [ ! -f "$EXTRACTED/compatibilitytool.vdf" ]; then
-            rm -rf "$STAGE_DIR"
-            echo "# $idx/$total: $version failed (bad archive / structure)" >&3
-            ((failed_count++)); failed_list="${failed_list}\n  $version (extract/structure)"
-            continue
-        fi
-
-        rm -rf "${install_dir:?}/$dest_name"
-        if ! mv "$EXTRACTED" "$install_dir/$dest_name"; then
-            rm -rf "$STAGE_DIR"
-            echo "# $idx/$total: $version failed (move)" >&3
-            ((failed_count++)); failed_list="${failed_list}\n  $version (move failed)"
-            continue
-        fi
-        rm -rf "$STAGE_DIR"
-
-        if [ -d "$install_dir/$dest_name" ] && [ -f "$install_dir/$dest_name/compatibilitytool.vdf" ]; then
-            echo "# $idx/$total: $version installed → $dest_name" >&3
-            ((success_count++))
-        else
-            echo "# $idx/$total: $version failed (verify)" >&3
-            ((failed_count++)); failed_list="${failed_list}\n  $version (verify failed)"
-        fi
-    done
-
-    rm -rf /tmp/compat_proton_$$ /tmp/curl_err_$$.log 2>/dev/null || true
-
-    if kill -0 $zenity_pid 2>/dev/null; then
-        local result_msg="\n========== Install complete ==========\nSucceeded: $success_count"
-        if [ $failed_count -gt 0 ]; then
-            result_msg+="\nFailed: $failed_count\nFailed versions:${failed_list}"
-        fi
-        if [ $success_count -gt 0 ]; then
-            result_msg+="\n\nFully quit and restart Steam to refresh the compatibility tool list."
-        fi
-        echo "# $result_msg" >&3
-        exec 3>&-
-        wait $zenity_pid 2>/dev/null
-    fi
-    rm -f "$pipe"
-}
-
-compat_uninstall_by_pattern() {
-    local title="$1"
-    local pattern="$2"
-    local installed_list
-    installed_list=$(get_installed_compat_dirs "$pattern")
-    [ -z "$installed_list" ] && {
-        zenity --info --text="No installed ${title} detected." --ok-label="Back" --width=420 2>/dev/null
-        return 0
-    }
-    mapfile -t installed_array <<< "$installed_list"
-    local list_args=(
-        --list --checklist
-        --title="Uninstall ${title}"
-        --text="Choose version(s) to uninstall (multiple allowed)"
-        --column="Select" --column="Installed directory"
-        --width=560 --height=360
-        --ok-label="Uninstall"
-        --cancel-label="Back"
-    )
-    local ver
-    for ver in "${installed_array[@]}"; do
-        list_args+=("FALSE" "$ver")
-    done
-    local selection
-    selection=$(zenity "${list_args[@]}" 2>/dev/null) || return 0
-    [ -z "$selection" ] && return 0
-    IFS='|' read -r -a selected <<< "$selection"
-
-    local install_dir="$HOME/.local/share/Steam/compatibilitytools.d"
-    local total=${#selected[@]} success=0 fail=0 failed_list=""
-    local pipe="/tmp/zenity_pipe_$$"
-    mkfifo "$pipe"
-    zenity --progress --pulsate --title="Uninstall ${title}" --text="Getting ready..." --width=500 < "$pipe" &
-    local zenity_pid=$!
-    exec 3> "$pipe"
-    local i version idx
-    for i in "${!selected[@]}"; do
-        if ! kill -0 $zenity_pid 2>/dev/null; then
-            echo "User cancelled uninstall" >&2
-            break
-        fi
-        version="${selected[$i]}"
-        idx=$((i+1))
-        echo "# Processing $idx/$total: $version ..." >&3
-        if [ -d "$install_dir/$version" ]; then
-            rm -rf "$install_dir/$version"
-            if [ ! -d "$install_dir/$version" ]; then
-                ((success++)); echo "# $idx/$total: $version uninstalled" >&3
-            else
-                ((fail++)); failed_list="${failed_list}\n  $version (delete failed)"
-                echo "# $idx/$total: $version uninstall failed" >&3
-            fi
-        else
-            ((success++)); echo "# $idx/$total: $version (missing, skipped)" >&3
-        fi
-        sleep 0.2
-    done
-    if kill -0 $zenity_pid 2>/dev/null; then
-        local result_msg="\n========== Uninstall complete ==========\nSucceeded: $success"
-        [ $fail -gt 0 ] && result_msg+="\nFailed: $fail\nFailed versions:${failed_list}"
-        result_msg+="\n\nRestart Steam for the changes to take effect."
-        echo "# $result_msg" >&3
-        exec 3>&-
-        wait $zenity_pid 2>/dev/null
-    fi
-    rm -f "$pipe"
-}
-
-cachyos_proton_install() {
-    (
-        echo "10"; echo "# Fetching Proton-CachyOS SLR versions..."
-        sleep 0.4
-        echo "100"
-    ) | zenity --progress --pulsate --title="Loading" --text="Fetching version list..." --width=400 2>/dev/null &
-    local ZENITY_PID=$!
-    local all_versions
-    all_versions=$(get_cachyos_versions)
-    kill $ZENITY_PID 2>/dev/null; wait $ZENITY_PID 2>/dev/null
-    [ -z "$all_versions" ] && {
-        zenity --error --text="Cannot fetch Proton-CachyOS versions. Check your network." --width=420 2>/dev/null
-        return 1
-    }
-    mapfile -t version_array <<< "$all_versions"
-    local installed_list installed_array=() available_versions=()
-    installed_list=$(get_installed_compat_dirs 'proton-cachyos|cachyos')
-    [ -n "$installed_list" ] && mapfile -t installed_array <<< "$installed_list"
-    local ver already inst stem
-    for ver in "${version_array[@]}"; do
-        already=false
-        stem=$(echo "$ver" | sed 's/^cachyos-//')
-        for inst in "${installed_array[@]}"; do
-            if echo "$inst" | grep -F -- "$stem" >/dev/null; then
-                already=true; break
-            fi
-        done
-        [ "$already" = false ] && available_versions+=("$ver")
-    done
-    [ ${#available_versions[@]} -eq 0 ] && {
-        zenity --info --text="All listed Proton-CachyOS (SLR) versions are already installed." --width=420 2>/dev/null
-        return 0
-    }
-    local list_args=(
-        --list --checklist
-        --title="Install Proton-CachyOS (SLR)"
-        --text="Choose SLR version(s) to install\nDeck uses the x86_64 package into compatibilitytools.d"
-        --column="Select" --column="Version"
-        --width=620 --height=480
-        --ok-label="Install" --cancel-label="Back"
-    )
-    for ver in "${available_versions[@]}"; do
-        list_args+=("FALSE" "$ver")
-    done
-    local selection ret
-    selection=$(zenity "${list_args[@]}" 2>/dev/null)
-    ret=$?
-    [ $ret -ne 0 ] && return 0
-    [ -z "$selection" ] && {
-        zenity --warning --text="Please select at least one version." --width=300 2>/dev/null
-        return 0
-    }
-    local selected
-    IFS='|' read -r -a selected <<< "$selection"
-    compat_do_install_tar_xz "CachyOS/proton-cachyos" "Proton-CachyOS" "${selected[@]}"
-}
-
-cachyos_proton_uninstall() {
-    compat_uninstall_by_pattern "Proton-CachyOS" 'proton-cachyos|cachyos'
-}
-
-dwproton_install() {
-    zenity --info --width=520 --title="About DW Proton" \
-        --text="DW Proton (dwproton) targets anime / specific titles.\nUpstream does not support cheat/trainer use; use the separate CheatDeck plugin for that.\nDownloads: dawn-winery/dwproton-mirror on GitHub." \
-        2>/dev/null || true
-    (
-        echo "10"; echo "# Fetching DW Proton versions..."
-        sleep 0.4
-        echo "100"
-    ) | zenity --progress --pulsate --title="Loading" --text="Fetching version list..." --width=400 2>/dev/null &
-    local ZENITY_PID=$!
-    local all_versions
-    all_versions=$(get_dwproton_versions)
-    kill $ZENITY_PID 2>/dev/null; wait $ZENITY_PID 2>/dev/null
-    [ -z "$all_versions" ] && {
-        zenity --error --text="Cannot fetch DW Proton versions. Check your network." --width=420 2>/dev/null
-        return 1
-    }
-    mapfile -t version_array <<< "$all_versions"
-    local installed_list installed_array=() available_versions=()
-    installed_list=$(get_installed_compat_dirs 'dwproton|dw-proton')
-    [ -n "$installed_list" ] && mapfile -t installed_array <<< "$installed_list"
-    local ver already inst
-    for ver in "${version_array[@]}"; do
-        already=false
-        for inst in "${installed_array[@]}"; do
-            if echo "$inst" | grep -F -- "$ver" >/dev/null; then
-                already=true; break
-            fi
-        done
-        [ "$already" = false ] && available_versions+=("$ver")
-    done
-    [ ${#available_versions[@]} -eq 0 ] && {
-        zenity --info --text="All listed DW Proton versions are already installed." --width=420 2>/dev/null
-        return 0
-    }
-    local list_args=(
-        --list --checklist
-        --title="Install DW Proton"
-        --text="Choose version(s) to install\nAnime / specific-game focused; no cheats bundled"
-        --column="Select" --column="Version"
-        --width=620 --height=480
-        --ok-label="Install" --cancel-label="Back"
-    )
-    for ver in "${available_versions[@]}"; do
-        list_args+=("FALSE" "$ver")
-    done
-    local selection ret
-    selection=$(zenity "${list_args[@]}" 2>/dev/null)
-    ret=$?
-    [ $ret -ne 0 ] && return 0
-    [ -z "$selection" ] && {
-        zenity --warning --text="Please select at least one version." --width=300 2>/dev/null
-        return 0
-    }
-    local selected
-    IFS='|' read -r -a selected <<< "$selection"
-    compat_do_install_tar_xz "dawn-winery/dwproton-mirror" "DW Proton" "${selected[@]}"
-}
-
-dwproton_uninstall() {
-    compat_uninstall_by_pattern "DW Proton" 'dwproton|dw-proton'
 }
 
 install_cheatdeck_install() {
@@ -16064,31 +12260,6 @@ uninstall_todesk() {
     echo -e "${GREEN}✅ ToDesk uninstall complete${NC}"
 }
 
-install_wps_office() { install_flatpak_app "WPS Office" "WPS Office" "Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"; }
-install_qq() { install_flatpak_app "QQ" "QQ" "Network;Chat" "com.qq.QQ" "com.tencent.qq"; }
-install_wechat() { install_flatpak_app "WeChat" "WeChat" "Network;Chat" "com.tencent.WeChat" "com.qq.weixin"; }
-install_qqmusic() { install_flatpak_app "QQ Music" "QQ Music" "Audio" "com.qq.QQmusic" "com.tencent.QQmusic"; }
-install_baidunetdisk() { install_flatpak_app "Baidu Netdisk" "Baidu Netdisk" "Network;FileTransfer" "com.baidu.NetDisk" "com.baidu.pan"; }
-install_edge() { install_flatpak_app "Microsoft Edge" "Microsoft Edge" "Network;WebBrowser" "com.microsoft.Edge"; }
-install_chrome() { install_flatpak_app "Google Chrome" "Google Chrome" "Network;WebBrowser" "com.google.Chrome"; }
-
-install_fcitx5() {
-    if ! flatpak info org.fcitx.Fcitx5 &>/dev/null; then
-        install_flatpak_app "Fcitx 5" "Fcitx 5" "Utility;Settings" "org.fcitx.Fcitx5"
-    else
-        echo -e "${GREEN}✓ Fcitx 5 main program installed${NC}"
-    fi
-    if ! flatpak info org.fcitx.Fcitx5.Addon.ChineseAddons &>/dev/null; then
-        echo "Installing the Chinese input method add-on..."
-        if flatpak install flathub org.fcitx.Fcitx5.Addon.ChineseAddons -y; then
-            echo -e "${GREEN}✓ Chinese add-on installed${NC}"
-        else
-            echo -e "${RED}✗ Failed to install the Chinese add-on${NC}"
-        fi
-    else
-        echo -e "${GREEN}✓ Chinese add-on already installed${NC}"
-    fi
-}
 update_installed_apps() {
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ Update all apps ════════════════${NC}"
@@ -16173,241 +12344,6 @@ update_installed_apps() {
     printf '%s\n' "$left" | sed 's/^/  · /'
     echo -e "${YELLOW}  It may have been skipped (e.g. still running) or need a reboot.${NC}"
     return 1
-}
-
-uninstall_wps_office() { uninstall_flatpak_app "WPS Office" "WPS Office" "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"; }
-uninstall_qq() { uninstall_flatpak_app "QQ" "QQ" "com.qq.QQ" "com.tencent.qq"; }
-uninstall_wechat() { uninstall_flatpak_app "WeChat" "WeChat" "com.tencent.WeChat" "com.qq.weixin"; }
-uninstall_qqmusic() { uninstall_flatpak_app "QQ Music" "QQ Music" "com.qq.QQmusic" "com.tencent.QQmusic"; }
-uninstall_baidunetdisk() { uninstall_flatpak_app "Baidu Netdisk" "Baidu Netdisk" "com.baidu.NetDisk" "com.baidu.pan"; }
-uninstall_edge() { uninstall_flatpak_app "Microsoft Edge" "Microsoft Edge" "com.microsoft.Edge"; }
-uninstall_chrome() { uninstall_flatpak_app "Google Chrome" "Google Chrome" "com.google.Chrome" "org.chromium.Chromium"; }
-uninstall_fcitx5() {
-    mk_temp_dir
-    clear
-    echo -e "${YELLOW}════════════════ Uninstall Fcitx 5 ════════════════${NC}"
-
-    local MAIN_APP="org.fcitx.Fcitx5"
-    local ADDON_APP="org.fcitx.Fcitx5.Addon.ChineseAddons"
-    local DESKTOP_NAME="Fcitx 5"
-
-    if ! flatpak info "$MAIN_APP" &>/dev/null; then
-        echo -e "${YELLOW}Fcitx 5 main program is not installed.${NC}"
-        if flatpak info "$ADDON_APP" &>/dev/null; then
-            echo -e "${CYAN}The Chinese add-on is installed but the main program is missing, uninstall only the add-on?${NC}"
-            read -n1 -p "Press Enter or A to confirm uninstalling the add-on, any other key to cancel: " confirm < /dev/tty
-            echo
-            if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
-                flatpak uninstall "$ADDON_APP" -y 2>/dev/null && echo -e "${GREEN}✓ Chinese add-on uninstalled${NC}"
-            else
-                echo "Operation cancelled."
-            fi
-        fi
-        return 0
-    fi
-
-    echo -e "${CYAN}Fcitx 5 main program detected as installed.${NC}"
-    read -n1 -p "Press Enter or A to confirm uninstalling, any other key to cancel: " confirm < /dev/tty
-    echo
-    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
-        echo "Starting the uninstall..."
-    else
-        echo "Uninstall cancelled."
-        return 0
-    fi
-
-    if flatpak info "$ADDON_APP" &>/dev/null; then
-        echo "Uninstalling the Chinese add-on..."
-        flatpak uninstall "$ADDON_APP" -y 2>/dev/null
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}✓ Chinese add-on uninstalled${NC}"
-        else
-            echo -e "${YELLOW}⚠️  Failed to uninstall the Chinese add-on (it may already be removed)${NC}"
-        fi
-    else
-        echo -e "${YELLOW}Chinese add-on is not installed, skipping.${NC}"
-    fi
-
-    echo "Uninstalling the Fcitx 5 main program..."
-    flatpak uninstall "$MAIN_APP" -y 2>/dev/null
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ Fcitx 5 main program uninstalled${NC}"
-    else
-        echo -e "${RED}✗ Failed to uninstall the main program, please check the flatpak status.${NC}"
-        return 1
-    fi
-
-    local desktop_dir="$HOME/Desktop"
-    if [ -d "$desktop_dir" ]; then
-        for f in "$desktop_dir/Fcitx 5.desktop" "$desktop_dir/org.fcitx.Fcitx5.desktop"; do
-            if [ -f "$f" ]; then
-                rm -f "$f" 2>/dev/null && echo -e "${GREEN}✓ Desktop shortcut deleted: $(basename "$f")${NC}"
-            fi
-        done
-        find "$desktop_dir" -maxdepth 1 -name "*Fcitx*" -name "*.desktop" -exec rm -f {} \; 2>/dev/null
-    fi
-
-    echo ""
-    echo -e "${GREEN}✅ Fcitx 5 and its related components uninstalled.${NC}"
-}
-
-uninstall_other_flatpak_apps() {
-    if ! command -v zenity &>/dev/null; then
-        echo "zenity not found, please run in a desktop environment."
-        return 1
-    fi
-
-    local exclude_ids=(
-        "com.wps.Office" "cn.wps.wps-office" "com.kingsoft.wps"
-        "com.qq.QQ" "com.tencent.qq"
-        "com.tencent.WeChat" "com.qq.weixin"
-        "com.qq.QQmusic" "com.tencent.QQmusic"
-        "com.baidu.NetDisk" "com.baidu.pan"
-        "com.microsoft.Edge"
-        "com.google.Chrome" "org.chromium.Chromium"
-        "org.fcitx.Fcitx5" "org.fcitx.Fcitx5.Addon.ChineseAddons"
-    )
-
-    _remove_shortcut() {
-        local app_id="$1"
-        local desktop_dir="$HOME/Desktop"
-        [ -d "$desktop_dir" ] || return
-        local id_us="${app_id//./_}"
-        for f in "$desktop_dir"/*.desktop; do
-            [ -e "$f" ] || continue
-            local base=$(basename "$f")
-            # Only match shortcuts whose file name is exactly the app ID (dot/underscore forms),
-            # no substring matching, to avoid deleting unrelated .desktop files
-            if [ "$base" = "${app_id}.desktop" ] || [ "$base" = "${id_us}.desktop" ]; then
-                rm -f "$f" 2>/dev/null && echo "Desktop shortcut deleted: $base"
-            fi
-        done
-    }
-
-    while true; do
-        local installed_apps=()
-        while IFS=$'\t' read -r app_id app_name; do
-            local skip=0
-            for exclude in "${exclude_ids[@]}"; do
-                if [[ "$app_id" == "$exclude" ]]; then
-                    skip=1
-                    break
-                fi
-            done
-            if [ $skip -eq 0 ]; then
-                installed_apps+=("$app_id|$app_name")
-            fi
-        done < <(flatpak list --app --columns=application,name 2>/dev/null)
-
-        if [ ${#installed_apps[@]} -eq 0 ]; then
-            zenity --info --text="There are no other installed Flatpak applications to uninstall." --width=400
-            break
-        fi
-
-        local list_data=()
-        for entry in "${installed_apps[@]}"; do
-            IFS='|' read -r app_id app_name <<< "$entry"
-            list_data+=("FALSE" "$app_name ($app_id)")
-        done
-
-        local selections
-        selections=$(zenity --list --checklist \
-            --title="Uninstall other Flatpak applications" \
-            --text="Please choose the application(s) to uninstall (multiple allowed):" \
-            --column="Select" --column="Application" \
-            "${list_data[@]}" \
-            --width=700 --height=400 \
-            --multiple 2>/dev/null)
-
-        if [ $? -ne 0 ] || [ -z "$selections" ]; then
-            break
-        fi
-
-        IFS='|' read -r -a selected_names <<< "$selections"
-        local selected_ids=()
-        for selected in "${selected_names[@]}"; do
-            for entry in "${installed_apps[@]}"; do
-                IFS='|' read -r app_id app_name <<< "$entry"
-                if [ "$app_name ($app_id)" = "$selected" ]; then
-                    selected_ids+=("$app_id")
-                    break
-                fi
-            done
-        done
-
-        [ ${#selected_ids[@]} -eq 0 ] && continue
-
-        zenity --question \
-            --text="Uninstall the selected applications?\n${#selected_ids[@]} item(s) in total." \
-            --ok-label="Uninstall" --cancel-label="Cancel" 2>/dev/null || continue
-
-        local total=${#selected_ids[@]}
-        local success=0
-        local fail=0
-        local failed_list=""
-        local data_dirs=()
-
-        local pipe="/tmp/zenity_pipe_$$"
-        mkfifo "$pipe"
-        zenity --progress --pulsate --no-cancel --auto-close \
-            --title="Uninstall applications" --text="Getting ready..." --width=500 < "$pipe" &
-        local zenity_pid=$!
-        exec 3> "$pipe"
-
-        for i in "${!selected_ids[@]}"; do
-            local app_id="${selected_ids[$i]}"
-            local idx=$((i+1))
-
-            echo "# Processing item $idx/$total: $app_id (uninstalling...)" >&3
-
-            if flatpak uninstall "$app_id" -y &>/dev/null; then
-                ((success++))
-                _remove_shortcut "$app_id"
-                local data_dir="$HOME/.var/app/$app_id"
-                if [ -d "$data_dir" ]; then
-                    data_dirs+=("$data_dir")
-                fi
-                echo "# Item $idx/$total: $app_id uninstalled successfully" >&3
-            else
-                ((fail++))
-                failed_list+=" $app_id"
-                echo "# Item $idx/$total: $app_id uninstall failed" >&3
-            fi
-            sleep 0.2
-        done
-
-        exec 3>&-
-        wait $zenity_pid 2>/dev/null
-        rm -f "$pipe"
-
-        sleep 1.0
-
-        local result_msg="Uninstall result:\nSucceeded: $success"
-        if [ $fail -gt 0 ]; then
-            result_msg+="\nFailed: $fail\nFailed IDs:${failed_list}"
-        fi
-
-        if [ ${#data_dirs[@]} -gt 0 ]; then
-            local question_msg="$result_msg\n\nThe following application data directories still exist:"
-            for d in "${data_dirs[@]}"; do
-                question_msg+="\n  $d"
-            done
-            question_msg+="\n\nDelete these data directories?"
-
-            if zenity --question --text="$question_msg" --width=600 \
-                --ok-label="Delete data" --cancel-label="Keep" 2>/dev/null; then
-                for d in "${data_dirs[@]}"; do
-                    rm -rf "$d" && echo "Deleted $d"
-                done
-            else
-                :
-            fi
-            continue
-        else
-            zenity --info --text="$result_msg" --width=400 2>/dev/null
-            continue
-        fi
-    done
 }
 
 install_yellow_duck_software() {
@@ -18073,7 +14009,6 @@ class MainWindow(Gtk.Window):
         if cat_id == "sysopt" and self.system_type == "双系统":
             # 把双系统检修项并进「引导与双系统」分组，避免再占一个侧栏分类
             dual_kids = [
-                (fl("health_check"), "health_check"),
                 (fl("fix_boot"), "fix_boot"),
                 (fl("fix_shared_disk"), "fix_shared_disk"),
             ]
@@ -18085,7 +14020,6 @@ class MainWindow(Gtk.Window):
                 else:
                     merged.append(item)
             items = merged
-            self.func_map[fl("health_check")] = "health_check"
             self.func_map[fl("fix_boot")] = "fix_boot"
             self.func_map[fl("fix_shared_disk")] = "fix_shared_disk"
         self._populate_func_tiles(items)
@@ -18300,7 +14234,7 @@ class MainWindow(Gtk.Window):
                         walk(item[1], cat)
             walk(items, cat)
         if self.system_type == "双系统":
-            for key in ("health_check", "fix_boot", "fix_shared_disk"):
+            for key in ("fix_boot", "fix_shared_disk"):
                 name = fl(key)
                 if query in name.lower():
                     matches.append((name, t("cat_sysopt"), key))
@@ -18355,8 +14289,27 @@ class MainWindow(Gtk.Window):
             if response != Gtk.ResponseType.YES:
                 return
 
-        if func_key in ("steamdeck_cache_manager", "ge_proton_manager", "uninstall_other_flatpak_apps"):
-            self._run_standalone_script(func_key); return
+        # Flatpak 安装/卸载改为原生 GTK 窗口（不再走 zenity 脚本）
+        if func_key == "install_flatpak_apps_gui":
+            win = FlatpakInstallWindow(self)
+            self._fp_win = win
+            return
+        if func_key == "uninstall_other_flatpak_apps":
+            win = FlatpakUninstallWindow(self)
+            self._fp_win = win
+            return
+
+        # Steam 缓存管理器改为原生 GTK 窗口（不再走 zenity 脚本）
+        if func_key == "steamdeck_cache_manager":
+            win = CacheManagerWindow(self)
+            self._cm_win = win
+            return
+
+        # 兼容层管理改为原生 GTK 窗口（安装/卸载 GE-Proton、CachyOS、DW Proton）
+        if func_key == "ge_proton_manager":
+            win = CompatManagerWindow(self)
+            self._compat_win = win
+            return
         if func_key == "install_uu_accelerator":
             self.run_external_terminal(func_key); return
 
@@ -18615,6 +14568,2890 @@ def _update_window_error(win, error_msg):
         btn.show()
     except Exception:
         show_main_window()
+
+
+# ============================================================================
+# Flatpak 应用安装 / 卸载（GTK 版，替代原来的 zenity 实现）
+# ============================================================================
+# 为什么改：zenity 只是外挂子进程，bash 侧靠 kill -0 轮询判断"窗口还在不在"，
+# 实测真实窗口下取消不可靠（flatpak 常常在检测到之前就装完了）。
+# 改成 GTK 后由 Python 直接 Popen 跑 flatpak，取消 = terminate() 该进程，
+# 是确定的、立即生效的操作，不依赖任何间接推断。
+# ============================================================================
+# ============================================================================
+# Flatpak 应用安装 / 卸载（GTK 版）
+# ============================================================================
+# 为什么不再用 zenity：
+#   1) 取消/关窗无法真正终止 flatpak —— zenity 只是外挂子进程，bash 侧靠 kill -0
+#      轮询检测，实测真实窗口下要么检测不到、要么 flatpak 已经把包装完了；
+#   2) 进度只能靠管道喂百分比，拿不到"取消"这种即时控制权。
+# 改成 GTK 后，Python 用 Popen 直接跑 flatpak，取消时 terminate() 就是权威操作，
+# 不需要任何轮询推断。
+FLATPAK_CATALOG = [
+    # (显示名, 候选 ID 列表, 桌面分类, 桌面快捷方式名, 附加包, 分组)
+    ("WPS Office",      ["com.wps.Office", "cn.wps.wps-office", "com.kingsoft.wps"], "Office", "WPS Office", None, "办公"),
+    ("微信",            ["com.tencent.WeChat", "com.qq.weixin"], "Network;Chat", "微信", None, "通讯"),
+    ("QQ",              ["com.qq.QQ", "com.tencent.qq"], "Network;Chat", "QQ", None, "通讯"),
+    ("钉钉",            ["com.dingtalk.DingTalk"], "Network;Chat", "DingTalk", None, "通讯"),
+    ("飞书",            ["cn.feishu.Feishu"], "Network;Chat", "Feishu", None, "通讯"),
+    ("腾讯会议",        ["com.tencent.wemeet"], "Network;Chat", "Wemeet", None, "通讯"),
+    ("Telegram",        ["org.telegram.desktop"], "Network;Chat", "Telegram", None, "通讯"),
+    ("Discord",         ["com.discordapp.Discord"], "Network;Chat", "Discord", None, "通讯"),
+    ("Edge浏览器",      ["com.microsoft.Edge"], "Network;WebBrowser", "Microsoft Edge", None, "浏览器"),
+    ("Google浏览器",    ["com.google.Chrome", "org.chromium.Chromium"], "Network;WebBrowser", "Google Chrome", None, "浏览器"),
+    ("Firefox",         ["org.mozilla.firefox"], "Network;WebBrowser", "Firefox", None, "浏览器"),
+    ("QQ音乐",          ["com.qq.QQmusic", "com.tencent.QQmusic"], "Audio", "QQ音乐", None, "影音"),
+    ("网易云音乐",      ["com.github.gmg137.netease-cloud-music-gtk"], "Audio", "NetEase Cloud Music", None, "影音"),
+    ("VLC",             ["org.videolan.VLC"], "AudioVideo", "VLC", None, "影音"),
+    ("Spotify",         ["com.spotify.Client"], "Audio;Music", "Spotify", None, "影音"),
+    ("百度网盘",        ["com.baidu.NetDisk", "com.baidu.pan"], "Network;FileTransfer", "百度网盘", None, "网盘下载"),
+    ("迅雷",            ["com.xunlei.Thunder"], "Network;FileTransfer", "Thunder", None, "网盘下载"),
+    ("LibreOffice",     ["org.libreoffice.LibreOffice"], "Office", "LibreOffice", None, "办公"),
+    ("Obsidian",        ["md.obsidian.Obsidian"], "Office;Utility", "Obsidian", None, "笔记写作"),
+    ("Joplin",          ["net.cozic.joplin_desktop"], "Office;Utility", "Joplin", None, "笔记写作"),
+    ("Thunderbird",     ["org.mozilla.thunderbird"], "Network;Email", "Thunderbird", None, "办公"),
+    ("OBS Studio",      ["com.obsproject.Studio"], "AudioVideo", "OBS Studio", None, "创作工具"),
+    ("GIMP",            ["org.gimp.GIMP"], "Graphics", "GIMP", None, "创作工具"),
+    ("Krita",           ["org.kde.krita"], "Graphics", "Krita", None, "创作工具"),
+    ("Inkscape",        ["org.inkscape.Inkscape"], "Graphics", "Inkscape", None, "创作工具"),
+    ("Audacity",        ["org.audacityteam.Audacity"], "AudioVideo", "Audacity", None, "创作工具"),
+    ("Blender",         ["org.blender.Blender"], "Graphics;3DGraphics", "Blender", None, "创作工具"),
+    ("RustDesk",        ["com.rustdesk.RustDesk"], "Network;RemoteAccess", "RustDesk", None, "远程控制"),
+    ("Remmina",         ["org.remmina.Remmina"], "Network;RemoteAccess", "Remmina", None, "远程控制"),
+    ("Lutris",          ["net.lutris.Lutris"], "Game", "Lutris", None, "游戏工具"),
+    ("Heroic",          ["com.heroicgameslauncher.hgl"], "Game", "Heroic", None, "游戏工具"),
+    ("Prism Launcher",  ["org.prismlauncher.PrismLauncher"], "Game", "Prism Launcher", None, "游戏工具"),
+    ("RetroArch",       ["org.libretro.RetroArch"], "Game;Emulator", "RetroArch", None, "游戏工具"),
+    ("PCSX2",           ["net.pcsx2.PCSX2"], "Game;Emulator", "PCSX2", None, "游戏工具"),
+    ("Dolphin",         ["org.DolphinEmu.dolphin-emu"], "Game;Emulator", "Dolphin Emulator", None, "游戏工具"),
+    ("Flatseal",        ["com.github.tchx84.Flatseal"], "Utility;Settings", "Flatseal", None, "系统工具"),
+    ("Fcitx 5",         ["org.fcitx.Fcitx5"], "Utility;Settings", "Fcitx 5", "org.fcitx.Fcitx5.Addon.ChineseAddons", "系统工具"),
+]
+
+FLATPAK_EXCLUDE = {"org.fcitx.Fcitx5.Addon.ChineseAddons"}
+
+
+def _fp_installed_ids():
+    """返回本机已安装的 flatpak 应用 ID 集合。"""
+    try:
+        r = subprocess.run(["flatpak", "list", "--app", "--columns=application"],
+                           capture_output=True, text=True, timeout=15)
+        return set(x.strip() for x in r.stdout.splitlines() if x.strip())
+    except Exception:
+        return set()
+
+
+def _fp_pick_id(candidates, installed):
+    """从候选 ID 里挑一个可用的：优先已安装的，否则取第一个。"""
+    for c in candidates:
+        if c in installed:
+            return c
+    return candidates[0]
+
+
+def _fp_run_async(argv, on_line, on_done, cwd=None, env=None):
+    """跑一个子进程，按行回调输出，结束后回调退出码。
+
+    关键：这里保留 Popen 句柄，取消时由调用方直接 terminate()/kill()，
+    不依赖任何"窗口是否还活着"的间接判断。
+    """
+    def worker():
+        proc = None
+        try:
+            proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    cwd=cwd, env=env, bufsize=1, text=True)
+            _fp_run_async.last_proc = proc
+            for line in iter(proc.stdout.readline, ""):
+                if line:
+                    GLib.idle_add(on_line, line)
+            proc.wait()
+            rc = proc.returncode
+        except Exception as e:
+            GLib.idle_add(on_line, f"{e}\n")
+            rc = 1
+        finally:
+            try:
+                if proc and proc.stdout:
+                    proc.stdout.close()
+            except Exception:
+                pass
+            GLib.idle_add(on_done, rc)
+
+    th = threading.Thread(target=worker, daemon=True)
+    th.start()
+    return th
+
+
+def _fp_progress_parse(line):
+    """从 flatpak 输出里解析 (子步骤, 子步骤总数, 段内百分比, 速度)。"""
+    step = steps = 0
+    pct = None
+    rate = ""
+    m = re.search(r"(\d+)/(\d+)", line)
+    if m:
+        try:
+            step, steps = int(m.group(1)), int(m.group(2))
+        except Exception:
+            step = steps = 0
+    # 取最后一个百分号前的数字
+    pcts = re.findall(r"(\d+)%", line)
+    if pcts:
+        pct = int(pcts[-1])
+    m = re.search(r"([\d.]+)\s*([kKmMgG]?B/s)", line)
+    if m:
+        rate = f"{m.group(1)} {m.group(2)}"
+    if pct is None:
+        return None
+    return step, steps, pct, rate
+
+
+def _fp_fold_pct(step, steps, pct):
+    """把「第 step 个子任务、段内 pct%」折算成整应用百分比。"""
+    if steps and steps > 1:
+        step = max(1, min(step or 1, steps))
+        return ((step - 1) * 100 + pct) // steps
+    return pct
+
+
+def _fp_write_shortcut(desk_name, cat, app_id):
+    """创建桌面快捷方式（仅在应用确实已安装时）。"""
+    try:
+        r = subprocess.run(["flatpak", "info", app_id], capture_output=True, timeout=10)
+        if r.returncode != 0:
+            return False
+        desktop_dir = os.environ.get("XDG_DESKTOP_DIR") or os.path.join(os.path.expanduser("~"), "Desktop")
+        os.makedirs(desktop_dir, exist_ok=True)
+        path = os.path.join(desktop_dir, f"{desk_name}.desktop")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("[Desktop Entry]\nType=Application\n"
+                    f"Name={desk_name}\nExec=flatpak run {app_id}\n"
+                    f"Icon={app_id}\nTerminal=false\nCategories={cat};\n")
+        os.chmod(path, 0o755)
+        return True
+    except Exception:
+        return False
+
+
+def _fp_remove_shortcuts(app_id):
+    """删除指向该应用的桌面快捷方式。
+
+    安装时快捷方式按「显示名」命名，所以不能靠文件名匹配；
+    改为读 .desktop 的 Exec 行，凡是 flatpak run <ID> 的都删。
+    """
+    removed = []
+    try:
+        desktop_dir = os.environ.get("XDG_DESKTOP_DIR") or os.path.join(os.path.expanduser("~"), "Desktop")
+        if not os.path.isdir(desktop_dir):
+            return removed
+        pat = re.compile(r"^Exec=.*flatpak\s+run\s+" + re.escape(app_id) + r"(\s|$)")
+        for name in os.listdir(desktop_dir):
+            if not name.endswith(".desktop"):
+                continue
+            p = os.path.join(desktop_dir, name)
+            try:
+                with open(p, "r", encoding="utf-8", errors="replace") as f:
+                    head = f.read(4096)
+            except Exception:
+                continue
+            if any(pat.match(l) for l in head.splitlines()):
+                try:
+                    os.remove(p)
+                    removed.append(name)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return removed
+
+# ---------- Steam 缓存管理器（GTK 原生，替代原有的 zenity 实现） ----------
+
+def _cm_steamapps_dirs():
+    """收集所有 Steam 库的 steamapps 目录：默认库 + libraryfolders.vdf 里的其它库。
+
+    旧 zenity 实现只写死 $HOME/.local/share/Steam/steamapps，装在 SD 卡或
+    第二块盘的库完全不出现；这里保持同样行为，把 VDF 里的路径也加进来。
+    """
+    dirs = []
+    root = os.path.join(os.path.expanduser("~"), ".local", "share", "Steam")
+    d0 = os.path.join(root, "steamapps")
+    if os.path.isdir(d0):
+        dirs.append(d0)
+    vdf = os.path.join(d0, "libraryfolders.vdf")
+    if os.path.isfile(vdf):
+        try:
+            with open(vdf, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    m = re.search(r'"path"\s*"([^"]+)"', line)
+                    if not m:
+                        continue
+                    sa = os.path.join(m.group(1), "steamapps")
+                    if os.path.isdir(sa) and sa not in dirs:
+                        dirs.append(sa)
+        except Exception:
+            pass
+    return dirs
+
+
+def _cm_dir_size_mb(path):
+    """用 du -sm 取目录大小（MB）。失败返回 0，调用方按「空目录」跳过。"""
+    try:
+        r = subprocess.run(["du", "-sm", "--", path], capture_output=True, text=True, timeout=180)
+        v = r.stdout.split("\t")[0].strip()
+        return int(v) if v.isdigit() else 0
+    except Exception:
+        return 0
+
+
+def _cm_app_name(steamapps, app_id):
+    """从 appmanifest_<id>.acf 里读游戏名，取不到返回空串。"""
+    manifest = os.path.join(steamapps, "appmanifest_%s.acf" % app_id)
+    try:
+        with open(manifest, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if '"name"' in line:
+                    parts = line.split('"')
+                    if len(parts) > 3 and parts[3].strip():
+                        return parts[3].strip()
+                    break
+    except Exception:
+        pass
+    return ""
+
+
+def _cm_scan(cache_type):
+    """扫描某一类缓存，返回 [(app_id, 名称, 大小MB, 目录), ...]，大的排前面。"""
+    out = []
+    for sa in _cm_steamapps_dirs():
+        base = os.path.join(sa, cache_type)
+        if not os.path.isdir(base):
+            continue
+        try:
+            names = sorted(os.listdir(base))
+        except Exception:
+            continue
+        for app_id in names:
+            if not app_id.isdigit():
+                continue
+            full = os.path.join(base, app_id)
+            if not os.path.isdir(full):
+                continue
+            mb = _cm_dir_size_mb(full)
+            if mb <= 0:
+                continue
+            out.append((app_id, _cm_app_name(sa, app_id), mb, full))
+    out.sort(key=lambda x: x[2], reverse=True)
+    return out
+
+
+def _cm_steam_running():
+    """Steam 在跑时删 compatdata 可能损坏正在用的 Proton 前缀，删前要提示。"""
+    for exe in ("steam", "steamwebhelper"):
+        try:
+            if subprocess.run(["pgrep", "-x", exe], capture_output=True).returncode == 0:
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _cm_fmt_size(mb):
+    if mb >= 1024:
+        return "%.1f GB" % (mb / 1024.0)
+    return "%d MB" % mb
+
+
+class CacheManagerWindow(Gtk.Window):
+    """Steam 缓存管理器：选类型 → 勾选条目 → 确认 → 删除 → 结果。
+
+    全部在一个窗口里完成，不再弹 zenity。流程与 FlatpakUninstallWindow 一致：
+    用显式 self.phase 驱动页面与按钮，而不是靠窗口是否还在来推断状态。
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(title=fl("steamdeck_cache_manager"))
+        self.set_icon_name("input-gamepad-symbolic")
+        self.set_default_size(660, 560)
+        self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT if parent else Gtk.WindowPosition.CENTER)
+        if parent:
+            self.set_transient_for(parent)
+        self.set_deletable(True)
+
+        self.phase = "type"        # type / items / confirm / running / done
+        self.cache_type = "shadercache"
+        self.items = []            # 当前类型扫描到的全部条目
+        self.picked = []           # 勾选的条目
+        self.scanning = False
+        self.cancelled = False
+        self.cur_proc = None       # 正在跑的 rm，取消时 terminate
+        self.deleted = 0
+        self.failed = 0
+        self.freed_mb = 0
+        self.total_mb = 0
+        self.steamapps = _cm_steamapps_dirs()
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        head.set_margin_top(14); head.set_margin_bottom(8)
+        head.set_margin_start(16); head.set_margin_end(16)
+        title = Gtk.Label()
+        title.set_markup("<span size='large'><b>%s</b></span>"
+                         % GLib.markup_escape_text(fl("steamdeck_cache_manager")))
+        title.set_xalign(0)
+        head.pack_start(title, True, True, 0)
+        outer.pack_start(head, False, False, 0)
+
+        self.hint = Gtk.Label()
+        self.hint.set_xalign(0); self.hint.set_line_wrap(True)
+        self.hint.set_margin_start(16); self.hint.set_margin_end(16); self.hint.set_margin_bottom(8)
+        self.hint.get_style_context().add_class("dash-card-desc")
+        outer.pack_start(self.hint, False, False, 0)
+
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.stack.set_transition_duration(160)
+        self.stack.set_margin_start(16); self.stack.set_margin_end(16)
+        outer.pack_start(self.stack, True, True, 0)
+        self.stack.add_named(self._build_type_page(), "type")
+        self.stack.add_named(self._build_items_page(), "items")
+        self.stack.add_named(self._build_confirm_page(), "confirm")
+        self.stack.add_named(self._build_progress_page(), "progress")
+
+        # 底部按钮：一个主按钮随阶段变化 + 一个返回按钮（列表/确认页才有意义）
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        btn_row.set_margin_top(10); btn_row.set_margin_bottom(14)
+        btn_row.set_margin_start(16); btn_row.set_margin_end(16)
+        self.back_btn = Gtk.Button(label=self._lbl("back"))
+        self.back_btn.connect("clicked", self._on_back_clicked)
+        btn_row.pack_start(self.back_btn, False, False, 0)
+        self.main_btn = Gtk.Button(label=self._lbl("next"))
+        self.main_btn.get_style_context().add_class("suggested-action")
+        self.main_btn.connect("clicked", self._on_main_clicked)
+        btn_row.pack_end(self.main_btn, False, False, 0)
+        outer.pack_start(btn_row, False, False, 0)
+
+        self.add(outer)
+        self.connect("delete-event", self._on_delete_event)
+        self.show_all()
+        self._sync_buttons()
+
+    # ---------- 文案 ----------
+
+    def _lbl(self, key):
+        m = {
+            "next":     ("查看", "View"),
+            "delete":   ("删除所选", "Delete selected"),
+            "cancel":   ("取消", "Cancel"),
+            "back":     ("返回", "Back"),
+            "done":     ("完成", "Done"),
+        }
+        zh, en = m[key]
+        return en if get_lang() == "en" else zh
+
+    def _t(self, zh, en):
+        return en if get_lang() == "en" else zh
+
+    def _type_title(self, cache_type=None):
+        ct = cache_type or self.cache_type
+        if ct == "shadercache":
+            return self._t("着色器缓存", "Shader cache")
+        return self._t("兼容数据", "Compatibility data")
+
+    # ---------- 页面构建 ----------
+
+    def _build_type_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.set_valign(Gtk.Align.START)
+
+        self.rb_shader = Gtk.RadioButton.new_with_label_from_widget(
+            None, self._t("着色器缓存", "Shader cache"))
+        self.rb_shader.connect("toggled", self._on_type_toggled)
+        row1 = self._radio_row(self.rb_shader,
+                               self._t("shadercache，删掉后会自动重建，不影响游戏数据",
+                                       "shadercache, rebuilt automatically, game data untouched"))
+        box.pack_start(row1, False, False, 0)
+
+        self.rb_compat = Gtk.RadioButton.new_with_label_from_widget(
+            self.rb_shader, self._t("兼容数据", "Compatibility data"))
+        self.rb_compat.connect("toggled", self._on_type_toggled)
+        row2 = self._radio_row(self.rb_compat,
+                               self._t("compatdata，含各游戏的 Proton 前缀，删除后对应游戏需要重新初始化",
+                                       "compatdata, holds each game's Proton prefix; those games must reinitialize"))
+        box.pack_start(row2, False, False, 0)
+        return box
+
+    def _radio_row(self, radio, desc):
+        row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        row.set_margin_top(6)
+        radio.set_halign(Gtk.Align.START)
+        row.pack_start(radio, False, False, 0)
+        lbl = Gtk.Label(label=desc)
+        lbl.set_xalign(0); lbl.set_line_wrap(True)
+        lbl.set_margin_start(28)
+        lbl.get_style_context().add_class("dash-card-desc")
+        row.pack_start(lbl, False, False, 0)
+        return row
+
+    def _build_items_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        sw = Gtk.ScrolledWindow()
+        sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sw.set_vexpand(True)
+        self.list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        sw.add(self.list_box)
+        box.pack_start(sw, True, True, 0)
+        return box
+
+    def _build_confirm_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        sw = Gtk.ScrolledWindow()
+        sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sw.set_valign(Gtk.Align.FILL)
+        self.confirm_label = Gtk.Label()
+        self.confirm_label.set_xalign(0); self.confirm_label.set_line_wrap(True)
+        self.confirm_label.set_valign(Gtk.Align.START)
+        self.confirm_label.set_selectable(False)
+        sw.add(self.confirm_label)
+        box.pack_start(sw, True, True, 0)
+        return box
+
+    def _build_progress_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_valign(Gtk.Align.CENTER)
+        self.prog_label = Gtk.Label(label="")
+        self.prog_label.set_xalign(0); self.prog_label.set_line_wrap(True)
+        self.prog_label.get_style_context().add_class("dash-card-title")
+        box.pack_start(self.prog_label, False, False, 0)
+        self.prog_bar = Gtk.ProgressBar()
+        self.prog_bar.set_show_text(False)
+        box.pack_start(self.prog_bar, False, False, 0)
+        self.detail_label = Gtk.Label(label="")
+        self.detail_label.set_xalign(0); self.detail_label.set_line_wrap(True)
+        self.detail_label.get_style_context().add_class("dash-card-desc")
+        box.pack_start(self.detail_label, False, False, 0)
+        return box
+
+    # ---------- 状态与按钮 ----------
+
+    def _sync_buttons(self):
+        phase = self.phase
+        if phase == "type":
+            self.back_btn.set_visible(False)
+            self.main_btn.set_visible(True)
+            self.main_btn.set_label(self._lbl("next"))
+            self.main_btn.set_sensitive(bool(self.steamapps) and not self.scanning)
+            if not self.steamapps:
+                self.hint.set_text(self._t(
+                    "未找到 Steam 库目录，请确认 Steam 已安装并至少登录过一次。",
+                    "No Steam library found. Make sure Steam is installed and you have logged in once."))
+            elif self.scanning:
+                self.hint.set_text(self._t("正在扫描，请稍候…", "Scanning, please wait…"))
+            else:
+                self.hint.set_text(self._t("请选择要清理的缓存类型。",
+                                           "Choose the cache type to clean."))
+        elif phase == "items":
+            self.back_btn.set_visible(True)
+            self.back_btn.set_label(self._lbl("back"))
+            self.back_btn.set_sensitive(True)
+            n = len(self.picked)
+            self.main_btn.set_visible(n > 0)
+            self.main_btn.set_sensitive(n > 0)
+            self.main_btn.set_label(self._lbl("delete"))
+        elif phase == "confirm":
+            self.back_btn.set_visible(True)
+            self.back_btn.set_label(self._lbl("cancel"))
+            self.back_btn.set_sensitive(True)
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(True)
+            self.main_btn.set_label(self._lbl("delete"))
+        elif phase == "running":
+            self.back_btn.set_visible(False)
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(True)
+            self.main_btn.set_label(self._lbl("cancel"))
+        else:  # done
+            self.back_btn.set_visible(False)
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(True)
+            self.main_btn.set_label(self._lbl("done"))
+
+    def _set_phase(self, phase, page):
+        self.phase = phase
+        self.stack.set_visible_child_name(page)
+        self._sync_buttons()
+
+    # ---------- 交互 ----------
+
+    def _on_type_toggled(self, *_a):
+        if not self.rb_compat.get_active():
+            self.cache_type = "shadercache"
+        else:
+            self.cache_type = "compatdata"
+        # 换类型时清掉上一轮的扫描结果，避免按钮点击后看到旧数据
+        self.items = []
+        self.picked = []
+        self._clear_rows()
+
+    def _on_back_clicked(self, *_a):
+        if self.phase == "confirm":
+            # 从确认页退回列表，保留原有勾选，方便改选
+            self._show_items_page()
+            return
+        if self.phase == "items":
+            self._set_phase("type", "type")
+
+    def _on_main_clicked(self, *_a):
+        if self.phase == "type":
+            if not self.scanning:
+                self._start_scan()
+        elif self.phase == "items":
+            self._goto_confirm()
+        elif self.phase == "confirm":
+            self._start_delete()
+        elif self.phase == "running":
+            self.cancelled = True
+            self.detail_label.set_text(self._t("正在取消…", "Cancelling…"))
+            p = self.cur_proc
+            if p:
+                try:
+                    p.terminate()
+                except Exception:
+                    pass
+        else:  # done
+            self._set_phase("type", "type")
+            self.items = []
+            self.picked = []
+            self._clear_rows()
+            self.stack.set_visible_child_name("type")
+
+    def _on_delete_event(self, *_a):
+        # 删除过程中关窗：先终止 rm，避免留下半个目录还在被写
+        self.cancelled = True
+        p = self.cur_proc
+        if p:
+            try:
+                p.terminate()
+            except Exception:
+                pass
+        return False
+
+    # ---------- 扫描 ----------
+
+    def _start_scan(self):
+        self.scanning = True
+        self._sync_buttons()
+        cache_type = self.cache_type
+
+        def worker():
+            try:
+                items = _cm_scan(cache_type)
+            except Exception:
+                items = []
+            GLib.idle_add(self._on_scan_done, cache_type, items)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_scan_done(self, cache_type, items):
+        self.scanning = False
+        if cache_type != self.cache_type:
+            # 扫描期间用户换了类型，结果作废
+            self._sync_buttons()
+            return
+        self.items = items
+        self.picked = []
+        if not items:
+            self.hint.set_text(self._t("没有找到可清理的%s。"
+                                       % self._type_title(cache_type),
+                                       "Nothing to clean in %s."
+                                       % self._type_title(cache_type).lower()))
+            self._sync_buttons()
+            return
+        self._populate_items()
+        self._show_items_page()
+
+    def _clear_rows(self):
+        for ch in list(self.list_box.get_children()):
+            self.list_box.remove(ch)
+
+    def _populate_items(self):
+        self._clear_rows()
+        for app_id, name, mb, path in self.items:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            cb = Gtk.CheckButton()
+            cb._cm_item = (app_id, name, mb, path)
+            cb.connect("toggled", self._on_item_toggled)
+            title = Gtk.Label()
+            shown = name or self._t("未知应用", "Unknown app")
+            if not name:
+                shown = "%s (%s)" % (shown, app_id)
+            title.set_markup("<b>%s</b>" % GLib.markup_escape_text(shown))
+            title.set_xalign(0)
+            size = Gtk.Label(label=_cm_fmt_size(mb))
+            size.set_xalign(1.0)
+            size.get_style_context().add_class("dash-card-desc")
+            row.pack_start(cb, False, False, 0)
+            row.pack_start(title, True, True, 0)
+            row.pack_start(size, False, False, 0)
+            eb = Gtk.EventBox()
+            eb.add(row)
+            eb.connect("button-press-event",
+                       lambda _w, _e, c=cb: (c.set_active(not c.get_active()), True)[1])
+            self.list_box.pack_start(eb, False, False, 0)
+        # 重建行后必须显式 show_all：窗口早已显示过，新建的行默认是隐藏的
+        self.list_box.show_all()
+
+    def _walk_checkbuttons(self):
+        found = []
+
+        def rec(w):
+            if isinstance(w, Gtk.CheckButton):
+                found.append(w)
+                return
+            if hasattr(w, "get_children"):
+                for c in w.get_children():
+                    rec(c)
+
+        for ch in self.list_box.get_children():
+            rec(ch)
+        return found
+
+    def _on_item_toggled(self, *_a):
+        self.picked = [cb._cm_item for cb in self._walk_checkbuttons() if cb.get_active()]
+        if self.phase == "items":
+            self._update_items_hint()
+            self._sync_buttons()
+
+    def _update_items_hint(self):
+        n = len(self.picked)
+        total = sum(x[2] for x in self.picked)
+        label = self._type_title()
+        if n:
+            self.hint.set_text(self._t(
+                "共 %d 项（%s），已选 %d 项，约 %s。"
+                % (len(self.items), label, n, _cm_fmt_size(total)),
+                "%d entries (%s), %d selected, about %s."
+                % (len(self.items), label.lower(), n, _cm_fmt_size(total))))
+        else:
+            self.hint.set_text(self._t(
+                "共 %d 项（%s），勾选要删除的项目后点「删除所选」。"
+                % (len(self.items), label),
+                "%d entries (%s). Tick the ones to delete, then press Delete selected."
+                % (len(self.items), label.lower())))
+
+    def _show_items_page(self):
+        self.phase = "items"
+        self.stack.set_visible_child_name("items")
+        self._update_items_hint()
+        self._sync_buttons()
+
+
+    # ---------- 确认 ----------
+
+    def _goto_confirm(self):
+        self.picked = [cb._cm_item for cb in self._walk_checkbuttons() if cb.get_active()]
+        if not self.picked:
+            return
+        self.total_mb = sum(x[2] for x in self.picked)
+        lines = []
+        for app_id, name, mb, path in self.picked:
+            lines.append("  • %s  (%s)" % (name or self._t("未知应用", "Unknown app"),
+                                           _cm_fmt_size(mb)))
+        head = self._t("将永久删除以下%s：" % self._type_title(),
+                       "The following %s will be deleted permanently:"
+                       % self._type_title().lower())
+        tail = self._t("\n\n共 %d 项，约 %s，删除后无法恢复。"
+                       % (len(self.picked), _cm_fmt_size(self.total_mb)),
+                       "\n\n%d entries, about %s. This cannot be undone."
+                       % (len(self.picked), _cm_fmt_size(self.total_mb)))
+        text = head + "\n\n" + "\n".join(lines) + tail
+        if self.cache_type == "compatdata" and _cm_steam_running():
+            text += self._t("\n\n⚠ 检测到 Steam 正在运行，删除兼容数据可能损坏正在使用的 "
+                            "Proton 前缀，建议先退出 Steam。",
+                            "\n\n⚠ Steam is running. Deleting compatibility data may damage "
+                            "Proton prefixes in use; quit Steam first.")
+        self.confirm_label.set_text(text)
+        self.hint.set_text(self._t("请确认要删除的内容，删除后无法恢复。",
+                                   "Review what will be deleted; this cannot be undone."))
+        self._set_phase("confirm", "confirm")
+
+    # ---------- 删除 ----------
+
+    def _start_delete(self):
+        sel = list(self.picked)
+        self.cancelled = False
+        self.deleted = self.failed = self.freed_mb = 0
+        self.prog_label.set_text(self._t("正在删除…", "Deleting…"))
+        self.prog_bar.set_fraction(0)
+        self.detail_label.set_text("")
+        self._set_phase("running", "progress")
+
+        def worker():
+            total = len(sel)
+            for i, (app_id, name, mb, path) in enumerate(sel, 1):
+                if self.cancelled:
+                    break
+                GLib.idle_add(self._on_delete_progress, i, total, name or app_id,
+                              self.freed_mb, mb)
+                rc = self._rm_path(path)
+                if self.cancelled:
+                    break
+                if rc == 0:
+                    self.deleted += 1
+                    self.freed_mb += mb
+                else:
+                    self.failed += 1
+            GLib.idle_add(self._finish_delete, total)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _rm_path(self, path):
+        try:
+            p = subprocess.Popen(["rm", "-rf", "--", path],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.cur_proc = p
+            p.wait()
+            self.cur_proc = None
+            return p.returncode
+        except Exception:
+            self.cur_proc = None
+            return 1
+
+    def _on_delete_progress(self, i, total, name, freed_done, cur_mb):
+        self.prog_label.set_text(self._t("正在删除 %d/%d：%s" % (i, total, name),
+                                         "Deleting %d/%d: %s" % (i, total, name)))
+        self.prog_bar.set_fraction(min(1.0, (i - 1) / float(max(1, total))))
+        self.detail_label.set_text(self._t(
+            "已释放 %s，本项 %s" % (_cm_fmt_size(freed_done), _cm_fmt_size(cur_mb)),
+            "%s freed, this item %s" % (_cm_fmt_size(freed_done), _cm_fmt_size(cur_mb))))
+        return False
+
+    def _finish_delete(self, total):
+        self.prog_bar.set_fraction(1.0)
+        self.prog_label.set_text("")
+        if self.cancelled:
+            msg = self._t("已取消：删除 %d 项，释放 %s" % (self.deleted, _cm_fmt_size(self.freed_mb)),
+                          "Cancelled: %d deleted, %s freed"
+                          % (self.deleted, _cm_fmt_size(self.freed_mb)))
+            if self.failed:
+                msg += self._t("，失败 %d 项" % self.failed, ", %d failed" % self.failed)
+        elif self.failed:
+            msg = self._t("清理结束：成功 %d 项，失败 %d 项，释放 %s"
+                          % (self.deleted, self.failed, _cm_fmt_size(self.freed_mb)),
+                          "Cleaning finished: %d succeeded, %d failed, %s freed"
+                          % (self.deleted, self.failed, _cm_fmt_size(self.freed_mb)))
+        else:
+            msg = self._t("✓ 清理完成：删除 %d 项，释放 %s"
+                          % (self.deleted, _cm_fmt_size(self.freed_mb)),
+                          "✓ Cleaning done: %d deleted, %s freed"
+                          % (self.deleted, _cm_fmt_size(self.freed_mb)))
+        self.prog_label.set_text(msg)
+        detail_parts = []
+        if self.failed:
+            detail_parts.append(self._t("失败项可能正被占用，请退出 Steam 后重试。",
+                                        "Failed entries may be in use; quit Steam and retry."))
+        if _cm_steam_running():
+            detail_parts.append(self._t("建议重启 Steam 让缓存重新生成。",
+                                        "Restart Steam so the caches can be rebuilt."))
+        self.detail_label.set_text("\n".join(detail_parts))
+        self.phase = "done"
+        self.hint.set_text("")
+        self._sync_buttons()
+
+# ===== 兼容层管理（GE-Proton / Proton-CachyOS / DW Proton）=====
+
+
+def _compat_install_dir():
+    return os.path.join(os.path.expanduser("~"), ".local", "share", "Steam",
+                        "compatibilitytools.d")
+
+
+COMPAT_MIRRORS = [
+    ("gh-proxy.com（国内镜像，速度快）", "gh-proxy.com (fast mirror)", "https://gh-proxy.com/"),
+    ("gh.3w.pm（国内镜像，稳定）", "gh.3w.pm (mirror)", "https://gh.3w.pm/"),
+    ("cors.isteed.cc（国内镜像，稳定）", "cors.isteed.cc (mirror)", "https://cors.isteed.cc/"),
+    ("ghproxy.net（国内镜像，慢速备用）", "ghproxy.net (slow mirror)", "https://ghproxy.net/"),
+    # 官方源用空前缀：browser_download_url 本身已是完整的 https://github.com/... 地址，
+    # 若这里也写 https://github.com/ 会拼成 .../https://github.com/... 导致 404
+    ("GitHub（官方源）", "GitHub (official)", ""),
+]
+
+# 三个兼容层家族的差异都收在这张表里，安装/卸载流程完全共用
+COMPAT_FAMILIES = {
+    "ge": {
+        "repo": "GloriousEggroll/proton-ge-custom",
+        "title": ("GE-Proton", "GE-Proton"),
+        "ext": ".tar.gz",
+        "avoid_v3": False,     # 上游不发 x86_64_v3 包，无需排除
+        "per_page": 100,
+        "use_tag_as_dir": True,   # 目标目录名用 release tag
+        "need_vdf": False,
+        "dir_re": r"^GE-Proton",
+    },
+    "cachyos": {
+        "repo": "CachyOS/proton-cachyos",
+        "title": ("Proton-CachyOS (SLR)", "Proton-CachyOS (SLR)"),
+        "ext": ".tar.xz",
+        "avoid_v3": True,      # Deck 用普通 x86_64，不要 v3 变体
+        "per_page": 50,
+        "use_tag_as_dir": False,  # 目标目录名用资源名（tag 与资源名不一致）
+        "need_vdf": True,
+        "dir_re": r"proton-cachyos|cachyos",
+    },
+    "dw": {
+        "repo": "dawn-winery/dwproton-mirror",
+        "title": ("DW Proton", "DW Proton"),
+        "ext": ".tar.xz",
+        "avoid_v3": True,
+        "per_page": 50,
+        "use_tag_as_dir": False,
+        "need_vdf": True,
+        "dir_re": r"dwproton|dw-proton",
+    },
+}
+
+
+def _compat_resp_socket(resp):
+    """从 HTTPResponse 里挖出底层 socket，用于取消时 interrupt 阻塞读。
+
+    结构是 http.client.HTTPResponse -> fp(BufferedReader) -> raw(HTTPResponse 的
+    SocketIO) -> _sock。拿不到就返回 None（取消会退化为轮询，慢但不至于出错）。
+    """
+    try:
+        return resp.fp.raw._sock
+    except AttributeError:
+        return None
+
+
+class _CompatCancelled(Exception):
+    pass
+
+
+def _compat_open(url, timeout=25, owner=None, accept=None):
+    """GET 一个 URL，返回 HTTPResponse；owner 存在时登记底层 socket。
+
+    取消时 owner._abort_download() 会对这个 socket 做 shutdown，让阻塞中的
+    read/read1 立刻抛 OSError。urlopen 本身没有取消接口，这是唯一可靠的打断
+    方式（实测 0.1 毫秒生效；而 close() 只关本地文件对象，要等缓冲读完）。
+    """
+    headers = {"User-Agent": "steamdeck-toolbox"}
+    if accept:
+        headers["Accept"] = accept
+    req = urllib.request.Request(url, headers=headers)
+    resp = urllib.request.urlopen(req, timeout=timeout)
+    if owner is not None:
+        owner._track_resp(resp)
+    return resp
+
+
+def _compat_api(url, timeout=25, owner=None):
+    """取 GitHub API 的 JSON。owner 传入窗口时，取消可以打断阻塞读。"""
+    resp = _compat_open(url, timeout=timeout, owner=owner,
+                        accept="application/vnd.github+json")
+    try:
+        raw = resp.read()
+    except OSError:
+        if owner is not None and getattr(owner, "cancelled", False):
+            raise _CompatCancelled()
+        raise
+    finally:
+        if owner is not None:
+            owner._untrack()
+        try:
+            resp.close()
+        except Exception:
+            pass
+    return json.loads(raw.decode("utf-8", "replace"))
+
+
+def _compat_mirror_order(primary):
+    """要尝试的镜像顺序：用户选的那个优先，其余按表内顺序兜底。
+
+    弱网下最常见的失败是连不上、下到一半断、拿到的内容不对；换源比重试同一个
+    源有效得多，所以这里永远返回全部镜像。
+    """
+    first = [m for m in COMPAT_MIRRORS if m[2] == primary]
+    rest = [m for m in COMPAT_MIRRORS if m[2] != primary]
+    return first + rest
+
+
+def _compat_fetch_tags(family, owner=None):
+    """取某个兼容层家族的全部可用版本 tag（新的在前）。"""
+    fam = COMPAT_FAMILIES[family]
+    url = ("https://api.github.com/repos/%s/releases?per_page=%d"
+           % (fam["repo"], fam["per_page"]))
+    data = _compat_api(url, owner=owner)
+    tags = []
+    for rel in data or []:
+        tag = rel.get("tag_name") or ""
+        if not tag:
+            continue
+        if family == "ge":
+            if tag.startswith("GE-Proton"):
+                tags.append(tag)
+        elif rel.get("prerelease"):
+            continue
+        elif family == "cachyos":
+            # tag 形如 cachyos-11.0-20261015-slr
+            if "slr" in tag.lower() and any(ch.isdigit() for ch in tag):
+                tags.append(tag)
+        else:
+            if tag.lower().startswith("dwproton") and any(ch.isdigit() for ch in tag):
+                tags.append(tag)
+    return tags
+
+
+def _compat_installed(family):
+    """已安装目录名列表（按名字排序）。"""
+    fam = COMPAT_FAMILIES[family]
+    d = _compat_install_dir()
+    out = []
+    if not os.path.isdir(d):
+        return out
+    pat = re.compile(fam["dir_re"], re.I)
+    for name in sorted(os.listdir(d)):
+        p = os.path.join(d, name)
+        if not os.path.isdir(p) or name.startswith(".stage."):
+            continue
+        if family == "ge":
+            # 旧实现按 GE-Proton* 判断，不校验 vdf（GE 包里确实带 vdf，但保持一致）
+            if pat.match(name):
+                out.append(name)
+            continue
+        if not os.path.isfile(os.path.join(p, "compatibilitytool.vdf")):
+            continue
+        if pat.search(name):
+            out.append(name)
+    return out
+
+
+def _compat_already_installed(family, tag, installed):
+    """判断某个 tag 是否已经装过（三家判定规则不同）。"""
+    if family == "ge":
+        return tag in installed
+    if family == "cachyos":
+        # tag cachyos-11.0-20261015-slr → 资源名含 11.0-20261015-slr-x86_64
+        stem = tag.split("-", 1)[1] if "-" in tag else tag
+        return any(stem in inst for inst in installed)
+    return any(tag in inst for inst in installed)
+
+
+def _compat_pick_asset(assets, ext, avoid_v3=True):
+    """从 release assets 里挑适合 Deck 的包（x86_64，排除 arm64/aarch64/v3）。"""
+    def ok(name, strict):
+        low = name.lower()
+        if not low.endswith(ext):
+            return False
+        if "arm64" in low or "aarch64" in low:
+            return False
+        if strict:
+            if "x86_64" not in low:
+                return False
+            if avoid_v3 and "x86_64_v3" in low:
+                return False
+        return True
+
+    for strict in (True, False):
+        for a in assets or []:
+            if ok(a.get("name", "") or "", strict):
+                return a
+    return None
+
+
+def _compat_sha_asset(assets, asset_name):
+    """找安装包对应的 .sha512sum 下载地址（两种命名都试）。"""
+    ext = None
+    for cand in (".tar.gz", ".tar.xz"):
+        if asset_name.endswith(cand):
+            ext = cand
+            break
+    wants = []
+    if ext:
+        wants.append(asset_name[: -len(ext)] + ".sha512sum")
+        wants.append(asset_name + ".sha512sum")
+    else:
+        wants.append(asset_name + ".sha512sum")
+    for a in assets or []:
+        if (a.get("name") or "") in wants:
+            return a.get("browser_download_url") or ""
+    return ""
+
+
+def _compat_stem(name, ext):
+    return name[: -len(ext)] if name.endswith(ext) else name
+
+
+def _compat_bytes(n):
+    try:
+        n = float(n)
+    except Exception:
+        return "?"
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return ("%.0f %s" % (n, unit)) if unit == "B" else ("%.1f %s" % (n, unit))
+        n /= 1024.0
+    return "?"
+
+
+class CompatManagerWindow(Gtk.Window):
+    """兼容层管理：GE-Proton / Proton-CachyOS(SLR) / DW Proton 的安装与卸载。
+
+    与旧的 zenity 版本相比，下载/校验/解压全部在 Python 里完成：
+    进度是真实字节进度（旧版只有 pulsate 动画），取消能立刻中断下载。
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(title=fl("ge_proton_manager"))
+        self.set_icon_name("input-gamepad-symbolic")
+        self.set_default_size(660, 560)
+        self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT if parent
+                          else Gtk.WindowPosition.CENTER)
+        if parent:
+            self.set_transient_for(parent)
+        self.set_deletable(True)
+
+        self.phase = "type"        # type / list / confirm / running / done
+        self.family = "ge"
+        self.action = "install"
+        self.versions = []         # 列表页要展示的条目
+        self.picked = []
+        self.loading = False
+        self.cancelled = False
+        self.mirror = ""           # 镜像前缀，官方源为空串
+        self.batch_ok = 0
+        self.batch_fail = 0
+        self.failed_list = []
+        self._last_ui = 0.0
+        self._last_pct = -1.0
+        self._dl_resp = None      # 正在下载的响应对象
+        self._dl_sock = None      # 它的底层 socket，取消时 shutdown 打断阻塞读
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        head.set_margin_top(14); head.set_margin_bottom(8)
+        head.set_margin_start(16); head.set_margin_end(16)
+        title = Gtk.Label()
+        title.set_markup("<span size='large'><b>%s</b></span>"
+                         % GLib.markup_escape_text(fl("ge_proton_manager")))
+        title.set_xalign(0)
+        head.pack_start(title, True, True, 0)
+        outer.pack_start(head, False, False, 0)
+
+        self.hint = Gtk.Label()
+        self.hint.set_xalign(0); self.hint.set_line_wrap(True)
+        self.hint.set_margin_start(16); self.hint.set_margin_end(16)
+        self.hint.set_margin_bottom(8)
+        self.hint.get_style_context().add_class("dash-card-desc")
+        outer.pack_start(self.hint, False, False, 0)
+
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.stack.set_transition_duration(160)
+        self.stack.set_margin_start(16); self.stack.set_margin_end(16)
+        outer.pack_start(self.stack, True, True, 0)
+        self.stack.add_named(self._build_type_page(), "type")
+        self.stack.add_named(self._build_list_page(), "list")
+        self.stack.add_named(self._build_confirm_page(), "confirm")
+        self.stack.add_named(self._build_progress_page(), "progress")
+
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        btn_row.set_margin_top(10); btn_row.set_margin_bottom(14)
+        btn_row.set_margin_start(16); btn_row.set_margin_end(16)
+        self.back_btn = Gtk.Button(label=self._lbl("back"))
+        self.back_btn.connect("clicked", self._on_back_clicked)
+        btn_row.pack_start(self.back_btn, False, False, 0)
+        self.main_btn = Gtk.Button(label=self._lbl("next"))
+        self.main_btn.get_style_context().add_class("suggested-action")
+        self.main_btn.connect("clicked", self._on_main_clicked)
+        btn_row.pack_end(self.main_btn, False, False, 0)
+        outer.pack_start(btn_row, False, False, 0)
+
+        self.add(outer)
+        self.connect("delete-event", self._on_delete_event)
+        self.show_all()
+        self._sync_buttons()
+
+    # ---------- 文案 ----------
+
+    def _lbl(self, key):
+        m = {
+            "next":      ("下一步", "Next"),
+            "install":   ("安装所选", "Install selected"),
+            "uninstall": ("卸载所选", "Uninstall selected"),
+            "start":     ("开始安装", "Start install"),
+            "startrem":  ("开始卸载", "Start uninstall"),
+            "cancel":    ("取消", "Cancel"),
+            "back":      ("返回", "Back"),
+            "done":      ("完成", "Done"),
+        }
+        zh, en = m[key]
+        return en if get_lang() == "en" else zh
+
+    def _t(self, zh, en):
+        return en if get_lang() == "en" else zh
+
+    def _family_title(self, family=None):
+        zh, en = COMPAT_FAMILIES[family or self.family]["title"]
+        return en if get_lang() == "en" else zh
+
+    def _family_note(self, family):
+        if family == "dw":
+            return self._t("DW Proton 偏二次元与特定游戏；外挂请用独立的 CheatDeck 插件入口。",
+                           "DW Proton targets anime/specific games; use the CheatDeck "
+                           "plugin entry for trainers.")
+        if family == "cachyos":
+            return self._t("CachyOS 提供的 SLR 兼容层，使用普通 x86_64 包（不用 v3 变体）。",
+                           "SLR builds from CachyOS, using the plain x86_64 package "
+                           "(not the v3 variant).")
+        return self._t("安装到 compatibilitytools.d，可与 Steam 自带的 Proton 并存。",
+                       "Installed into compatibilitytools.d alongside Steam's built-in Proton.")
+
+    # ---------- 页面构建 ----------
+
+    def _build_type_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        box.set_valign(Gtk.Align.START)
+        first = None
+        self._op_radios = []
+        for fam_key, act in (("ge", "install"), ("ge", "uninstall"),
+                             ("cachyos", "install"), ("cachyos", "uninstall"),
+                             ("dw", "install"), ("dw", "uninstall")):
+            if act == "install":
+                verb = self._t("安装", "Install")
+            else:
+                verb = self._t("卸载", "Uninstall")
+            label = "%s：%s" % (self._family_title(fam_key), verb)
+            if first is None:
+                rb = Gtk.RadioButton.new_with_label_from_widget(None, label)
+                first = rb
+            else:
+                rb = Gtk.RadioButton.new_with_label_from_widget(first, label)
+            rb.set_margin_top(6)
+            rb.set_halign(Gtk.Align.START)
+            rb.connect("toggled", self._on_op_toggled, fam_key, act)
+            box.pack_start(rb, False, False, 0)
+            self._op_radios.append((rb, fam_key, act))
+        return box
+
+    def _build_list_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        sw = Gtk.ScrolledWindow()
+        sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sw.set_vexpand(True)
+        self.list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        sw.add(self.list_box)
+        box.pack_start(sw, True, True, 0)
+        return box
+
+    def _build_confirm_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        sw = Gtk.ScrolledWindow()
+        sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sw.set_valign(Gtk.Align.FILL)
+        self.confirm_label = Gtk.Label()
+        self.confirm_label.set_xalign(0); self.confirm_label.set_line_wrap(True)
+        self.confirm_label.set_valign(Gtk.Align.START)
+        sw.add(self.confirm_label)
+        box.pack_start(sw, True, True, 0)
+
+        # 镜像源只在安装时出现
+        self.mirror_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        mlbl = Gtk.Label(label=self._t("下载镜像源（所有版本共用）",
+                                       "Download mirror (shared by all versions)"))
+        mlbl.set_xalign(0)
+        mlbl.get_style_context().add_class("dash-card-title")
+        self.mirror_box.pack_start(mlbl, False, False, 0)
+        mfirst = None
+        self._mirror_radios = []
+        for zh, en, prefix in COMPAT_MIRRORS:
+            label = en if get_lang() == "en" else zh
+            if mfirst is None:
+                rb = Gtk.RadioButton.new_with_label_from_widget(None, label)
+                mfirst = rb
+            else:
+                rb = Gtk.RadioButton.new_with_label_from_widget(mfirst, label)
+            rb.set_halign(Gtk.Align.START)
+            if prefix == "":
+                rb.set_active(True)   # 默认官方源，和旧版首次点击即官方一致
+            rb.connect("toggled", self._on_mirror_toggled, prefix)
+            self.mirror_box.pack_start(rb, False, False, 0)
+            self._mirror_radios.append(rb)
+        box.pack_start(self.mirror_box, False, False, 0)
+        return box
+
+    def _build_progress_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_valign(Gtk.Align.CENTER)
+        self.prog_label = Gtk.Label(label="")
+        self.prog_label.set_xalign(0); self.prog_label.set_line_wrap(True)
+        self.prog_label.get_style_context().add_class("dash-card-title")
+        box.pack_start(self.prog_label, False, False, 0)
+        self.prog_bar = Gtk.ProgressBar()
+        self.prog_bar.set_show_text(False)
+        box.pack_start(self.prog_bar, False, False, 0)
+        self.detail_label = Gtk.Label(label="")
+        self.detail_label.set_xalign(0); self.detail_label.set_line_wrap(True)
+        self.detail_label.get_style_context().add_class("dash-card-desc")
+        box.pack_start(self.detail_label, False, False, 0)
+        return box
+
+    # ---------- 状态与按钮 ----------
+
+    def _sync_buttons(self):
+        phase = self.phase
+        if phase == "type":
+            self.back_btn.set_visible(False)
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(True)
+            # 获取版本列表时按钮变「取消」：弱网下这个请求可能挂满 25 秒超时，
+            # 不让点会让人以为窗口卡死
+            self.main_btn.set_label(self._lbl("cancel") if self.loading
+                                    else self._lbl("next"))
+            if not self.loading:
+                self.hint.set_text(self._t("选择要管理的兼容层与操作。",
+                                           "Choose the compatibility layer and action."))
+        elif phase == "list":
+            self.back_btn.set_visible(True)
+            self.back_btn.set_label(self._lbl("back"))
+            self.back_btn.set_sensitive(not self.loading)
+            n = len(self.picked)
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(bool(n) and not self.loading)
+            if self.action == "install":
+                self.main_btn.set_label(self._lbl("install"))
+            else:
+                self.main_btn.set_label(self._lbl("uninstall"))
+        elif phase == "confirm":
+            self.back_btn.set_visible(True)
+            self.back_btn.set_label(self._lbl("back"))
+            self.back_btn.set_sensitive(True)
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(True)
+            self.main_btn.set_label(self._lbl("start") if self.action == "install"
+                                    else self._lbl("startrem"))
+        elif phase == "running":
+            self.back_btn.set_visible(False)
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(True)
+            self.main_btn.set_label(self._lbl("cancel"))
+        else:  # done
+            self.back_btn.set_visible(False)
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(True)
+            self.main_btn.set_label(self._lbl("done"))
+
+    def _set_phase(self, phase, page):
+        self.phase = phase
+        self.stack.set_visible_child_name(page)
+        self._sync_buttons()
+
+    # ---------- 交互 ----------
+
+    def _on_op_toggled(self, rb, family, act):
+        if not rb.get_active():
+            return
+        self.family = family
+        self.action = act
+        self.versions = []
+        self.picked = []
+        self._clear_rows()
+        self.hint.set_text(self._family_note(family))
+
+    def _on_mirror_toggled(self, rb, prefix):
+        if rb.get_active():
+            self.mirror = prefix
+
+    def _on_back_clicked(self, *_a):
+        if self.phase == "confirm":
+            self._set_phase("list", "list")
+            self._update_list_hint()
+            return
+        if self.phase == "list":
+            self.picked = []
+            self._set_phase("type", "type")
+
+    def _on_main_clicked(self, *_a):
+        if self.phase == "type":
+            if self.loading:
+                self.cancelled = True
+                self.hint.set_text(self._t("正在取消…", "Cancelling…"))
+                self._abort_download()
+            else:
+                self._start_load()
+        elif self.phase == "list":
+            self._goto_confirm()
+        elif self.phase == "confirm":
+            self._start_batch()
+        elif self.phase == "running":
+            self.cancelled = True
+            self.detail_label.set_text(self._t("正在取消…", "Cancelling…"))
+            self._abort_download()
+        else:  # done
+            if self.cancelled and self.versions:
+                # 取消后回到版本列表，勾选还在，可以换镜像/换版本重试
+                self.cancelled = False
+                self._set_phase("list", "list")
+                self._update_list_hint()
+                return
+            self.cancelled = False
+            self.picked = []
+            self._clear_rows()
+            self._set_phase("type", "type")
+
+    def _on_delete_event(self, *_a):
+        self.cancelled = True
+        self._abort_download()
+        return False
+
+    def _track_resp(self, resp):
+        """登记当前响应与它的底层 socket，供取消时 shutdown 打断。"""
+        self._dl_resp = resp
+        self._dl_sock = _compat_resp_socket(resp)
+
+    def _untrack(self):
+        self._dl_resp = None
+        self._dl_sock = None
+
+    def _abort_download(self):
+        """取消时打断正在阻塞的网络读。
+
+        close() 没用：HTTPResponse.close() 只关本地文件对象，不会打断已经在
+        recv 里的读（实测要等 17 秒把缓冲读完）。真正有效的是对底层 socket
+        做 shutdown(SHUT_RDWR)，实测 0.1 毫秒内让 read1 抛 BrokenPipeError。
+
+        下载、取 sha512sum、取 GitHub API 三条路径都会登记 socket，所以
+        "获取下载信息" 阶段点取消也能立刻停住，不会卡在「正在取消…」。
+        """
+        sock = self._dl_sock
+        if sock is None:
+            return
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+    # ---------- 版本列表 ----------
+
+    def _start_load(self):
+        # 每次加载都重置取消态：上一次取消留下的 True 会让本轮直接判为已取消
+        self.cancelled = False
+        self.loading = True
+        self._sync_buttons()
+        family, action = self.family, self.action
+        self.prog_label.set_text(self._t("正在获取版本列表…", "Fetching version list…"))
+        self.prog_bar.set_fraction(0)
+        self.detail_label.set_text("")
+        self.hint.set_text(self._t("正在获取版本列表…", "Fetching version list…"))
+
+        def worker():
+            items = []
+            err = ""
+            try:
+                if action == "install":
+                    installed = _compat_installed(family)
+                    items = [t for t in _compat_fetch_tags(family, owner=self)
+                             if not _compat_already_installed(family, t, installed)]
+                else:
+                    items = _compat_installed(family)
+            except Exception as e:
+                err = str(e) or e.__class__.__name__
+            GLib.idle_add(self._on_load_done, family, action, items, err)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_load_done(self, family, action, items, err):
+        self.loading = False
+        if family != self.family or action != self.action:
+            # 加载期间用户换了选项，结果作废
+            self._sync_buttons()
+            return
+        if self.cancelled:
+            # 用户主动取消，不是网络错误；留在类型页让他重新选
+            self.cancelled = False
+            self._sync_buttons()
+            # 取消提示要写在 _sync_buttons 之后，否则会被那里的默认文案盖掉
+            self.hint.set_text(self._t("已取消获取版本列表。",
+                                       "Cancelled fetching the version list."))
+            return
+        if err:
+            self.hint.set_text(self._t("无法获取版本列表：%s\n请检查网络后重试。" % err,
+                                       "Cannot fetch the version list: %s\n"
+                                       "Check your network and try again." % err))
+            self._sync_buttons()
+            return
+        self.versions = items
+        self.picked = []
+        self._clear_rows()
+        if not items:
+            if action == "install":
+                self.hint.set_text(self._t("所有版本都已安装。",
+                                           "Every version is already installed."))
+            else:
+                self.hint.set_text(self._t("未检测到已安装的%s。"
+                                           % self._family_title(family),
+                                           "No installed %s found."
+                                           % self._family_title(family)))
+            self._set_phase("list", "list")
+            return
+        self._populate_rows()
+        self._set_phase("list", "list")
+        self._update_list_hint()
+
+    def _clear_rows(self):
+        for ch in list(self.list_box.get_children()):
+            self.list_box.remove(ch)
+
+    def _populate_rows(self):
+        self._clear_rows()
+        for ver in self.versions:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            cb = Gtk.CheckButton()
+            cb._compat_item = ver
+            cb.connect("toggled", self._on_item_toggled)
+            title = Gtk.Label()
+            title.set_markup("<b>%s</b>" % GLib.markup_escape_text(ver))
+            title.set_xalign(0)
+            row.pack_start(cb, False, False, 0)
+            row.pack_start(title, True, True, 0)
+            eb = Gtk.EventBox()
+            eb.add(row)
+            eb.connect("button-press-event",
+                       lambda _w, _e, c=cb: (c.set_active(not c.get_active()), True)[1])
+            self.list_box.pack_start(eb, False, False, 0)
+        # 重建行后必须显式 show_all：窗口早已显示过，新建的行默认隐藏
+        self.list_box.show_all()
+
+    def _walk_checkbuttons(self):
+        found = []
+
+        def rec(w):
+            if isinstance(w, Gtk.CheckButton):
+                found.append(w)
+                return
+            if hasattr(w, "get_children"):
+                for c in w.get_children():
+                    rec(c)
+
+        for ch in self.list_box.get_children():
+            rec(ch)
+        return found
+
+    def _collect_picked(self):
+        self.picked = [cb._compat_item for cb in self._walk_checkbuttons()
+                       if cb.get_active()]
+        return self.picked
+
+    def _on_item_toggled(self, *_a):
+        self._collect_picked()
+        if self.phase == "list":
+            self._update_list_hint()
+            self._sync_buttons()
+
+    def _update_list_hint(self):
+        n = len(self.picked)
+        name = self._family_title()
+        total = len(self.versions)
+        if self.action == "install":
+            if n:
+                self.hint.set_text(self._t(
+                    "%s：共 %d 个版本可安装，已选 %d 个。"
+                    % (name, total, n),
+                    "%s: %d versions available, %d selected." % (name, total, n)))
+            else:
+                self.hint.set_text(self._t(
+                    "%s：共 %d 个版本可安装，勾选后点「安装所选」。"
+                    % (name, total),
+                    "%s: %d versions available. Tick the ones to install."
+                    % (name, total)))
+        else:
+            if n:
+                self.hint.set_text(self._t(
+                    "%s：共 %d 个已安装，已选 %d 个。"
+                    % (name, total, n),
+                    "%s: %d installed, %d selected." % (name, total, n)))
+            else:
+                self.hint.set_text(self._t(
+                    "%s：共 %d 个已安装，勾选后点「卸载所选」。"
+                    % (name, total),
+                    "%s: %d installed. Tick the ones to remove."
+                    % (name, total)))
+
+    # ---------- 确认 ----------
+
+    def _goto_confirm(self):
+        picked = self._collect_picked()
+        if not picked:
+            return
+        verb = self._t("安装", "install") if self.action == "install" \
+            else self._t("卸载", "remove")
+        head = self._t("将%s以下 %d 个版本：" % (verb, len(picked)),
+                       "%s the following %d version(s):" % (verb.capitalize(), len(picked)))
+        lines = ["  • %s" % v for v in picked]
+        text = head + "\n\n" + "\n".join(lines)
+        if self.action == "install":
+            text += self._t("\n\n将下载到 compatibilitytools.d，完成后重启 Steam 生效。",
+                            "\n\nThey will be downloaded into compatibilitytools.d; "
+                            "restart Steam afterwards.")
+        else:
+            text += self._t("\n\n目录会被永久删除，删除后无法恢复。",
+                            "\n\nThe directories are deleted permanently.")
+        self.confirm_label.set_text(text)
+        self.mirror_box.set_visible(self.action == "install")
+        self.hint.set_text(self._t("请确认后继续。", "Review and continue."))
+        self._set_phase("confirm", "confirm")
+
+    # ---------- 执行 ----------
+
+    def _start_batch(self):
+        sel = list(self._collect_picked())
+        if not sel:
+            return
+        self.cancelled = False
+        self.batch_ok = 0
+        self.batch_fail = 0
+        self.failed_list = []
+        self._last_ui = 0.0
+        self._last_pct = -1.0
+        self.prog_bar.set_fraction(0)
+        self.prog_label.set_text(self._t("准备中…", "Preparing…"))
+        self.detail_label.set_text("")
+        self.hint.set_text("")
+        self._set_phase("running", "progress")
+        if self.action == "install":
+            threading.Thread(target=self._run_install, args=(sel, self.mirror),
+                             daemon=True).start()
+        else:
+            threading.Thread(target=self._run_uninstall, args=(sel,),
+                             daemon=True).start()
+
+    # ---------- 进度回调（线程安全） ----------
+
+    def _ui(self, idx, total, text, inner, detail=None, force=False):
+        """从后台线程更新进度；字节级回调太密集，按时间/百分比节流。"""
+        now = time.time()
+        if not force and now - self._last_ui < 0.12:
+            return
+        self._last_ui = now
+        GLib.idle_add(self._apply_progress, idx, total, text, inner, detail)
+
+    def _apply_progress(self, idx, total, text, inner, detail):
+        overall = ((idx - 1) + max(0.0, min(1.0, inner))) / float(max(1, total))
+        self.prog_bar.set_fraction(min(1.0, overall))
+        self.prog_label.set_text(text or "")
+        if detail is not None:
+            self.detail_label.set_text(detail)
+        return False
+
+    # ---------- 安装 ----------
+
+    def _run_install(self, versions, mirror):
+        total = len(versions)
+        for i, ver in enumerate(versions, 1):
+            if self.cancelled:
+                break
+            try:
+                self._install_one(ver, mirror, i, total)
+                self.batch_ok += 1
+            except _CompatCancelled:
+                break
+            except Exception as e:
+                self.batch_fail += 1
+                self.failed_list.append((ver, str(e) or e.__class__.__name__))
+        GLib.idle_add(self._finish_batch, total)
+
+    def _install_one(self, ver, mirror, idx, total):
+        fam = COMPAT_FAMILIES[self.family]
+        repo = fam["repo"]
+        ext = fam["ext"]
+
+        self._ui(idx, total, self._t("正在获取 %s 的下载信息…" % ver,
+                                     "Fetching download info for %s…" % ver),
+                 0.0, "", force=True)
+        rel = self._api_with_retry("https://api.github.com/repos/%s/releases/tags/%s"
+                                   % (repo, urllib.parse.quote(ver)))
+        assets = rel.get("assets") or []
+        pick = _compat_pick_asset(assets, ext, fam.get("avoid_v3", True))
+        if not pick:
+            raise RuntimeError(self._t("这个版本没有适合 Deck 的 x86_64 安装包",
+                                       "No x86_64 package suitable for Deck"))
+        asset_name = pick.get("name") or ""
+        dl_url = pick.get("browser_download_url") or ""
+        asset_size = int(pick.get("size") or 0)
+        if not dl_url:
+            raise RuntimeError(self._t("拿不到下载地址", "No download URL"))
+        sha_url = _compat_sha_asset(assets, asset_name)
+        dest_name = ver if fam["use_tag_as_dir"] else _compat_stem(asset_name, ext)
+        if self.cancelled:
+            raise _CompatCancelled()
+
+        tmpdir = tempfile.mkdtemp(prefix="compat_dl_")
+        stage = None
+        try:
+            local = os.path.join(tmpdir, asset_name)
+            # 下载 + 校验交给 _fetch_package：它负责逐个镜像重试
+            self._fetch_package(ver, dl_url, sha_url, local, asset_size,
+                                mirror, idx, total)
+
+            self._ui(idx, total, self._t("正在解压 %s…" % ver, "Extracting %s…" % ver),
+                     0.93, "", force=True)
+            install_dir = _compat_install_dir()
+            os.makedirs(install_dir, exist_ok=True)
+            stage = tempfile.mkdtemp(prefix=".stage.", dir=install_dir)
+            self._extract(local, stage)
+            top = self._locate_extracted(stage, ver, fam)
+            if top is None:
+                raise RuntimeError(self._t("压缩包结构异常，未找到版本目录",
+                                           "unexpected archive layout, version dir not found"))
+            dest = os.path.join(install_dir, dest_name)
+            if os.path.isdir(dest):
+                shutil.rmtree(dest, ignore_errors=True)
+            shutil.move(top, dest)
+            if not os.path.isdir(dest):
+                raise RuntimeError(self._t("移动到目标目录失败", "move into place failed"))
+            self._ui(idx, total, self._t("%s 安装完成" % ver, "%s installed" % ver),
+                     1.0, "", force=True)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            if stage:
+                shutil.rmtree(stage, ignore_errors=True)
+
+    def _api_with_retry(self, url):
+        """GitHub API 不走镜像，失败就再试一次（限速和抖动都很常见）。"""
+        last = None
+        for attempt in (0, 1):
+            if self.cancelled:
+                raise _CompatCancelled()
+            try:
+                return _compat_api(url, timeout=20, owner=self)
+            except _CompatCancelled:
+                raise
+            except Exception as e:
+                last = e
+                if self.cancelled:
+                    raise _CompatCancelled()
+                if attempt == 0:
+                    time.sleep(1.2)
+        raise RuntimeError(self._t("获取版本信息失败：%s" % (str(last) or "网络错误"),
+                                   "cannot fetch release info: %s"
+                                   % (str(last) or "network error")))
+
+    def _fetch_package(self, ver, dl_url, sha_url, local, asset_size,
+                       mirror, idx, total):
+        """按镜像顺序抓包并校验：一个源失败就换下一个，全都失败才报错。
+
+        用户选的源优先，其余源按 COMPAT_MIRRORS 顺序兜底。下载不完整、sha512
+        对不上都算这个源失败——镜像返回错误内容是真实存在的情况。
+        """
+        order = _compat_mirror_order(mirror)
+        reasons = []
+        for i, (zh, en, prefix) in enumerate(order):
+            if self.cancelled:
+                raise _CompatCancelled()
+            mname = en if get_lang() == "en" else zh
+            if i:
+                self._ui(idx, total,
+                         self._t("换用镜像 %s 重试…" % mname,
+                                 "Retrying with mirror %s…" % mname),
+                         0.0, "", force=True)
+            try:
+                self._download(prefix + dl_url, os.path.join(
+                    os.path.dirname(local), os.path.basename(local)),
+                    idx, total, ver, asset_size, mname)
+                if self.cancelled:
+                    raise _CompatCancelled()
+                got = os.path.getsize(local)
+                if asset_size and got != asset_size:
+                    raise RuntimeError(self._t("下载不完整（%s / %s 字节）"
+                                               % (got, asset_size),
+                                               "incomplete download (%s / %s bytes)"
+                                               % (got, asset_size)))
+                self._ui(idx, total,
+                         self._t("正在校验 %s…" % ver, "Verifying %s…" % ver),
+                         0.88, "", force=True)
+                if sha_url:
+                    want = self._fetch_sha(prefix + sha_url, mname)
+                    if want:
+                        got_sha = self._sha512(local)
+                        if got_sha and got_sha.lower() != want.lower():
+                            raise RuntimeError(self._t("sha512 校验失败，包已损坏",
+                                                       "sha512 mismatch, package corrupted"))
+                if self.cancelled:
+                    raise _CompatCancelled()
+                return
+            except _CompatCancelled:
+                raise
+            except Exception as e:
+                if self.cancelled:
+                    raise _CompatCancelled()
+                reasons.append((mname, str(e) or e.__class__.__name__))
+        if len(reasons) == 1:
+            raise RuntimeError(reasons[0][1])
+        raise RuntimeError(self._t(
+            "所有镜像源都失败：%s"
+            % "；".join("%s：%s" % (n, w) for n, w in reasons),
+            "all mirrors failed: %s"
+            % "; ".join("%s: %s" % (n, w) for n, w in reasons)))
+
+    def _download(self, url, dest, idx, total, ver, expect, mname=""):
+        try:
+            return self._download_inner(url, dest, idx, total, ver, expect, mname)
+        finally:
+            self._untrack()
+
+    def _download_inner(self, url, dest, idx, total, ver, expect, mname=""):
+        resp = _compat_open(url, timeout=60, owner=self)
+        done = 0
+        try:
+            length = int(resp.headers.get("Content-Length") or 0) or expect
+            with open(dest, "wb") as f:
+                while True:
+                    if self.cancelled:
+                        raise _CompatCancelled()
+                    # read1：有多少读多少，不会为了凑满缓冲区一直等。
+                    # 本机弱网时 read(262144) 会阻塞几十秒，取消要等半分钟才生效。
+                    try:
+                        chunk = resp.read1(65536)
+                    except AttributeError:
+                        chunk = resp.read(65536)
+                    except OSError:
+                        if self.cancelled:
+                            raise _CompatCancelled()
+                        raise
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    done += len(chunk)
+                    inner = (done / float(length)) * 0.85 if length else 0.0
+                    if mname:
+                        label = self._t("正在从 %s 下载 %s…" % (mname, ver),
+                                        "Downloading %s from %s…" % (ver, mname))
+                    else:
+                        label = self._t("正在下载 %s…" % ver,
+                                        "Downloading %s…" % ver)
+                    self._ui(idx, total, label, inner,
+                             "%s / %s" % (_compat_bytes(done),
+                                          _compat_bytes(length) if length else "?"))
+        finally:
+            self._untrack()
+            try:
+                resp.close()
+            except Exception:
+                pass
+        return done
+
+    def _fetch_sha(self, url, mname=""):
+        """取 .sha512sum 里的那串摘要；取不到返回空串（不影响安装，只是跳过校验）。"""
+        try:
+            resp = _compat_open(url, timeout=60, owner=self)
+        except _CompatCancelled:
+            raise
+        except Exception:
+            return ""
+        try:
+            text = resp.read().decode("utf-8", "replace").strip()
+        except OSError:
+            if self.cancelled:
+                raise _CompatCancelled()
+            return ""
+        except Exception:
+            return ""
+        finally:
+            self._untrack()
+            try:
+                resp.close()
+            except Exception:
+                pass
+        parts = text.split()
+        first = parts[0] if parts else ""
+        return first if len(first) == 128 else ""
+
+    def _sha512(self, path):
+        try:
+            h = hashlib.sha512()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                    h.update(chunk)
+            return h.hexdigest()
+        except Exception:
+            return ""
+
+    def _extract(self, archive, stage):
+        try:
+            with tarfile.open(archive, "r:*") as tf:
+                try:
+                    tf.extractall(stage, filter="tar")
+                except TypeError:
+                    # Python < 3.12 没有 filter 参数
+                    tf.extractall(stage)
+        except Exception as e:
+            raise RuntimeError(self._t("解压失败：%s" % (str(e) or "未知错误"),
+                                       "extraction failed: %s" % (str(e) or "unknown")))
+
+    def _locate_extracted(self, stage, ver, fam):
+        """定位解压出的顶层目录。
+
+        GE-Proton11-4 起包内顶层目录带 -x86_64 后缀（与 tag 不同名），
+        所以先取唯一的顶层目录，再按 tag 前缀 / compatibilitytool.vdf 兜底。
+        """
+        entries = [os.path.join(stage, n) for n in os.listdir(stage)]
+        dirs = [p for p in entries if os.path.isdir(p)]
+        if fam.get("need_vdf"):
+            cands = [p for p in dirs
+                     if os.path.isfile(os.path.join(p, "compatibilitytool.vdf"))]
+            if len(cands) == 1:
+                return cands[0]
+            # 兜底：往下找一层
+            for p in dirs:
+                for sub in os.listdir(p):
+                    sp = os.path.join(p, sub)
+                    if os.path.isfile(os.path.join(sp, "compatibilitytool.vdf")):
+                        return sp
+            return None
+        if len(dirs) == 1:
+            return dirs[0]
+        for p in dirs:
+            base = os.path.basename(p)
+            if base == ver or base.startswith(ver):
+                return p
+        return None
+
+    # ---------- 卸载 ----------
+
+    def _run_uninstall(self, names):
+        total = len(names)
+        install_dir = _compat_install_dir()
+        for i, name in enumerate(names, 1):
+            if self.cancelled:
+                break
+            path = os.path.join(install_dir, name)
+            self._ui(i, total, self._t("正在删除 %s…" % name, "Removing %s…" % name),
+                     (i - 1) / float(max(1, total)), "", force=True)
+            try:
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                if os.path.isdir(path):
+                    self.batch_fail += 1
+                    self.failed_list.append((name, self._t("删除失败，可能仍被占用",
+                                                           "delete failed, maybe in use")))
+                else:
+                    self.batch_ok += 1
+            except Exception as e:
+                self.batch_fail += 1
+                self.failed_list.append((name, str(e) or e.__class__.__name__))
+            time.sleep(0.05)
+        GLib.idle_add(self._finish_batch, total)
+
+    # ---------- 收尾 ----------
+
+    def _finish_batch(self, total):
+        self.prog_bar.set_fraction(1.0)
+        act_zh = "安装" if self.action == "install" else "卸载"
+        act_en = "install" if self.action == "install" else "uninstall"
+        if self.cancelled:
+            msg = self._t("已取消：取消前完成 %d 个" % self.batch_ok,
+                          "Cancelled: %d finished before cancelling" % self.batch_ok)
+            if self.batch_fail:
+                msg += self._t("，失败 %d 个" % self.batch_fail,
+                               ", %d failed" % self.batch_fail)
+        elif self.batch_fail:
+            msg = self._t("%s结束：成功 %d 个，失败 %d 个" % (act_zh, self.batch_ok,
+                                                            self.batch_fail),
+                          "%s finished: %d ok, %d failed"
+                          % (act_en.capitalize(), self.batch_ok, self.batch_fail))
+        else:
+            msg = self._t("✓ %s完成：成功 %d 个" % (act_zh, self.batch_ok),
+                          "✓ %s done: %d ok" % (act_en.capitalize(), self.batch_ok))
+        self.prog_label.set_text(msg)
+
+        details = []
+        for ver, why in self.failed_list[:8]:
+            details.append("· %s：%s" % (ver, why))
+        if len(self.failed_list) > 8:
+            details.append(self._t("…另有 %d 个失败项"
+                                   % (len(self.failed_list) - 8),
+                                   "…and %d more failed" % (len(self.failed_list) - 8)))
+        if self.batch_ok:
+            details.append(self._t("建议完全退出并重启 Steam 以刷新兼容层列表。",
+                                   "Fully restart Steam so the list refreshes."))
+        self.detail_label.set_text("\n".join(details))
+        self.phase = "done"
+        self.hint.set_text("")
+        self._sync_buttons()
+
+
+
+class FlatpakInstallWindow(Gtk.Window):
+    """安装 Flatpak 应用：勾选 → 安装 → 进度 → 结果，全部在一个窗口里。"""
+
+    def __init__(self, parent=None):
+        super().__init__(title=fl("install_flatpak_apps_gui"))
+        self.set_icon_name("input-gamepad-symbolic")
+        self.set_default_size(620, 520)
+        self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT if parent else Gtk.WindowPosition.CENTER)
+        if parent:
+            self.set_transient_for(parent)
+        self.set_deletable(True)
+
+        self.proc = None          # 当前 flatpak 进程（供取消时 terminate）
+        self.phase = "select"     # select / running / done
+        self.cancelled = False
+        self.installed = _fp_installed_ids()
+        self.queue = []           # 待安装的 (id, desk_name, cat, addon)
+        self.queue_total = 0
+        self.done_count = 0
+        self.fail_count = 0
+        self.failed = []
+        self.last_inner = 0
+        self.last_error = ""      # 最近一条可读的错误（来自 flatpak stderr）
+        self.error_lines = []     # 收集到的错误行，失败时展示
+        self._search_gen = 0      # 搜索代数：丢弃过期的远端搜索结果
+        # 勾选状态不能只存在复选框里：列表每次重建都会销毁旧行，
+        # 搜索/翻查一次就丢光。用 {app_id: meta} 常驻保存。
+        self.picked = {}
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+        # 顶部标题
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        head.set_margin_top(14); head.set_margin_bottom(8)
+        head.set_margin_start(16); head.set_margin_end(16)
+        title = Gtk.Label()
+        title.set_markup(f"<span size='large'><b>{fl('install_flatpak_apps_gui')}</b></span>")
+        title.set_xalign(0)
+        head.pack_start(title, True, True, 0)
+
+        # 搜索框放右上角：先在内置清单里匹配（秒出），匹配不到再查 flathub。
+        # 这样常用应用不用等网络，冷门应用也能找到并直接勾选安装。
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_width_chars(20)
+        self.search_entry.set_placeholder_text(
+            "搜索应用" if get_lang() != "en" else "Search apps")
+        self.search_entry.connect("search-changed", self._on_search_changed)
+        head.pack_end(self.search_entry, False, False, 0)
+        outer.pack_start(head, False, False, 0)
+
+        # 说明
+        self.hint = Gtk.Label()
+        self.hint.set_xalign(0)
+        self.hint.set_line_wrap(True)
+        self.hint.set_margin_start(16); self.hint.set_margin_end(16)
+        self.hint.set_margin_bottom(8)
+        self.hint.get_style_context().add_class("dash-card-desc")
+        outer.pack_start(self.hint, False, False, 0)
+
+        # 主体：可切换的 勾选页 / 进度页
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.stack.set_transition_duration(160)
+        self.stack.set_margin_start(16); self.stack.set_margin_end(16)
+        outer.pack_start(self.stack, True, True, 0)
+
+        self.stack.add_named(self._build_select_page(), "select")
+        self.stack.add_named(self._build_progress_page(), "progress")
+
+        # 底部按钮：只保留一个主按钮，按状态变化
+        #   · 选择页      → 「安装」（有勾选才可点）；未勾选时隐藏，避免出现无意义的按钮
+        #   · 安装中      → 「取消」（真正终止 flatpak）
+        #   · 安装结束    → 「完成」（关窗）
+        # 不再同时摆「否/确定」两个按钮：那个「否」在选择页上等于「关窗」、
+        # 在结果页上又和「确定」重复，纯属噪音。
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        btn_row.set_margin_top(10); btn_row.set_margin_bottom(14)
+        btn_row.set_margin_start(16); btn_row.set_margin_end(16)
+        self.main_btn = Gtk.Button(label=self._lbl("install"))
+        self.main_btn.get_style_context().add_class("suggested-action")
+        self.main_btn.connect("clicked", self._on_main_clicked)
+        btn_row.pack_end(self.main_btn, False, False, 0)
+        outer.pack_start(btn_row, False, False, 0)
+
+        self.add(outer)
+        self._refresh_select_page()
+        self.show_all()
+        self._sync_buttons()
+
+    def _lbl(self, key):
+        m = {
+            "install": ("安装", "Install"),
+            "cancel": ("取消", "Cancel"),
+            "done": ("完成", "Done"),
+            "back": ("返回列表", "Back to list"),
+        }
+        zh, en = m[key]
+        return en if get_lang() == "en" else zh
+
+    def _sync_buttons(self):
+        """按当前阶段（self.phase）决定主按钮的文字与可用性。
+
+        用显式的 phase 而不是读 stack 页名，是因为结果页/取消页仍复用 progress
+        那个布局，只看页名分不出「正在装」和「装完了」。
+        """
+        phase = getattr(self, "phase", "select")
+        # 搜索框只在勾选页有意义（安装中/结果页还留着会让人以为能搜）
+        try:
+            self.search_entry.set_visible(phase == "select")
+        except Exception:
+            pass
+        if phase == "select":
+            n = len(self._selected())
+            # 没勾选任何应用时，按钮没有可执行的动作，直接隐藏
+            self.main_btn.set_visible(n > 0)
+            self.main_btn.set_sensitive(n > 0)
+            self.main_btn.set_label(self._lbl("install"))
+        elif phase == "running":
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(True)
+            self.main_btn.set_label(self._lbl("cancel"))
+        else:  # done
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(True)
+            # 装完不关窗，回勾选页可以接着装别的
+            self.main_btn.set_label(self._lbl("back"))
+
+    def _on_main_clicked(self, *_a):
+        phase = getattr(self, "phase", "select")
+        if phase == "select":
+            self._start_install()
+        elif phase == "running":
+            # 安装中 → 真正终止 flatpak 进程；随后由 _on_app_done 收尾
+            self.cancelled = True
+            self.detail_label.set_text("正在取消…" if get_lang() != "en" else "Cancelling…")
+            self._kill_proc()
+        else:
+            # 结果页「返回列表」：重新扫描并回到勾选页，可以接着装别的
+            self._back_to_select()
+
+    def _back_to_select(self):
+        """安装结束/取消后回到勾选页（与卸载窗口同名方法一致）。"""
+        self.phase = "select"
+        self.stack.set_visible_child_name("select")
+        self.prog_bar.set_fraction(0)
+        self.prog_label.set_text("")
+        self.detail_label.set_text("")
+        self.cancelled = False
+        # 装完的应用已从列表消失，勾选也一并清掉，避免下次误装
+        self.picked = {}
+        # 清掉搜索词再刷新：刚装好的应用本来就已从列表移除，
+        # 若搜索词还停在它上面，回去只会看到「没有匹配的未安装应用」
+        try:
+            self.search_entry.set_text("")
+        except Exception:
+            pass
+        self._refresh_select_page()
+        self._sync_buttons()
+
+    def _build_select_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        sw = Gtk.ScrolledWindow()
+        sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sw.set_vexpand(True)
+        self.list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        sw.add(self.list_box)
+        box.pack_start(sw, True, True, 0)
+        return box
+
+    def _build_progress_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_valign(Gtk.Align.CENTER)
+        self.prog_label = Gtk.Label(label="")
+        self.prog_label.set_xalign(0)
+        self.prog_label.set_line_wrap(True)
+        self.prog_label.get_style_context().add_class("dash-card-title")
+        box.pack_start(self.prog_label, False, False, 0)
+
+        self.prog_bar = Gtk.ProgressBar()
+        self.prog_bar.set_show_text(False)
+        box.pack_start(self.prog_bar, False, False, 0)
+
+        self.detail_label = Gtk.Label(label="")
+        self.detail_label.set_xalign(0)
+        self.detail_label.set_line_wrap(True)
+        self.detail_label.get_style_context().add_class("dash-card-desc")
+        box.pack_start(self.detail_label, False, False, 0)
+        return box
+
+    def _refresh_select_page(self):
+        """重绘列表：尊重当前搜索词（空则显示全部未安装应用）。"""
+        q = ""
+        try:
+            q = self.search_entry.get_text().strip()
+        except Exception:
+            pass
+        self._render_list(q)
+
+    def _on_search_changed(self, entry):
+        """输入变化时刷新列表：先本地匹配，本地没有结果再查远端。"""
+        self._render_list(entry.get_text().strip())
+
+    def _local_matches(self, q):
+        """在内置清单里按名称/分组/ID 模糊匹配。"""
+        ql = q.lower()
+        out = []
+        for item in FLATPAK_CATALOG:
+            title, cands, cat, desk, addon, group = item
+            hay = f"{title} {group} {' '.join(cands)}".lower()
+            if ql in hay:
+                out.append(item)
+        return out
+
+    def _remote_search(self, q):
+        """本地没有结果时用 flatpak search 查远端，返回 [(id, name)]。"""
+        try:
+            r = subprocess.run(["flatpak", "search", "--columns=application,name", q],
+                               capture_output=True, text=True, timeout=20)
+            rows, seen = [], set()
+            for line in r.stdout.splitlines():
+                parts = line.split("\t")
+                if len(parts) < 2:
+                    continue
+                app_id, name = parts[0].strip(), parts[1].strip()
+                if not app_id or app_id in seen:
+                    continue
+                seen.add(app_id)
+                rows.append((app_id, name))
+                if len(rows) >= 20:
+                    break
+            return rows
+        except Exception:
+            return []
+
+    def _render_list(self, q=""):
+        """按查询词重绘列表；q 为空则显示全部未安装应用。"""
+        self._search_gen += 1
+        for ch in list(self.list_box.get_children()):
+            self.list_box.remove(ch)
+        self.installed = _fp_installed_ids()
+        if not q:
+            self._render_catalog_rows(FLATPAK_CATALOG)
+            return
+        locals_ = self._local_matches(q)
+        if locals_:
+            self._render_catalog_rows(locals_)
+            return
+        status = Gtk.Label()
+        status.set_xalign(0)
+        status.set_text("本地清单无匹配，正在搜索 flathub…"
+                        if get_lang() != "en" else
+                        "No local match, searching flathub…")
+        status.get_style_context().add_class("dash-card-desc")
+        self.list_box.pack_start(status, False, False, 0)
+        self.list_box.show_all()
+
+        gen = self._search_gen
+
+        def do_remote():
+            rows = self._remote_search(q)
+            GLib.idle_add(self._render_remote_rows, q, rows, gen)
+            return False
+
+        threading.Thread(target=do_remote, daemon=True).start()
+
+    def _render_catalog_rows(self, items):
+        shown = 0
+        for title, cands, cat, desk, addon, group in items:
+            if any(c in self.installed for c in cands):
+                continue
+            self._add_row(title, group, (_fp_pick_id(cands, self.installed), desk, cat, addon))
+            shown += 1
+        if shown == 0:
+            lbl = Gtk.Label()
+            lbl.set_text("没有匹配的未安装应用。" if get_lang() != "en"
+                         else "No matching apps that are not installed.")
+            lbl.set_margin_top(20)
+            self.list_box.pack_start(lbl, False, False, 0)
+        self.list_box.show_all()
+        self._restore_checks()
+        self._update_hint()
+
+    def _render_remote_rows(self, q, rows, gen=None):
+        try:
+            if self.search_entry.get_text().strip() != q:
+                return False
+        except Exception:
+            pass
+        # search-changed 可能被触发两次（set_text 排队的 + 显式发出的），
+        # 两份结果都会回到这里；只认最新一代，否则后到的结果会把用户
+        # 刚勾上的选项连同整页一起重建掉。
+        if gen is not None and gen != self._search_gen:
+            return False
+        for ch in list(self.list_box.get_children()):
+            self.list_box.remove(ch)
+        rows = [(i, n) for i, n in rows if i not in self.installed]
+        if not rows:
+            lbl = Gtk.Label()
+            lbl.set_text("flathub 上也没有找到匹配的应用。" if get_lang() != "en"
+                         else "Nothing matching on flathub either.")
+            lbl.set_margin_top(20)
+            self.list_box.pack_start(lbl, False, False, 0)
+        else:
+            for app_id, name in rows:
+                self._add_row(name, "在线搜索", (app_id, name, "Utility", None))
+        self.list_box.show_all()
+        self._restore_checks()
+        self._update_hint()
+        return False
+
+    def _add_row(self, title, group, meta):
+        """加一行复选框；meta = (app_id, desk_name, cat, addon)。"""
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        cb = Gtk.CheckButton()
+        cb._fp_meta = meta
+        text = Gtk.Label()
+        text.set_markup(f"<b>{GLib.markup_escape_text(title)}</b>  "
+                        f"<span size='small'>{GLib.markup_escape_text(group)}</span>")
+        text.set_xalign(0)
+        text.set_line_wrap(True)
+        row.pack_start(cb, False, False, 0)
+        row.pack_start(text, True, True, 0)
+        eb = Gtk.EventBox()
+        eb.add(row)
+        eb.connect("button-press-event",
+                   lambda _w, _e, c=cb: (c.set_active(not c.get_active()), True)[1])
+        cb.connect("toggled", self._on_row_toggled, cb)
+        self.list_box.pack_start(eb, False, False, 0)
+
+
+    def _walk_checkbuttons(self):
+        """遍历 list_box 里所有 CheckButton（它们被包在 EventBox>Box 里）。"""
+        found = []
+
+        def rec(w):
+            if isinstance(w, Gtk.CheckButton):
+                found.append(w)
+                return
+            if hasattr(w, "get_children"):
+                for c in w.get_children():
+                    rec(c)
+
+        for ch in self.list_box.get_children():
+            rec(ch)
+        return found
+
+    def _on_row_toggled(self, cb, *_a):
+        """复选框变化 → 更新常驻的 picked，再刷新按钮/提示。"""
+        meta = getattr(cb, "_fp_meta", None)
+        if meta:
+            try:
+                if cb.get_active():
+                    self.picked[meta[0]] = meta
+                else:
+                    self.picked.pop(meta[0], None)
+            except Exception:
+                pass
+        self._update_hint()
+
+    def _selected(self):
+        """已勾选的应用（跨搜索/重绘保留，取自 picked 而不是当前可见行）。"""
+        return list(getattr(self, "picked", {}).values())
+
+    def _restore_checks(self):
+        """重绘后把 picked 里的应用重新勾上（勾选框随旧行销毁了）。"""
+        picked = getattr(self, "picked", None)
+        if not picked:
+            return
+        for cb in self._walk_checkbuttons():
+            try:
+                if cb._fp_meta[0] in picked and not cb.get_active():
+                    cb.set_active(True)
+            except Exception:
+                pass
+
+    def _update_hint(self):
+        n = len(self._selected())
+        if get_lang() == "en":
+            self.hint.set_text(f"{n} app(s) selected. Installed apps are not listed.")
+        else:
+            self.hint.set_text(f"已选择 {n} 个应用；已安装的不会列出。")
+        # 勾选数量变化会影响主按钮是否该出现
+        try:
+            self._sync_buttons()
+        except Exception:
+            pass
+    def _kill_proc(self):
+        p = self.proc
+        if not p:
+            return
+        try:
+            p.terminate()
+        except Exception:
+            pass
+        GLib.timeout_add(300, self._force_kill, p)
+
+    def _force_kill(self, p):
+        try:
+            if p.poll() is None:
+                p.kill()
+        except Exception:
+            pass
+        return False
+
+    def _start_install(self):
+        sel = self._selected()
+        if not sel:
+            return
+        # _add_row 存的 meta 已经是 (app_id, desk, cat, addon) —— 挑 ID 的工作
+        # 在渲染列表时就做完了。这里若再按候选列表解包，会把字符串当字符序列遍历，
+        # 得到的是第一个字符（就是结果页那个 "c"），并把 desk/cat 顺序弄反。
+        self.queue = []
+        for app_id, desk, cat, addon in sel:
+            self.queue.append((app_id, desk, cat, addon))
+        self.queue_total = len(self.queue)
+        self.done_count = self.fail_count = 0
+        self.failed = []
+        self.last_inner = 0
+        self.cancelled = False
+
+        self.phase = "running"
+        self.stack.set_visible_child_name("progress")
+        self._sync_buttons()
+        self.prog_bar.set_fraction(0)
+        self._next_app()
+
+    def _next_app(self):
+        if self.cancelled:
+            self._finish(cancelled=True)
+            return
+        if not self.queue:
+            self._finish(cancelled=False)
+            return
+
+        app_id, desk, cat, addon = self.queue.pop(0)
+        self.cur = (app_id, desk, cat, addon)
+        idx = self.done_count + self.fail_count + 1
+        if get_lang() == "en":
+            self.prog_label.set_text(f"Installing {idx}/{self.queue_total}: {app_id}")
+        else:
+            self.prog_label.set_text(f"正在安装 {idx}/{self.queue_total}：{app_id}")
+        self.last_inner = 0
+        argv = ["flatpak", "install", "-y", "flathub", app_id]
+        _fp_run_async(argv, self._on_line, lambda rc: self._on_app_done(rc))
+        # 拿回 Popen 句柄（worker 线程里设置的）
+        GLib.timeout_add(120, self._grab_proc)
+
+    def _grab_proc(self):
+        self.proc = getattr(_fp_run_async, "last_proc", None)
+        return False
+
+    def _on_line(self, line):
+        parsed = _fp_progress_parse(line)
+        if not parsed:
+            # 非进度行：flatpak 的报错（「错误： 未在远程仓库…」等）就藏在这里。
+            # 原来直接 return 丢弃，失败时用户只能看到一个空白的失败提示。
+            self._note_output(line)
+            return False
+        step, steps, pct, rate = parsed
+        inner = _fp_fold_pct(step, steps, pct)
+        if inner < self.last_inner:
+            inner = self.last_inner
+        self.last_inner = inner
+
+        overall = int(((self.done_count + self.fail_count) * 100 + inner) / max(1, self.queue_total))
+        overall = min(overall, 100)
+        self.prog_bar.set_fraction(overall / 100.0)
+        # 进度条内的文字已关掉，百分比统一显示在下方这一行；
+        # 多应用时用整体百分比（含已完成的应用），比单应用百分比更准确
+        self.detail_label.set_text(f"{overall}%" + (f"  {rate}" if rate else ""))
+        return False
+
+    def _note_output(self, line):
+        """收集值得展示的输出行（错误/警告），供失败时报告原因。"""
+        t = (line or "").strip()
+        if not t:
+            return
+        # flatpak 的进度帧用 \r 刷新，去掉控制字符后判断
+        if "\r" in t:
+            t = t.split("\r")[-1].strip()
+        low = t.lower()
+        important = (
+            t.startswith("错误") or t.startswith("error") or
+            "错误：" in t or "失败" in low or "failed" in low or
+            t.startswith("警告") or t.startswith("warning") or
+            "not found" in low or "no such" in low or
+            "permission" in low or "denied" in low
+        )
+        if important:
+            self.last_error = t
+            self.error_lines.append(t)
+            if len(self.error_lines) > 20:
+                self.error_lines = self.error_lines[-20:]
+
+    def _on_app_done(self, rc):
+        app_id, desk, cat, addon = self.cur
+        if rc == 0:
+            self.done_count += 1
+            if _fp_write_shortcut(desk, cat, app_id) and addon:
+                _fp_run_async(["flatpak", "install", "-y", "flathub", addon], lambda l: False,
+                              lambda r: False)
+        else:
+            self.fail_count += 1
+            self.failed.append(app_id)
+        self._next_app()
+        return False
+
+    def _failure_details(self):
+        """失败时给出「哪个应用 + 为什么」。"""
+        if not self.failed:
+            return ""
+        zh = get_lang() != "en"
+        parts = []
+        for app_id in self.failed:
+            parts.append(f"· {app_id}")
+        # 附上 flatpak 真实报错（最常见的是 ID 不存在、网络不通、磁盘满）
+        if self.error_lines:
+            # 去重，保留顺序，最多 3 条，太长会撑爆窗口
+            seen, uniq = set(), []
+            for line in self.error_lines:
+                if line in seen:
+                    continue
+                seen.add(line)
+                uniq.append(line)
+            reason = "\n".join(uniq[-3:])
+            parts.append("")
+            parts.append(("原因：" if zh else "Reason:"))
+            parts.append(reason)
+        return "\n".join(parts)
+
+    def _finish(self, cancelled):
+        self.prog_bar.set_fraction(1.0 if not cancelled else self.prog_bar.get_fraction())
+        if cancelled:
+            if get_lang() == "en":
+                self.prog_label.set_text("Cancelled")
+                self.detail_label.set_text(f"Completed {self.done_count} before cancelling.")
+            else:
+                self.prog_label.set_text("已取消")
+                self.detail_label.set_text(f"取消前已完成 {self.done_count} 个。")
+        else:
+            if self.fail_count == 0:
+                msg = (f"✓ Install complete: {self.done_count} succeeded" if get_lang() == "en"
+                       else f"✓ 安装完成：成功 {self.done_count} 个")
+            elif self.done_count:
+                msg = (f"Install finished: {self.done_count} succeeded, {self.fail_count} failed"
+                       if get_lang() == "en" else
+                       f"安装结束：成功 {self.done_count} 个，失败 {self.fail_count} 个")
+            else:
+                msg = (f"✗ Install failed: {self.fail_count}" if get_lang() == "en"
+                       else f"✗ 安装失败：{self.fail_count} 个")
+            self.prog_label.set_text(msg)
+            self.detail_label.set_text(self._failure_details())
+            self.prog_bar.set_fraction(1.0)
+        # 结果页：主按钮变成「返回列表」，点它回到勾选页继续装
+        self.phase = "done"
+        self.stack.set_visible_child_name("progress")
+        self._sync_buttons()
+
+
+class FlatpakUninstallWindow(Gtk.Window):
+    """卸载 Flatpak 应用：勾选 → 卸载 → 进度 → 结果（含数据目录清理询问）。"""
+
+    def __init__(self, parent=None):
+        super().__init__(title=fl("uninstall_other_flatpak_apps"))
+        self.set_icon_name("input-gamepad-symbolic")
+        self.set_default_size(600, 500)
+        self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT if parent else Gtk.WindowPosition.CENTER)
+        if parent:
+            self.set_transient_for(parent)
+        self.proc = None
+        self.phase = "select"     # select / running / askdata / done
+        self.cancelled = False
+        self.queue = []
+        self.queue_total = 0
+        self.done_count = 0
+        self.fail_count = 0
+        self.failed = []
+        self.data_dirs = []
+        self.last_inner = 0
+        self.last_error = ""
+        self.error_lines = []
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        head.set_margin_top(14); head.set_margin_bottom(8)
+        head.set_margin_start(16); head.set_margin_end(16)
+        title = Gtk.Label()
+        title.set_markup(f"<span size='large'><b>{fl('uninstall_other_flatpak_apps')}</b></span>")
+        title.set_xalign(0)
+        head.pack_start(title, True, True, 0)
+        outer.pack_start(head, False, False, 0)
+
+        self.hint = Gtk.Label()
+        self.hint.set_xalign(0); self.hint.set_line_wrap(True)
+        self.hint.set_margin_start(16); self.hint.set_margin_end(16); self.hint.set_margin_bottom(8)
+        self.hint.get_style_context().add_class("dash-card-desc")
+        outer.pack_start(self.hint, False, False, 0)
+
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.stack.set_transition_duration(160)
+        self.stack.set_margin_start(16); self.stack.set_margin_end(16)
+        outer.pack_start(self.stack, True, True, 0)
+        self.stack.add_named(self._build_select_page(), "select")
+        self.stack.add_named(self._build_progress_page(), "progress")
+
+        # 底部按钮：只保留一个主按钮，随阶段变化
+        #   选择页 → 「卸载」（有勾选才显示）
+        #   卸载中 → 「取消」（真正终止 flatpak）
+        #   结果页 → 「完成」（关窗）
+        #   数据询问 → 额外露出「保留」按钮
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        btn_row.set_margin_top(10); btn_row.set_margin_bottom(14)
+        btn_row.set_margin_start(16); btn_row.set_margin_end(16)
+        self.keep_btn = Gtk.Button(label=self._lbl("keep"))
+        self.keep_btn.connect("clicked", lambda *_a: self.destroy())
+        self.main_btn = Gtk.Button(label=self._lbl("uninstall"))
+        self.main_btn.get_style_context().add_class("suggested-action")
+        self.main_btn.connect("clicked", self._on_main_clicked)
+        btn_row.pack_end(self.main_btn, False, False, 0)
+        btn_row.pack_end(self.keep_btn, False, False, 0)
+        outer.pack_start(btn_row, False, False, 0)
+
+        self.add(outer)
+        self._refresh_select_page()
+        self.show_all()
+        self.keep_btn.set_visible(False)
+        self._sync_buttons()
+
+    def _lbl(self, key):
+        m = {
+            "uninstall": ("卸载", "Uninstall"),
+            "cancel": ("取消", "Cancel"),
+            "done": ("完成", "Done"),
+            "back": ("返回列表", "Back to list"),
+            "keep": ("保留", "Keep"),
+            "delete": ("删除数据", "Delete data"),
+        }
+        zh, en = m[key]
+        return en if get_lang() == "en" else zh
+
+    def _sync_buttons(self):
+        """按 self.phase 决定按钮；用显式阶段而不是 stack 页名，
+        因为结果页/数据询问页都复用 progress 那个布局。"""
+        phase = getattr(self, "phase", "select")
+        if phase == "select":
+            n = len(self._selected())
+            self.main_btn.set_visible(n > 0)
+            self.main_btn.set_sensitive(n > 0)
+            self.main_btn.set_label(self._lbl("uninstall"))
+            self.keep_btn.set_visible(False)
+        elif phase == "running":
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(True)
+            self.main_btn.set_label(self._lbl("cancel"))
+            self.keep_btn.set_visible(False)
+        elif phase == "askdata":
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(True)
+            self.main_btn.set_label(self._lbl("delete"))
+            self.keep_btn.set_visible(True)
+        else:  # done
+            self.main_btn.set_visible(True)
+            self.main_btn.set_sensitive(True)
+            self.main_btn.set_label(self._lbl("back"))
+            self.keep_btn.set_visible(False)
+
+    def _on_main_clicked(self, *_a):
+        phase = getattr(self, "phase", "select")
+        if phase == "select":
+            self._start_uninstall()
+        elif phase == "running":
+            self.cancelled = True
+            self.detail_label.set_text("正在取消…" if get_lang() != "en" else "Cancelling…")
+            self._kill_proc()
+        elif phase == "askdata":
+            self._do_cleanup()
+        else:
+            # 结果页「返回列表」：重新扫描并回到勾选页，可以接着卸别的
+            self._back_to_select()
+
+    def _back_to_select(self):
+        """卸载结束/取消后回到勾选页，可以接着卸别的（与安装窗口装完回列表一致）。"""
+        self.phase = "select"
+        self.stack.set_visible_child_name("select")
+        self.prog_bar.set_fraction(0)
+        self.prog_label.set_text("")
+        self.detail_label.set_text("")
+        self.cancelled = False
+        self._refresh_select_page()
+        self._sync_buttons()
+
+    def _build_select_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        sw = Gtk.ScrolledWindow()
+        sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sw.set_vexpand(True)
+        self.list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        sw.add(self.list_box)
+        box.pack_start(sw, True, True, 0)
+        return box
+
+    def _build_progress_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_valign(Gtk.Align.CENTER)
+        self.prog_label = Gtk.Label(label="")
+        self.prog_label.set_xalign(0); self.prog_label.set_line_wrap(True)
+        box.pack_start(self.prog_label, False, False, 0)
+        self.prog_bar = Gtk.ProgressBar()
+        self.prog_bar.set_show_text(False)
+        box.pack_start(self.prog_bar, False, False, 0)
+        self.detail_label = Gtk.Label(label="")
+        self.detail_label.set_xalign(0); self.detail_label.set_line_wrap(True)
+        self.detail_label.get_style_context().add_class("dash-card-desc")
+        box.pack_start(self.detail_label, False, False, 0)
+        return box
+
+    def _refresh_select_page(self):
+        for ch in list(self.list_box.get_children()):
+            self.list_box.remove(ch)
+        try:
+            r = subprocess.run(["flatpak", "list", "--app", "--columns=application,name"],
+                               capture_output=True, text=True, timeout=15)
+            rows = [l.split("\t") for l in r.stdout.splitlines() if l.strip()]
+        except Exception:
+            rows = []
+        shown = 0
+        for parts in rows:
+            app_id = parts[0].strip()
+            app_name = parts[1].strip() if len(parts) > 1 else app_id
+            if app_id in FLATPAK_EXCLUDE:
+                continue
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            cb = Gtk.CheckButton()
+            cb._fp_app = app_id
+            text = Gtk.Label()
+            text.set_markup(f"<b>{GLib.markup_escape_text(app_name)}</b>  "
+                            f"<span size='small'>{GLib.markup_escape_text(app_id)}</span>")
+            text.set_xalign(0); text.set_line_wrap(True)
+            row.pack_start(cb, False, False, 0)
+            row.pack_start(text, True, True, 0)
+            eb = Gtk.EventBox()
+            eb.add(row)
+            eb.connect("button-press-event",
+                       lambda _w, _e, c=cb: (c.set_active(not c.get_active()), True)[1])
+            cb.connect("toggled", lambda *_a: self._update_hint())
+            self.list_box.pack_start(eb, False, False, 0)
+            shown += 1
+        if shown == 0:
+            lbl = Gtk.Label(label="没有可卸载的 Flatpak 应用。" if get_lang() != "en"
+                            else "No Flatpak apps available to uninstall.")
+            lbl.set_margin_top(20)
+            self.list_box.pack_start(lbl, False, False, 0)
+        # 必须显式 show_all：初次显示是靠窗口的 show_all() 一起带出来的，
+        # 但「返回列表」时窗口早已显示过，之后新建的行默认是隐藏的 ——
+        # 不调用这一句，返回列表后看到的就是一片空白。
+        self.list_box.show_all()
+        self._update_hint()
+
+    def _walk_checkbuttons(self):
+        found = []
+
+        def rec(w):
+            if isinstance(w, Gtk.CheckButton):
+                found.append(w)
+                return
+            if hasattr(w, "get_children"):
+                for c in w.get_children():
+                    rec(c)
+
+        for ch in self.list_box.get_children():
+            rec(ch)
+        return found
+
+    def _selected(self):
+        return [cb._fp_app for cb in self._walk_checkbuttons() if cb.get_active()]
+
+    def _update_hint(self):
+        n = len(self._selected())
+        self.hint.set_text(f"{n} selected." if get_lang() == "en" else f"已选择 {n} 个应用。")
+        # 勾选数量决定主按钮该不该出现（与安装窗口一致）
+        try:
+            self._sync_buttons()
+        except Exception:
+            pass
+    def _kill_proc(self):
+        p = self.proc
+        if not p:
+            return
+        try:
+            p.terminate()
+        except Exception:
+            pass
+        GLib.timeout_add(300, self._force_kill, p)
+
+    def _force_kill(self, p):
+        try:
+            if p.poll() is None:
+                p.kill()
+        except Exception:
+            pass
+        return False
+    def _start_uninstall(self):
+        sel = self._selected()
+        if not sel:
+            return
+        self.queue = list(sel)
+        self.queue_total = len(self.queue)
+        self.done_count = self.fail_count = 0
+        self.failed = []
+        self.data_dirs = []
+        self.last_inner = 0
+        self.cancelled = False
+        self.phase = "running"
+        self.stack.set_visible_child_name("progress")
+        self._sync_buttons()
+        self.prog_bar.set_fraction(0)
+        self._next_app()
+
+    def _next_app(self):
+        if self.cancelled:
+            self._finish(True); return
+        if not self.queue:
+            self._finish(False); return
+        app_id = self.queue.pop(0)
+        self.cur = app_id
+        idx = self.done_count + self.fail_count + 1
+        self.prog_label.set_text(f"Uninstalling {idx}/{self.queue_total}: {app_id}"
+                                 if get_lang() == "en" else
+                                 f"正在卸载 {idx}/{self.queue_total}：{app_id}")
+        self.last_inner = 0
+        _fp_run_async(["flatpak", "uninstall", "-y", app_id], self._on_line,
+                      lambda rc: self._on_app_done(rc))
+        GLib.timeout_add(120, self._grab_proc)
+
+    def _grab_proc(self):
+        self.proc = getattr(_fp_run_async, "last_proc", None)
+        return False
+
+    def _note_output(self, line):
+        """收集 flatpak 的错误行，供失败时展示原因。"""
+        t = (line or "").strip()
+        if not t:
+            return
+        if "\r" in t:
+            t = t.split("\r")[-1].strip()
+        low = t.lower()
+        important = (
+            t.startswith("错误") or t.startswith("error") or
+            "错误：" in t or "失败" in low or "failed" in low or
+            t.startswith("警告") or t.startswith("warning") or
+            "not found" in low or "no such" in low or
+            "permission" in low or "denied" in low
+        )
+        if important:
+            self.last_error = t
+            self.error_lines.append(t)
+            if len(self.error_lines) > 20:
+                self.error_lines = self.error_lines[-20:]
+
+    def _on_line(self, line):
+        parsed = _fp_progress_parse(line)
+        if not parsed:
+            self._note_output(line)
+            return False
+        step, steps, pct, rate = parsed
+        inner = _fp_fold_pct(step, steps, pct)
+        if inner < self.last_inner:
+            inner = self.last_inner
+        self.last_inner = inner
+        overall = int(((self.done_count + self.fail_count) * 100 + inner) / max(1, self.queue_total))
+        overall = min(overall, 100)
+        self.prog_bar.set_fraction(overall / 100.0)
+        self.detail_label.set_text(f"{overall}%" + (f"  {rate}" if rate else ""))
+        return False
+
+    def _on_app_done(self, rc):
+        app_id = self.cur
+        if rc == 0:
+            self.done_count += 1
+            _fp_remove_shortcuts(app_id)
+            d = os.path.join(os.path.expanduser("~"), ".var", "app", app_id)
+            if os.path.isdir(d):
+                self.data_dirs.append(d)
+        else:
+            self.fail_count += 1
+            self.failed.append(app_id)
+        self._next_app()
+        return False
+
+    def _failure_details(self):
+        if not self.failed:
+            return ""
+        zh = get_lang() != "en"
+        parts = [f"· {a}" for a in self.failed]
+        if self.error_lines:
+            seen, uniq = set(), []
+            for line in self.error_lines:
+                if line in seen:
+                    continue
+                seen.add(line)
+                uniq.append(line)
+            parts.append("")
+            parts.append("原因：" if zh else "Reason:")
+            parts.append("\n".join(uniq[-3:]))
+        return "\n".join(parts)
+
+    def _finish(self, cancelled):
+        if cancelled:
+            self.prog_label.set_text("已取消" if get_lang() != "en" else "Cancelled")
+            self.detail_label.set_text(
+                f"取消前已完成 {self.done_count} 个。" if get_lang() != "en"
+                else f"Completed {self.done_count} before cancelling.")
+        else:
+            if self.fail_count == 0:
+                msg = (f"✓ Uninstall complete: {self.done_count} succeeded" if get_lang() == "en"
+                       else f"✓ 卸载完成：成功 {self.done_count} 个")
+            elif self.done_count:
+                msg = (f"Uninstall finished: {self.done_count} succeeded, {self.fail_count} failed"
+                       if get_lang() == "en" else
+                       f"卸载结束：成功 {self.done_count} 个，失败 {self.fail_count} 个")
+            else:
+                msg = (f"✗ Uninstall failed: {self.fail_count}" if get_lang() == "en"
+                       else f"✗ 卸载失败：{self.fail_count} 个")
+            self.prog_label.set_text(msg)
+            if self.failed:
+                self.detail_label.set_text(self._failure_details())
+            else:
+                self.detail_label.set_text("")
+            self.prog_bar.set_fraction(1.0)
+
+        # 有残留数据 → 在同一窗口里问，不再弹第二个窗口
+        if not cancelled and self.data_dirs:
+            self._ask_data_cleanup()
+            return
+        # 结果页：主按钮是「返回列表」，点了可以继续卸别的（不再直接关窗）
+        self.phase = "done"
+        self.stack.set_visible_child_name("progress")
+        self._sync_buttons()
+
+    def _ask_data_cleanup(self):
+        """把「是否删除本地数据」做成窗口的一部分，而不是另开一个对话框。"""
+        self.prog_label.set_text(
+            "是否删除本地数据？" if get_lang() != "en" else "Delete local data?")
+        names = ", ".join(os.path.basename(d) for d in self.data_dirs)
+        self.detail_label.set_text(
+            (f"以下应用仍留有数据：{names}\n选择「保留」则下次重装设置还在。")
+            if get_lang() != "en" else
+            f"These apps still have local data: {names}\nChoosing Keep preserves settings for a reinstall.")
+        # 切到专门的询问页：主按钮「删除数据」、次按钮「保留」（保留 = 关窗）
+        self.phase = "askdata"
+        self.stack.set_visible_child_name("progress")
+        self._sync_buttons()
+
+    def _do_cleanup(self, *_a):
+        ok_n = bad_n = 0
+        for d in self.data_dirs:
+            try:
+                shutil.rmtree(d)
+                ok_n += 1
+            except Exception:
+                bad_n += 1
+        msg = (f"已删除 {ok_n} 个数据目录" + (f"，{bad_n} 个失败" if bad_n else "")
+               if get_lang() != "en" else
+               f"Deleted {ok_n} data director(ies)" + (f", {bad_n} failed" if bad_n else ""))
+        self.prog_label.set_text(msg)
+        self.detail_label.set_text("")
+        # 清理完也回到「返回列表」，与普通结果页一致
+        self.phase = "done"
+        self.stack.set_visible_child_name("progress")
+        self._sync_buttons()
+
 
 class UpdateCheckWindow(Gtk.Window):
     def __init__(self):
