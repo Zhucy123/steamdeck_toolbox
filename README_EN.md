@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v2.0.2** | Updated: 2026-11-05
+> **Version: v2.0.3** | Updated: 2026-11-07
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -26,6 +26,12 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - Open the toolbox; it checks for updates on startup (built-in self-update)
 
 ## 📝 Changelog
+
+2026-11-07 (v2.0.3)
+[Bug fixes]
+- Fixed "clicking a feature does nothing": when a GTK callback raised, the traceback only went to the terminal, which is invisible when launched from a desktop shortcut — so clicks appeared to do nothing. Any uncaught exception now shows "This action failed and was skipped" and writes the full traceback to ~/.cache/steamdeck_toolbox_error.log; send that file with any bug report
+- Fixed the "install vte3?" prompt swallowing every click on the main window when VTE is missing: that dialog was modal with no parent window, so on some desktops it landed behind the main window — the toolbox window was there but nothing responded. It is now non-modal and always kept on top, so the main window stays usable even if the dialog ends up behind it
+- Feature windows now raise themselves to the front, so they are not hidden behind the main window on some desktops
 
 2026-11-05 (v2.0.2)
 [UI rework: native GTK windows]

@@ -33,7 +33,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "2.0.2"
+VERSION = "2.0.3"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1112,7 +1112,17 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-05（v2.0.2）
+CHANGELOG_BODY_ZH = """2026-11-07（v2.0.3）
+【问题修复】
+- 修复「功能点了没反应」：GTK 回调里抛异常时错误只写到终端，而用桌面快捷方式启动根本看不到，
+  表现出来就是点了毫无反应。现在任何未捕获异常都会弹窗提示「这个功能执行出错，已跳过」，
+  完整堆栈写入 ~/.cache/steamdeck_toolbox_error.log，反馈问题时把该文件发来即可定位
+- 修复缺少 VTE 组件时，启动弹出的「是否安装 vte3」提示框会吞掉主界面所有点击：
+  该框是模态且没有父窗口，部分桌面环境下会跑到主窗口背后，用户看到工具箱窗口在、
+  但点点什么反应都没有。改为非模态并置顶显示，即使框被压到后面，主界面也照常可用
+- 功能窗口打开后主动置顶到最前，避免在部分桌面环境下新窗口被主窗口挡住
+
+2026-11-05（v2.0.2）
 【界面重构：原生 GTK 窗口】
 - 「安装 Flatpak 应用」与「卸载其他已安装应用」改为原生 GTK 窗口，不再调用 zenity
   · 应用列表、勾选框、进度条、结果全部在主程序自己的窗口里，主题与主界面一致
@@ -1636,7 +1646,13 @@ CHANGELOG_BODY_ZH = """2026-11-05（v2.0.2）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-05 (v2.0.2)
+CHANGELOG_BODY_EN = """2026-11-07 (v2.0.3)
+[Bug fixes]
+- Fixed "clicking a feature does nothing": when a GTK callback raised, the traceback only went to the terminal, which is invisible when launched from a desktop shortcut — so clicks appeared to do nothing. Any uncaught exception now shows "This action failed and was skipped" and writes the full traceback to ~/.cache/steamdeck_toolbox_error.log; send that file with any bug report
+- Fixed the "install vte3?" prompt swallowing every click on the main window when VTE is missing: that dialog was modal with no parent window, so on some desktops it landed behind the main window — the toolbox window was there but nothing responded. It is now non-modal and always kept on top, so the main window stays usable even if the dialog ends up behind it
+- Feature windows now raise themselves to the front, so they are not hidden behind the main window on some desktops
+
+2026-11-05 (v2.0.2)
 [UI rework: native GTK windows]
 - "Install Flatpak Apps" and "Uninstall Other Installed Apps" are now native GTK windows; zenity is no longer used
   · The app list, checkboxes, progress bar and results all live in the tool's own window, matching the main UI theme
@@ -2285,6 +2301,104 @@ def compute_window_size(fallback_w=1040, fallback_h=680,
         return int(w), int(h)
     except Exception:
         return fallback_w, fallback_h
+
+# ============================================================================
+# 崩溃与异常兜底：让任何失败都有可见反馈
+#
+# 为什么需要：GTK 的信号回调（按钮 clicked、超时、线程 idle 回调）里抛出的
+# 异常不会被调用方捕获，只会经 sys.excepthook 打到 stderr。用户从桌面快捷方式
+# 启动时 stderr 没有任何窗口承载，表现出来的就是「点了按钮什么都没发生」——
+# 既没有报错也没有窗口，看起来像按钮失灵或程序卡死。
+#
+# 这里的做法：装上 excepthook，把 traceback 写进日志文件，并弹一个错误框说明
+# 发生了什么、日志在哪。程序不会因此退出，用户还能继续用别的功能。
+# ============================================================================
+APP_LOG_PATH = os.path.join(os.path.expanduser("~"), ".cache", "steamdeck_toolbox_error.log")
+_excepthook_installed = False
+_in_excepthook = False       # 防止错误框自身出错导致无限递归
+
+
+def log_exception(exc_type, exc_value, exc_tb, context=""):
+    """把异常写进日志文件，返回日志路径（写失败也返回路径，界面照常提示）。"""
+    import traceback as _tb
+    try:
+        os.makedirs(os.path.dirname(APP_LOG_PATH), exist_ok=True)
+        with open(APP_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write("\n===== %s =====\n" % time.strftime("%Y-%m-%d %H:%M:%S"))
+            if context:
+                f.write("context: %s\n" % context)
+            f.write("version: %s\n" % VERSION)
+            _tb.print_exception(exc_type, exc_value, exc_tb, file=f)
+    except Exception:
+        pass
+    return APP_LOG_PATH
+
+
+def report_exception(exc_type, exc_value, exc_tb, context=""):
+    """记录异常并弹窗告知。异常发生时程序没崩，所以给用户一个「继续」按钮。"""
+    global _in_excepthook
+    path = log_exception(exc_type, exc_value, exc_tb, context)
+    # 错误框自己再出错时不要再递归弹窗（否则会连环弹到卡死）
+    if _in_excepthook:
+        print("exception while showing error dialog", file=sys.stderr)
+        return
+    _in_excepthook = True
+    try:
+        dlg = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.ERROR,
+                                Gtk.ButtonsType.NONE,
+                                "这个功能执行出错，已跳过" if get_lang() != "en"
+                                else "This action failed and was skipped")
+        dlg.add_button(t("ok"), Gtk.ResponseType.OK)
+        detail = "%s: %s" % (exc_type.__name__, exc_value)
+        if get_lang() == "en":
+            hint = ("The rest of the toolbox still works.\n\n"
+                    "Detail: %s\nLog: %s" % (detail, path))
+        else:
+            hint = ("工具箱的其它功能不受影响。\n\n"
+                    "错误：%s\n日志：%s" % (detail, path))
+        dlg.format_secondary_text(hint)
+        fix_dialog_size(dlg)
+        dlg.run()
+        dlg.destroy()
+    except Exception as e:
+        print("failed to show error dialog: %s" % e, file=sys.stderr)
+    finally:
+        _in_excepthook = False
+
+
+def install_excepthook():
+    """安装全局异常钩子。main() 里调用；测试可重复调用（幂等）。"""
+    global _excepthook_installed
+    if _excepthook_installed:
+        return
+    _excepthook_installed = True
+
+    def _hook(exc_type, exc_value, exc_tb):
+        # Ctrl+C 保持默认行为，不弹窗
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+        report_exception(exc_type, exc_value, exc_tb, context="unhandled")
+
+    sys.excepthook = _hook
+
+
+def guarded(fn):
+    """装饰 GTK 回调：异常不再「无声消失」，而是走统一的报错路径。
+
+    为什么不用 try/except 包住每个回调：要改几十处、还容易漏。装饰器只在
+    run_function 这类统一入口上用，其余靠 install_excepthook 兜住。
+    """
+    import functools
+    @functools.wraps(fn)
+    def _wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception:
+            report_exception(*sys.exc_info(), context=getattr(fn, "__name__", ""))
+            return None
+    return _wrapper
+
 
 def fix_dialog_size(dlg):
     """修正对话框首次显示时「先小后大」的闪烁。
@@ -14270,6 +14384,7 @@ class MainWindow(Gtk.Window):
         func_key = model.get_value(iter_, 2)
         self.run_function(func_name, func_key)
 
+    @guarded
     def run_function(self, func_name, func_key):
         if func_key in DANGEROUS_FUNCS:
             dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
@@ -14433,12 +14548,21 @@ Categories=Utility;
         print(msg)
 
 def ensure_vte_installed():
+    # 注意：这个提示框以前是 MODAL + parent=None。
+    # 实测（xdotool 真实点击）：主窗口上只要存在一个模态框，所有瓷砖点击都会被吞掉，
+    # 而 parent=None 的框在某些窗口管理器下会跑到主窗口**后面**——
+    # 用户看到的是「工具箱窗口在，但点什么都没反应」，正是这个原因。
+    # 改成非模态 + 置顶 + present()，即使它被压到后面，主界面也照常可用。
     if VTE_AVAILABLE: return
-    dialog = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.QUESTION, Gtk.ButtonsType.NONE, t("vte_missing"))
+    dialog = Gtk.MessageDialog(None, 0, Gtk.MessageType.QUESTION, Gtk.ButtonsType.NONE, t("vte_missing"))
     dialog.format_secondary_text(t("vte_missing_hint"))
     dialog.add_button(t("yes"), Gtk.ResponseType.YES); dialog.add_button(t("no"), Gtk.ResponseType.NO)
     dialog.set_icon_name("input-gamepad-symbolic")
+    dialog.set_position(Gtk.WindowPosition.CENTER)
+    dialog.set_keep_above(True)
     fix_dialog_size(dialog)
+    dialog.show_all()
+    dialog.present()
     response = dialog.run(); dialog.destroy()
     if response == Gtk.ResponseType.YES:
         install_cmd = (
@@ -14933,6 +15057,7 @@ class CacheManagerWindow(Gtk.Window):
         self.add(outer)
         self.connect("delete-event", self._on_delete_event)
         self.show_all()
+        self.present()
         self._sync_buttons()
 
     # ---------- 文案 ----------
@@ -15669,6 +15794,7 @@ class CompatManagerWindow(Gtk.Window):
         self.add(outer)
         self.connect("delete-event", self._on_delete_event)
         self.show_all()
+        self.present()
         self._sync_buttons()
 
     # ---------- 文案 ----------
@@ -16567,6 +16693,7 @@ class FlatpakInstallWindow(Gtk.Window):
         self.add(outer)
         self._refresh_select_page()
         self.show_all()
+        self.present()
         self._sync_buttons()
 
     def _lbl(self, key):
@@ -17106,6 +17233,7 @@ class FlatpakUninstallWindow(Gtk.Window):
         self.add(outer)
         self._refresh_select_page()
         self.show_all()
+        self.present()
         self.keep_btn.set_visible(False)
         self._sync_buttons()
 
@@ -17618,6 +17746,9 @@ def main():
     # 启动时应用用户上次选择的语言与主题
     set_lang(load_lang_pref())
     apply_app_css(load_theme_pref())
+    # 回调里的异常默认只打到 stderr，从桌面启动时用户完全看不到。
+    # 装在 Gtk.main() 之前，保证任何一次点击失败都有日志和提示框。
+    install_excepthook()
     UpdateCheckWindow()
     Gtk.main()
 
