@@ -4,7 +4,7 @@ VERSION="1.3.9"
 rm -f /home/deck/steamdeck_toolbox.sh
 rm -f /home/deck/Desktop/SteamDeck工具箱.desktop
 
-TOOLBOX_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
+TOOLBOX_URL="https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/master/steamdeck_gui.py"
 TOOLBOX_NAME="$HOME/steamdeck_gui.py"
 
 echo "正在检查系统只读状态..."
@@ -56,7 +56,7 @@ else
     fi
 fi
 
-echo "正在从 Gitee 下载 Steam Deck GUI 工具箱..."
+echo "正在从 GitHub 下载 Steam Deck GUI 工具箱..."
 
 if curl -L --progress-bar "$TOOLBOX_URL" -o "$TOOLBOX_NAME"; then
     chmod +x "$TOOLBOX_NAME"
