@@ -33,7 +33,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "2.0.3"
+VERSION = "2.0.4"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1112,7 +1112,28 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-07（v2.0.3）
+CHANGELOG_BODY_ZH = """2026-11-08（v2.0.4）
+【问题修复：互通盘挂载】
+- 修复脏卷(NTFS dirty)时「假成功」：卷带脏标志或处于 Windows 休眠/快速启动状态时，
+  Linux 的 NTFS 驱动不会报错，而是悄悄把分区挂成只读。旧版只看挂载命令的返回值，
+  于是显示「✓ 挂载成功」，实际一个文件都写不进去。现在挂载后会回查实际选项，
+  发现是只读就明确提示，并给出能真正解决的处理步骤
+- 修复「修复互通盘」在分区已挂载但为只读时仍提示「所有分区均已挂载，无需操作」：
+  该提示曾让脏卷用户误以为一切正常。现在只读挂载被视为未就绪，会继续往下修复
+- 挂载失败时不再只丢一句「请检查 dmesg 输出」：现在会读取本次操作新产生的内核日志
+  （不再把开机以来的陈年旧报错当成这次的问题），识别出「卷脏 / 休眠 / 未干净卸载」
+  后直接给出对应步骤——进 Windows 关快速启动完整关机、或用 ntfsfix 清标志、或应急只读/强制挂载
+- 修复 fstab 里把挂载用户写死为 uid=1000,gid=1000 的问题：用户名不是 deck、
+  或 UID 不是 1000 的设备上，分区挂上了却读写不了。现在按当前实际用户写入
+- 修复 ntfsfix/ntfsinfo 缺失时的安装提示给错包名：提示的是 ntfs-3g，但这两个工具
+  实际在 ntfsprogs 包里，照提示装完依然缺工具。现在提示 `sudo pacman -S ntfsprogs`
+  并说明 SteamOS 需先 `steamos-readonly disable`
+- 「修复磁盘写入错误」调用 ntfsfix 时加上 -d（清除 dirty 脏标志），
+  避免修复完标志仍在、ntfs3 驱动依旧拒绝挂载
+- 互通盘挂载前新增预检：用 ntfs-3g.probe 提前判断该卷能否读写挂载，能读写就直接挂，
+  不能就先把原因和处理方式说清楚，不必等到挂完才发现是只读
+
+2026-11-07（v2.0.3）
 【问题修复】
 - 修复「功能点了没反应」：GTK 回调里抛异常时错误只写到终端，而用桌面快捷方式启动根本看不到，
   表现出来就是点了毫无反应。现在任何未捕获异常都会弹窗提示「这个功能执行出错，已跳过」，
@@ -1646,7 +1667,17 @@ CHANGELOG_BODY_ZH = """2026-11-07（v2.0.3）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-07 (v2.0.3)
+CHANGELOG_BODY_EN = """2026-11-08 (v2.0.4)
+[Bug fixes: shared disk mounting]
+- Fixed a "false success" on dirty volumes: when a volume carries the NTFS dirty flag or Windows is hibernated / using Fast Startup, the Linux NTFS driver does not fail -- it quietly mounts the partition read-only. The old code only checked the mount command's exit code, so it reported "✓ Mounted successfully" for a volume where not a single file could be written. It now re-reads the actual mount options and, when read-only, says so plainly and gives the steps that really fix it
+- Fixed "Fix Shared Disk" claiming "all partitions are mounted, no action needed" when a partition was mounted read-only: that message made dirty-volume users think everything was fine. A read-only mount now counts as not ready, so the repair continues
+- A failed mount no longer just prints "please check the dmesg output": it now reads the kernel messages produced by this operation (no longer surfacing old boot-time errors as if they were current) and, on recognising "dirty volume / hibernated / not cleanly unmounted", gives the matching steps -- turn off Fast Startup in Windows and shut down fully, or clear the flag with ntfsfix, or mount read-only / forced as an emergency
+- Fixed the fstab line hardcoding the mount user as uid=1000,gid=1000: on a machine whose user is not deck or whose UID is not 1000, partitions mounted but could not be written to. The ids now come from the current user
+- Fixed the wrong package name in the "ntfsfix/ntfsinfo missing" hint: it pointed at ntfs-3g, but both tools live in ntfsprogs, so following the hint left them still missing. It now says `sudo pacman -S ntfsprogs` and notes that SteamOS needs `steamos-readonly disable` first
+- "Fix Disk Write Errors" now calls ntfsfix with -d (clear the dirty flag), so the flag does not survive the repair and make ntfs3 refuse the mount again
+- The shared disk feature now pre-checks each volume with ntfs-3g.probe: if it can be mounted read-write it mounts normally, and if not the reason and remedy are explained up front instead of after discovering a read-only mount
+
+2026-11-07 (v2.0.3)
 [Bug fixes]
 - Fixed "clicking a feature does nothing": when a GTK callback raised, the traceback only went to the terminal, which is invisible when launched from a desktop shortcut — so clicks appeared to do nothing. Any uncaught exception now shows "This action failed and was skipped" and writes the full traceback to ~/.cache/steamdeck_toolbox_error.log; send that file with any bug report
 - Fixed the "install vte3?" prompt swallowing every click on the main window when VTE is missing: that dialog was modal with no parent window, so on some desktops it landed behind the main window — the toolbox window was there but nothing responded. It is now non-modal and always kept on top, so the main window stays usable even if the dialog ends up behind it
@@ -3222,8 +3253,22 @@ fix_single_ntfs() {
         echo "  分区当前挂载于 $mountpoint，正在卸载..."
         if sudo umount "$device" 2>/dev/null || sudo umount -f "$device" 2>/dev/null; then echo -e "${GREEN}  ✓ 卸载成功${NC}"; else echo -e "${RED}  ✗ 卸载失败，无法继续修复${NC}"; return 1; fi
     fi
-    echo "  正在运行 ntfsfix ..."
-    if sudo ntfsfix "$device" 2>/dev/null; then echo -e "${GREEN}  ✓ 修复成功${NC}"; else echo -e "${RED}  ✗ 修复失败，请检查 dmesg 输出${NC}"; sudo dmesg | grep -i ntfs | tail -5; fi
+    echo "  正在运行 ntfsfix -d（修复常见错误并清除 dirty 脏标志）..."
+    local _dmark _mlog
+    _dmark="$(sudo dmesg 2>/dev/null | wc -l)"
+    # -d/--clear-dirty：能修复且能挂载时清除卷上的 dirty 标志。
+    # 不带 -d 时 ntfsfix 只做基础修复，脏标志可能残留，ntfs3 依旧拒挂。
+    if sudo ntfsfix -d "$device" 2>/dev/null; then
+        echo -e "${GREEN}  ✓ 修复成功（已尝试清除 dirty 标志）${NC}"
+    else
+        echo -e "${RED}  ✗ 修复失败${NC}"
+        _mlog="$(sudo dmesg 2>/dev/null | tail -n "+$(( _dmark + 1 ))")"
+        if [ -n "$_mlog" ]; then
+            echo "  本次操作的 dmesg 输出："
+            echo "$_mlog" | grep -iE 'ntfs|volume' | tail -8 | sed 's/^/    /'
+        fi
+        echo "  若提示卷损坏严重，请进 Windows 运行 chkdsk /f 后再试。"
+    fi
     if [ -n "$mountpoint" ] && [ -d "$mountpoint" ]; then
         echo "  尝试重新挂载到 $mountpoint ..."
         if sudo mount "$device" "$mountpoint" 2>/dev/null; then echo -e "${GREEN}  ✓ 重新挂载成功${NC}"; else echo -e "${YELLOW}  ⚠️ 自动挂载失败，请稍后手动挂载${NC}"; fi
@@ -3307,12 +3352,13 @@ fix_disk_write_error() {
     # ------------------------------------------------------------------
     # 确认存在 NTFS 分区后，才需要 root 权限
     # ------------------------------------------------------------------
-    if ! command -v ntfsfix &> /dev/null; then
+    if ! command -v ntfsfix &> /dev/null || ! command -v ntfsinfo &> /dev/null; then
         echo ""
-        echo -e "${RED}错误: 未安装 ntfsfix 工具。${NC}"
-        echo "请安装 ntfs-3g 包："
-        echo "  sudo pacman -S ntfs-3g   (Arch/SteamOS)"
-        echo "  sudo apt install ntfs-3g (Debian/Ubuntu)"
+        echo -e "${RED}错误: 未安装 ntfsfix / ntfsinfo 工具。${NC}"
+        echo "这两个工具属于 ntfsprogs 包（注意：不在 ntfs-3g 包里）："
+        echo "  sudo steamos-readonly disable"
+        echo "  sudo pacman -S ntfsprogs         (Arch/SteamOS)"
+        echo "  sudo apt install ntfsprogs       (Debian/Ubuntu)"
         return 1
     fi
 
@@ -3830,6 +3876,128 @@ fstab_remove_entry() {
     sudo cp "$tmp" /etc/fstab && rm -f "$tmp"
 }
 
+# 生成 NTFS 挂载/fstab 选项。
+# 原来的实现把 uid=1000,gid=1000 写死，用户名不是 deck、或 UID 不是 1000 的设备
+# 挂载后会变成「挂上了但普通用户读写不了」，这里统一改成取当前实际用户。
+ntfs_mount_opts() {
+    local u g
+    u="$(id -u 2>/dev/null)"; g="$(id -g 2>/dev/null)"
+    [ -z "$u" ] && u=1000
+    [ -z "$g" ] && g=1000
+    printf 'rw,exec,uid=%s,gid=%s,windows_names,nofail' "$u" "$g"
+}
+
+# 判断某个挂载点当前是否只读。
+# ntfs-3g(FUSE) 遇到脏卷/休眠卷时不会报错，而是静默降级成 ro 挂载，
+# 只看 mount 命令返回值和 systemd 日志会误以为读写挂载成功，因此必须回查实际选项。
+ntfs_mountpoint_is_ro() {
+    local mp="$1" opts
+    [ -z "$mp" ] && return 1
+    opts="$(findmnt -n -o OPTIONS -M "$mp" 2>/dev/null | head -1)"
+    [ -z "$opts" ] && return 1
+    case ",$opts," in
+        *,ro,*) return 0 ;;
+    esac
+    return 1
+}
+
+# dmesg 行数基线：用于只提取「本次操作新产生」的内核日志。
+# 原来直接 dmesg | grep -i ntfs | tail -5，会把陈年旧日志当成这次的错误，把人带偏。
+dmesg_line_count() {
+    sudo dmesg 2>/dev/null | wc -l
+}
+
+dmesg_since() {
+    local mark="${1:-0}"
+    case "$mark" in ''|*[!0-9]*) mark=0 ;; esac
+    # 基线为 0 说明基线没取到（不是「dmesg 是空的」），此时宁可什么都不输出，
+    # 也不要把整份 dmesg 当成「本次操作」的日志拿去做诊断。
+    [ "$mark" -gt 0 ] || return 0
+    sudo dmesg 2>/dev/null | tail -n "+$(( mark + 1 ))"
+}
+
+# 挂载失败时，根据本次新增的内核日志给出可操作的处理步骤
+ntfs_explain_failure() {
+    local dev="$1" mp="$2" log="$3"
+    local hit=0
+    if echo "$log" | grep -qiE 'volume is dirty|"force" flag is not set'; then
+        hit=1
+        echo -e "${YELLOW}    诊断：卷上带有 NTFS 脏标志(dirty)，内核 ntfs3 驱动据此拒绝挂载。${NC}"
+    elif echo "$log" | grep -qiE 'hibernat'; then
+        hit=1
+        echo -e "${YELLOW}    诊断：Windows 处于休眠/快速启动状态，卷被标记为不可安全写入。${NC}"
+    elif echo "$log" | grep -qiE 'unclean|not clean|chkdsk'; then
+        hit=1
+        echo -e "${YELLOW}    诊断：文件系统处于未干净卸载状态，需要先修复再挂载。${NC}"
+    fi
+    if [ $hit -eq 1 ]; then
+        echo -e "${CYAN}    按顺序尝试：${NC}"
+        echo "      a) 进 Windows 关闭「快速启动」后选择「关机」，再回到 SteamOS 重试（最干净）"
+        echo "      b) 在本机清除标志："
+        echo "           sudo steamos-readonly disable"
+        echo "           sudo pacman -S ntfsprogs"
+        echo "           sudo umount $dev 2>/dev/null; sudo ntfsfix -d $dev"
+        echo "         然后重新运行本功能"
+        echo "      c) 应急只读挂载先取数据：sudo mount -o ro $dev $mp"
+        echo "      d) 应急读写（不清标志，有损坏元数据风险）："
+        echo "           sudo mount -t ntfs3 -o force,uid=$(id -u),gid=$(id -g) $dev $mp"
+    else
+        echo -e "${CYAN}    常见原因：${NC}"
+        echo "      a) 卷有 dirty/休眠标志 → 进 Windows 关闭快速启动并完整关机，"
+        echo "         或安装 ntfsprogs 后用 sudo ntfsfix -d $dev 清理"
+        echo "      b) 该分区是 Windows 恢复分区 → 本功能已自动跳过，不需要挂载"
+        echo "      c) 设备被占用 → 先 sudo umount $dev 再重试"
+        echo "      d) fstab 或挂载点异常 → 检查 /etc/fstab 与 $mp 的属主权限"
+    fi
+}
+
+# 挂载前预检：ntfs-3g.probe 随 ntfs-3g 包一起提供，不需要 ntfsprogs。
+# 它能提前判断「这个卷能不能以读写方式挂载」，从而在真正 mount 之前就给出
+# 明确提示，而不是等挂载后才发现是只读。
+# 返回 0=可读写挂载；1=只能只读/需要修复；2=无法判断（工具缺失或设备忙）
+ntfs_probe_writable() {
+    local dev="$1" probe out rc
+    for probe in /usr/bin/ntfs-3g.probe /bin/ntfs-3g.probe /usr/sbin/ntfs-3g.probe; do
+        [ -x "$probe" ] || continue
+        out="$(sudo "$probe" --readwrite "$dev" 2>&1)"
+        rc=$?
+        if [ $rc -eq 0 ]; then
+            return 0
+        fi
+        # 只有真正匹配到脏卷/休眠/未干净卸载的症状才算「不能读写挂载」，
+        # 其余失败（权限、设备忙、工具行为变化等）一律按「无法判断」处理，
+        # 避免给出错误的预检警告。
+        if echo "$out" | grep -qiE 'dirty|hibernat|unclean|not clean|chkdsk|refus'; then
+            return 1
+        fi
+        return 2
+    done
+    return 2
+}
+
+# 挂载成功但被降级为只读时的说明
+ntfs_explain_readonly() {
+    local dev="$1" mp="$2"
+    echo -e "${YELLOW}    原因：该卷带有 NTFS 脏标志(dirty) 或处于休眠状态，Linux 的 NTFS 驱动只肯以只读方式挂载。${NC}"
+    echo "    最常见来源：Windows 的「快速启动」或「休眠」导致系统没有真正关机。"
+    echo ""
+    echo -e "${CYAN}    彻底解决（推荐）：${NC}"
+    echo "      1) 进入 Windows → 设置 → 系统 → 电源 → 选择电源按钮的功能"
+    echo "         → 更改当前不可用的设置 → 取消勾选「启用快速启动」→ 保存修改"
+    echo "      2) 在 Windows 里选择「关机」（不要用「重启」，重启不会清除脏标志）"
+    echo "      3) 回到 SteamOS 重新运行本功能"
+    echo ""
+    echo -e "${CYAN}    不想进 Windows 时，可在 SteamOS 里清除脏标志：${NC}"
+    echo "      sudo steamos-readonly disable"
+    echo "      sudo pacman -S ntfsprogs          # 注意：ntfsfix 不在 ntfs-3g 包里"
+    echo "      sudo umount $dev 2>/dev/null; sudo ntfsfix -d $dev"
+    echo "      sudo mount $mp"
+    echo ""
+    echo -e "${CYAN}    仅应急（不清标志，强行读写，有损坏元数据的风险）：${NC}"
+    echo "      sudo umount $dev 2>/dev/null"
+    echo "      sudo mount -t ntfs3 -o force,uid=$(id -u),gid=$(id -g) $dev $mp"
+}
+
 fix_shared_disk() {
     mk_temp_dir
     clear
@@ -3887,6 +4055,8 @@ fix_shared_disk() {
     # 这里改为：只有当「已挂载 且 fstab 中已有对应条目 且 挂载点一致」才算真正就绪。
     local all_ready=true
     local fail_count=0
+    # 已挂载但被降级为只读的分区（脏卷/休眠卷时 ntfs-3g 会静默挂成 ro）
+    local ro_mounts=()
 
     echo "  清理无效的 fstab 条目..."
     local bad_entries=()
@@ -3959,7 +4129,12 @@ fix_shared_disk() {
         if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint" 2>/dev/null; then
             # 已挂载，还要确认 fstab 里有精确匹配该 UUID 的条目（子串匹配会误判，用锚定正则）
             if [ -n "$uuid" ] && grep -qE "^[[:space:]]*UUID=${uuid}[[:space:]]" /etc/fstab 2>/dev/null; then
-                :
+                # 挂载了、fstab 也有，但还要确认不是「被降级成只读」的假成功：
+                # 脏卷时 ntfs-3g 会以 ro 挂上且不报错，这种情况绝不能宣称「全部就绪」。
+                if ntfs_mountpoint_is_ro "$mountpoint"; then
+                    all_ready=false
+                    ro_mounts+=("$mountpoint")
+                fi
             else
                 all_ready=false
             fi
@@ -4077,6 +4252,19 @@ fix_shared_disk() {
         return
     fi
 
+    # 分区虽然挂上了，但被降级成只读：这种情况必须继续往下走，尝试重新以读写挂载，
+    # 不能像以前那样直接宣称「全部就绪」把用户打发走。
+    if [ ${#ro_mounts[@]} -gt 0 ]; then
+        echo -e "${YELLOW}⚠️  检测到 ${#ro_mounts[@]} 个分区当前是「只读」挂载：${NC}"
+        local _ro_mp
+        for _ro_mp in "${ro_mounts[@]}"; do
+            echo "    $_ro_mp"
+        done
+        echo "  只读挂载说明卷上带有 NTFS 脏标志或处于休眠状态，即使 fstab 正确也写不进文件。"
+        echo "  下面会先尝试重新以读写方式挂载；若仍为只读，会给出具体处理步骤。"
+        echo ""
+    fi
+
     echo "步骤5: 开始挂载并写入 fstab..."
     for ((i=0; i<part_count; i++)); do
         device="${part_devices[$i]}"
@@ -4129,7 +4317,7 @@ fix_shared_disk() {
                 mkdir -p "$(dirname "$_tmp")" 2>/dev/null
                 {
                     awk -v k="UUID=$uuid" '$1 != k' /etc/fstab 2>/dev/null
-                    printf '%s\n' "UUID=$uuid $mount_point ntfs-3g rw,exec,uid=1000,gid=1000,windows_names,nofail 0 0"
+                    printf '%s\n' "UUID=$uuid $mount_point ntfs-3g $(ntfs_mount_opts) 0 0"
                 } > "$_tmp" 2>/dev/null && chmod 644 "$_tmp" 2>/dev/null \
                     && sudo cp "$_tmp" /etc/fstab && rm -f "$_tmp" \
                     && echo "  已更新 fstab 挂载点 → $mount_point" \
@@ -4146,7 +4334,7 @@ fix_shared_disk() {
                 mkdir -p "$(dirname "$_tmp2")" 2>/dev/null
                 {
                     cat /etc/fstab 2>/dev/null
-                    printf '%s\n' "UUID=$uuid $mount_point ntfs-3g rw,exec,uid=1000,gid=1000,windows_names,nofail 0 0"
+                    printf '%s\n' "UUID=$uuid $mount_point ntfs-3g $(ntfs_mount_opts) 0 0"
                 } > "$_tmp2" 2>/dev/null && chmod 644 "$_tmp2" 2>/dev/null \
                     && sudo cp "$_tmp2" /etc/fstab && rm -f "$_tmp2" \
                     && echo "  已添加 fstab 条目。" \
@@ -4155,15 +4343,68 @@ fix_shared_disk() {
         fi
 
         if mountpoint -q "$mount_point" 2>/dev/null; then
-            echo "  分区已挂载到 $mount_point"
+            if ntfs_mountpoint_is_ro "$mount_point"; then
+                # ntfs-3g 是 FUSE 挂载，只读/读写是在挂载那一刻定下的，
+                # `mount -o remount,rw` 对 FUSE 无效。要真正有机会转成读写，
+                # 只能先卸载再按 fstab 重新挂载，这里就这么做。
+                echo -e "${YELLOW}  分区已挂载到 $mount_point，但当前是只读模式，正在重新挂载...${NC}"
+                if sudo umount "$device" 2>/dev/null; then
+                    if sudo mount "$mount_point" 2>/dev/null; then :; else
+                        [ -n "$uuid" ] && sudo mount -U "$uuid" "$mount_point" 2>/dev/null
+                    fi
+                else
+                    echo "  （分区正被占用，无法卸载，跳过重新挂载）"
+                fi
+                if ! mountpoint -q "$mount_point" 2>/dev/null; then
+                    # 卸载成功但重新挂载失败：此时分区根本没挂上，
+                    # 绝不能因为「不是只读」就报成功（那正是本功能要消灭的假成功）。
+                    echo -e "${RED}  ✗ 重新挂载失败，分区当前未挂载。${NC}"
+                    # 原来至少还是只读可访问，别让用户比修复前更糟：
+                    # 退回只读挂载，先保证能读到数据。
+                    if sudo mount -o ro "$device" "$mount_point" 2>/dev/null; then
+                        echo -e "${YELLOW}    已回退为只读挂载，至少可以读取其中的文件。${NC}"
+                    else
+                        echo "    回退只读挂载也失败了，请重新运行本功能或手动挂载。"
+                    fi
+                    ((fail_count++))
+                elif ntfs_mountpoint_is_ro "$mount_point"; then
+                    echo -e "${YELLOW}  ✗ 仍为只读挂载，无法写入文件。${NC}"
+                    ntfs_explain_readonly "$device" "$mount_point"
+                    ((fail_count++))
+                else
+                    echo -e "${GREEN}  ✓ 已切换为读写挂载：$mount_point${NC}"
+                fi
+            else
+                echo "  分区已挂载到 $mount_point"
+            fi
         else
+            # 记录 dmesg 基线，只取本次挂载新产生的内核日志，
+            # 避免把开机以来累积的旧 NTFS 报错当成本次错误。
+            local _dmark _mlog
+            _dmark="$(dmesg_line_count)"
+            # 挂载前预检：能提前发现「挂上也只会是只读」的情况，先把原因讲清楚
+            local _prc=0
+            ntfs_probe_writable "$device" || _prc=$?
+            if [ "$_prc" -eq 1 ]; then
+                echo -e "${YELLOW}  预检提示：该卷当前不允许读写挂载（脏标志/休眠/未干净卸载）。${NC}"
+            fi
             if sudo systemctl daemon-reload 2>/dev/null; then :; fi
             if sudo mount "$mount_point" 2>/dev/null || sudo mount -U "$uuid" "$mount_point" 2>/dev/null; then
-                echo -e "${GREEN}  ✓ 挂载成功到 $mount_point${NC}"
+                if ntfs_mountpoint_is_ro "$mount_point"; then
+                    echo -e "${YELLOW}  ⚠️  已挂载到 $mount_point，但被系统降级为「只读」${NC}"
+                    ntfs_explain_readonly "$device" "$mount_point"
+                    ((fail_count++))
+                else
+                    echo -e "${GREEN}  ✓ 挂载成功到 $mount_point（读写）${NC}"
+                fi
             else
-                echo -e "${RED}  ✗ 挂载失败，请检查 dmesg 输出。${NC}"
-                echo "  最近的 dmesg NTFS 相关错误："
-                sudo dmesg 2>/dev/null | grep -i ntfs | tail -5
+                _mlog="$(dmesg_since "$_dmark")"
+                echo -e "${RED}  ✗ 挂载失败。${NC}"
+                if [ -n "$_mlog" ]; then
+                    echo "  本次操作期间的 dmesg 输出："
+                    echo "$_mlog" | grep -iE 'ntfs|fuseblk' | tail -8 | sed 's/^/    /'
+                fi
+                ntfs_explain_failure "$device" "$mount_point" "$_mlog"
                 ((fail_count++))
             fi
         fi
@@ -8513,8 +8754,22 @@ fix_single_ntfs() {
         echo "  Partition is currently mounted at $mountpoint, unmounting..."
         if sudo umount "$device" 2>/dev/null || sudo umount -f "$device" 2>/dev/null; then echo -e "${GREEN}  ✓ Unmounted${NC}"; else echo -e "${RED}  ✗ Unmount failed, cannot continue the repair${NC}"; return 1; fi
     fi
-    echo "  Running ntfsfix ..."
-    if sudo ntfsfix "$device" 2>/dev/null; then echo -e "${GREEN}  ✓ Repair succeeded${NC}"; else echo -e "${RED}  ✗ Repair failed, please check the dmesg output${NC}"; sudo dmesg | grep -i ntfs | tail -5; fi
+    echo "  Running ntfsfix -d (repairs common errors and clears the dirty flag)..."
+    local _dmark _mlog
+    _dmark="$(sudo dmesg 2>/dev/null | wc -l)"
+    # -d/--clear-dirty: clear the volume dirty flag when the volume can be fixed and mounted.
+    # Without -d ntfsfix only does the basic repair and the dirty flag can remain, so ntfs3 still refuses to mount.
+    if sudo ntfsfix -d "$device" 2>/dev/null; then
+        echo -e "${GREEN}  ✓ Repair succeeded (dirty flag cleared where possible)${NC}"
+    else
+        echo -e "${RED}  ✗ Repair failed${NC}"
+        _mlog="$(sudo dmesg 2>/dev/null | tail -n "+$(( _dmark + 1 ))")"
+        if [ -n "$_mlog" ]; then
+            echo "  dmesg output from this operation:"
+            echo "$_mlog" | grep -iE 'ntfs|volume' | tail -8 | sed 's/^/    /'
+        fi
+        echo "  If it reports severe corruption, run chkdsk /f in Windows and try again."
+    fi
     if [ -n "$mountpoint" ] && [ -d "$mountpoint" ]; then
         echo "  Trying to remount at $mountpoint ..."
         if sudo mount "$device" "$mountpoint" 2>/dev/null; then echo -e "${GREEN}  ✓ Remounted successfully${NC}"; else echo -e "${YELLOW}  ⚠️ Automatic mount failed, please mount manually later${NC}"; fi
@@ -8598,12 +8853,13 @@ fix_disk_write_error() {
     # ------------------------------------------------------------------
     # Only after confirming an NTFS partition exists is root access needed
     # ------------------------------------------------------------------
-    if ! command -v ntfsfix &> /dev/null; then
+    if ! command -v ntfsfix &> /dev/null || ! command -v ntfsinfo &> /dev/null; then
         echo ""
-        echo -e "${RED}Error: ntfsfix is not installed.${NC}"
-        echo "Please install the ntfs-3g package:"
-        echo "  sudo pacman -S ntfs-3g   (Arch/SteamOS)"
-        echo "  sudo apt install ntfs-3g (Debian/Ubuntu)"
+        echo -e "${RED}Error: ntfsfix / ntfsinfo is not installed.${NC}"
+        echo "Both live in the ntfsprogs package (note: NOT in the ntfs-3g package):"
+        echo "  sudo steamos-readonly disable"
+        echo "  sudo pacman -S ntfsprogs         (Arch/SteamOS)"
+        echo "  sudo apt install ntfsprogs       (Debian/Ubuntu)"
         return 1
     fi
 
@@ -9121,6 +9377,132 @@ fstab_remove_entry() {
     sudo cp "$tmp" /etc/fstab && rm -f "$tmp"
 }
 
+# Build the NTFS mount / fstab options.
+# The old code hardcoded uid=1000,gid=1000; on a machine whose user is not deck or whose
+# UID is not 1000 the partition mounts but ordinary users cannot write to it, so derive
+# the ids from the current user instead.
+ntfs_mount_opts() {
+    local u g
+    u="$(id -u 2>/dev/null)"; g="$(id -g 2>/dev/null)"
+    [ -z "$u" ] && u=1000
+    [ -z "$g" ] && g=1000
+    printf 'rw,exec,uid=%s,gid=%s,windows_names,nofail' "$u" "$g"
+}
+
+# Is the given mountpoint currently read-only?
+# ntfs-3g(FUSE) does not fail on a dirty/hibernated volume: it silently downgrades the
+# mount to read-only. Checking only the mount exit code and the systemd journal therefore
+# reports success for a volume you cannot actually write to, so re-read the real options.
+ntfs_mountpoint_is_ro() {
+    local mp="$1" opts
+    [ -z "$mp" ] && return 1
+    opts="$(findmnt -n -o OPTIONS -M "$mp" 2>/dev/null | head -1)"
+    [ -z "$opts" ] && return 1
+    case ",$opts," in
+        *,ro,*) return 0 ;;
+    esac
+    return 1
+}
+
+# dmesg line-count baseline: used to extract only the kernel messages produced by THIS
+# operation. The old code ran `dmesg | grep -i ntfs | tail -5`, which surfaced months-old
+# errors from boot and pointed troubleshooting at the wrong thing.
+dmesg_line_count() {
+    sudo dmesg 2>/dev/null | wc -l
+}
+
+dmesg_since() {
+    local mark="${1:-0}"
+    case "$mark" in ''|*[!0-9]*) mark=0 ;; esac
+    # A baseline of 0 means it could not be read (not that dmesg is empty).
+    # Print nothing then, instead of feeding the whole log to the diagnosis
+    # as if it were this operation's output.
+    [ "$mark" -gt 0 ] || return 0
+    sudo dmesg 2>/dev/null | tail -n "+$(( mark + 1 ))"
+}
+
+# Turn a failed mount into actionable steps, based on this operation's kernel log
+ntfs_explain_failure() {
+    local dev="$1" mp="$2" log="$3"
+    local hit=0
+    if echo "$log" | grep -qiE 'volume is dirty|"force" flag is not set'; then
+        hit=1
+        echo -e "${YELLOW}    Diagnosis: the volume carries the NTFS dirty flag, so the in-kernel ntfs3 driver refuses to mount it.${NC}"
+    elif echo "$log" | grep -qiE 'hibernat'; then
+        hit=1
+        echo -e "${YELLOW}    Diagnosis: Windows is hibernated or Fast Startup is on, so the volume is not marked safe to write.${NC}"
+    elif echo "$log" | grep -qiE 'unclean|not clean|chkdsk'; then
+        hit=1
+        echo -e "${YELLOW}    Diagnosis: the filesystem was not cleanly unmounted and must be repaired before mounting.${NC}"
+    fi
+    if [ $hit -eq 1 ]; then
+        echo -e "${CYAN}    Try these in order:${NC}"
+        echo "      a) Boot Windows, turn off Fast Startup, choose Shut down, then come back and retry (cleanest)"
+        echo "      b) Clear the flag on this machine:"
+        echo "           sudo steamos-readonly disable"
+        echo "           sudo pacman -S ntfsprogs"
+        echo "           sudo umount $dev 2>/dev/null; sudo ntfsfix -d $dev"
+        echo "         then run this feature again"
+        echo "      c) Mount read-only for now, just to get at your data: sudo mount -o ro $dev $mp"
+        echo "      d) Emergency read-write (flag not cleared, risks corrupting metadata):"
+        echo "           sudo mount -t ntfs3 -o force,uid=$(id -u),gid=$(id -g) $dev $mp"
+    else
+        echo -e "${CYAN}    Common causes:${NC}"
+        echo "      a) dirty/hibernated flag on the volume -> turn off Fast Startup in Windows and shut"
+        echo "         down completely, or install ntfsprogs and run: sudo ntfsfix -d $dev"
+        echo "      b) this is a Windows recovery partition -> this feature already skips those"
+        echo "      c) the device is busy -> run sudo umount $dev first, then retry"
+        echo "      d) bad fstab entry or mountpoint -> check /etc/fstab and the owner of $mp"
+    fi
+}
+
+# Pre-mount check: ntfs-3g.probe ships with the ntfs-3g package, so ntfsprogs is not needed.
+# It tells us up front whether the volume can be mounted read-write, so the reason can be
+# explained before the mount instead of only after discovering a read-only mount.
+# Returns 0=read-write mount possible; 1=read-only/repair needed; 2=cannot tell (tool missing or device busy)
+ntfs_probe_writable() {
+    local dev="$1" probe out rc
+    for probe in /usr/bin/ntfs-3g.probe /bin/ntfs-3g.probe /usr/sbin/ntfs-3g.probe; do
+        [ -x "$probe" ] || continue
+        out="$(sudo "$probe" --readwrite "$dev" 2>&1)"
+        rc=$?
+        if [ $rc -eq 0 ]; then
+            return 0
+        fi
+        # Only a genuine dirty / hibernated / unclean symptom counts as "cannot mount read-write";
+        # every other failure (permissions, busy device, changed tool behaviour) is reported as
+        # "cannot tell", so the pre-check never raises a wrong warning.
+        if echo "$out" | grep -qiE 'dirty|hibernat|unclean|not clean|chkdsk|refus'; then
+            return 1
+        fi
+        return 2
+    done
+    return 2
+}
+
+# Explanation for a mount that succeeded but was downgraded to read-only
+ntfs_explain_readonly() {
+    local dev="$1" mp="$2"
+    echo -e "${YELLOW}    Reason: this volume carries the NTFS dirty flag or is hibernated, and the Linux NTFS driver only agrees to mount it read-only.${NC}"
+    echo "    The usual source is Windows Fast Startup or Hibernation: the system never really shut down."
+    echo ""
+    echo -e "${CYAN}    Proper fix (recommended):${NC}"
+    echo "      1) Boot Windows -> Settings -> System -> Power -> Choose what the power buttons do"
+    echo "         -> Change settings that are currently unavailable -> untick 'Turn on fast startup' -> save"
+    echo "      2) In Windows choose Shut down (do not use Restart; restarting does not clear the dirty flag)"
+    echo "      3) Come back to SteamOS and run this feature again"
+    echo ""
+    echo -e "${CYAN}    Without booting Windows you can clear the dirty flag inside SteamOS:${NC}"
+    echo "      sudo steamos-readonly disable"
+    echo "      sudo pacman -S ntfsprogs          # note: ntfsfix is NOT in the ntfs-3g package"
+    echo "      sudo umount $dev 2>/dev/null; sudo ntfsfix -d $dev"
+    echo "      sudo mount $mp"
+    echo ""
+    echo -e "${CYAN}    Emergency only (flag not cleared, forced read-write, may corrupt metadata):${NC}"
+    echo "      sudo umount $dev 2>/dev/null"
+    echo "      sudo mount -t ntfs3 -o force,uid=$(id -u),gid=$(id -g) $dev $mp"
+}
+
 fix_shared_disk() {
     mk_temp_dir
     clear
@@ -9178,6 +9560,8 @@ fix_shared_disk() {
     # Changed to: only "mounted AND an entry exists in fstab AND the mount point matches" counts as really ready.
     local all_ready=true
     local fail_count=0
+    # Partitions that are mounted but downgraded to read-only (ntfs-3g mounts dirty/hibernated volumes as ro)
+    local ro_mounts=()
 
     echo "  Cleaning up invalid fstab entries..."
     local bad_entries=()
@@ -9250,7 +9634,13 @@ fix_shared_disk() {
         if [ -n "$mountpoint" ] && [ "$mountpoint" != "None" ] && mountpoint -q "$mountpoint" 2>/dev/null; then
             # If mounted, also confirm fstab has an entry matching this UUID exactly (substring matching misjudges; use anchored regex)
             if [ -n "$uuid" ] && grep -qE "^[[:space:]]*UUID=${uuid}[[:space:]]" /etc/fstab 2>/dev/null; then
-                :
+                # Mounted and in fstab, but also verify this is not a false success at read-only:
+                # on a dirty volume ntfs-3g mounts ro without any error, and such a volume must never be
+                # reported as "everything is ready".
+                if ntfs_mountpoint_is_ro "$mountpoint"; then
+                    all_ready=false
+                    ro_mounts+=("$mountpoint")
+                fi
             else
                 all_ready=false
             fi
@@ -9368,6 +9758,20 @@ fix_shared_disk() {
         return
     fi
 
+    # The partitions are mounted but downgraded to read-only: keep going and try to remount them
+    # read-write instead of dismissing the user with "everything is ready" as the old code did.
+    if [ ${#ro_mounts[@]} -gt 0 ]; then
+        echo -e "${YELLOW}⚠️  ${#ro_mounts[@]} partition(s) are currently mounted READ-ONLY:${NC}"
+        local _ro_mp
+        for _ro_mp in "${ro_mounts[@]}"; do
+            echo "    $_ro_mp"
+        done
+        echo "  A read-only mount means the volume carries the NTFS dirty flag or is hibernated;"
+        echo "  even with a correct fstab entry you cannot write any files."
+        echo "  We will try to remount it read-write below; if it stays read-only you will get the exact steps."
+        echo ""
+    fi
+
     echo "Step 5: Mounting and writing to fstab..."
     for ((i=0; i<part_count; i++)); do
         device="${part_devices[$i]}"
@@ -9420,7 +9824,7 @@ fix_shared_disk() {
                 mkdir -p "$(dirname "$_tmp")" 2>/dev/null
                 {
                     awk -v k="UUID=$uuid" '$1 != k' /etc/fstab 2>/dev/null
-                    printf '%s\n' "UUID=$uuid $mount_point ntfs-3g rw,exec,uid=1000,gid=1000,windows_names,nofail 0 0"
+                    printf '%s\n' "UUID=$uuid $mount_point ntfs-3g $(ntfs_mount_opts) 0 0"
                 } > "$_tmp" 2>/dev/null && chmod 644 "$_tmp" 2>/dev/null \
                     && sudo cp "$_tmp" /etc/fstab && rm -f "$_tmp" \
                     && echo "  Updated the fstab mount point -> $mount_point" \
@@ -9437,7 +9841,7 @@ fix_shared_disk() {
                 mkdir -p "$(dirname "$_tmp2")" 2>/dev/null
                 {
                     cat /etc/fstab 2>/dev/null
-                    printf '%s\n' "UUID=$uuid $mount_point ntfs-3g rw,exec,uid=1000,gid=1000,windows_names,nofail 0 0"
+                    printf '%s\n' "UUID=$uuid $mount_point ntfs-3g $(ntfs_mount_opts) 0 0"
                 } > "$_tmp2" 2>/dev/null && chmod 644 "$_tmp2" 2>/dev/null \
                     && sudo cp "$_tmp2" /etc/fstab && rm -f "$_tmp2" \
                     && echo "  fstab entry added." \
@@ -9446,15 +9850,68 @@ fix_shared_disk() {
         fi
 
         if mountpoint -q "$mount_point" 2>/dev/null; then
-            echo "  Partition mounted at $mount_point"
+            if ntfs_mountpoint_is_ro "$mount_point"; then
+                # ntfs-3g is a FUSE mount: read-only vs read-write is fixed at mount time, so
+                # `mount -o remount,rw` has no effect on it. The only real chance of switching is
+                # to unmount and mount again via fstab, which is what we do here.
+                echo -e "${YELLOW}  Partition mounted at $mount_point, but read-only; remounting...${NC}"
+                if sudo umount "$device" 2>/dev/null; then
+                    if sudo mount "$mount_point" 2>/dev/null; then :; else
+                        [ -n "$uuid" ] && sudo mount -U "$uuid" "$mount_point" 2>/dev/null
+                    fi
+                else
+                    echo "  (partition is in use and cannot be unmounted; skipping the remount)"
+                fi
+                if ! mountpoint -q "$mount_point" 2>/dev/null; then
+                    # The unmount succeeded but the remount did not: the partition is not mounted at all,
+                    # so it must never be reported as a success just because it is "not read-only".
+                    echo -e "${RED}  ✗ Remount failed; the partition is currently not mounted.${NC}"
+                    # It was at least readable before, do not leave the user worse off than before the
+                    # repair: fall back to a read-only mount so the files stay accessible.
+                    if sudo mount -o ro "$device" "$mount_point" 2>/dev/null; then
+                        echo -e "${YELLOW}    Fell back to a read-only mount, so the files can still be read.${NC}"
+                    else
+                        echo "    The read-only fallback failed too; run this feature again or mount it manually."
+                    fi
+                    ((fail_count++))
+                elif ntfs_mountpoint_is_ro "$mount_point"; then
+                    echo -e "${YELLOW}  ✗ Still read-only, files cannot be written.${NC}"
+                    ntfs_explain_readonly "$device" "$mount_point"
+                    ((fail_count++))
+                else
+                    echo -e "${GREEN}  ✓ Remounted read-write: $mount_point${NC}"
+                fi
+            else
+                echo "  Partition mounted at $mount_point"
+            fi
         else
+            # Record a dmesg baseline so only the messages produced by THIS mount are shown,
+            # instead of surfacing every NTFS error accumulated since boot.
+            local _dmark _mlog
+            _dmark="$(dmesg_line_count)"
+            # Pre-mount check: catch "it will only mount read-only" before it happens and explain why
+            local _prc=0
+            ntfs_probe_writable "$device" || _prc=$?
+            if [ "$_prc" -eq 1 ]; then
+                echo -e "${YELLOW}  Pre-check: this volume does not currently allow a read-write mount (dirty flag / hibernated / not cleanly unmounted).${NC}"
+            fi
             if sudo systemctl daemon-reload 2>/dev/null; then :; fi
             if sudo mount "$mount_point" 2>/dev/null || sudo mount -U "$uuid" "$mount_point" 2>/dev/null; then
-                echo -e "${GREEN}  ✓ Mounted successfully at $mount_point${NC}"
+                if ntfs_mountpoint_is_ro "$mount_point"; then
+                    echo -e "${YELLOW}  ⚠️  Mounted at $mount_point, but the system downgraded it to READ-ONLY${NC}"
+                    ntfs_explain_readonly "$device" "$mount_point"
+                    ((fail_count++))
+                else
+                    echo -e "${GREEN}  ✓ Mounted successfully at $mount_point (read-write)${NC}"
+                fi
             else
-                echo -e "${RED}  ✗ Mount failed, please check the dmesg output.${NC}"
-                echo "  Recent NTFS-related dmesg errors:"
-                sudo dmesg 2>/dev/null | grep -i ntfs | tail -5
+                _mlog="$(dmesg_since "$_dmark")"
+                echo -e "${RED}  ✗ Mount failed.${NC}"
+                if [ -n "$_mlog" ]; then
+                    echo "  dmesg output during this operation:"
+                    echo "$_mlog" | grep -iE 'ntfs|fuseblk' | tail -8 | sed 's/^/    /'
+                fi
+                ntfs_explain_failure "$device" "$mount_point" "$_mlog"
                 ((fail_count++))
             fi
         fi

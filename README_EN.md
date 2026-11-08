@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v2.0.3** | Updated: 2026-11-07
+> **Version: v2.0.4** | Updated: 2026-11-08
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -26,6 +26,16 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - Open the toolbox; it checks for updates on startup (built-in self-update)
 
 ## 📝 Changelog
+
+2026-11-08 (v2.0.4)
+[Bug fixes: shared disk mounting]
+- Fixed a "false success" on dirty volumes: when a volume carries the NTFS dirty flag or Windows is hibernated / using Fast Startup, the Linux NTFS driver does not fail -- it quietly mounts the partition read-only. The old code only checked the mount command's exit code, so it reported "✓ Mounted successfully" for a volume where not a single file could be written. It now re-reads the actual mount options and, when read-only, says so plainly and gives the steps that really fix it
+- Fixed "Fix Shared Disk" claiming "all partitions are mounted, no action needed" when a partition was mounted read-only: that message made dirty-volume users think everything was fine. A read-only mount now counts as not ready, so the repair continues
+- A failed mount no longer just prints "please check the dmesg output": it now reads the kernel messages produced by this operation (no longer surfacing old boot-time errors as if they were current) and, on recognising "dirty volume / hibernated / not cleanly unmounted", gives the matching steps -- turn off Fast Startup in Windows and shut down fully, or clear the flag with ntfsfix, or mount read-only / forced as an emergency
+- Fixed the fstab line hardcoding the mount user as uid=1000,gid=1000: on a machine whose user is not deck or whose UID is not 1000, partitions mounted but could not be written to. The ids now come from the current user
+- Fixed the wrong package name in the "ntfsfix/ntfsinfo missing" hint: it pointed at ntfs-3g, but both tools live in ntfsprogs, so following the hint left them still missing. It now says `sudo pacman -S ntfsprogs` and notes that SteamOS needs `steamos-readonly disable` first
+- "Fix Disk Write Errors" now calls ntfsfix with -d (clear the dirty flag), so the flag does not survive the repair and make ntfs3 refuse the mount again
+- The shared disk feature now pre-checks each volume with ntfs-3g.probe: if it can be mounted read-write it mounts normally, and if not the reason and remedy are explained up front instead of after discovering a read-only mount
 
 2026-11-07 (v2.0.3)
 [Bug fixes]
