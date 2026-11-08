@@ -1113,25 +1113,30 @@ def changelog_body_text():
     return CHANGELOG_BODY_ZH
 
 CHANGELOG_BODY_ZH = """2026-11-08（v2.0.4）
-【问题修复：互通盘挂载】
-- 修复脏卷(NTFS dirty)时「假成功」：卷带脏标志或处于 Windows 休眠/快速启动状态时，
+【修复互通盘】
+- 脏卷(NTFS dirty)不再「假成功」：卷带脏标志、或 Windows 用了快速启动/休眠没真正关机时，
   Linux 的 NTFS 驱动不会报错，而是悄悄把分区挂成只读。旧版只看挂载命令的返回值，
-  于是显示「✓ 挂载成功」，实际一个文件都写不进去。现在挂载后会回查实际选项，
-  发现是只读就明确提示，并给出能真正解决的处理步骤
-- 修复「修复互通盘」在分区已挂载但为只读时仍提示「所有分区均已挂载，无需操作」：
-  该提示曾让脏卷用户误以为一切正常。现在只读挂载被视为未就绪，会继续往下修复
-- 挂载失败时不再只丢一句「请检查 dmesg 输出」：现在会读取本次操作新产生的内核日志
-  （不再把开机以来的陈年旧报错当成这次的问题），识别出「卷脏 / 休眠 / 未干净卸载」
-  后直接给出对应步骤——进 Windows 关快速启动完整关机、或用 ntfsfix 清标志、或应急只读/强制挂载
-- 修复 fstab 里把挂载用户写死为 uid=1000,gid=1000 的问题：用户名不是 deck、
-  或 UID 不是 1000 的设备上，分区挂上了却读写不了。现在按当前实际用户写入
-- 修复 ntfsfix/ntfsinfo 缺失时的安装提示给错包名：提示的是 ntfs-3g，但这两个工具
-  实际在 ntfsprogs 包里，照提示装完依然缺工具。现在提示 `sudo pacman -S ntfsprogs`
-  并说明 SteamOS 需先 `steamos-readonly disable`
-- 「修复磁盘写入错误」调用 ntfsfix 时加上 -d（清除 dirty 脏标志），
-  避免修复完标志仍在、ntfs3 驱动依旧拒绝挂载
-- 互通盘挂载前新增预检：用 ntfs-3g.probe 提前判断该卷能否读写挂载，能读写就直接挂，
+  于是显示「✓ 挂载成功」，实际一个文件都写不进去。现在挂载后会回查真实挂载选项，
+  是只读就明确提示，并给出能真正解决的处理步骤
+- 分区已挂载但为只读时，不再提示「所有分区均已挂载，无需操作」：旧提示会让脏卷用户
+  误以为一切正常。现在只读挂载算未就绪，会继续往下修复
+- 挂载失败不再只丢一句「请检查 dmesg 输出」：现在只看本次操作新产生的内核日志
+  （不再把开机以来的陈年旧报错当成这次的问题），认出「卷脏 / 休眠 / 未干净卸载」后
+  直接给出对应步骤——进 Windows 关快速启动完整关机、或用 ntfsfix 清标志、或应急只读/强制挂载
+- fstab 不再把挂载用户写死成 uid=1000,gid=1000：用户名不是 deck、或 UID 不是 1000 的设备上，
+  分区挂上了却读写不了。现在按当前实际用户写入
+- 挂载前新增预检：用 ntfs-3g.probe 先判断该卷能否读写挂载，能读写就直接挂，
   不能就先把原因和处理方式说清楚，不必等到挂完才发现是只读
+
+【修复磁盘写入错误】
+- 流程改为「先要密码 → 再按需解除 SteamOS 只读 → 缺工具自动装」，不再把
+  「未安装 ntfsfix」甩给用户自己处理：检测到 ntfsfix / ntfsinfo 缺失就直接装
+  （Arch/SteamOS 装 ntfsprogs，Debian/Ubuntu 装 ntfs-3g），装完就地重查；
+  只有确实装不上才报错，并给出可直接复制的命令
+- 修复旧版把包名说错的问题：旧提示让人装 ntfs-3g，但 Arch/SteamOS 上这两个工具
+  实际在 ntfsprogs 包里，照提示装完依然缺工具——这正是「明明装了 ntfs-3g
+  却还提示未安装」的原因
+- 调用 ntfsfix 时加上 -d（清除 dirty 脏标志），避免修完标志仍在、ntfs3 驱动依旧拒绝挂载
 
 2026-11-07（v2.0.3）
 【问题修复】
@@ -1668,14 +1673,17 @@ CHANGELOG_BODY_ZH = """2026-11-08（v2.0.4）
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
 CHANGELOG_BODY_EN = """2026-11-08 (v2.0.4)
-[Bug fixes: shared disk mounting]
-- Fixed a "false success" on dirty volumes: when a volume carries the NTFS dirty flag or Windows is hibernated / using Fast Startup, the Linux NTFS driver does not fail -- it quietly mounts the partition read-only. The old code only checked the mount command's exit code, so it reported "✓ Mounted successfully" for a volume where not a single file could be written. It now re-reads the actual mount options and, when read-only, says so plainly and gives the steps that really fix it
-- Fixed "Fix Shared Disk" claiming "all partitions are mounted, no action needed" when a partition was mounted read-only: that message made dirty-volume users think everything was fine. A read-only mount now counts as not ready, so the repair continues
-- A failed mount no longer just prints "please check the dmesg output": it now reads the kernel messages produced by this operation (no longer surfacing old boot-time errors as if they were current) and, on recognising "dirty volume / hibernated / not cleanly unmounted", gives the matching steps -- turn off Fast Startup in Windows and shut down fully, or clear the flag with ntfsfix, or mount read-only / forced as an emergency
-- Fixed the fstab line hardcoding the mount user as uid=1000,gid=1000: on a machine whose user is not deck or whose UID is not 1000, partitions mounted but could not be written to. The ids now come from the current user
-- Fixed the wrong package name in the "ntfsfix/ntfsinfo missing" hint: it pointed at ntfs-3g, but both tools live in ntfsprogs, so following the hint left them still missing. It now says `sudo pacman -S ntfsprogs` and notes that SteamOS needs `steamos-readonly disable` first
-- "Fix Disk Write Errors" now calls ntfsfix with -d (clear the dirty flag), so the flag does not survive the repair and make ntfs3 refuse the mount again
+[Bug fixes: Fix Shared Disk]
+- No more "false success" on dirty volumes: when a volume carries the NTFS dirty flag, or Windows used Fast Startup / hibernation and never really shut down, the Linux NTFS driver does not fail -- it quietly mounts the partition read-only. The old code only checked the mount command's exit code, so it reported "✓ Mounted successfully" for a volume where not a single file could be written. It now re-reads the real mount options and, when read-only, says so plainly and gives the steps that actually fix it
+- A partition mounted read-only no longer triggers "all partitions are mounted, no action needed": that message made dirty-volume users think everything was fine. A read-only mount now counts as not ready, so the repair continues
+- A failed mount no longer just prints "please check the dmesg output": it now reads only the kernel messages produced by this operation (no longer surfacing old boot-time errors as if they were current) and, on recognising "dirty volume / hibernated / not cleanly unmounted", gives the matching steps -- turn off Fast Startup in Windows and shut down fully, or clear the flag with ntfsfix, or mount read-only / forced as an emergency
+- fstab no longer hardcodes the mount user as uid=1000,gid=1000: on a machine whose user is not deck or whose UID is not 1000, partitions mounted but could not be written to. The ids now come from the current user
 - The shared disk feature now pre-checks each volume with ntfs-3g.probe: if it can be mounted read-write it mounts normally, and if not the reason and remedy are explained up front instead of after discovering a read-only mount
+
+[Bug fixes: Fix Disk Write Errors]
+- The flow is now "ask for the password -> disable SteamOS read-only if needed -> install missing tools automatically", instead of leaving "ntfsfix is not installed" for the user to deal with: when ntfsfix / ntfsinfo are missing they are installed on the spot (ntfsprogs on Arch/SteamOS, ntfs-3g on Debian/Ubuntu) and re-checked; it only reports an error if the install genuinely fails, together with ready-to-copy commands
+- Fixed the wrong package name in the old hint: it told users to install ntfs-3g, but on Arch/SteamOS both tools actually live in ntfsprogs, so following the hint left them still missing -- which is exactly why "ntfs-3g is installed but it still says not installed"
+- ntfsfix is now called with -d (clear the dirty flag), so the flag does not survive the repair and make ntfs3 refuse the mount again
 
 2026-11-07 (v2.0.3)
 [Bug fixes]
@@ -3350,18 +3358,12 @@ fix_disk_write_error() {
     fi
 
     # ------------------------------------------------------------------
-    # 确认存在 NTFS 分区后，才需要 root 权限
+    # 确认存在 NTFS 分区后，才需要 root 权限。
+    # 顺序刻意排成「先要密码 → 再解只读 → 再补工具」：
+    #   ntfsfix / ntfsinfo 在 Arch 上属于 ntfsprogs 包，而装包要写系统目录，
+    #   SteamOS 上必须先 steamos-readonly disable。所以密码在第一步就拿，
+    #   后面装包才不会卡在权限上。缺工具也不再让用户自己去装。
     # ------------------------------------------------------------------
-    if ! command -v ntfsfix &> /dev/null || ! command -v ntfsinfo &> /dev/null; then
-        echo ""
-        echo -e "${RED}错误: 未安装 ntfsfix / ntfsinfo 工具。${NC}"
-        echo "这两个工具属于 ntfsprogs 包（注意：不在 ntfs-3g 包里）："
-        echo "  sudo steamos-readonly disable"
-        echo "  sudo pacman -S ntfsprogs         (Arch/SteamOS)"
-        echo "  sudo apt install ntfsprogs       (Debian/Ubuntu)"
-        return 1
-    fi
-
     echo ""
     echo -e "${CYAN}发现 $ntfs_count 个 NTFS 分区，需要 root 权限进行检查。${NC}"
     echo -e "${CYAN}请输入您的 sudo 密码以继续操作（输入时不会显示）${NC}"
@@ -3390,6 +3392,45 @@ fix_disk_write_error() {
     else
         echo ""
         echo "步骤2: 跳过 SteamOS 只读检查（非 SteamOS）"
+    fi
+
+    echo ""
+    echo "步骤3: 检查 NTFS 工具（ntfsfix / ntfsinfo）"
+    # 缺什么补什么，装完就地重查；装不上才报错，且直接给出可复制的命令。
+    local missing_ntfs_tools=()
+    command -v ntfsfix  &> /dev/null || missing_ntfs_tools+=("ntfsfix")
+    command -v ntfsinfo &> /dev/null || missing_ntfs_tools+=("ntfsinfo")
+
+    if [ ${#missing_ntfs_tools[@]} -eq 0 ]; then
+        echo -e "${GREEN}✓ ntfsfix / ntfsinfo 已就绪${NC}"
+    else
+        echo -e "${YELLOW}  缺少: ${missing_ntfs_tools[*]}，正在自动安装...${NC}"
+        # Arch/SteamOS：ntfsfix、ntfsinfo 都在 ntfsprogs 包里（不在 ntfs-3g 包里）
+        # Debian/Ubuntu：同名工具在 ntfs-3g 包里，两个系别包名相反，不能混用
+        if command -v pacman &> /dev/null; then
+            sudo pacman -S --needed --noconfirm ntfsprogs >/dev/null 2>&1
+        elif command -v apt-get &> /dev/null; then
+            sudo apt-get install -y ntfs-3g >/dev/null 2>&1
+        fi
+        # 清掉 bash 的命令查找缓存：刚装上的二进制若不刷新，可能仍被判为找不到
+        hash -r 2>/dev/null || true
+
+        missing_ntfs_tools=()
+        command -v ntfsfix  &> /dev/null || missing_ntfs_tools+=("ntfsfix")
+        command -v ntfsinfo &> /dev/null || missing_ntfs_tools+=("ntfsinfo")
+
+        if [ ${#missing_ntfs_tools[@]} -eq 0 ]; then
+            echo -e "${GREEN}✓ 安装完成${NC}"
+        else
+            echo -e "${RED}✗ 自动安装失败，仍缺少: ${missing_ntfs_tools[*]}${NC}"
+            echo "  可手动安装后重试："
+            echo "    sudo steamos-readonly disable"
+            echo "    sudo pacman -S ntfsprogs        (Arch/SteamOS)"
+            echo "    sudo apt install ntfs-3g        (Debian/Ubuntu)"
+            # 不必在这里手动恢复只读：EXIT trap 里的 restore_readonly 会按
+            # RO_READONLY_DISABLED_BY_US 决定是否 enable
+            return 1
+        fi
     fi
 
     echo ""
@@ -8851,18 +8892,13 @@ fix_disk_write_error() {
     fi
 
     # ------------------------------------------------------------------
-    # Only after confirming an NTFS partition exists is root access needed
+    # Only after confirming an NTFS partition exists is root access needed.
+    # The order is deliberately "ask for the password -> disable read-only -> install tools":
+    #   on Arch, ntfsfix / ntfsinfo live in the ntfsprogs package, and installing a
+    #   package writes to system directories, which on SteamOS needs
+    #   steamos-readonly disable first. So the password is collected up front and
+    #   the tools are installed automatically instead of telling the user to do it.
     # ------------------------------------------------------------------
-    if ! command -v ntfsfix &> /dev/null || ! command -v ntfsinfo &> /dev/null; then
-        echo ""
-        echo -e "${RED}Error: ntfsfix / ntfsinfo is not installed.${NC}"
-        echo "Both live in the ntfsprogs package (note: NOT in the ntfs-3g package):"
-        echo "  sudo steamos-readonly disable"
-        echo "  sudo pacman -S ntfsprogs         (Arch/SteamOS)"
-        echo "  sudo apt install ntfsprogs       (Debian/Ubuntu)"
-        return 1
-    fi
-
     echo ""
     echo -e "${CYAN}$ntfs_count NTFS partition(s) found, root permission is required for the check.${NC}"
     echo -e "${CYAN}Please enter your sudo password to continue (it will not be shown while typing)${NC}"
@@ -8891,6 +8927,47 @@ fix_disk_write_error() {
     else
         echo ""
         echo "Step 2: Skipping the SteamOS read-only check (not SteamOS)"
+    fi
+
+    echo ""
+    echo "Step 3: Checking the NTFS tools (ntfsfix / ntfsinfo)"
+    # Install whatever is missing and re-check right away; only fail if the
+    # install itself fails, and then print ready-to-copy commands.
+    local missing_ntfs_tools=()
+    command -v ntfsfix  &> /dev/null || missing_ntfs_tools+=("ntfsfix")
+    command -v ntfsinfo &> /dev/null || missing_ntfs_tools+=("ntfsinfo")
+
+    if [ ${#missing_ntfs_tools[@]} -eq 0 ]; then
+        echo -e "${GREEN}✓ ntfsfix / ntfsinfo are ready${NC}"
+    else
+        echo -e "${YELLOW}  Missing: ${missing_ntfs_tools[*]}, installing automatically...${NC}"
+        # Arch/SteamOS: ntfsfix and ntfsinfo both live in ntfsprogs (NOT in ntfs-3g).
+        # Debian/Ubuntu: the same tools live in ntfs-3g. The package names are swapped
+        # between the two distro families, so they must not be mixed up.
+        if command -v pacman &> /dev/null; then
+            sudo pacman -S --needed --noconfirm ntfsprogs >/dev/null 2>&1
+        elif command -v apt-get &> /dev/null; then
+            sudo apt-get install -y ntfs-3g >/dev/null 2>&1
+        fi
+        # 清掉 bash 的命令查找缓存：刚装上的二进制若不刷新，可能仍被判为找不到
+        hash -r 2>/dev/null || true
+
+        missing_ntfs_tools=()
+        command -v ntfsfix  &> /dev/null || missing_ntfs_tools+=("ntfsfix")
+        command -v ntfsinfo &> /dev/null || missing_ntfs_tools+=("ntfsinfo")
+
+        if [ ${#missing_ntfs_tools[@]} -eq 0 ]; then
+            echo -e "${GREEN}✓ Installation complete${NC}"
+        else
+            echo -e "${RED}✗ Automatic installation failed, still missing: ${missing_ntfs_tools[*]}${NC}"
+            echo "  Install manually and retry:"
+            echo "    sudo steamos-readonly disable"
+            echo "    sudo pacman -S ntfsprogs        (Arch/SteamOS)"
+            echo "    sudo apt install ntfs-3g        (Debian/Ubuntu)"
+            # No need to restore read-only here: restore_readonly in the EXIT trap
+            # decides based on RO_READONLY_DISABLED_BY_US
+            return 1
+        fi
     fi
 
     echo ""
