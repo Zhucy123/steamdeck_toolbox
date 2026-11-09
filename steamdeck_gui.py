@@ -33,7 +33,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "2.0.4"
+VERSION = "2.1.0"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -916,11 +916,38 @@ _UI_STRINGS = {
         "Follow <a href=\"https://x.com/AlanWake2100\">AlanWake (@AlanWake2100)</a> on X for updates~"
     ),
     "no_terminal": {"zh": "未找到可用的终端模拟器", "en": "No usable terminal emulator found"},
-    "no_terminal_hint": {"zh": "请安装 konsole 或 xterm 后重试。",
-                         "en": "Please install konsole or xterm and try again."},
+    "no_terminal_hint": {"zh": "请安装任一终端模拟器（如 konsole / kitty / foot / alacritty / xterm）后重试。",
+                          "en": "Please install a terminal emulator (e.g. konsole / kitty / foot / alacritty / xterm) and try again."},
     "task_running": {"zh": "任务运行中", "en": "Running"},
     "task_done": {"zh": "任务已完成", "en": "Task completed"},
     "task_failed": {"zh": "任务失败", "en": "Task failed"},
+    "task_cancelled": {"zh": "任务已取消", "en": "Task cancelled"},
+    "task_running_confirm": {"zh": "有任务正在运行，是否终止并继续？",
+                              "en": "A task is still running. Stop it and continue?"},
+    "external_start": {"zh": "任务已在外部终端启动（PID {pid}），请查看弹出的终端窗口。",
+                        "en": "Task started in an external terminal (PID {pid}). Check the popup window."},
+    "external_done_ok": {"zh": "外部终端任务已完成（退出码 0）。",
+                          "en": "External terminal task finished (exit code 0)."},
+    "external_done_fail": {"zh": "外部终端任务失败（退出码 {rc}）。",
+                            "en": "External terminal task failed (exit code {rc})."},
+    "external_running_close": {"zh": "外部终端任务仍在运行，关闭窗口不会终止它。",
+                                "en": "The external terminal task is still running; closing this window will not stop it."},
+    "check_fail_button": {"zh": "检查更新失败，请检查网络连接。\n可点击进入主界面。",
+                           "en": "Update check failed. Please check your network.\nClick to enter the main window."},
+    "vte_manual_en": {"zh": "请手动打开终端执行：sudo pacman -S --noconfirm vte3",
+                       "en": "Please open a terminal and run: sudo pacman -S --noconfirm vte3"},
+    "fp_query_fail": {"zh": "无法查询已安装应用（flatpak 未安装或命令失败）。",
+                       "en": "Could not query installed apps (flatpak missing or command failed)."},
+    "fp_search_fail": {"zh": "flathub 搜索失败（flatpak 未安装或命令失败）：{err}",
+                        "en": "Flathub search failed (flatpak missing or command failed): {err}"},
+    "fp_no_apps_title": {"zh": "没有可卸载的 Flatpak 应用。",
+                          "en": "No Flatpak apps available to uninstall."},
+    "update_target_unsafe": {"zh": "无法确定自身脚本路径（{path}），为安全起见未执行替换。\n请手动下载新版本：{url}",
+                              "en": "Cannot determine a safe self-update target ({path}); replacement skipped.\nDownload manually: {url}"},
+    "update_ver_mismatch": {"zh": "下载内容版本号与检查结果不一致（期望 v{want}，实得 v{got}），已中止更新。",
+                              "en": "Downloaded version does not match the check result (expected v{want}, got v{got}); update aborted."},
+    "update_backup_fail": {"zh": "⚠️ 备份当前版本失败：{err}\n更新将继续，但出错时无法自动回滚。",
+                            "en": "⚠️ Failed to back up the current version: {err}\nThe update will continue, but there is no automatic rollback."},
     "task_external": {"zh": "任务已在外部终端中运行，请查看弹出的终端窗口。",
                       "en": "The task is running in an external terminal. Check the popup window."},
     "close": {"zh": "关闭", "en": "Close"},
@@ -1112,7 +1139,61 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-08（v2.0.4）
+CHANGELOG_BODY_ZH = """2026-11-09（v2.1.0）
+【全功能问题排查与修复】
+- 用智能体团队逐项检查了工具箱全部功能（系统优化、双系统、插件、软件安装、网络工具、
+  界面与自更新），按审查结果修复了下面的确定问题，并补充了跨设备依赖检查
+
+【安全：下载与 root 执行】
+- UU / 迅游 / 奇游加速器不再把明文 HTTP 内容直接管道给 root：改为 HTTPS、超时与
+  HTTP 状态检查、下载到临时文件后校验是 shell 文本、显示来源，校验通过直接由 sudo
+  提示密码执行；不再显示脚本预览和二次确认，体验回到「直接开始安装」
+- 奇游：sd.qiyou.cn 只提供 HTTP、443 未开放，导致上一版统一改 HTTPS 后连不上。
+  现改为直接取支持 HTTPS 的真实安装脚本 static.qiyou.cn/.../qyplug.sh；
+  同时给下载 helper 增加「HTTPS 失败自动回退 HTTP 并明确警告」的通用能力
+- Watt 证书信任：不再把 /etc/hosts 改成所有人可写；保存并恢复原权限，校验
+  CA:TRUE 与 SHA256 指纹，卸载按指纹精确清理，程序目录已删时也能清理证书与权限
+- Epic / 战网 / 育碧卸载前列出将删除的路径并二次确认，避免误删默认目录里的游戏
+
+【安装器与任务窗】
+- 安装器改为临时文件 + 标记/大小/语法校验通过后才原子替换，失败保留旧版；
+  只读模式只恢复脚本自己关掉的那一次，不覆盖用户原本可写的设置
+- 任务取消不再显示「任务已完成」，改为「任务已取消」；已有任务在跑时切换功能先确认；
+  关闭 Flatpak 窗口会真正终止进程，附加包失败不再被主包成功掩盖
+- 补充 XDG 桌面目录、更多终端模拟器、Flatpak 缺失与查询失败的明确提示，
+  双系统探测放宽，避免 Clover 用户看不到修引导与互通盘入口
+
+【引导与系统】
+- 修复 Clover 文件检查返回码被 `local` 吞掉、可能给不存在的文件注册启动项的问题
+- 交换分区操作失败时不再继续删除旧 Swap；Steam / Gamescope 急救在备份失败时
+  立即中止，不再删除无法恢复的原配置
+- 「清理虚拟内存配置」改为按 ZRAM 重置后的实际状态判定，修掉「实际已清理成功
+  却误报 ZRAM 重置失败」；NTFS 修复失败会真实反映在结果里
+- 「切换 Flatpak 软件源」当前地址能匹配到 5 个预设源时直接显示对应名称（如
+  「中科大-联通节点」），不再只显示一串 URL
+- 引导文件配置工具按工具箱语言联动：中文界面用汉化版，英文界面保留社区原版英文
+
+【Watt Toolkit / 软件安装】
+- 修掉安装 Watt 时删除临时工作目录导致后续每条 sudo 刷上百行
+  `getcwd: 无法访问父目录`；备份改到同一文件系统，复制时不带
+  security.capability xattr，修掉 `mv: setting attribute ... 不允许的操作`
+- 证书信任改为显式写入系统 anchors 目录并刷新证书包，再用 openssl verify 验证
+  是否真正生效（此前「✓ 已加入」但 HTTPS 加速仍会报证书错误）；hosts 及整体
+  结果都按实际状态判定，不再假成功
+- 同版本不再误报更新（v3.1.0 与 3.1.0）；ToDesk / AnyDesk / 小黄鸭等不再
+  「先删旧版再装」导致半安装，下载、解压、服务启动、卸载与更新的失败都会如实反映
+- 「更新全部应用」恢复显示下载百分比与速度：去掉 --noninteractive、启用
+  FLATPAK_TTY_PROGRESS，并用过滤器把原地刷新转成干净逐行文本，不重现乱码
+
+【插件商店】
+- Decky 服务用户不再写死 deck 并补齐官方字段；卸载插件商店会停止、禁用并删除
+  systemd 服务与 CEF 标记；插件安装改为临时目录校验后再替换，失败保留旧插件
+
+【依赖与兼容性】
+- 补充 GTK3/VTE3、flatpak、p11-kit、openssl、ntfs-3g/ntfsprogs、efibootmgr、7z、
+  jupiter-hw-support 等依赖的检查与提示；未在其他发行版上假定这些组件一定存在
+
+2026-11-08（v2.0.4）
 【修复互通盘】
 - 脏卷(NTFS dirty)不再「假成功」：卷带脏标志、或 Windows 用了快速启动/休眠没真正关机时，
   Linux 的 NTFS 驱动不会报错，而是悄悄把分区挂成只读。旧版只看挂载命令的返回值，
@@ -1136,6 +1217,26 @@ CHANGELOG_BODY_ZH = """2026-11-08（v2.0.4）
 - 修复安装提示给错包名：旧版让装 ntfs-3g，但 ntfsfix/ntfsinfo 在 Arch/SteamOS 上属 ntfsprogs，
   照提示装完依然缺工具。现在自动安装正确的包，两类系包名差异也已分清
 - 调用 ntfsfix 时加上 -d（清除 dirty 脏标志），避免修复完标志仍在、ntfs3 驱动依旧拒绝挂载
+【全功能问题修复】
+- 安全：UU / 迅游 / 奇游不再用明文 HTTP 把远端脚本直接管道给 root，改为 HTTPS、
+  超时与 HTTP 状态检查、临时文件校验、显示来源并二次确认后再执行
+- 安全：Watt 证书信任不再把 /etc/hosts 改成所有人可写；保存并恢复原权限，
+  校验 CA 属性与指纹，卸载按指纹精确清理，程序目录已删时也能清理证书与 hosts 权限
+- 安全：Epic / 战网 / 育碧等卸载前列出将删除的路径并二次确认，避免误删默认目录里的游戏
+- 安装器：下载改为临时文件 + 标记/大小/语法校验通过后才原子替换，失败保留旧版；
+  只读模式只恢复脚本自己关掉的那一次，不覆盖用户原本可写的设置
+- 任务窗：取消不再显示「任务已完成」，改为「任务已取消」；已有任务在跑时切换功能会先确认；
+  关闭 Flatpak 窗口会真正终止进程，附加包失败不再被主包成功掩盖
+- 引导：修复 Clover 文件检查返回码被 `local` 吞掉、可能给不存在的文件注册启动项的问题；
+  交换分区操作失败时不再继续删除旧 Swap
+- 急救：Steam / Gamescope 重置在备份失败时立即中止，不再删除无法恢复的原配置
+- 插件商店：服务用户不再写死 deck 并补齐官方字段；卸载会停止、禁用并删除 systemd 服务；
+  插件安装改为临时目录校验后再替换，失败保留旧插件
+- 软件安装：ToDesk / AnyDesk / Watt / 小黄鸭等不再「先删旧版再装」导致半安装，
+  下载、解压、服务启动、卸载与更新的失败都会真实反映在结果里
+- 兼容性：补充 XDG 桌面目录、更多终端模拟器、Flatpak 缺失与查询失败的明确提示，
+  双系统探测放宽，避免 Clover 用户看不到修引导与互通盘入口
+
 
 2026-11-07（v2.0.3）
 【问题修复】
@@ -1671,7 +1772,81 @@ CHANGELOG_BODY_ZH = """2026-11-08（v2.0.4）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-08 (v2.0.4)
+CHANGELOG_BODY_EN = """2026-11-09 (v2.1.0)
+[Repo-wide audit and fixes]
+- An agent team reviewed every toolbox feature (system optimization, dual boot, plugins,
+  software installs, network tools, UI and self-update). The confirmed issues below were
+  fixed, and missing cross-device dependencies were checked.
+
+[Security: downloads and root execution]
+- UU / Xunyou / Qiyou accelerators no longer pipe plaintext-HTTP content straight into a
+  root shell: they now use HTTPS, timeouts and HTTP status checks, validate a temporary
+  download as shell text, show its origin, then let sudo prompt for the password directly.
+  The script preview and extra confirmation were removed to restore the "start installing
+  immediately" experience.
+- Qiyou: sd.qiyou.cn only serves HTTP (port 443 closed), so the previous HTTPS-only
+  change broke it. It now fetches the real installer from static.qiyou.cn over HTTPS, and
+  the download helper gained a generic "fall back to HTTP with an explicit warning" path.
+- Watt certificate trust no longer makes /etc/hosts world-writable: original permissions
+  are saved and restored, CA:TRUE and the SHA256 fingerprint are verified, cleanup is
+  fingerprint-based and still runs when the program directory is gone.
+- Epic / Battle.net / Ubisoft uninstalls now list the paths to be removed and ask for
+  confirmation, so games in default folders are not deleted by accident.
+
+[Installer and task window]
+- Installer: temporary file + marker/size/syntax checks before an atomic replace; a
+  failure keeps the old version. Read-only mode is restored only when this script
+  disabled it, never overriding the user's own writable setting.
+- Cancelling a task now shows "Task cancelled" instead of "Task completed"; switching
+  features while a task runs asks for confirmation; closing a Flatpak window really
+  terminates the process, and a failed addon no longer hides behind a successful main app.
+- Added XDG desktop dirs, more terminal emulators, explicit messages when Flatpak is
+  missing or a query fails, and more permissive dual-boot detection so Clover users can
+  still see the boot and shared-disk repairs.
+
+[Boot and system]
+- Fixed the Clover file-check return code being swallowed by `local`, which could
+  register a boot entry for a missing file.
+- Swap operations no longer delete the old swap when deactivation fails; Steam / Gamescope
+  emergency reset aborts immediately if the backup fails, instead of deleting data that
+  cannot be restored.
+- "Clean Virtual Memory Config" now judges by the actual post-reset ZRAM state, fixing
+  the false "ZRAM reset failed" when it had in fact succeeded; NTFS repair failures are
+  now reported honestly.
+- "Switch Flatpak Software Source" shows the matching preset name (e.g. "USTC - China
+  Unicom node") when the current URL matches one of the 5 sources, instead of a raw URL.
+- The boot configuration tool now follows the toolbox language: the Chinese UI keeps
+  the translated script, the English UI keeps the original community English version.
+
+[Watt Toolkit / software installs]
+- Fixed the Watt installer removing its own working directory, which made every later
+  sudo print hundreds of "getcwd: cannot access parent directory" lines. Backups now
+  live on the same filesystem and copies drop security.capability xattrs, fixing
+  "mv: setting attribute ... operation not permitted".
+- Certificate trust now writes explicitly to the system anchors dir, refreshes the CA
+  bundle and verifies with openssl verify that it really took effect (previously it
+  reported success while HTTPS acceleration still failed). hosts and the overall result
+  are judged by actual state, no more false success.
+- The same version is no longer reported as an update (v3.1.0 vs 3.1.0). ToDesk /
+  AnyDesk / Lossless Scaling no longer "remove the old version first" and leave a
+  half-install; download, extraction, service start, uninstall and update failures are
+  reported honestly.
+- "Update All Apps" shows download percentage and speed again: dropped --noninteractive,
+  enabled FLATPAK_TTY_PROGRESS, and added a filter that turns in-place redraws into
+  clean lines without reintroducing the old garbage characters.
+
+[Plugin Store]
+- The Decky service user is no longer hardcoded to deck and the official fields are
+  filled in; uninstall stops, disables and removes the systemd unit and CEF markers;
+  plugin installs validate a temporary directory before replacing, keeping the old
+  plugin on failure.
+
+[Dependencies and compatibility]
+- Added checks and hints for GTK3/VTE3, flatpak, p11-kit, openssl, ntfs-3g/ntfsprogs,
+  efibootmgr, 7z, jupiter-hw-support and others; these are no longer assumed to exist
+  on every distro.
+
+2026-11-08 (v2.0.4)
 [Bug fixes: Fix Shared Disk]
 - No more "false success" on dirty volumes: when a volume carries the NTFS dirty flag, or Windows used Fast Startup / hibernation and never really shut down, the Linux NTFS driver does not fail -- it quietly mounts the partition read-only. The old code only checked the mount command's exit code, so it reported "✓ Mounted successfully" for a volume where not a single file could be written. It now re-reads the real mount options and, when read-only, says so plainly and gives the steps that actually fix it
 - Fixed "Fix Shared Disk" claiming "all partitions are mounted, no action needed" when a partition was mounted read-only: that message made dirty-volume users think everything was fine. A read-only mount now counts as not ready, so the repair continues
@@ -1684,6 +1859,18 @@ CHANGELOG_BODY_EN = """2026-11-08 (v2.0.4)
 - The flow is now "enter the admin password -> disable SteamOS read-only mode as needed -> install missing tools automatically" instead of immediately telling you that ntfsfix is not installed and leaving the install to you
 - Fixed the wrong package name in the install hint: the old version pointed at ntfs-3g, but on Arch/SteamOS ntfsfix and ntfsinfo belong to ntfsprogs, so following that hint left them still missing. The correct package is now installed automatically, and the package-name difference between the two distro families is handled
 - ntfsfix is now called with -d (clear the dirty flag), so the flag does not survive the repair and make ntfs3 refuse the mount again
+[Repo-wide bug fixes]
+- Security: UU / Xunyou / Qiyou no longer pipe a plaintext-HTTP remote script straight into a root shell; they now use HTTPS, timeouts and HTTP status checks, validate a temporary download, show its origin and ask for confirmation before executing
+- Security: Watt certificate trust no longer makes /etc/hosts world-writable; original permissions are saved and restored, CA constraints and fingerprints are verified, cleanup is fingerprint-based and still runs when the program directory is already gone
+- Security: Epic / Battle.net / Ubisoft uninstalls now list the paths to be removed and ask for confirmation, so games in default folders are not deleted by accident
+- Installer: downloads go to a temporary file and only atomically replace the target after marker / size / syntax checks pass; a failure keeps the old version. Read-only mode is restored only when this script disabled it, never overriding the user's own writable setting
+- Task window: cancelling now shows "Task cancelled" instead of "Task completed"; switching features while a task runs asks for confirmation; closing a Flatpak window really terminates the process, and a failed addon no longer hides behind a successful main package
+- Boot: fixed the Clover file-check return code being swallowed by `local`, which could register a boot entry for a missing file; swap operations no longer delete the old swap when deactivation fails
+- Emergency reset: Steam / Gamescope reset aborts immediately if the backup fails, instead of deleting data that cannot be restored
+- Plugin Store: the service user is no longer hardcoded to deck and the official fields are filled in; uninstall stops, disables and removes the systemd unit; plugin installs validate a temporary directory before replacing, keeping the old plugin on failure
+- Software installs: ToDesk / AnyDesk / Watt / Lossless Scaling no longer "remove the old version first" and leave a half-install; download, extraction, service start, uninstall and update failures are now reported honestly
+- Compatibility: added XDG desktop dirs, more terminal emulators, explicit messages when Flatpak is missing or a query fails, and more permissive dual-boot detection so Clover users can still see the boot and shared-disk repairs
+
 
 2026-11-07 (v2.0.3)
 [Bug fixes]
@@ -2571,10 +2758,33 @@ def compare_versions(a, b):
     return (ta > tb) - (ta < tb)
 
 def find_terminal():
-    for t in ("konsole", "xterm", "gnome-terminal", "xfce4-terminal", "lxterminal"):
+    # 覆盖 Steam Deck / 常见 Linux 桌面上的终端；顺序按常见度与参数兼容性排。
+    for t in ("konsole", "gnome-terminal", "xfce4-terminal", "lxterminal", "xterm",
+              "kitty", "foot", "alacritty", "kgx", "tilix", "qterminal",
+              "mate-terminal", "terminator", "wezterm"):
         if shutil.which(t):
             return t
     return None
+
+def terminal_command(term, command_str):
+    """不同终端用不同的命令行参数把命令喂给它。"""
+    if term == "gnome-terminal":
+        return [term, "--", "bash", "-c", command_str]
+    if term == "kitty":
+        return [term, "bash", "-c", command_str]
+    if term == "foot":
+        return [term, "bash", "-c", command_str]
+    if term == "alacritty":
+        return [term, "-e", "bash", "-c", command_str]
+    if term == "kgx":                 # GNOME Console
+        return [term, "--", "bash", "-c", command_str]
+    if term == "tilix":
+        return [term, "-e", "bash", "-c", command_str]
+    if term == "wezterm":
+        return [term, "start", "--", "bash", "-c", command_str]
+    # konsole / xterm / xfce4-terminal / lxterminal / qterminal /
+    # mate-terminal / terminator 都用 -e
+    return [term, "-e", "bash", "-c", command_str]
 
 def launch_terminal(command_str):
     """在可用的终端模拟器中执行命令，返回是否成功启动。"""
@@ -2582,14 +2792,9 @@ def launch_terminal(command_str):
     if not term:
         return False
     try:
-        if term == "gnome-terminal":
-            subprocess.Popen([term, "--", "bash", "-c", command_str],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                             stdin=subprocess.DEVNULL, start_new_session=True)
-        else:
-            subprocess.Popen([term, "-e", "bash", "-c", command_str],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                             stdin=subprocess.DEVNULL, start_new_session=True)
+        subprocess.Popen(terminal_command(term, command_str),
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         stdin=subprocess.DEVNULL, start_new_session=True)
         return True
     except Exception:
         return False
@@ -2621,7 +2826,8 @@ DEFAULT_DANGEROUS_HINT = "该功能会修改系统引导、挂载或系统文件
 # ============================================================================
 BASH_SCRIPT_ZH = r'''#!/bin/bash
 set -uo pipefail
-TEMP_DIR="/tmp/steamdeck_toolbox"
+# FIX-SOFTWARE: avoid predictable shared /tmp path (symlink/TOCTOU).
+TEMP_DIR="$(mktemp -d /tmp/steamdeck_toolbox.XXXXXXXX 2>/dev/null || echo /tmp/steamdeck_toolbox)"
 cleanup_temp() { rm -rf "$TEMP_DIR" 2>/dev/null; }
 # SteamOS 只读模式：脚本退出时自动恢复（sudo -n 非交互，避免卡在密码提示）
 # 关键：只有脚本自己 disable 过只读，退出时才恢复。
@@ -2642,7 +2848,11 @@ restore_readonly() {
     return 0
 }
 trap 'ec=$?; restore_readonly; cleanup_temp; exit $ec' EXIT
-trap 'echo -e "\n${YELLOW}用户取消操作，关闭窗口。${NC}"; cleanup_temp; exit 0' INT TERM
+# 用户点「取消」会收到 INT/TERM：用专用退出码 75 区分「已取消」与「成功(0)」。
+# 不写 exit 0，否则 TaskWindow 会把取消当成功显示「任务已完成」。
+# EXIT trap 仍用 ec=$? 保留这个真实退出码（restore_readonly / cleanup_temp 不能改掉它）。
+CANCEL_EXIT_CODE=75
+trap 'echo -e "\n${YELLOW}用户取消操作，关闭窗口。${NC}"; exit $CANCEL_EXIT_CODE' INT TERM
 
 PYTHON_CMD="python3"
 command -v python3 &>/dev/null || PYTHON_CMD="python"
@@ -2651,6 +2861,132 @@ CURRENT_USER="${USER:-$(id -un)}"
 CURRENT_GROUP="$(id -gn "$CURRENT_USER" 2>/dev/null || echo "$CURRENT_USER")"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; PURPLE='\033[0;35m'; NC='\033[0m'
+
+# ===== FIX-SOFTWARE: shared safe helpers =====
+# Resolve the real Desktop dir (XDG) and make sure it exists.
+fs_desktop_dir() {
+    local d=""
+    if command -v xdg-user-dir >/dev/null 2>&1; then
+        d="$(xdg-user-dir DESKTOP 2>/dev/null)"
+    fi
+    [ -n "$d" ] && [ "$d" != "$HOME" ] || d="${XDG_DESKTOP_DIR:-$HOME/Desktop}"
+    mkdir -p "$d" 2>/dev/null || d="$HOME/Desktop"
+    printf '%s' "$d"
+}
+# curl with hard fail/timeouts; download to a temp file; verify it is a non-trivial,
+# non-HTML shell text before anything gets executed.
+# usage: fs_fetch_shell URL TMPFILE  -> 0 ok, 1 fail (TMPFILE cleaned on failure)
+fs_fetch_shell() {
+    local url="$1" out="$2" rc=0
+    rm -f "$out"
+    curl -fsSL --connect-timeout 15 --max-time 120 -o "$out" "$url" || rc=$?
+    # FIX-QIYOU: 有些厂商的安装域名只开了 80 端口、没开 443（例如 sd.qiyou.cn）。
+    # HTTPS 连接失败时自动退回 HTTP，并通过下面的内容校验；同时明确告知用户
+    # 正在使用明文连接，让用户自己决定是否继续以 root 执行。
+    if [ "$rc" -ne 0 ] && [ "${url#https://}" != "$url" ]; then
+        local http_url="http://${url#https://}" rc2=0
+        echo -e "${YELLOW}⚠️  HTTPS 连接失败，尝试改用 HTTP 明文连接: $http_url${NC}"
+        echo -e "${YELLOW}   明文连接无法验证对方身份，请确认来源可信后再继续。${NC}"
+        curl -fsSL --connect-timeout 15 --max-time 120 -o "$out" "$http_url" || rc2=$?
+        if [ "$rc2" -eq 0 ]; then rc=0; url="$http_url"; fi
+    fi
+    if [ "$rc" -ne 0 ]; then
+        rm -f "$out"; return 1
+    fi
+    if [ ! -s "$out" ]; then
+        rm -f "$out"; return 1
+    fi
+    # Reject obvious HTML error / login pages (case-insensitive, first 4KB).
+    if head -c 4096 "$out" | grep -qiE '<!doctype[[:space:]]+html|<html([[:space:]>])|<head([[:space:]>])|<title>'; then
+        rm -f "$out"; return 1
+    fi
+    # Must look like a shell script: shebang, or shell keywords / parameter expansion.
+    if ! grep -qE '(^#!.*(/|env )?(ba)?sh|^#!/bin/(ba)?sh|\b(sudo|apt|pacman|systemctl|echo|set|if|then|fi|for|while|curl|wget|mkdir|cp|mv|rm|cat|chmod|chown)\b|\$\(|`|#.*)' "$out"; then
+        rm -f "$out"; return 1
+    fi
+    return 0
+}
+# Compare dotted version strings: returns 0 if $1 > $2, 1 otherwise (equal/less/invalid).
+fs_ver_gt() {
+    local a="$1" b="$2" i av bv
+    [ -n "$a" ] && [ -n "$b" ] || return 1
+    IFS='.' read -ra A <<< "$a"; IFS='.' read -ra B <<< "$b"
+    for i in "${!A[@]}"; do
+        av="${A[$i]}"; bv="${B[$i]:-0}"
+        [[ "$av" =~ ^[0-9]+$ ]] || av=0
+        [[ "$bv" =~ ^[0-9]+$ ]] || bv=0
+        if [ "$((10#$av))" -gt "$((10#$bv))" ]; then return 0; fi
+        if [ "$((10#$av))" -lt "$((10#$bv))" ]; then return 1; fi
+    done
+    return 1
+}
+# FIX-PROGRESS: 把 flatpak/ostree 用 \r 原地刷新的进度条转成干净的逐行文本，
+# 保留「Receiving objects: NN% ... X MB/s」这类含百分比与速度的行。
+# --noninteractive 会关闭进度输出，所以更新命令要去掉它并设 FLATPAK_TTY_PROGRESS=1；
+# 本过滤器负责清除 ANSI 控制符与光标位置应答，避免再次出现乱码。
+fp_progress_filter() {
+    "${PYTHON_CMD:-python3}" -u -c '
+import sys, re
+ansi = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[@-Z\\\\-_]")
+def clean(t):
+    t = ansi.sub("", t)
+    t = re.sub(r"\^\[\[[0-9;]*R", "", t)
+    return t.strip()
+buf = b""
+while True:
+    ch = sys.stdin.buffer.read(1)
+    if not ch:
+        break
+    if ch[0] in (13, 10):
+        c = clean(buf.decode("utf-8", "replace"))
+        if c:
+            print(c, flush=True)
+        buf = b""
+    else:
+        buf += ch
+if buf:
+    c = clean(buf.decode("utf-8", "replace"))
+    if c:
+        print(c, flush=True)
+' 2>/dev/null
+}
+
+# Verify a downloaded Windows installer is not an HTML error page.
+# usage: fs_verify_installer FILE mz|msi
+fs_verify_installer() {
+    local f="$1" kind="$2" sz
+    [ -f "$f" ] || return 1
+    sz=$(stat -c %s "$f" 2>/dev/null || echo 0)
+    [ "$sz" -ge 65536 ] || return 1
+    if head -c 4096 "$f" | grep -qiE '<!doctype[[:space:]]+html|<html([[:space:]>])|<head([[:space:]>])|<title>'; then
+        return 1
+    fi
+    if [ "$kind" = "mz" ]; then
+        [ "$(head -c 2 "$f")" = "MZ" ] || return 1
+        if command -v file >/dev/null 2>&1; then
+            file "$f" | grep -qiE 'PE32|MS-DOS|executable' || return 1
+        fi
+    else
+        # MSI is an OLE2 compound file: D0 CF 11 E0 A1 B1 1A E1
+        [ "$(head -c 8 "$f" | od -An -tx1 | tr -d ' \n')" = "d0cf11e0a1b11ae1" ] || return 1
+    fi
+    return 0
+}
+# Reject tar/zip archives containing path traversal or absolute paths.
+# usage: fs_archive_safe ARCHIVE tar|zip
+fs_archive_safe() {
+    local f="$1" kind="$2" line
+    if [ "$kind" = "tar" ]; then
+        line=$(tar -tf "$f" 2>/dev/null | grep -E '(^/|(^|/)\.\./)' | head -1)
+    else
+        line=$(unzip -Z1 "$f" 2>/dev/null | grep -E '(^/|(^|/)\.\./)' | head -1)
+    fi
+    if [ -n "$line" ]; then
+        return 1
+    fi
+    return 0
+}
+# ===== END FIX-SOFTWARE shared helpers =====
 
 # 全局下载镜像源（GitHub 加速）
 # 2026-10 实测：各跑 5 轮小文件 + 33MB 二进制（sha256 校验）+ 大文件 range，
@@ -2723,7 +3059,10 @@ download_zip_with_mirrors() {
 mk_temp_dir() { mkdir -p "$TEMP_DIR"; }
 
 confirm_action() {
-    read -n1 -p "按回车键或 A 键确认，其他键取消: " confirm < /dev/tty
+    # FIX-SOFTWARE: /dev/tty EOF 时按「取消」处理，避免 read 失败后
+    # 变量沿用上一次的值被误判为确认，以及菜单空转死循环。
+    local confirm=""
+    read -r -n1 -p "按回车键或 A 键确认，其他键取消: " confirm < /dev/tty || { echo; return 1; }
     echo
     [[ -z "$confirm" || "$confirm" =~ [Aa] ]]
 }
@@ -2842,12 +3181,27 @@ install_chinese_source() {
         "https://dl.flathub.org/repo/"
     )
 
-    # 显示当前源，方便判断要不要改
-    local FP_OLD_URL
+    # 显示当前源：能匹配到菜单里的 5 个预设源就显示对应名称，否则显示原始地址
+    local FP_OLD_URL FP_CURRENT_LABEL="" FP_NORM_OLD FP_NORM_URL mi
     # 注意：flatpak 没有 remote-get-url 这个子命令，要从 remotes 列表里取
     FP_OLD_URL=$(flatpak remotes --columns=name,url 2>/dev/null | awk '$1 == "flathub" {print $2; exit}')
     if [ -n "$FP_OLD_URL" ]; then
-        echo -e "当前 flathub 源: ${CYAN}${FP_OLD_URL}${NC}"
+        # 规范化后再比：去掉结尾斜杠并转小写，避免仅斜杠/大小写不同就匹配不上
+        FP_NORM_OLD=$(echo "$FP_OLD_URL" | tr '[:upper:]' '[:lower:]' | sed 's#/*$##')
+        for mi in "${!MIRROR_URLS[@]}"; do
+            FP_NORM_URL=$(echo "${MIRROR_URLS[$mi]}" | tr '[:upper:]' '[:lower:]' | sed 's#/*$##')
+            if [ "$FP_NORM_OLD" = "$FP_NORM_URL" ]; then
+                FP_CURRENT_LABEL="${MIRROR_LABELS[$mi]}"
+                break
+            fi
+        done
+        if [ -n "$FP_CURRENT_LABEL" ]; then
+            echo -e "当前 flathub 源: ${GREEN}${FP_CURRENT_LABEL}${NC}"
+            echo -e "  地址: ${CYAN}${FP_OLD_URL}${NC}"
+        else
+            echo -e "当前 flathub 源: ${CYAN}${FP_OLD_URL}${NC}"
+            echo -e "${YELLOW}  （该地址不在预设的 5 个软件源中）${NC}"
+        fi
         echo ""
     fi
 
@@ -3035,7 +3389,17 @@ apply_cryo_recommendation() {
     confirm_action || { echo "取消操作。"; return; }
     local swap_size_gb=16; local block_count=$((swap_size_gb*1024))
     check_swap_space "$swap_size_gb" || return 1
-    sudo swapoff /home/swapfile 2>/dev/null; sudo swapoff -a 2>/dev/null
+    # FIX-LEAD: cryo swapoff
+    # swapoff 失败时仍删除 /home/swapfile 会让正在使用的 Swap 失去路径且无法恢复，
+    # 低内存时可能触发 OOM。先确认旧 Swap 已全部停用，否则中止并保持原状。
+    if ! sudo swapoff /home/swapfile 2>/dev/null && swapon --show=NAME --noheadings 2>/dev/null | grep -qx '/home/swapfile'; then
+        echo -e "${RED}✗ Failed to deactivate existing /home/swapfile; aborted, original swap untouched.${NC}"
+        return 1
+    fi
+    if ! sudo swapoff -a 2>/dev/null; then
+        echo -e "${RED}✗ Failed to deactivate all swap devices; aborted to avoid deleting an active file.${NC}"
+        return 1
+    fi
     sudo rm -f /home/swapfile
     sudo touch /home/swapfile; sudo chattr +C /home/swapfile 2>/dev/null || true
     if ! sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$block_count conv=fsync status=progress 2>/dev/null; then
@@ -3219,10 +3583,20 @@ cleanup_swap() {
     # 只有在真正存在 /dev/zram0 时才重置它；不存在属于"当前没启用 ZRAM"，不是失败。
     # 原写法 `[ -b ... ] && reset || echo 失败` 在设备不存在时会误报"ZRAM 重置失败"。
     if [ -b /dev/zram0 ]; then
-        if sudo zramctl /dev/zram0 --reset 2>/dev/null; then
+        # zramctl --reset 在部分内核上会「实际已经重置成功但返回非 0」：
+        # 写完 sysfs 的 reset 后设备状态瞬间变化，命令读回校验失败。
+        # 因此不能只看返回码，要按重置后的实际状态判定。
+        sudo zramctl /dev/zram0 --reset 2>/dev/null
+        local _zram_still_on=0 _zram_disk_size=""
+        if swapon --show=NAME --noheadings 2>/dev/null | grep -qx "/dev/zram0"; then
+            _zram_still_on=1
+        fi
+        _zram_disk_size=$(cat /sys/block/zram0/disksize 2>/dev/null || echo "")
+        if [ "$_zram_still_on" -eq 0 ] && { [ ! -e /sys/block/zram0/disksize ] || [ "${_zram_disk_size:-1}" = "0" ]; }; then
             echo -e "${GREEN}✓ ZRAM 已重置${NC}"
         else
-            echo -e "${YELLOW}⚠️ ZRAM 重置失败（设备可能仍被占用），可重启后再试。${NC}"
+            echo -e "${YELLOW}⚠️ ZRAM 仍在使用中（设备未释放），重启后会自动恢复默认配置。${NC}"
+            echo "    当前交换设备：$(swapon --show=NAME --noheadings 2>/dev/null | tr '\n' ' ')"
         fi
     else
         echo -e "${CYAN}ℹ 未发现 ZRAM 设备，跳过重置。${NC}"
@@ -3276,6 +3650,8 @@ fix_single_ntfs() {
             echo "$_mlog" | grep -iE 'ntfs|volume' | tail -8 | sed 's/^/    /'
         fi
         echo "  若提示卷损坏严重，请进 Windows 运行 chkdsk /f 后再试。"
+        # FIX-LEAD: fix_single_ntfs ZH
+        return 1
     fi
     if [ -n "$mountpoint" ] && [ -d "$mountpoint" ]; then
         echo "  尝试重新挂载到 $mountpoint ..."
@@ -3548,10 +3924,12 @@ fix_disk_write_error() {
         esac
     done
 
+    # FIX-LEAD: ntfs fix count
+    local fix_fail=0
     case $fix_choice in
         1)
             for idx in "${dirty_indices[@]}"; do
-                fix_single_ntfs "${ntfs_devices[$idx]}" "${ntfs_mountpoints[$idx]}"
+                fix_single_ntfs "${ntfs_devices[$idx]}" "${ntfs_mountpoints[$idx]}" || ((fix_fail++))
             done
             ;;
         2)
@@ -3578,8 +3956,9 @@ fix_disk_write_error() {
             for num in "${indices[@]}"; do
                 # 由“脏分区列表序号”映射回真实分区下标
                 local target_idx="${dirty_indices[$((num-1))]}"
-                fix_single_ntfs "${ntfs_devices[$target_idx]}" "${ntfs_mountpoints[$target_idx]}"
+                fix_single_ntfs "${ntfs_devices[$target_idx]}" "${ntfs_mountpoints[$target_idx]}" || ((fix_fail++))
             done
+            # FIX-LEAD: ntfs selected count ZH
             ;;
         3|*)
             echo "操作取消。"
@@ -3588,6 +3967,11 @@ fix_disk_write_error() {
 
     _restore_readonly_after_fix
     echo ""
+    # FIX-LEAD: ntfs final ZH
+    if [ "${fix_fail:-0}" -gt 0 ]; then
+        echo -e "${YELLOW}⚠️  修复流程结束，但有 ${fix_fail} 个分区修复失败，请查看上面的错误信息。${NC}"
+        return 1
+    fi
     echo -e "${GREEN}✅ 修复流程完成。${NC}"
 }
 
@@ -3762,7 +4146,10 @@ if [ -z "$CLOVER_ENTRY" ]; then
     echo "   ESP 分区: $ESP_DEV （磁盘 $ESP_DISK，分区号 $ESP_PARTN）"
 
     clover_files_ok
-    local files_rc=$?
+    # FIX-LEAD: fix_boot files_rc ZH
+    # 该段在生成的子脚本里运行于函数外：bash 的 `local` 会失败并覆盖 $?，
+    # 导致 Clover 文件缺失 (返回 1) 被误当成 0 而继续注册无效启动项。
+    files_rc=$?
     if [ "$files_rc" -eq 2 ]; then
         echo ""
         echo "⚠️  无法读取 ESP 内容来判断 Clover 文件是否存在（权限或挂载问题）。"
@@ -4525,36 +4912,93 @@ fix_shared_disk() {
 }
 
 install_uu_accelerator() {
+    # FIX-SOFTWARE: 不再把网络内容直接管道给 root。
+    # https + 超时 + 下载到临时文件 + 校验是 shell 文本 + 校验通过后直接 sudo 执行（由 sudo 提示密码）。
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 安装UU加速器插件 ════════════════${NC}"
-    if curl -s uudeck.com | sudo sh; then
-        echo -e "${GREEN}✓ UU加速器插件安装完成。${NC}"
-    else
-        echo -e "${RED}✗ 安装失败（脚本返回错误码），请检查网络后重试。${NC}"
+    local url="https://uudeck.com"
+    local tmp="$(mktemp "$TEMP_DIR/uudeck.com.XXXXXX.sh" 2>/dev/null)"
+    if [ -z "$tmp" ]; then
+        echo -e "${RED}✗ 无法创建临时文件，操作中止。${NC}"
         return 1
     fi
+    echo -e "${CYAN}正在下载并校验安装脚本（来源: $url）...${NC}"
+    if ! fs_fetch_shell "$url" "$tmp"; then
+        echo -e "${RED}✗ 下载失败，或返回内容不是有效的 shell 脚本（可能拿到了 HTML 错误页），已中止。${NC}"
+        rm -f "$tmp"
+        return 1
+    fi
+    echo -e "${GREEN}✓ 已下载并通过基本校验，即将以 root 执行（下一步需要输入密码）。${NC}"
+    echo -e "${CYAN}正在以 sudo 执行已下载的脚本...${NC}"
+    if sudo sh "$tmp"; then
+        echo -e "${GREEN}✓ 安装UU加速器插件完成。${NC}"
+        rm -f "$tmp"
+        return 0
+    fi
+    echo -e "${RED}✗ 安装脚本返回错误码，请检查上方输出。${NC}"
+    rm -f "$tmp"
+    return 1
 }
 
 install_xunyou_accelerator() {
+    # FIX-SOFTWARE: 不再把网络内容直接管道给 root。
+    # https + 超时 + 下载到临时文件 + 校验是 shell 文本 + 校验通过后直接 sudo 执行（由 sudo 提示密码）。
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 安装迅游加速器插件 ════════════════${NC}"
-    if curl -s sd.xunyou.com | sudo sh; then
-        echo -e "${GREEN}✓ 迅游加速器插件安装完成。${NC}"
-    else
-        echo -e "${RED}✗ 安装失败（脚本返回错误码），请检查网络后重试。${NC}"
+    local url="https://sd.xunyou.com"
+    local tmp="$(mktemp "$TEMP_DIR/sd.xunyou.com.XXXXXX.sh" 2>/dev/null)"
+    if [ -z "$tmp" ]; then
+        echo -e "${RED}✗ 无法创建临时文件，操作中止。${NC}"
         return 1
     fi
+    echo -e "${CYAN}正在下载并校验安装脚本（来源: $url）...${NC}"
+    if ! fs_fetch_shell "$url" "$tmp"; then
+        echo -e "${RED}✗ 下载失败，或返回内容不是有效的 shell 脚本（可能拿到了 HTML 错误页），已中止。${NC}"
+        rm -f "$tmp"
+        return 1
+    fi
+    echo -e "${GREEN}✓ 已下载并通过基本校验，即将以 root 执行（下一步需要输入密码）。${NC}"
+    echo -e "${CYAN}正在以 sudo 执行已下载的脚本...${NC}"
+    if sudo sh "$tmp"; then
+        echo -e "${GREEN}✓ 安装迅游加速器插件完成。${NC}"
+        rm -f "$tmp"
+        return 0
+    fi
+    echo -e "${RED}✗ 安装脚本返回错误码，请检查上方输出。${NC}"
+    rm -f "$tmp"
+    return 1
 }
 
 install_qiyou_accelerator() {
+    # FIX-SOFTWARE: 不再把网络内容直接管道给 root。
+    # https + 超时 + 下载到临时文件 + 校验是 shell 文本 + 校验通过后直接 sudo 执行（由 sudo 提示密码）。
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ 安装奇游联机宝加速插件 ════════════════${NC}"
-    if curl -s sd.qiyou.cn | sudo sh; then
-        echo -e "${GREEN}✓ 奇游联机宝加速插件安装完成。${NC}"
-    else
-        echo -e "${RED}✗ 安装失败（脚本返回错误码），请检查网络后重试。${NC}"
+    # FIX-QIYOU: sd.qiyou.cn 只提供 HTTP（443 未开放），一级引导脚本本身也用
+    # 明文 http 去 static.qiyou.cn 拉真正的安装脚本。static.qiyou.cn 支持 HTTPS，
+    # 因此直接取真实脚本，既避开连不上的 443，也不再经过明文引导层。
+    local url="https://static.qiyou.cn/upgrade/ljb/plugin/qyplug.sh"
+    local tmp="$(mktemp "$TEMP_DIR/qyplug.XXXXXX.sh" 2>/dev/null)"
+    if [ -z "$tmp" ]; then
+        echo -e "${RED}✗ 无法创建临时文件，操作中止。${NC}"
         return 1
     fi
+    echo -e "${CYAN}正在下载并校验安装脚本（来源: $url）...${NC}"
+    if ! fs_fetch_shell "$url" "$tmp"; then
+        echo -e "${RED}✗ 下载失败，或返回内容不是有效的 shell 脚本（可能拿到了 HTML 错误页），已中止。${NC}"
+        rm -f "$tmp"
+        return 1
+    fi
+    echo -e "${GREEN}✓ 已下载并通过基本校验，即将以 root 执行（下一步需要输入密码）。${NC}"
+    echo -e "${CYAN}正在以 sudo 执行已下载的脚本...${NC}"
+    if sudo sh "$tmp"; then
+        echo -e "${GREEN}✓ 安装奇游联机宝加速插件完成。${NC}"
+        rm -f "$tmp"
+        return 0
+    fi
+    echo -e "${RED}✗ 安装脚本返回错误码，请检查上方输出。${NC}"
+    rm -f "$tmp"
+    return 1
 }
 
 install_asklink() {
@@ -4563,24 +5007,54 @@ install_asklink() {
     echo -e "${YELLOW}════════════════ AskLink 远程 ════════════════${NC}"
 
     if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
+        # FIX-SOFTWARE: 二次确认 + 检查返回值 + 用户数据目录单独确认。
         echo -e "${GREEN}AskLink 已安装。${NC}"
-        echo -e "${YELLOW}按 回车键/A键 卸载，按其他键保持安装并退出。${NC}"
-        read -p "请选择: " -n 1 -r < /dev/tty
-        echo ""
-        if [[ $REPLY == "" ]]; then
-            echo -e "${CYAN}正在卸载 AskLink...${NC}"
-            sudo rm -rf /opt/AskLink
-            rm -f "$HOME/Desktop/AskLink.desktop"
-            sudo rm -f /usr/share/applications/AskLink.desktop
-            rm -f "$HOME/.local/share/applications/AskLink.desktop"
-            if [ -d "$HOME/Documents/AskLink" ]; then
-                rm -rf "$HOME/Documents/AskLink"
-                echo -e "${CYAN}已删除配置文件目录 $HOME/Documents/AskLink${NC}"
-            fi
-            echo -e "${GREEN}✅ AskLink 已卸载。${NC}"
-        else
-            echo -e "${GREEN}保持 AskLink 安装。${NC}"
+        echo -e "${YELLOW}将删除 /opt/AskLink 及桌面/系统快捷方式。${NC}"
+        local DESKTOP_DIR
+        DESKTOP_DIR="$(fs_desktop_dir)"
+        echo -e "${RED}警告：卸载会移除程序文件；配置目录可能含用户数据。${NC}"
+        if ! confirm_action; then
+            echo -e "${GREEN}已取消，保持 AskLink 安装。${NC}"
+            return 0
         fi
+        local fail=0
+        # 结束可能占用二进制的进程（检查返回值但不因「没找到进程」而失败）
+        if pgrep -f '/opt/AskLink' >/dev/null 2>&1; then
+            sudo pkill -f '/opt/AskLink' 2>/dev/null || echo -e "${YELLOW}⚠ 结束进程失败，请手动关闭后重试${NC}"
+        fi
+        if ! sudo rm -rf /opt/AskLink; then
+            echo -e "${RED}✗ 删除 /opt/AskLink 失败${NC}"; fail=1
+        fi
+        local f
+        for f in "$DESKTOP_DIR/AskLink.desktop" "$HOME/Desktop/AskLink.desktop"                  "$HOME/.local/share/applications/AskLink.desktop"; do
+            if [ -e "$f" ] && ! rm -f "$f"; then
+                echo -e "${RED}✗ 删除 $f 失败${NC}"; fail=1
+            fi
+        done
+        if [ -e /usr/share/applications/AskLink.desktop ] && ! sudo rm -f /usr/share/applications/AskLink.desktop; then
+            echo -e "${RED}✗ 删除系统快捷方式失败${NC}"; fail=1
+        fi
+        # 用户数据目录：单独确认
+        if [ -d "$HOME/Documents/AskLink" ]; then
+            echo ""
+            echo -e "${CYAN}是否删除配置与用户数据目录 $HOME/Documents/AskLink？${NC}"
+            echo -e "${YELLOW}该目录可能含登录信息/配置，删除后无法恢复。${NC}"
+            if confirm_action; then
+                if ! rm -rf "$HOME/Documents/AskLink"; then
+                    echo -e "${RED}✗ 删除配置目录失败${NC}"; fail=1
+                else
+                    echo -e "${GREEN}✓ 已删除配置目录${NC}"
+                fi
+            else
+                echo -e "${YELLOW}已保留配置目录。${NC}"
+            fi
+        fi
+        echo ""
+        if [ "$fail" -ne 0 ]; then
+            echo -e "${RED}✗ 卸载过程中有失败项，请按上方提示手动处理。${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}✅ AskLink 已卸载。${NC}"
         return 0
     fi
 
@@ -4632,24 +5106,37 @@ install_asklink() {
     echo -e "${CYAN}正在下载 ${FILENAME} ...${NC}"
 
     cd "$TEMP_DIR" || return
+    # FIX-SOFTWARE: 关键下载加 --fail/超时；dpkg 不再 2>/dev/null 吞错误。
     if command -v wget &>/dev/null; then
-        wget --show-progress "$ASKLINK_URL" -O "$FILENAME"
+        wget --show-progress --connect-timeout=15 --timeout=120 --tries=1 "$ASKLINK_URL" -O "$FILENAME"
     else
-        curl -L --fail --progress-bar "$ASKLINK_URL" -o "$FILENAME"
+        curl -L --fail --connect-timeout 15 --max-time 120 --progress-bar "$ASKLINK_URL" -o "$FILENAME"
     fi
-    if [ $? -ne 0 ] || [ ! -f "$FILENAME" ]; then
-        echo -e "${RED}下载失败。${NC}"
+    if [ $? -ne 0 ] || [ ! -s "$FILENAME" ]; then
+        echo -e "${RED}下载失败或文件为空。${NC}"
+        rm -f "$FILENAME"
         return 1
     fi
 
-    echo -e "${CYAN}正在安装...${NC}"
-    sudo dpkg --force-depends -i "$FILENAME" 2>/dev/null
-
+    echo -e "${CYAN}正在安装（dpkg 输出不再被抑制，失败将如实显示）...${NC}"
+    if ! sudo dpkg --force-depends -i "$FILENAME"; then
+        echo -e "${RED}✗ dpkg 安装失败，请查看上方真实错误。${NC}"
+        echo -e "${YELLOW}  常见原因：缺依赖。可尝试 sudo pacman -S 相应依赖后重试。${NC}"
+        rm -f "$FILENAME"
+        return 1
+    fi
     rm -f "$FILENAME"
 
+    # 安装后验证可执行文件/服务，而不是只看目录存在
+    if [ ! -x /opt/AskLink/AskLink ] && ! command -v asklink &>/dev/null; then
+        echo -e "${RED}✗ dpkg 返回成功但未找到可执行的 AskLink，安装视为失败。${NC}"
+        return 1
+    fi
     if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
         echo -e "${GREEN}✅ AskLink 安装成功！${NC}"
-        local DESKTOP_FILE="$HOME/Desktop/AskLink.desktop"
+        local DESKTOP_DIR
+        DESKTOP_DIR="$(fs_desktop_dir)"
+        local DESKTOP_FILE="$DESKTOP_DIR/AskLink.desktop"
         cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Type=Application
@@ -4704,7 +5191,10 @@ watt_toolkit_install() {
     fi
 
     if $has_install; then
-        if [ -n "$installed_version" ] && [ "$installed_version" = "$VERSION" ]; then
+        # FIX-WATT: .version 可能是 "v3.1.0" 而下载常量是 "3.1.0"，
+        # 比较前去掉开头的 v，否则同版本也会误报「检测到新版本」。
+        local installed_cmp="${installed_version#v}"
+        if [ -n "$installed_version" ] && [ "$installed_cmp" = "$VERSION" ]; then
             echo -e "${GREEN}✅ 已是最新版本 ${installed_version}，无需操作。${NC}"
             return 0
         fi
@@ -4722,67 +5212,145 @@ watt_toolkit_install() {
         fi
     fi
 
+    # FIX-SOFTWARE: 下载到 mktemp 临时目录 + curl --fail/超时；先校验关键文件
+    # 再替换旧目录；mv/mkdir 失败立即中止；.version 只在全部成功后写。
     echo -e "${GREEN}将安装版本: ${VERSION}${NC}"
     echo "正在下载 ${DOWNLOAD_URL} ..."
 
-    local temp_dir="/tmp/watt_toolkit_install"
-    rm -rf "$temp_dir"
-    mkdir -p "$temp_dir"
-    cd "$temp_dir" || return 1
-
-    local filename="Steam_v${VERSION}_linux_x64.tgz"
-    curl -L --progress-bar -o "$filename" "$DOWNLOAD_URL"
-    if [ $? -ne 0 ] || [ ! -f "$filename" ]; then
+    local temp_dir
+    temp_dir="$(mktemp -d /tmp/watt_toolkit_install.XXXXXXXX 2>/dev/null)" || {
+        echo -e "${RED}✗ 无法创建临时目录，已中止（旧安装未动）。${NC}"; return 1; }
+    # FIX-WATT: 绝不 cd 进临时目录。安装末尾会 rm -rf 该目录，若当前工作目录
+    # 还在里面，后续每条 sudo 都会 getcwd 失败并刷上百行
+    # "job-working-directory: getcwd: 无法访问父目录"。全部改用绝对路径。
+    local filename="$temp_dir/Steam_v${VERSION}_linux_x64.tgz"
+    if ! curl -L --fail --connect-timeout 15 --max-time 300 --progress-bar -o "$filename" "$DOWNLOAD_URL"; then
         echo -e "${RED}下载失败，请检查网络后重试。${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+        return 1
+    fi
+    if [ ! -s "$filename" ]; then
+        echo -e "${RED}下载文件为空，已中止。${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
         return 1
     fi
 
     echo -e "${CYAN}正在解压...${NC}"
     local temp_extract="$temp_dir/extracted"
-    mkdir -p "$temp_extract"
+    if ! mkdir -p "$temp_extract"; then
+        echo -e "${RED}✗ 创建解压目录失败，已中止。${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+        return 1
+    fi
     if ! tar -xzf "$filename" -C "$temp_extract"; then
         echo -e "${RED}解压失败。${NC}"
-        rm -rf "$temp_dir"
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
         return 1
     fi
 
     local content_count=$(ls -1 "$temp_extract" | wc -l)
     local first_item=$(ls -1 "$temp_extract" | head -1)
+    local src_root="$temp_extract"
+    if [ "$content_count" -eq 1 ] && [ -d "$temp_extract/$first_item" ]; then
+        src_root="$temp_extract/$first_item"
+    fi
 
+    # 先在暂存区校验关键文件（DLL 存在、dotnet 可执行），验证通过才动旧目录。
+    local stage_dotnet="$src_root/dotnet/dotnet"
+    local stage_dll="$src_root/assemblies/Steam++.dll"
+    if [ ! -f "$stage_dll" ] || [ ! -x "$stage_dotnet" ]; then
+        echo -e "${RED}错误: 解压内容缺少关键文件或 dotnet 不可执行，安装中止（旧安装未动）。${NC}"
+        echo "  期望: $stage_dll 存在、$stage_dotnet 可执行(-x)"
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+        return 1
+    fi
+    echo -e "${GREEN}✓ 关键文件校验通过（DLL + dotnet 可执行）${NC}"
+
+    # FIX-WATT: 备份目标必须与安装目录位于同一文件系统（/tmp 与 /home 常是不同设备），
+    # 且压缩包里的 dotnet 带 security.capability xattr —— mv/cp -a 在跨设备或
+    # 不允许设置 capability 时会报 "setting attribute 'security.capability'"。
+    # 因此：备份放到 $HOME 下，用 cp -a 复制而非 mv；新文件先装到同文件系统的
+    # 暂存目录，用 cp -r --no-preserve=xattr 避免把 capability 带过去。
+    local backup_dir="$HOME/.watt_toolkit_backup.$$"
+    local had_backup=0
     if [ -d "$INSTALL_DIR" ]; then
-        echo "检测到旧安装目录，正在删除..."
-        rm -rf "$INSTALL_DIR"
+        echo "检测到旧安装目录，先备份再替换..."
+        if ! cp -a "$INSTALL_DIR" "$backup_dir" 2>/dev/null; then
+            echo -e "${RED}✗ 备份旧目录失败，已中止（旧安装未动）。${NC}"
+            rm -rf "$backup_dir" 2>/dev/null
+            cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+            return 1
+        fi
+        had_backup=1
     fi
-    mkdir -p "$INSTALL_DIR"
-
-    if [ $content_count -eq 1 ] && [ -d "$temp_extract/$first_item" ]; then
-        echo -e "${CYAN}检测到顶层目录，移动内容到 $INSTALL_DIR ...${NC}"
-        shopt -s dotglob
-        mv "$temp_extract/$first_item"/* "$INSTALL_DIR/"
-        shopt -u dotglob
-        find "$temp_extract/$first_item" -maxdepth 1 -name ".*" ! -name "." ! -name ".." -exec mv {} "$INSTALL_DIR/" \;
-        rm -rf "$temp_extract/$first_item"
+    local stage_install="$HOME/.watt_toolkit_new.$$"
+    rm -rf "$stage_install" 2>/dev/null
+    if ! mkdir -p "$stage_install"; then
+        echo -e "${RED}✗ 创建暂存安装目录失败，已中止（旧安装未动）。${NC}"
+        [ "$had_backup" -eq 1 ] && rm -rf "$backup_dir" 2>/dev/null
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+        return 1
+    fi
+    if cp -r --no-preserve=xattr "$src_root"/. "$stage_install"/ 2>/dev/null || cp -r "$src_root"/. "$stage_install"/; then
+        :
     else
-        echo -e "${CYAN}移动所有内容到 $INSTALL_DIR ...${NC}"
-        shopt -s dotglob
-        mv "$temp_extract"/* "$INSTALL_DIR/"
-        shopt -u dotglob
-        find "$temp_extract" -maxdepth 1 -name ".*" ! -name "." ! -name ".." -exec mv {} "$INSTALL_DIR/" \;
+        echo -e "${RED}✗ 复制安装文件失败，已中止（旧安装未动）。${NC}"
+        rm -rf "$stage_install" "$backup_dir" 2>/dev/null
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+        return 1
     fi
-
+    if [ ! -f "$stage_install/assemblies/Steam++.dll" ] || [ ! -x "$stage_install/dotnet/dotnet" ]; then
+        echo -e "${RED}✗ 暂存内容缺少关键文件或 dotnet 不可执行，已中止（旧安装未动）。${NC}"
+        rm -rf "$stage_install" "$backup_dir" 2>/dev/null
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+        return 1
+    fi
+    if [ -d "$INSTALL_DIR" ]; then
+        if ! mv "$INSTALL_DIR" "$INSTALL_DIR.old.$$" 2>/dev/null; then
+            echo -e "${RED}✗ 移走旧安装目录失败，已中止（旧安装未动）。${NC}"
+            rm -rf "$stage_install" "$backup_dir" 2>/dev/null
+            cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+            return 1
+        fi
+        if ! mv "$stage_install" "$INSTALL_DIR" 2>/dev/null; then
+            echo -e "${RED}✗ 移入新版本失败，正在恢复旧版本...${NC}"
+            mv "$INSTALL_DIR.old.$$" "$INSTALL_DIR" 2>/dev/null
+            rm -rf "$stage_install" "$backup_dir" 2>/dev/null
+            cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+            return 1
+        fi
+        rm -rf "$INSTALL_DIR.old.$$" 2>/dev/null
+    else
+        if ! mv "$stage_install" "$INSTALL_DIR" 2>/dev/null; then
+            echo -e "${RED}✗ 移入新版本失败，已中止。${NC}"
+            rm -rf "$stage_install" 2>/dev/null
+            cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+            return 1
+        fi
+    fi
+    rm -rf "$backup_dir" 2>/dev/null
     rm -rf "$temp_dir"
 
-
-    echo "$VERSION" > "$INSTALL_DIR/.version"
-
+    local DESKTOP_DIR
+    DESKTOP_DIR="$(fs_desktop_dir)"
     local desktop_file="$DESKTOP_DIR/Watt_Toolkit.desktop"
     local dotnet_root="$INSTALL_DIR/dotnet"
     local dll_path="$INSTALL_DIR/assemblies/Steam++.dll"
     local icon_path="$INSTALL_DIR/Icons/Watt-Toolkit.png"
 
-    if [ ! -f "$dll_path" ] || [ ! -f "$dotnet_root/dotnet" ]; then
-        echo -e "${RED}错误: 关键文件缺失，安装可能不完整。${NC}"
+    # 二次复核：dotnet 必须可执行(-x)，而非仅存在(-f)
+    if [ ! -f "$dll_path" ] || [ ! -x "$dotnet_root/dotnet" ]; then
+        echo -e "${RED}错误: 安装后关键文件缺失或 dotnet 不可执行，安装视为失败。${NC}"
         echo "请检查 $INSTALL_DIR 目录内容。"
+        return 1
+    fi
+    # 启动脚本兼容：Steam++.sh 或直接用 dotnet 跑 DLL
+    if [ ! -x "$INSTALL_DIR/Steam++.sh" ] && [ ! -x "$dotnet_root/dotnet" ]; then
+        echo -e "${YELLOW}⚠ 未找到 Steam++.sh 且 dotnet 不可用，桌面快捷方式可能无法启动。${NC}"
+    fi
+    # 全部成功后才写 .version
+    if ! echo "$VERSION" > "$INSTALL_DIR/.version"; then
+        echo -e "${RED}✗ 写入 .version 失败。${NC}"
         return 1
     fi
 
@@ -4831,36 +5399,35 @@ EOF
 }
 
 watt_toolkit_trust_cert() {
-    # 从安装流程调用时传 skip_clear，避免把安装结果摘要清掉
+    # FIX-SOFTWARE: 不再 chmod a+w /etc/hosts（所有本地用户可写）。
+    # 证书先校验 CA:TRUE 与指纹，写入记录文件供卸载精确匹配。
     [ "${1:-}" = "skip_clear" ] || clear
     echo -e "${YELLOW}═══════ 信任 Watt Toolkit (Steam++) 加速证书 ═══════${NC}"
     echo ""
-    echo "加速功能需要三项系统级改动："
+    echo "加速功能需要两项系统级改动："
     echo "  1. 把 Watt Toolkit 自签的根证书加入系统信任库（否则 https 加速报证书错误）"
-    echo "  2. 允许写入 /etc/hosts（加速靠改 hosts 实现域名重定向）"
-    echo "  3. 允许读取 /etc/hosts（Watt Toolkit 读取当前 hosts 内容以做增量修改）"
+    echo "  2. 让当前用户能写 /etc/hosts（用 sudo 临时提权，不永久放开权限）"
     echo ""
     echo -e "${YELLOW}安全提示：${NC}"
     echo "  该证书是 Watt Toolkit 在本机自己生成的根证书（CN=SteamTools Certificate），"
     echo "  信任它意味着持有对应私钥的进程可以解密本机的 https 流量。"
-    echo "  不再使用 Watt Toolkit 时，建议移除该信任（见卸载提示）。"
+    echo "  不再使用 Watt Toolkit 时，建议运行卸载功能移除该信任。"
     echo ""
 
     local CERT_DIR="$HOME/.local/share/Steam++/Plugins/Accelerator"
     local CERT_FILE="$CERT_DIR/SteamTools.Certificate.cer"
+    local RECORD_FILE="$HOME/.local/share/Steam++/watt_toolkit_trust.record"
     local INSTALL_DIR="$HOME/Watt Toolkit"
-    local launch_now="" retry=""
+    local launch_now="" retry="" confirm=""
+    local CERT_FP=""
 
-    # ---------- 前置检查 ----------
-    if ! command -v trust &>/dev/null; then
+    if ! command -v trust >/dev/null 2>&1; then
         echo -e "${RED}✗ 未找到 trust 命令（由 p11-kit 提供），无法写入系统信任库。${NC}"
         echo -e "${YELLOW}  可尝试：sudo pacman -S p11-kit${NC}"
         return 1
     fi
 
     # ---------- 证书存在性 ----------
-    # 证书不是安装包自带的，而是 Watt Toolkit 首次运行时加速插件生成的，
-    # 所以刚装完通常还没有，需要用户先启动软件并点一次「加速」。
     if [ ! -f "$CERT_FILE" ]; then
         echo -e "${YELLOW}未找到加速证书：${NC}"
         echo "  $CERT_FILE"
@@ -4868,21 +5435,28 @@ watt_toolkit_trust_cert() {
         echo "这个证书由 Watt Toolkit 首次运行时生成，安装包里并没有。"
         echo "请先启动 Watt Toolkit，在「网络加速」里点一次「加速」，证书才会出现。"
         echo ""
-
+        local start_cmd=""
         if [ -x "$INSTALL_DIR/Steam++.sh" ]; then
-            read -n1 -p "现在启动 Watt Toolkit 吗？[回车/A=启动，其他键=跳过] " launch_now < /dev/tty
+            start_cmd="$INSTALL_DIR/Steam++.sh"
+        elif [ -f "$INSTALL_DIR/assemblies/Steam++.dll" ] && [ -x "$INSTALL_DIR/dotnet/dotnet" ]; then
+            start_cmd="$INSTALL_DIR/dotnet/dotnet"
+        fi
+        if [ -n "$start_cmd" ]; then
+            read -r -n1 -p "现在启动 Watt Toolkit 吗？[回车/A=启动，其他键=跳过] " launch_now < /dev/tty || launch_now="q"
             echo
             if [[ -z "$launch_now" || "$launch_now" =~ [Aa] ]]; then
-                nohup "$INSTALL_DIR/Steam++.sh" >/dev/null 2>&1 &
+                if [ "$start_cmd" = "$INSTALL_DIR/dotnet/dotnet" ]; then
+                    (cd "$INSTALL_DIR" && nohup env DOTNET_ROOT="$INSTALL_DIR/dotnet" "$start_cmd" "$INSTALL_DIR/assemblies/Steam++.dll" >/dev/null 2>&1 &)
+                else
+                    nohup "$start_cmd" >/dev/null 2>&1 &
+                fi
                 echo -e "${GREEN}✓ 已启动 Watt Toolkit${NC}"
                 echo ""
             fi
         else
-            echo -e "${YELLOW}未找到 $INSTALL_DIR/Steam++.sh，请手动从桌面启动。${NC}"
+            echo -e "${YELLOW}未找到 Steam++.sh / dotnet 启动入口，请手动从桌面启动。${NC}"
             echo ""
         fi
-
-        # 等用户操作完再检测；Q 可放弃，避免卡死在循环里
         local wait_count=0
         while [ ! -f "$CERT_FILE" ]; do
             wait_count=$((wait_count + 1))
@@ -4890,7 +5464,7 @@ watt_toolkit_trust_cert() {
                 echo -e "${YELLOW}等待超时，已退出。证书生成后可再运行本功能。${NC}"
                 return 0
             fi
-            read -n1 -p "在 Watt Toolkit 里点一次「加速」后按回车重新检测（Q 放弃）: " retry < /dev/tty
+            read -r -n1 -p "在 Watt Toolkit 里点一次「加速」后按回车重新检测（Q 放弃）: " retry < /dev/tty || { echo; echo -e "${CYAN}输入不可用，已退出。${NC}"; return 0; }
             echo
             if [[ "${retry:-}" =~ [Qq] ]]; then
                 echo -e "${CYAN}已放弃。证书生成后可再运行「信任证书」。${NC}"
@@ -4902,30 +5476,42 @@ watt_toolkit_trust_cert() {
 
     echo -e "${GREEN}✓ 找到证书: $CERT_FILE${NC}"
 
-    # ---------- 证书校验 ----------
-    if command -v openssl &>/dev/null; then
-        local cert_subject cert_end
+    # ---------- 证书校验：必须是 CA:TRUE，且记录指纹 ----------
+    if command -v openssl >/dev/null 2>&1; then
+        local cert_subject cert_end bc
         if ! cert_subject=$(openssl x509 -in "$CERT_FILE" -noout -subject 2>/dev/null); then
             echo -e "${RED}✗ 证书无法解析，文件可能已损坏。${NC}"
-            echo -e "${YELLOW}  请在 Watt Toolkit 里重新生成证书后再试。${NC}"
             return 1
         fi
         echo "  $cert_subject"
+        bc=$(openssl x509 -in "$CERT_FILE" -noout -text 2>/dev/null | grep -A1 "Basic Constraints" | tr '\n' ' ')
+        if ! printf '%s' "$bc" | grep -qi "CA:TRUE"; then
+            echo -e "${RED}✗ 该证书不是 CA 证书（Basic Constraints 缺少 CA:TRUE），拒绝加入系统信任库。${NC}"
+            echo -e "${YELLOW}  只信任 Watt Toolkit 自己生成的根证书，避免误信普通终端证书。${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}  ✓ Basic Constraints: CA:TRUE${NC}"
         cert_end=$(openssl x509 -in "$CERT_FILE" -noout -enddate 2>/dev/null | cut -d= -f2)
         [ -n "$cert_end" ] && echo "  有效期至: $cert_end"
-        if ! openssl x509 -in "$CERT_FILE" -noout -checkend 0 &>/dev/null; then
+        if ! openssl x509 -in "$CERT_FILE" -noout -checkend 0 >/dev/null 2>&1; then
             echo -e "${RED}✗ 证书已过期，请先在 Watt Toolkit 里重新生成证书。${NC}"
             return 1
         fi
+        CERT_FP=$(openssl x509 -in "$CERT_FILE" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2 | tr -d ':' | tr 'A-F' 'a-f')
+        if [ -z "$CERT_FP" ]; then
+            echo -e "${RED}✗ 无法读取证书指纹，已中止。${NC}"
+            return 1
+        fi
+        echo "  SHA256 指纹: $CERT_FP"
     else
-        # 没有 openssl 时至少确认是 PEM 证书，避免把垃圾文件写进信任库
         if ! grep -q "BEGIN CERTIFICATE" "$CERT_FILE" 2>/dev/null; then
             echo -e "${RED}✗ 文件不是有效的 PEM 证书，已中止。${NC}"
             return 1
         fi
+        echo -e "${YELLOW}⚠ 未安装 openssl，无法校验 CA:TRUE / 指纹；仅做 PEM 基本检查。${NC}"
+        echo -e "${YELLOW}  建议先安装 openssl 后重试，以便在卸载时按指纹精确移除。${NC}"
     fi
 
-    # ---------- 已信任检测 ----------
     local already_trusted=false
     if trust list 2>/dev/null | grep -qi "SteamTools Certificate"; then
         already_trusted=true
@@ -4934,165 +5520,304 @@ watt_toolkit_trust_cert() {
     fi
 
     echo ""
-    read -n1 -p "按回车键或 A 键确认写入系统信任库并调整 /etc/hosts 权限，其他键取消: " confirm < /dev/tty
+    read -r -n1 -p "按回车键或 A 键确认写入系统信任库，其他键取消: " confirm < /dev/tty || confirm="q"
     echo
     if [[ -n "$confirm" && ! "$confirm" =~ [Aa] ]]; then
         echo -e "${GREEN}已取消，未做任何改动。${NC}"
         return 0
     fi
 
-    # ---------- 解除只读（写 /etc 需要） ----------
     if ! ensure_writable; then return 1; fi
+
+    # ---------- 保存 hosts 原权限 ----------
+    local HOSTS_PERM=""
+    HOSTS_PERM=$(stat -c %a /etc/hosts 2>/dev/null)
+    [ -z "$HOSTS_PERM" ] && HOSTS_PERM="644"
+    echo -e "${CYAN}/etc/hosts 原权限: $HOSTS_PERM（已记录，卸载时恢复）${NC}"
 
     # ---------- 写入信任库 ----------
     echo ""
     echo -e "${CYAN}正在把证书写入系统信任库...${NC}"
-    if sudo trust anchor --store "$CERT_FILE"; then
-        echo -e "${GREEN}✓ 证书已加入系统信任库${NC}"
-    else
-        echo -e "${RED}✗ 写入信任库失败，请检查上方输出。${NC}"
+    # FIX-WATT: `sudo trust anchor --store` 会写到 root 的私有 anchor 位置，
+    # 普通用户的 `trust list` 看不到，且不会刷新系统证书包 —— 结果就是
+    # "✓ 已加入" 但 HTTPS 加速仍报证书错误。改为显式写入系统 anchors 目录、
+    # 刷新证书包，再用 openssl 指纹验证是否真正生效。
+    local ANCHOR_DIR="/etc/ca-certificates/trust-source/anchors"
+    local ANCHOR_FILE="$ANCHOR_DIR/SteamTools.Certificate.crt"
+    if [ ! -d "$ANCHOR_DIR" ]; then
+        if ! sudo mkdir -p "$ANCHOR_DIR" 2>/dev/null; then
+            echo -e "${RED}✗ 无法创建系统证书目录 $ANCHOR_DIR。${NC}"
+            return 1
+        fi
+    fi
+    if ! sudo cp "$CERT_FILE" "$ANCHOR_FILE" 2>/dev/null; then
+        echo -e "${RED}✗ 写入系统证书目录失败，请检查上方输出。${NC}"
         return 1
     fi
-
-    if trust list 2>/dev/null | grep -qi "SteamTools Certificate"; then
-        echo -e "${GREEN}✓ 已确认证书在信任库中${NC}"
+    sudo chmod 644 "$ANCHOR_FILE" 2>/dev/null
+    # p11-kit 也登记一份（失败不致命，系统 anchors 已就位）
+    sudo trust anchor --store "$CERT_FILE" 2>/dev/null || true
+    # 刷新系统证书包，让浏览器/openssl 立刻能看到新 CA
+    if command -v update-ca-trust >/dev/null 2>&1; then
+        if ! sudo update-ca-trust 2>/dev/null; then
+            echo -e "${YELLOW}⚠ 刷新系统证书包失败，可稍后手动执行 sudo update-ca-trust。${NC}"
+        fi
+    fi
+    # 功能判据：用系统 bundle 直接验证这张证书能否通过
+    local TRUST_OK=0
+    if command -v openssl >/dev/null 2>&1 && [ -f /etc/ca-certificates/extracted/tls-ca-bundle.pem ]; then
+        if openssl verify -CAfile /etc/ca-certificates/extracted/tls-ca-bundle.pem "$CERT_FILE" >/dev/null 2>&1; then
+            TRUST_OK=1
+        fi
+    fi
+    if [ "$TRUST_OK" -eq 1 ]; then
+        echo -e "${GREEN}✓ 已确认证书在系统信任库中生效（openssl verify 通过）${NC}"
     else
-        echo -e "${YELLOW}⚠ 未能从 trust list 中确认证书，请手动检查: trust list | grep -i steam${NC}"
+        echo -e "${YELLOW}⚠ 无法确认证书已在系统信任库生效，HTTPS 加速可能仍报证书错误。${NC}"
+        echo "    可手动检查: openssl verify -CAfile /etc/ca-certificates/extracted/tls-ca-bundle.pem $CERT_FILE"
     fi
 
-    # ---------- /etc/hosts 权限 ----------
-    # 加速靠改 hosts 实现，Watt Toolkit 以普通用户运行，需要读写权限才不用每次提权。
+    # ---------- 记录文件：保存 hosts 原权限与证书指纹 ----------
+    if ! mkdir -p "$(dirname "$RECORD_FILE")" 2>/dev/null; then
+        echo -e "${RED}✗ 无法创建记录目录，已中止（避免以后无法精确卸载）。${NC}"
+        return 1
+    fi
+    {
+        echo "HOSTS_PERM=$HOSTS_PERM"
+        echo "CERT_FP=$CERT_FP"
+        echo "CERT_FILE=$CERT_FILE"
+    } > "$RECORD_FILE" || {
+        echo -e "${RED}✗ 无法写入记录文件 $RECORD_FILE，已中止。${NC}"
+        return 1
+    }
+    chmod 600 "$RECORD_FILE" 2>/dev/null || true
+
+    # ---------- hosts 可写：用 sudo 临时提权，不永久 chmod a+w ----------
+    # Watt Toolkit 以普通用户运行需要写 hosts；这里只把 hosts 的属主改成当前用户，
+    # 并保留原权限位（不再放开 group/others 写权限），卸载时按记录恢复。
     echo ""
-    echo -e "${CYAN}调整 /etc/hosts 权限...${NC}"
-    if sudo chmod a+w /etc/hosts && sudo chmod a+r /etc/hosts; then
-        echo -e "${GREEN}✓ /etc/hosts 权限已调整${NC}"
-    else
-        echo -e "${RED}✗ 调整 /etc/hosts 权限失败${NC}"
-        return 1
+    echo -e "${CYAN}配置 /etc/hosts 可写（仅属主可写，使用 sudo 临时提权）...${NC}"
+    local hosts_fail=0
+    if ! sudo chown "$CURRENT_USER":"$CURRENT_GROUP" /etc/hosts 2>/dev/null; then
+        echo -e "${YELLOW}⚠ 无法调整 /etc/hosts 属主，加速时可能需要手动授权。${NC}"
+        hosts_fail=1
+    fi
+    # 只给属主写权限；去掉 group/others 的写位（绝不 a+w）
+    if ! sudo chmod u+w,go-w /etc/hosts 2>/dev/null; then
+        echo -e "${YELLOW}⚠ 调整 /etc/hosts 权限失败，加速时可能需要手动授权。${NC}"
+        hosts_fail=1
+    fi
+    # 功能判据：当前用户是否真的能写 /etc/hosts
+    if ! [ -w /etc/hosts ]; then
+        echo -e "${YELLOW}⚠ /etc/hosts 当前仍不可写，加速功能改 hosts 可能失败。${NC}"
+        hosts_fail=1
     fi
     local hosts_perm
-    hosts_perm=$(stat -c '%A' /etc/hosts 2>/dev/null)
-    [ -n "$hosts_perm" ] && echo "  当前权限: $hosts_perm"
+    hosts_perm=$(stat -c '%A %U:%G' /etc/hosts 2>/dev/null)
+    [ -n "$hosts_perm" ] && echo "  当前权限/属主: $hosts_perm"
 
-    # ---------- 结果 ----------
     echo ""
+    if [ "$hosts_fail" -ne 0 ] || [ "$TRUST_OK" -ne 1 ]; then
+        echo -e "${YELLOW}⚠ 加速证书信任流程结束，但有项目未生效，请按上方提示处理。${NC}"
+        return 1
+    fi
     echo -e "${GREEN}✅ 加速证书信任完成${NC}"
     echo -e "${YELLOW}提示：${NC}"
     echo "  · 已打开的浏览器需要重启，才会重新加载系统证书库"
-    echo "  · 若 Watt Toolkit 重新生成了证书，需要再运行一次本功能"
+    echo "  · /etc/hosts 原权限 $HOSTS_PERM 与证书指纹已记录到 $RECORD_FILE"
+    echo "  · 卸载时会按记录恢复，而非一律改成 644"
     if $already_trusted; then
         echo "  · 本次是覆盖更新，旧证书已被替换"
     fi
 }
 
 watt_toolkit_uninstall() {
+    # FIX-SOFTWARE: 即使程序目录不存在也继续清理根 CA / hosts 权限；
+    # 按记录文件恢复 hosts 原权限、按指纹精确移除证书；失败如实报告。
     mk_temp_dir
     clear
-    echo -e "${YELLOW}══════════════ 卸载 Watt Toolkit ══════════════${NC}"
+    echo -e "${YELLOW}════════════════ 卸载 Watt Toolkit ══════════════${NC}"
     local INSTALL_DIR="$HOME/Watt Toolkit"
-    local DESKTOP_DIR="$HOME/Desktop"
-
-    if [ ! -d "$INSTALL_DIR" ]; then
-        echo -e "${YELLOW}未检测到已安装的 Watt Toolkit。${NC}"
-        return 0
-    fi
-
-    echo -e "${CYAN}正在卸载 Watt Toolkit...${NC}"
-    echo "将删除以下目录: ${INSTALL_DIR}"
-    echo "将删除桌面快捷方式: ${DESKTOP_DIR}/Watt_Toolkit.desktop"
-    echo ""
-
-    read -n1 -p "按回车键或 A 键确认卸载，其他键取消: " confirm < /dev/tty
-    echo
-    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
-        echo "继续卸载..."
-    else
-        echo "取消卸载。"
-        return 0
-    fi
-
-    if rm -rf "$INSTALL_DIR"; then
-        echo -e "${GREEN}✓ 已删除安装目录${NC}"
-    else
-        echo -e "${RED}✗ 删除安装目录失败${NC}"
-    fi
-
-    if rm -f "${DESKTOP_DIR}/Watt_Toolkit.desktop"; then
-        echo -e "${GREEN}✓ 已删除桌面快捷方式${NC}"
-    else
-        echo -e "${RED}✗ 删除桌面快捷方式失败${NC}"
-    fi
-
-    echo ""
-    # ---------- 清理信任证书与 hosts 权限 ----------
-    # 安装时「信任证书」把自签根证书写进了系统信任库、并放宽了 /etc/hosts 权限，
-    # 卸载后这些都得收回来，否则等于留下一张能解密 https 的根证书和可写的 hosts。
+    local DESKTOP_DIR
+    DESKTOP_DIR="$(fs_desktop_dir)"
+    local RECORD_FILE="$HOME/.local/share/Steam++/watt_toolkit_trust.record"
     local cert_dir="$HOME/.local/share/Steam++/Plugins/Accelerator"
     local cert_file="$cert_dir/SteamTools.Certificate.cer"
-    local trusted=false
-    trust list 2>/dev/null | grep -qi "SteamTools Certificate" && trusted=true
-    # 只有 others 的写权限位真的开着才提示，避免误报（比如用户从没跑过信任证书）
-    # stat -c %A 输出的第 9 个字符即 others 的写位，如 -rw-rw-rw- 的末位是 w
-    local hosts_open=false
-    local hosts_perm_now
-    hosts_perm_now=$(stat -c '%A' /etc/hosts 2>/dev/null)
-    [ "${hosts_perm_now:8:1}" = "w" ] && hosts_open=true
+    local confirm=""
+    local HOSTS_PERM="" CERT_FP="" REC_CERT_FILE=""
 
-    if $trusted || $hosts_open; then
-        echo -e "${YELLOW}检测到 Watt Toolkit 还留下了系统级改动：${NC}"
-        $trusted && echo "  • 系统信任库里仍有 SteamTools 根证书（可用于解密本机 https）"
-        $hosts_open && echo "  • /etc/hosts 被放宽为所有人可写（当前 $(stat -c '%A' /etc/hosts 2>/dev/null)）"
-        echo ""
-        read -n1 -p "是否一并清除（移除根证书 + 恢复 hosts 权限）？[回车/A=清除，其他键=保留] " clean_sys < /dev/tty
-        echo
-        if [[ -z "$clean_sys" || "$clean_sys" =~ [Aa] ]]; then
-            if ! ensure_writable; then return 1; fi
+    if [ -f "$RECORD_FILE" ]; then
+        while IFS='=' read -r rk rv; do
+            case "$rk" in
+                HOSTS_PERM) HOSTS_PERM="$rv" ;;
+                CERT_FP) CERT_FP="$rv" ;;
+                CERT_FILE) REC_CERT_FILE="$rv" ;;
+            esac
+        done < "$RECORD_FILE"
+    fi
+    [ -n "$REC_CERT_FILE" ] && cert_file="$REC_CERT_FILE"
 
-            # 移除信任：优先用 trust anchor --remove，失败再从 trust list 里取 pkcs11 id 兜底
-            if $trusted; then
-                echo -e "${CYAN}正在移除系统信任库中的 SteamTools 证书...${NC}"
-                if [ -f "$cert_file" ] && sudo trust anchor --remove "$cert_file" 2>/dev/null; then
-                    echo -e "${GREEN}✓ 已移除证书${NC}"
-                else
-                    # 证书文件已被删掉时，只能从信任库里反查锚点 id
-                    local anchor_id
-                    anchor_id=$(trust list 2>/dev/null | grep -i -B 1 "label: SteamTools Certificate" \
-                                | grep -o 'pkcs11:id=[^;]*;type=cert' | head -1)
-                    if [ -n "$anchor_id" ] && sudo trust anchor --remove "$anchor_id" 2>/dev/null; then
-                        echo -e "${GREEN}✓ 已移除证书${NC}"
-                    else
-                        echo -e "${YELLOW}⚠ 自动移除失败，请手动执行：${NC}"
-                        echo "    trust list | grep -i -B1 'SteamTools'   # 查看锚点"
-                        echo "    sudo trust anchor --remove '<上面的 pkcs11:id=...>'"
-                    fi
-                fi
-            fi
+    local install_exists=false
+    [ -d "$INSTALL_DIR" ] && install_exists=true
+    if ! $install_exists; then
+        echo -e "${YELLOW}未检测到程序目录，但仍会继续清理证书信任与 /etc/hosts 权限。${NC}"
+    fi
 
-            # 恢复 /etc/hosts 权限为常规的 644（属主可写，其他只读）
-            echo -e "${CYAN}正在恢复 /etc/hosts 权限...${NC}"
-            if sudo chmod 644 /etc/hosts 2>/dev/null; then
-                echo -e "${GREEN}✓ /etc/hosts 已恢复为 644（所有人可写已收回）${NC}"
-            else
-                echo -e "${YELLOW}⚠ 恢复失败，请手动执行: sudo chmod 644 /etc/hosts${NC}"
-            fi
-            local hosts_perm
-            hosts_perm=$(stat -c '%A' /etc/hosts 2>/dev/null)
-            [ -n "$hosts_perm" ] && echo "  当前权限: $hosts_perm"
+    echo -e "${CYAN}将执行以下操作：${NC}"
+    $install_exists && echo "  · 删除目录: $INSTALL_DIR"
+    echo "  · 删除桌面快捷方式: $DESKTOP_DIR/Watt_Toolkit.desktop"
+    echo "  · 从系统信任库移除 SteamTools 根证书（有记录时按 SHA256 指纹精确匹配）"
+    echo "  · 恢复 /etc/hosts 权限${HOSTS_PERM:+（原权限 $HOSTS_PERM）}"
+    echo ""
+    echo -e "${YELLOW}警告：目录内可能含用户数据；删除系统级改动需要 sudo。${NC}"
+    echo ""
+    if ! confirm_action; then
+        echo -e "${GREEN}已取消，未做任何改动。${NC}"
+        return 0
+    fi
 
-            # 信任库变更后刷新系统证书包
-            if command -v update-ca-trust &>/dev/null; then
-                sudo update-ca-trust 2>/dev/null || true
-            fi
+    local fail_count=0
+    # ---------- 删除程序目录（symlink 不跟随） ----------
+    if $install_exists; then
+        if [ -L "$INSTALL_DIR" ]; then
+            echo -e "${RED}✗ $INSTALL_DIR 是符号链接，拒绝删除，请手动检查。${NC}"
+            fail_count=$((fail_count + 1))
+        elif rm -rf "$INSTALL_DIR"; then
+            echo -e "${GREEN}✓ 已删除安装目录${NC}"
         else
-            echo -e "${YELLOW}已保留证书信任与 hosts 权限。${NC}"
-            echo -e "${YELLOW}如需手动清除：${NC}"
-            echo "    sudo trust anchor --remove \"$cert_file\""
-            echo "    sudo chmod 644 /etc/hosts"
+            echo -e "${RED}✗ 删除安装目录失败${NC}"
+            fail_count=$((fail_count + 1))
         fi
     fi
 
+    # ---------- 桌面快捷方式（XDG + 兼容旧路径） ----------
+    local df
+    for df in "$DESKTOP_DIR/Watt_Toolkit.desktop" "$HOME/Desktop/Watt_Toolkit.desktop"; do
+        if [ -e "$df" ] || [ -L "$df" ]; then
+            if rm -f "$df"; then
+                echo -e "${GREEN}✓ 已删除桌面快捷方式 $df${NC}"
+            else
+                echo -e "${RED}✗ 删除桌面快捷方式失败: $df${NC}"
+                fail_count=$((fail_count + 1))
+            fi
+        fi
+    done
+
+    # ---------- 系统级清理（无条件执行） ----------
     echo ""
-    echo -e "${GREEN}✅ Watt Toolkit 已卸载完成。${NC}"
+    echo -e "${CYAN}清理系统级改动...${NC}"
+    if ! ensure_writable; then
+        fail_count=$((fail_count + 1))
+    else
+        # 按指纹精确移除，而不是只按显示名
+        local removed=false fp=""
+        fs_cert_fp() {
+            command -v openssl >/dev/null 2>&1 || return 1
+            openssl x509 -in "$1" -noout -fingerprint -sha256 2>/dev/null \
+                | cut -d= -f2 | tr -d ':' | tr 'A-F' 'a-f'
+        }
+        # FIX-WATT: 信任功能会显式写 /etc/ca-certificates/trust-source/anchors/
+        # SteamTools.Certificate.crt，卸载必须先删它，否则 update-ca-trust 后仍会信任。
+        if [ -f /etc/ca-certificates/trust-source/anchors/SteamTools.Certificate.crt ]; then
+            if sudo rm -f /etc/ca-certificates/trust-source/anchors/SteamTools.Certificate.crt 2>/dev/null; then
+                echo -e "${GREEN}✓ 已删除系统证书锚点 SteamTools.Certificate.crt${NC}"
+                removed=true
+            else
+                echo -e "${YELLOW}⚠ 删除系统证书锚点失败${NC}"
+                fail_count=$((fail_count + 1))
+            fi
+        fi
+        # 候选：记录里的证书文件 + 系统 anchors 目录里的 PEM
+        local cand anchor_dirs=(
+            /etc/pki/ca-trust/source/anchors
+            /etc/ca-certificates/trust-source/anchors
+            "$HOME/.local/share/p11-kit/anchors"
+        )
+        if [ -n "$CERT_FP" ]; then
+            echo "  目标指纹: $CERT_FP"
+            if [ -f "$cert_file" ]; then
+                fp="$(fs_cert_fp "$cert_file")"
+                if [ -n "$fp" ] && [ "$fp" = "$CERT_FP" ]; then
+                    if sudo trust anchor --remove "$cert_file" 2>/dev/null; then
+                        echo -e "${GREEN}✓ 已按指纹移除证书文件 $cert_file${NC}"
+                        removed=true
+                    fi
+                fi
+            fi
+            for ad in "${anchor_dirs[@]}"; do
+                [ -d "$ad" ] || continue
+                for cand in "$ad"/*; do
+                    [ -f "$cand" ] || continue
+                    fp="$(fs_cert_fp "$cand")" || continue
+                    if [ "$fp" = "$CERT_FP" ]; then
+                        if sudo trust anchor --remove "$cand" 2>/dev/null; then
+                            echo -e "${GREEN}✓ 已按指纹移除锚点 $cand${NC}"
+                            removed=true
+                        else
+                            echo -e "${YELLOW}⚠ 移除锚点失败: $cand${NC}"
+                            fail_count=$((fail_count + 1))
+                        fi
+                    fi
+                done
+            done
+            if ! $removed; then
+                echo -e "${YELLOW}⚠ 未在信任库中找到指纹匹配的锚点（可能已手动移除）。${NC}"
+            fi
+        else
+            # 旧版本遗留：没有指纹记录时按精确 pkcs11 id 兜底，不再只按显示名删
+            echo -e "${YELLOW}⚠ 记录文件里没有证书指纹（旧版信任或缺少 openssl），改用锚点 id 兜底。${NC}"
+            local anchor_id
+            anchor_id=$(trust list 2>/dev/null | grep -i -B 1 "label: SteamTools Certificate" \
+                        | grep -o 'pkcs11:id=[^;]*;type=cert' | head -1)
+            if [ -n "$anchor_id" ] && sudo trust anchor --remove "$anchor_id" 2>/dev/null; then
+                echo -e "${GREEN}✓ 已按锚点 id 移除证书${NC}"
+            elif [ -f "$cert_file" ] && sudo trust anchor --remove "$cert_file" 2>/dev/null; then
+                echo -e "${GREEN}✓ 已按证书文件移除${NC}"
+            else
+                echo -e "${YELLOW}⚠ 未能自动移除证书，请手动执行：${NC}"
+                echo "    trust list | grep -i -B1 'SteamTools'"
+                echo "    sudo trust anchor --remove '<pkcs11:id=...>'"
+                fail_count=$((fail_count + 1))
+            fi
+        fi
+
+        # ---------- 恢复 /etc/hosts 原权限 ----------
+        echo -e "${CYAN}正在恢复 /etc/hosts 权限...${NC}"
+        local target_perm="$HOSTS_PERM"
+        [ -z "$target_perm" ] && target_perm="644"
+        if sudo chmod "$target_perm" /etc/hosts 2>/dev/null; then
+            echo -e "${GREEN}✓ /etc/hosts 已恢复为 $target_perm${NC}"
+        else
+            echo -e "${YELLOW}⚠ 恢复失败，请手动执行: sudo chmod $target_perm /etc/hosts${NC}"
+            fail_count=$((fail_count + 1))
+        fi
+        # 属主也恢复为 root（信任功能曾把它改成当前用户）
+        if ! sudo chown root:root /etc/hosts 2>/dev/null; then
+            echo -e "${YELLOW}⚠ 无法恢复 /etc/hosts 属主为 root，请手动执行: sudo chown root:root /etc/hosts${NC}"
+            fail_count=$((fail_count + 1))
+        fi
+        local hosts_perm
+        hosts_perm=$(stat -c '%A' /etc/hosts 2>/dev/null)
+        [ -n "$hosts_perm" ] && echo "  当前权限: $hosts_perm"
+
+        if command -v update-ca-trust >/dev/null 2>&1; then
+            if ! sudo update-ca-trust 2>/dev/null; then
+                echo -e "${YELLOW}⚠ 刷新系统证书包失败（可稍后手动执行 sudo update-ca-trust）。${NC}"
+            fi
+        fi
+    fi
+
+    if [ -f "$RECORD_FILE" ]; then
+        rm -f "$RECORD_FILE" && echo -e "${GREEN}✓ 已清理记录文件${NC}"
+    fi
+
+    echo ""
+    if [ "$fail_count" -gt 0 ]; then
+        echo -e "${RED}✗ 卸载完成但有 $fail_count 项失败，请按上方提示手动处理。${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✅ Watt Toolkit 卸载完成，证书与 hosts 权限已恢复。${NC}"
+    return 0
 }
 
 install_github_plugin() {
@@ -5781,8 +6506,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=deck
+# FIX-LEAD: decky service
+User=${CURRENT_USER}
 Environment="HOMEBREW_FOLDER=${HOMEBREW_DIR}"
+Environment="UNPRIVILEGED_PATH=${HOMEBREW_DIR}"
+Environment="PRIVILEGED_PATH=${HOMEBREW_DIR}"
+WorkingDirectory=${HOMEBREW_DIR}
 ExecStart=${PLUGIN_LOADER}
 Restart=always
 RestartSec=3
@@ -5822,12 +6551,38 @@ uninstall_plugin_store() {
         return 0
     fi
 
+    # FIX-LEAD: uninstall_plugin_store ZH
+    # 旧版只删 homebrew，留下已启用的 plugin_loader.service；重启后 systemd 会
+    # 反复尝试启动已不存在的二进制。卸载前先停服务并删除 unit。
+    local _fail=0
+    if systemctl is-enabled --quiet plugin_loader 2>/dev/null || systemctl is-active --quiet plugin_loader 2>/dev/null; then
+        if ! sudo systemctl disable --now plugin_loader 2>/dev/null; then
+            echo -e "${YELLOW}⚠️  停止/禁用 plugin_loader 服务失败，请稍后手动处理。${NC}"
+            _fail=1
+        fi
+    fi
+    if [ -f /etc/systemd/system/plugin_loader.service ]; then
+        sudo rm -f /etc/systemd/system/plugin_loader.service 2>/dev/null || _fail=1
+    fi
+    if [ -f "$HOME/.config/systemd/user/plugin_loader.service" ]; then
+        rm -f "$HOME/.config/systemd/user/plugin_loader.service" 2>/dev/null || _fail=1
+    fi
+    sudo systemctl daemon-reload 2>/dev/null || _fail=1
+    # 安装时创建的 CEF 远程调试标记
+    rm -f "$HOME/.steam/steam/.cef-enable-remote-debugging" \
+          "$HOME/.var/app/com.valvesoftware.Steam/data/Steam/.cef-enable-remote-debugging" 2>/dev/null
+    rm -rf /tmp/plugin_loader 2>/dev/null
+
     echo "正在执行卸载..."
     sudo rm -rf "$HOME/homebrew"
     # 以目录是否真的消失为准（rm 在部分失败时也可能返回 0）
     if [ -d "$HOME/homebrew" ]; then
         echo -e "${RED}✗ 插件商店卸载失败，目录仍存在: $HOME/homebrew${NC}"
         echo -e "${YELLOW}  请手动删除：sudo rm -rf \"$HOME/homebrew\"${NC}"
+        return 1
+    fi
+    if [ "$_fail" -ne 0 ]; then
+        echo -e "${YELLOW}⚠️  主目录已删除，但服务/标记清理有失败项，请按上面的提示手动检查。${NC}"
         return 1
     fi
     echo -e "${GREEN}✓ 插件商店卸载完成${NC}"
@@ -5923,7 +6678,12 @@ emergency_steam_reset() {
 
     # 备份并移走配置
     if [ -d "$steam_root/config" ]; then
-        cp -a "$steam_root/config" "$bak/config" 2>/dev/null || true
+        # FIX-LEAD: emergency backup ZH
+        # 备份失败仍删除原目录会造成不可恢复的配置丢失，这里必须成功才继续。
+        if ! cp -a "$steam_root/config" "$bak/config" 2>/dev/null; then
+            echo -e "${RED}✗ 备份 config 失败，已中止删除（原数据未改动）。${NC}"
+            return 1
+        fi
         rm -rf "$steam_root/config"
         echo -e "${GREEN}✓ 已重置 config${NC}"
     else
@@ -5947,7 +6707,11 @@ emergency_steam_reset() {
             if [ -e "$bak/$base" ]; then
                 base="${base}_$(echo "$f" | md5sum | awk '{print $1}' | cut -c1-6)"
             fi
-            cp -a "$f" "$bak/$base" 2>/dev/null || true
+            # FIX-LEAD: emergency loop backup
+            if ! cp -a "$f" "$bak/$base" 2>/dev/null; then
+                echo -e "${RED}✗ 备份 $f 失败，已中止删除。${NC}"
+                return 1
+            fi
             rm -rf "$f"
             echo -e "${GREEN}✓ 已清理 $f${NC}"
         fi
@@ -6006,7 +6770,11 @@ emergency_gamescope_reset() {
             local dest
             dest="$bak/$(echo "$p" | sed 's#^/##; s#/#_#g')"
             mkdir -p "$(dirname "$dest")"
-            cp -a "$p" "$dest" 2>/dev/null || true
+            # FIX-LEAD: emergency gamescope backup
+            if ! cp -a "$p" "$dest" 2>/dev/null; then
+                echo -e "${RED}✗ 备份 $p 失败，已中止删除。${NC}"
+                return 1
+            fi
             rm -rf "$p"
             echo -e "${GREEN}✓ 已清理 $p${NC}"
         fi
@@ -6874,7 +7642,7 @@ done
 TOOLBOX_EOF
 
     chmod +x ~/1Clover-tools/Clover-Toolbox.sh
-    echo -e "${GREEN}✓ 已更新 Clover-Toolbox.sh 为汉化版。${NC}"
+    echo -e "${GREEN}✓ 中文界面：已写入汉化版 Clover-Toolbox.sh。${NC}"
 
     echo -e "${YELLOW}建议重启设备以使引导生效。${NC}"
     echo ""
@@ -6889,11 +7657,13 @@ install_anydesk() {
     local ANYDESK_BIN="$ANYDESK_INSTALL_DIR/anydesk"
     local DESKTOP_FILE="$HOME/Desktop/AnyDesk.desktop"
 
+    # FIX-SOFTWARE: 版本查询加 --fail/超时；无法获取版本时不臆造默认版本去降级。
     echo "正在检查最新版本..."
-    local REMOTE_VERSION=$(curl -s https://anydesk.com.cn/zhs/downloads/linux | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/^v//')
+    local REMOTE_VERSION=$(curl -fsSL --connect-timeout 15 --max-time 60 https://anydesk.com.cn/zhs/downloads/linux 2>/dev/null | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/^v//')
     if [ -z "$REMOTE_VERSION" ]; then
-        echo -e "${YELLOW}无法自动获取版本，尝试使用默认版本 8.0.4${NC}"
-        REMOTE_VERSION="8.0.4"
+        echo -e "${YELLOW}无法可靠获取官网版本（网络异常或页面改版），已取消更新，保持现有安装。${NC}"
+        echo -e "${YELLOW}  不再使用硬编码默认版本，避免把已安装的新版本误降级。${NC}"
+        return 0
     fi
     echo "最新版本: $REMOTE_VERSION"
 
@@ -6911,20 +7681,17 @@ install_anydesk() {
 
     local TARGET_VERSION=""
     if [ -n "$LOCAL_VERSION" ]; then
-        if [ "$LOCAL_VERSION" = "$REMOTE_VERSION" ]; then
-            echo -e "${GREEN}✅ 已是最新版本 ${LOCAL_VERSION}，无需操作。${NC}"
+        # 只有远程版本「严格大于」本地才更新；相等/更小/无法比较都保持本地。
+        if ! fs_ver_gt "$REMOTE_VERSION" "$LOCAL_VERSION"; then
+            echo -e "${GREEN}✅ 本地版本 ${LOCAL_VERSION} 不低于官网 ${REMOTE_VERSION}，保持现有安装，不更新（避免误降级）。${NC}"
             return 0
-        else
-            echo -e "${YELLOW}发现新版本 ${REMOTE_VERSION}（当前: ${LOCAL_VERSION}）${NC}"
-            read -n1 -p "按回车键或 A 键更新，其他键取消: " confirm < /dev/tty
-            echo
-            if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
-                TARGET_VERSION="$REMOTE_VERSION"
-            else
-                echo "取消更新。"
-                return 0
-            fi
         fi
+        echo -e "${YELLOW}发现更高的新版本 ${REMOTE_VERSION}（当前: ${LOCAL_VERSION}）${NC}"
+        if ! confirm_action; then
+            echo "取消更新。"
+            return 0
+        fi
+        TARGET_VERSION="$REMOTE_VERSION"
     else
         TARGET_VERSION="$REMOTE_VERSION"
     fi
@@ -6937,46 +7704,72 @@ install_anydesk() {
     echo "正在安装 AnyDesk ${TARGET_VERSION}..."
     cd /tmp || return
 
+    # FIX-SOFTWARE: mktemp -d 避免共享固定 /tmp 名；curl/wget 加 --fail/超时。
     local URL="https://download.anydesk.com/linux/anydesk-${TARGET_VERSION}-amd64.tar.gz"
-    local TARBALL="/tmp/anydesk-${TARGET_VERSION}.tar.gz"
-    local EXTRACT_DIR="/tmp/anydesk-extract.$$"
+    local WORK_DIR
+    WORK_DIR="$(mktemp -d /tmp/anydesk-install.XXXXXXXX 2>/dev/null)" || {
+        echo -e "${RED}✗ 无法创建临时目录，已中止。${NC}"; return 1; }
+    local TARBALL="$WORK_DIR/anydesk-${TARGET_VERSION}.tar.gz"
+    local EXTRACT_DIR="$WORK_DIR/extract"
     echo "下载中..."
 
-    # 先把包下载并解压到临时目录，全部成功后再替换旧安装。
-    # 原逻辑是先 rm -rf 旧目录再下载，网络一失败用户的可用 AnyDesk 就没了。
-    rm -f "$TARBALL"
-    if ! wget -q --show-progress "$URL" -O "$TARBALL"; then
+    if ! wget -q --show-progress --connect-timeout=15 --timeout=180 --tries=1 "$URL" -O "$TARBALL"; then
         echo -e "${RED}下载失败，请检查网络后重试。${NC}"
         echo -e "${YELLOW}已保留原有的 AnyDesk 安装（如有）。${NC}"
-        rm -f "$TARBALL"
+        rm -rf "$WORK_DIR"
         return 1
     fi
-    rm -rf "$EXTRACT_DIR"; mkdir -p "$EXTRACT_DIR"
+    if [ ! -s "$TARBALL" ]; then
+        echo -e "${RED}下载文件为空或不是有效归档，已中止。${NC}"
+        rm -rf "$WORK_DIR"
+        return 1
+    fi
+    mkdir -p "$EXTRACT_DIR" || { rm -rf "$WORK_DIR"; return 1; }
     if ! tar -xzf "$TARBALL" -C "$EXTRACT_DIR" --strip-components=1; then
         echo -e "${RED}✗ 解压失败，安装中止。${NC}"
-        rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+        rm -rf "$WORK_DIR"
         echo -e "${YELLOW}已保留原有的 AnyDesk 安装（如有）。${NC}"
         return 1
     fi
     if [ ! -x "$EXTRACT_DIR/anydesk" ]; then
         echo -e "${RED}✗ 安装包内容不完整（未找到 anydesk 可执行文件），安装中止。${NC}"
-        rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+        rm -rf "$WORK_DIR"
         echo -e "${YELLOW}已保留原有的 AnyDesk 安装（如有）。${NC}"
         return 1
     fi
 
-    rm -rf "$ANYDESK_INSTALL_DIR"
-    mkdir -p "$ANYDESK_INSTALL_DIR"
-    if ! cp -a "$EXTRACT_DIR"/. "$ANYDESK_INSTALL_DIR"/; then
+    # 原子替换：先把新内容放到临时目录，mv 成功后再切换，绝不先删旧目录。
+    local STAGE_DIR="$WORK_DIR/stage"
+    if ! mkdir -p "$STAGE_DIR"; then rm -rf "$WORK_DIR"; return 1; fi
+    if ! cp -a "$EXTRACT_DIR"/. "$STAGE_DIR"/; then
         echo -e "${RED}✗ 安装文件复制失败。${NC}"
-        rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+        rm -rf "$WORK_DIR"
         return 1
     fi
-    rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
-    chmod +x "$ANYDESK_BIN" 2>/dev/null
+    chmod +x "$STAGE_DIR/anydesk" 2>/dev/null
+    if [ ! -x "$STAGE_DIR/anydesk" ]; then
+        echo -e "${RED}✗ 暂存目录缺少可执行文件，已中止（旧安装未动）。${NC}"
+        rm -rf "$WORK_DIR"
+        return 1
+    fi
+    local BACKUP_DIR=""
+    if [ -d "$ANYDESK_INSTALL_DIR" ]; then
+        BACKUP_DIR="$WORK_DIR/backup"
+        if ! mv "$ANYDESK_INSTALL_DIR" "$BACKUP_DIR"; then
+            echo -e "${RED}✗ 备份旧安装目录失败，已中止（旧安装未动）。${NC}"
+            rm -rf "$WORK_DIR"
+            return 1
+        fi
+    fi
+    if ! mv "$STAGE_DIR" "$ANYDESK_INSTALL_DIR"; then
+        echo -e "${RED}✗ 安装新版本失败，正在恢复旧版本...${NC}"
+        [ -n "$BACKUP_DIR" ] && mv "$BACKUP_DIR" "$ANYDESK_INSTALL_DIR" 2>/dev/null
+        rm -rf "$WORK_DIR"
+        return 1
+    fi
+    rm -rf "$WORK_DIR"
     if [ ! -x "$ANYDESK_BIN" ]; then
         echo -e "${RED}✗ 安装文件不完整（未找到可执行文件）。${NC}"
-        rm -rf "$ANYDESK_INSTALL_DIR"
         return 1
     fi
     mkdir -p "$HOME/.local/bin"
@@ -7029,10 +7822,23 @@ uninstall_anydesk() {
         return 0
     fi
 
+    local fail=0
     if $local_found; then
-        rm -rf "$ANYDESK_INSTALL_DIR" && echo -e "${GREEN}✓ 已删除本地安装目录${NC}"
-        rm -f "$DESKTOP_FILE" && echo -e "${GREEN}✓ 已删除本地桌面快捷方式${NC}"
-        rm -f "$BIN_LINK" && echo -e "${GREEN}✓ 已删除命令链接${NC}"
+        if rm -rf "$ANYDESK_INSTALL_DIR"; then
+            echo -e "${GREEN}✓ 已删除本地安装目录${NC}"
+        else
+            echo -e "${RED}✗ 删除本地安装目录失败${NC}"; fail=1
+        fi
+        if rm -f "$DESKTOP_FILE"; then
+            echo -e "${GREEN}✓ 已删除本地桌面快捷方式${NC}"
+        else
+            echo -e "${RED}✗ 删除本地桌面快捷方式失败${NC}"; fail=1
+        fi
+        if rm -f "$BIN_LINK"; then
+            echo -e "${GREEN}✓ 已删除命令链接${NC}"
+        else
+            echo -e "${RED}✗ 删除命令链接失败${NC}"; fail=1
+        fi
     fi
 
     if $flatpak_found; then
@@ -7068,10 +7874,15 @@ uninstall_anydesk() {
 
         else
             echo -e "${RED}✗ Flatpak 版本卸载失败${NC}"
+            fail=1
         fi
     fi
 
     echo ""
+    if [ "$fail" -ne 0 ]; then
+        echo -e "${RED}✗ 卸载过程中有失败项，不报告为完全成功，请按上方提示手动处理。${NC}"
+        return 1
+    fi
     echo -e "${GREEN}✅ AnyDesk 卸载完成。${NC}"
 }
 
@@ -7212,14 +8023,30 @@ install_todesk() {
     echo -e "${GREEN}✓ 安装包完整${NC}"
 
     # ---------- 清理旧版本 ----------
-    # todesk-bin 声明 conflict=todesk，官方 4.1.0 若还在会挡住安装，先卸掉。
+    # FIX-SOFTWARE: 记录旧包信息；卸载失败立即中止（不再 || true 继续）。
+    local OLD_PKGS=""
+    pacman -Q todesk &>/dev/null && OLD_PKGS="$OLD_PKGS todesk"
+    pacman -Q todesk-bin &>/dev/null && OLD_PKGS="$OLD_PKGS todesk-bin"
+    OLD_PKGS="${OLD_PKGS# }"
+    [ -n "$OLD_PKGS" ] && echo -e "${CYAN}安装前检测到旧包:$OLD_PKGS（已记录，失败时可据此恢复）${NC}"
     if pacman -Q todesk &>/dev/null; then
         echo -e "${CYAN}卸载旧版 todesk 包...${NC}"
-        sudo pacman -R --noconfirm todesk 2>/dev/null || true
+        if ! sudo pacman -R --noconfirm todesk; then
+            echo -e "${RED}✗ 卸载旧版 todesk 失败，为避免版本冲突已中止，未安装新包。${NC}"
+            echo -e "${YELLOW}  请手动处理: sudo pacman -R --noconfirm todesk${NC}"
+            rm -rf "$CLONE_DIR"
+            return 1
+        fi
     fi
     if pacman -Q todesk-bin &>/dev/null; then
         echo -e "${CYAN}卸载现有 todesk-bin...${NC}"
-        sudo pacman -R --noconfirm todesk-bin 2>/dev/null || true
+        if ! sudo pacman -R --noconfirm todesk-bin; then
+            echo -e "${RED}✗ 卸载现有 todesk-bin 失败，已中止。${NC}"
+            echo -e "${YELLOW}  旧包信息:${OLD_PKGS:-无}${NC}"
+            echo -e "${YELLOW}  恢复指引: sudo pacman -U --noconfirm $pkg_path（安装包仍在 $CLONE_DIR）${NC}"
+            rm -rf "$CLONE_DIR"
+            return 1
+        fi
     fi
 
     # ---------- 清理孤儿文件（关键） ----------
@@ -7284,14 +8111,33 @@ install_todesk() {
     echo -e "${CYAN}正在安装 ToDesk $TODESK_VERSION ...${NC}"
     if ! sudo pacman -U --noconfirm "$pkg_path"; then
         echo -e "${RED}✗ 安装失败，请检查上方 pacman 输出。${NC}"
-        rm -rf "$CLONE_DIR"
+        echo -e "${YELLOW}  安装前的旧包:${OLD_PKGS:-无} 已被卸载，未自动重装以免再次失败。${NC}"
+        echo -e "${YELLOW}  手动恢复指引: sudo pacman -U --noconfirm $pkg_path${NC}"
+        echo -e "${YELLOW}  （安装包保留在 $CLONE_DIR，未清理）${NC}"
         return 1
     fi
 
-    # ---------- 服务与快捷方式 ----------
-    sudo systemctl daemon-reload 2>/dev/null || true
-    sudo systemctl enable todeskd.service 2>/dev/null || true
-    sudo systemctl restart todeskd.service 2>/dev/null || true
+    # ---------- 服务与快捷方式：检查返回码 + is-active 验证 ----------
+    # FIX-SOFTWARE: 不再 || true 吞掉 enable/restart 失败，服务未起不报安装成功。
+    local svc_fail=0
+    if ! sudo systemctl daemon-reload 2>/dev/null; then
+        echo -e "${YELLOW}⚠ systemctl daemon-reload 失败${NC}"
+    fi
+    if ! sudo systemctl enable todeskd.service 2>/dev/null; then
+        echo -e "${RED}✗ 启用 todeskd.service 失败${NC}"
+        svc_fail=1
+    fi
+    if ! sudo systemctl restart todeskd.service 2>/dev/null; then
+        echo -e "${RED}✗ 重启 todeskd.service 失败${NC}"
+        svc_fail=1
+    fi
+    if ! systemctl is-active --quiet todeskd.service 2>/dev/null; then
+        echo -e "${RED}✗ todeskd.service 未处于 active 状态${NC}"
+        echo -e "${YELLOW}  可手动检查: systemctl status todeskd.service${NC}"
+        svc_fail=1
+    else
+        echo -e "${GREEN}✓ todeskd.service 已启用并处于 active 状态${NC}"
+    fi
 
     if [ -f /usr/share/applications/todesk.desktop ]; then
         mkdir -p "$HOME/Desktop"
@@ -7310,6 +8156,10 @@ install_todesk() {
 
     # ---------- 结果确认 ----------
     echo ""
+    if [ "$svc_fail" -ne 0 ]; then
+        echo -e "${RED}✗ 包已安装，但服务未正常启动，不视为安装成功。${NC}"
+        return 1
+    fi
     if pacman -Q todesk-bin &>/dev/null || [ -x /opt/todesk/bin/ToDesk ]; then
         echo -e "${GREEN}✅ ToDesk $TODESK_VERSION 安装完成${NC}"
         echo -e "${YELLOW}提示: ToDesk 仅支持 X11 会话，不支持 Wayland。${NC}"
@@ -7452,26 +8302,28 @@ update_installed_apps() {
     # 另：flatpak update 默认并不刷新 appstream 元数据，只有显式加 --appstream 才会，
     # 所以这里无需额外跳过，也不会卡在「更新 appstream 数据」。
 
+    # FIX-SOFTWARE: 区分「无更新 / 查询失败 / 超时」，不再把空输出当"全部最新"。
     echo -e "${CYAN}正在检查可用更新...${NC}"
-    local updates="" check_rc=0
-    updates=$(timeout 120 flatpak remote-ls --updates 2>/dev/null) || check_rc=$?
+    local updates="" check_rc=0 check_err="" check_tmp
+    check_tmp="$(mktemp "$TEMP_DIR/flatpak_check.XXXXXX" 2>/dev/null)"
+    updates=$(timeout 120 flatpak remote-ls --updates 2>"$check_tmp") || check_rc=$?
+    [ -f "$check_tmp" ] && check_err="$(cat "$check_tmp")"
+    rm -f "$check_tmp"
 
     if [ $check_rc -ne 0 ]; then
-        # 联网检查失败/超时（常见于镜像站抖动），退回本地缓存再判断一次，
-        # 总比直接报错好——至少能把已知的更新列出来
-        echo -e "${YELLOW}联网检查超时或失败，改用本地缓存数据判断...${NC}"
-        updates=$(timeout 30 flatpak remote-ls --updates --cached 2>/dev/null)
-        [ -z "$updates" ] && {
-            echo ""
-            echo -e "${RED}✗ 无法检查更新：网络异常，且本地缓存中没有待更新项。${NC}"
-            echo -e "${YELLOW}  请检查网络后重试，或在「切换软件源」里换个镜像源。${NC}"
-            return 1
-        }
+        if [ $check_rc -eq 124 ] || [ $check_rc -eq 137 ]; then
+            echo -e "${RED}✗ 更新查询超时或被强制终止（rc=$check_rc），不作为「无更新」处理。${NC}"
+        else
+            echo -e "${RED}✗ 更新查询失败（rc=$check_rc）。${NC}"
+            [ -n "$check_err" ] && echo -e "${YELLOW}  flatpak stderr: $(echo "$check_err" | head -3 | tr '\n' ' ')${NC}"
+        fi
+        echo -e "${YELLOW}  请检查网络后重试，或在「切换软件源」里换个镜像源。${NC}"
+        return 1
     fi
 
     if [ -z "$updates" ]; then
         echo ""
-        echo -e "${GREEN}✓ 所有已安装应用均为最新版本，无需更新。${NC}"
+        echo -e "${GREEN}✓ 查询成功且无待更新项：所有已安装应用均为最新版本。${NC}"
         return 0
     fi
 
@@ -7480,37 +8332,48 @@ update_installed_apps() {
     printf '%s\n' "$updates" | sed 's/^/  · /'
     echo ""
 
-    # 加 --noninteractive 让 flatpak 走纯文本逐行输出，不用 ANSI 原地刷新的进度条。
-    #
-    # 这解决了之前那个乱码问题（进度条后面冒出的 ^[[20;68R^[[20;68R^[[20;77R）：
-    # flatpak 画进度条前会发 ESC[6n 问终端「光标在哪」，VTE 按协议把 ESC[行;列R
-    # 写回 PTY 的输入方向，而 PTY 默认开着 ECHO，内核就把这串应答回显成了可见文本。
-    # 只要不画进度条，就不会发这个查询，从源头消除乱码，也不去动终端 ECHO
-    # （动 ECHO 会让后续 read 读到残留的应答字节，那更糟）。
-    #
-    # 实测对比（同一台机器、同样无更新的状态）：
-    #   默认              → 转义符 31 个，含 ANSI 加粗/光标控制
-    #   --noninteractive  → 转义符 0 个，纯文本逐行输出
-    # 代价是输出更精简（官方说明「显示最少的输出信息」），不显示百分比进度条，
-    # 但每完成一步仍有文字反馈，对「更新全部应用」这种场景足够。
+    # FIX-PROGRESS: 显示百分比与下载速度。
+    # --noninteractive 会关掉进度输出，所以去掉它并设 FLATPAK_TTY_PROGRESS=1
+    # 让 flatpak/ostree 输出「Receiving objects: NN% (...) X MB/s」；
+    # 输出经 fp_progress_filter 把 \r 原地刷新转成逐行文本、清除 ANSI 与光标应答，
+    # 既保留进度/速度，又不会重现之前的乱码。
     echo -e "${CYAN}开始更新（大包可能较慢，请耐心等待）...${NC}"
+    echo -e "${CYAN}下方会实时显示下载百分比与速度${NC}"
     echo ""
     local rc=0
-    timeout 1200 flatpak update --noninteractive -y < /dev/null || rc=$?
+    # 用临时文件保存 flatpak 的真实退出码：管道里 $? 会是过滤器或 pipefail 的结果
+    local _fp_status="${TEMP_DIR}/fp_update_status.$$"
+    ( FLATPAK_TTY_PROGRESS=1 timeout 1200 flatpak update -y < /dev/null 2>&1; echo $? > "$_fp_status" ) \
+        | fp_progress_filter
+    if [ -f "$_fp_status" ]; then
+        rc=$(cat "$_fp_status" 2>/dev/null || echo 1)
+        rm -f "$_fp_status"
+    else
+        rc=1
+    fi
 
     echo ""
-    if [ $rc -eq 124 ]; then
-        echo -e "${RED}✗ 更新超时（20 分钟），已中止。${NC}"
+    # FIX-SOFTWARE: rc=137/124 单列为超时/被杀，不再笼统"更新失败"。
+    if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then
+        echo -e "${RED}✗ 更新超时或被强制终止（rc=$rc），已中止，不视为完成。${NC}"
         echo -e "${YELLOW}  已下载的部分不会丢失，可稍后重试或先切换软件源。${NC}"
         return 1
     elif [ $rc -ne 0 ]; then
-        echo -e "${RED}✗ 更新失败，请检查上方输出。${NC}"
+        echo -e "${RED}✗ 更新失败（rc=$rc），请检查上方输出。${NC}"
         return 1
     fi
 
-    # 用本地缓存复核：update 已经刷新过 summary，这里不会再有额外的网络等待
-    local left
-    left=$(timeout 30 flatpak remote-ls --updates --cached 2>/dev/null)
+    # 复核：检查 returncode 与 stderr，复核失败不能报"全部完成"
+    local left="" left_rc=0 left_err="" left_tmp
+    left_tmp="$(mktemp "$TEMP_DIR/flatpak_recheck.XXXXXX" 2>/dev/null)"
+    left=$(timeout 30 flatpak remote-ls --updates --cached 2>"$left_tmp") || left_rc=$?
+    [ -f "$left_tmp" ] && left_err="$(cat "$left_tmp")"
+    rm -f "$left_tmp"
+    if [ $left_rc -ne 0 ]; then
+        echo -e "${RED}✗ 复核更新结果失败（rc=$left_rc），不能确认更新已完成。${NC}"
+        [ -n "$left_err" ] && echo -e "${YELLOW}  flatpak stderr: $(echo "$left_err" | head -3 | tr '\n' ' ')${NC}"
+        return 1
+    fi
     if [ -z "$left" ]; then
         echo -e "${GREEN}✓ 所有应用更新完成${NC}"
         return 0
@@ -7526,40 +8389,56 @@ install_yellow_duck_software() {
     clear
     echo -e "${YELLOW}════════════════ 安装小黄鸭软件 ════════════════${NC}"
     echo ""
+    # FIX-SOFTWARE: 失败一律 return 1（原来 return 默认 0，GUI 误报成功）。
     local LOSS_DIR="$HOME/.local/share/Steam/steamapps/common/Lossless Scaling"
+    local STEAM_COMMON="$HOME/.local/share/Steam/steamapps/common"
     if [[ -d "$LOSS_DIR" ]]; then
         echo -e "${CYAN}检测到已安装小黄鸭软件。${NC}"
         echo "   安装目录: $LOSS_DIR"
-        echo ""
-        read -p "是否要卸载已安装的小黄鸭软件？(y/N): " -n 1 -r < /dev/tty
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo "开始卸载小黄鸭软件..."
-            if sudo rm -rf "$LOSS_DIR"; then
-                echo -e "${GREEN}✅ 小黄鸭软件已成功卸载。${NC}"
-                echo "如需重新安装，请再次运行此功能。"
-            else
-                echo -e "${RED}❌ 卸载失败，请检查权限。${NC}"
-            fi
-            return
-        else
-            echo "取消操作。"
-            return
+        echo -e "${RED}警告：将删除整个目录，可能含用户数据，删除后无法恢复。${NC}"
+        if ! confirm_action; then
+            echo -e "${GREEN}已取消，未删除任何文件。${NC}"
+            return 0
         fi
+        if [ -L "$LOSS_DIR" ]; then
+            echo -e "${RED}✗ 目标是符号链接，拒绝删除，请手动检查。${NC}"
+            return 1
+        fi
+        echo "开始卸载小黄鸭软件..."
+        if ! sudo rm -rf "$LOSS_DIR"; then
+            echo -e "${RED}❌ 卸载失败，请检查权限。${NC}"
+            return 1
+        fi
+        if [ -d "$LOSS_DIR" ]; then
+            echo -e "${RED}❌ 目录仍存在，卸载未生效。${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}✅ 小黄鸭软件已成功卸载。${NC}"
+        echo "如需重新安装，请再次运行此功能。"
+        return 0
     fi
 
     echo -e "${CYAN}未检测到小黄鸭软件，开始从 Gitee 下载分卷文件...${NC}"
-    local DOWNLOAD_DIR="/tmp/lossless_scaling_download"
-    rm -rf "$DOWNLOAD_DIR"
-    mkdir -p "$DOWNLOAD_DIR"
-    cd "$DOWNLOAD_DIR" || return
+    if [ ! -d "$STEAM_COMMON" ]; then
+        echo -e "${RED}✗ 目标目录不存在：$STEAM_COMMON，已中止。${NC}"
+        return 1
+    fi
+    local DOWNLOAD_DIR
+    DOWNLOAD_DIR="$(mktemp -d /tmp/lossless_scaling_download.XXXXXXXX 2>/dev/null)" || {
+        echo -e "${RED}✗ 无法创建临时目录。${NC}"; return 1; }
+    cd "$DOWNLOAD_DIR" || { rm -rf "$DOWNLOAD_DIR"; return 1; }
 
     local BASE_URL="https://gitee.com/Zhucy2100/app-backup/raw/master/Lossless%20Scaling/Lossless%20Scaling.zip"
     local failed=0
     for i in 001 002 003 004 005 006 007; do
         echo "正在下载 Lossless Scaling.zip.${i} ..."
-        if ! curl -L --fail -o "Lossless Scaling.zip.${i}" "${BASE_URL}.${i}"; then
+        if ! curl -L --fail --connect-timeout 15 --max-time 180 -o "Lossless Scaling.zip.${i}" "${BASE_URL}.${i}"; then
             echo -e "${RED}下载 Lossless Scaling.zip.${i} 失败。${NC}"
+            failed=1
+            break
+        fi
+        if [ ! -s "Lossless Scaling.zip.${i}" ]; then
+            echo -e "${RED}分卷 Lossless Scaling.zip.${i} 为空，疑似错误页。${NC}"
             failed=1
             break
         fi
@@ -7567,22 +8446,40 @@ install_yellow_duck_software() {
 
     if [ $failed -ne 0 ]; then
         echo -e "${RED}下载失败，请检查网络。${NC}"
-        rm -rf "$DOWNLOAD_DIR"
-        return
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
     fi
 
     echo "合并分卷文件并解压..."
-    cat "Lossless Scaling.zip".* > Lossless-Scaling-Combined.zip
-    unzip -o Lossless-Scaling-Combined.zip -d "$HOME/.local/share/Steam/steamapps/common/"
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}解压失败。${NC}"
-        rm -rf "$DOWNLOAD_DIR"
-        return
+    if ! cat "Lossless Scaling.zip".* > Lossless-Scaling-Combined.zip; then
+        echo -e "${RED}✗ 合并分卷失败。${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
     fi
-
-    sudo chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "$HOME/.local/share/Steam/steamapps/common/Lossless Scaling"
-    rm -rf "$DOWNLOAD_DIR"
+    # 解压前校验归档不含 ../ 或绝对路径，防止解压到 Steam common 之外
+    if ! fs_archive_safe Lossless-Scaling-Combined.zip zip; then
+        echo -e "${RED}✗ 归档包含 ../ 或绝对路径，拒绝解压（防目录穿越），已中止。${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+    if ! unzip -o Lossless-Scaling-Combined.zip -d "$STEAM_COMMON/"; then
+        echo -e "${RED}解压失败。${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+    if [ ! -d "$LOSS_DIR" ]; then
+        echo -e "${RED}✗ 解压后未找到目标目录 $LOSS_DIR，安装失败。${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+    if ! sudo chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "$LOSS_DIR"; then
+        echo -e "${RED}✗ chown 失败，安装未正确完成。${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+    cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
     echo -e "${GREEN}✅ 小黄鸭软件安装完成！${NC}"
+    return 0
 }
 
 extract_exe_icon() {
@@ -7803,12 +8700,18 @@ install_ubisoft() {
         return 0
     fi
 
+    # FIX-SOFTWARE: --fail/超时 + 校验 PE 头，不把 HTML 错误页交给 Proton。
     echo -e "${CYAN}正在下载育碧安装程序...${NC}"
     cd "$HOME" || return
     rm -f UbisoftConnectInstaller.exe
-    curl -# -L -o UbisoftConnectInstaller.exe "https://ubistatic3-a.akamaihd.net/orbit/launcher_installer/UbisoftConnectInstaller.exe"
-    if [ $? -ne 0 ] || [ ! -f "UbisoftConnectInstaller.exe" ]; then
+    if ! curl -# -L --fail --connect-timeout 15 --max-time 300 -o UbisoftConnectInstaller.exe "https://ubistatic3-a.akamaihd.net/orbit/launcher_installer/UbisoftConnectInstaller.exe"; then
         echo -e "${RED}下载失败，请检查网络。${NC}"
+        rm -f UbisoftConnectInstaller.exe
+        return 1
+    fi
+    if ! fs_verify_installer UbisoftConnectInstaller.exe mz; then
+        echo -e "${RED}✗ 下载内容不是有效的 PE 安装程序（文件过小或为 HTML 错误页），已中止。${NC}"
+        rm -f UbisoftConnectInstaller.exe
         return 1
     fi
 
@@ -7824,8 +8727,12 @@ install_ubisoft() {
         echo "   请先在 Steam 库 → 工具 中安装 Proton Experimental，然后重试。"
         return 1
     fi
-    "$PROTON_BIN" waitforexitandrun \
-        "$HOME/UbisoftConnectInstaller.exe" /S
+    # FIX-SOFTWARE: 检查 Proton 退出码，失败不再继续"等待安装完成"。
+    if ! "$PROTON_BIN" waitforexitandrun \
+        "$HOME/UbisoftConnectInstaller.exe" /S; then
+        echo -e "${RED}✗ Proton 运行安装程序失败（返回非 0），请检查 Proton 环境或日志。${NC}"
+        return 1
+    fi
 
     echo -e "${CYAN}等待安装完成...${NC}"
     local WAIT_TIME=0
@@ -7840,12 +8747,17 @@ install_ubisoft() {
     done
     echo ""
 
-    if [ -d "$UBISOFT_DIR" ]; then
+    local EXE_PATH="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe"
+    # FIX-SOFTWARE: 除目录存在外，还验证目标 exe 出现，不把空目录当安装成功。
+    if [ -d "$UBISOFT_DIR" ] && [ -f "$EXE_PATH" ]; then
         echo -e "${GREEN}✓ 育碧平台安装成功！${NC}"
-        local EXE_PATH="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe"
 
         echo -e "${CYAN}正在添加到 Steam 库...${NC}"
-        steamos-add-to-steam "$EXE_PATH"
+        # FIX-SOFTWARE: 先确认工具存在，避免命令缺失时误判为"已添加"
+        if ! command -v steamos-add-to-steam >/dev/null 2>&1; then
+            echo -e "${YELLOW}⚠ 未找到 steamos-add-to-steam，跳过自动添加，请手动在 Steam 库添加该 exe。${NC}"
+        else
+            steamos-add-to-steam "$EXE_PATH"
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ 已添加 Steam 快捷方式。${NC}"
             echo -e "${YELLOW}请手动在 Steam 库中为该快捷方式设置兼容层为 Proton Experimental。${NC}"
@@ -7853,6 +8765,7 @@ install_ubisoft() {
         else
             echo -e "${YELLOW}⚠️ 自动添加到 Steam 失败，请手动添加该 exe 文件。${NC}"
         fi
+        fi  # FIX-SOFTWARE: add_to_steam guard end
 
         local ICON_PATH=""
         echo -e "${CYAN}正在从 exe 提取图标...${NC}"
@@ -7864,7 +8777,9 @@ install_ubisoft() {
             echo -e "${YELLOW}⚠️ 图标提取失败，使用系统游戏图标。${NC}"
         fi
 
-        local DESKTOP_FILE="$HOME/Desktop/Ubisoft Connect.desktop"
+        local DESKTOP_DIR
+        DESKTOP_DIR="$(fs_desktop_dir)"
+        local DESKTOP_FILE="$DESKTOP_DIR/Ubisoft Connect.desktop"
         cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Type=Application
@@ -7892,12 +8807,18 @@ install_epic() {
         return 0
     fi
 
+    # FIX-SOFTWARE: --fail/超时 + 校验 MSI(OLE2) 头，不把 HTML 错误页交给 Proton。
     echo -e "${CYAN}正在下载 Epic 安装程序...${NC}"
     cd "$HOME" || return
     rm -f EpicGamesLauncherInstaller.msi
-    wget -O EpicGamesLauncherInstaller.msi "https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/installer/download/EpicGamesLauncherInstaller.msi"
-    if [ $? -ne 0 ] || [ ! -f "EpicGamesLauncherInstaller.msi" ]; then
+    if ! wget --connect-timeout=15 --timeout=300 --tries=1 -O EpicGamesLauncherInstaller.msi "https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/installer/download/EpicGamesLauncherInstaller.msi"; then
         echo -e "${RED}下载失败，请检查网络。${NC}"
+        rm -f EpicGamesLauncherInstaller.msi
+        return 1
+    fi
+    if ! fs_verify_installer EpicGamesLauncherInstaller.msi msi; then
+        echo -e "${RED}✗ 下载内容不是有效的 MSI 安装程序（文件过小或为 HTML 错误页），已中止。${NC}"
+        rm -f EpicGamesLauncherInstaller.msi
         return 1
     fi
 
@@ -7916,8 +8837,12 @@ install_epic() {
         echo "   请先在 Steam 库 → 工具 中安装 Proton Experimental，然后重试。"
         return 1
     fi
-    "$PROTON_BIN" waitforexitandrun \
-        "$HOME/EpicGamesLauncherInstaller.msi" /quiet /log "$MSI_LOG"
+    # FIX-SOFTWARE: Epic MSI 用显式 msiexec /i ... /quiet 经 Proton 运行，并检查退出码。
+    if ! "$PROTON_BIN" waitforexitandrun \
+        msiexec /i "Z:\\home\\deck\\EpicGamesLauncherInstaller.msi" /quiet /log "$MSI_LOG"; then
+        echo -e "${RED}✗ Proton 运行 msiexec 失败（返回非 0），请检查日志：${MSI_LOG}${NC}"
+        return 1
+    fi
 
     echo -e "${CYAN}等待安装完成...${NC}"
     local WAIT_TIME=0
@@ -7932,12 +8857,17 @@ install_epic() {
     done
     echo ""
 
-    if [ -d "$EPIC_DIR" ]; then
+    local EXE_PATH="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
+    # FIX-SOFTWARE: 除目录存在外，还验证目标 exe 出现。
+    if [ -d "$EPIC_DIR" ] && [ -f "$EXE_PATH" ]; then
         echo -e "${GREEN}✓ Epic平台安装成功！${NC}"
-        local EXE_PATH="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
 
         echo -e "${CYAN}正在添加到 Steam 库...${NC}"
-        steamos-add-to-steam "$EXE_PATH"
+        # FIX-SOFTWARE: 先确认工具存在，避免命令缺失时误判为"已添加"
+        if ! command -v steamos-add-to-steam >/dev/null 2>&1; then
+            echo -e "${YELLOW}⚠ 未找到 steamos-add-to-steam，跳过自动添加，请手动在 Steam 库添加该 exe。${NC}"
+        else
+            steamos-add-to-steam "$EXE_PATH"
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ 已添加 Steam 快捷方式。${NC}"
             echo -e "${YELLOW}请手动在 Steam 库中为该快捷方式设置兼容层为 Proton Experimental。${NC}"
@@ -7945,6 +8875,7 @@ install_epic() {
         else
             echo -e "${YELLOW}⚠️ 自动添加到 Steam 失败，请手动添加该 exe 文件。${NC}"
         fi
+        fi  # FIX-SOFTWARE: add_to_steam guard end
 
         local ICON_PATH=""
         echo -e "${CYAN}正在从 exe 提取图标...${NC}"
@@ -7956,7 +8887,9 @@ install_epic() {
             echo -e "${YELLOW}⚠️ 图标提取失败，使用系统游戏图标。${NC}"
         fi
 
-        local DESKTOP_FILE="$HOME/Desktop/Epic Games Launcher.desktop"
+        local DESKTOP_DIR
+        DESKTOP_DIR="$(fs_desktop_dir)"
+        local DESKTOP_FILE="$DESKTOP_DIR/Epic Games Launcher.desktop"
         cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Type=Application
@@ -7999,7 +8932,8 @@ install_battle_net() {
 
     for part in "${files[@]}"; do
         echo "正在下载 Battle.net_backup.part_${part} ..."
-        if ! curl -L --fail --retry 2 \
+        # FIX-SOFTWARE: 关键下载加 connect/max-time 超时。
+        if ! curl -L --fail --connect-timeout 15 --max-time 180 --retry 2 \
              -H "User-Agent: ${CURL_UA}" \
              -H "Referer: ${CURL_REFERER}" \
              -o "Battle.net_backup.part_${part}" "${BASE_URL}_${part}"; then
@@ -8019,8 +8953,19 @@ install_battle_net() {
     cat Battle.net_backup.part_* > Battle.net_backup.tar.xz
 
     echo -e "${CYAN}正在解压到目标目录...${NC}"
-    mkdir -p "$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)"
-    if ! tar -xJf Battle.net_backup.tar.xz -C "$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/"; then
+    local BN_TARGET="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)"
+    if ! mkdir -p "$BN_TARGET"; then
+        echo -e "${RED}✗ 创建目标目录失败。${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+    # 解压前校验归档不含 ../ 或绝对路径
+    if ! fs_archive_safe Battle.net_backup.tar.xz tar; then
+        echo -e "${RED}✗ 归档包含 ../ 或绝对路径，拒绝解压（防目录穿越），已中止。${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+    if ! tar -xJf Battle.net_backup.tar.xz -C "$BN_TARGET/"; then
         echo -e "${RED}解压失败。${NC}"
         rm -rf "$DOWNLOAD_DIR"
         return 1
@@ -8034,7 +8979,10 @@ install_battle_net() {
     fi
 
     echo -e "${CYAN}正在添加到 Steam 库...${NC}"
-    steamos-add-to-steam "$EXE_PATH"
+    if ! command -v steamos-add-to-steam >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠ 未找到 steamos-add-to-steam，跳过自动添加，请手动添加该 exe。${NC}"
+    else
+        steamos-add-to-steam "$EXE_PATH"
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ 已添加 Steam 快捷方式。${NC}"
         echo -e "${YELLOW}请手动在 Steam 库中为该快捷方式设置兼容层为 Proton Experimental。${NC}"
@@ -8042,6 +8990,7 @@ install_battle_net() {
     else
         echo -e "${YELLOW}⚠️ 自动添加到 Steam 失败，请手动添加该 exe 文件。${NC}"
     fi
+    fi  # FIX-SOFTWARE: bn add_to_steam guard end
 
     local ICON_PATH=""
     echo -e "${CYAN}正在从 exe 提取图标...${NC}"
@@ -8072,18 +9021,16 @@ EOF
 }
 
 uninstall_third_party_platform() {
+    # FIX-SOFTWARE: 增加「取消/返回」项；/dev/tty EOF 不死循环。
     mk_temp_dir
     while true; do
         clear
         echo -e "${YELLOW}═══════════ 卸载第三方游戏平台 ═══════════${NC}"
         echo ""
-
         local UBISOFT_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
         local EPIC_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
         local BATTLE_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
-        local ubisoft_installed=false
-        local epic_installed=false
-        local battle_installed=false
+        local ubisoft_installed=false epic_installed=false battle_installed=false
         [ -d "$UBISOFT_DIR" ] && ubisoft_installed=true
         [ -d "$EPIC_DIR" ] && epic_installed=true
         [ -d "$BATTLE_DIR" ] && battle_installed=true
@@ -8099,121 +9046,224 @@ uninstall_third_party_platform() {
         $epic_installed && echo -e "  ${GREEN}✓ Epic平台${NC}"
         $battle_installed && echo -e "  ${GREEN}✓ 战网平台${NC}"
         echo ""
-
         echo "请选择要卸载的平台："
         echo "  1) 卸载育碧平台"
         echo "  2) 卸载Epic平台"
         echo "  3) 卸载战网平台"
-        read -p "请输入 [1-3]: " choice < /dev/tty
-        case $choice in
-            1) uninstall_ubisoft; break ;;
-            2) uninstall_epic; break ;;
-            3) uninstall_battle_net; break ;;
+        echo "  0) 取消 / 返回（不卸载）"
+        local choice=""
+        if ! read -r -p "请输入 [0-3]（回车=取消）: " choice < /dev/tty; then
+            echo -e "${GREEN}已取消，未做任何改动。${NC}"
+            return 0
+        fi
+        case "$choice" in
+            1) uninstall_ubisoft; return $? ;;
+            2) uninstall_epic; return $? ;;
+            3) uninstall_battle_net; return $? ;;
+            ""|0) echo -e "${GREEN}已取消，未做任何改动。${NC}"; return 0 ;;
             *) echo -e "${RED}无效选项 请重新输入${NC}"; sleep 0.5 ;;
         esac
     done
 }
 
 uninstall_ubisoft() {
+    # FIX-SOFTWARE: 明确列出删除路径 + 二次确认 + symlink 检查 + 卸载器失败不报成功。
     local UBISOFT_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+    local DESKTOP_DIR
+    DESKTOP_DIR="$(fs_desktop_dir)"
+    local DESKTOP_FILE="$DESKTOP_DIR/Ubisoft Connect.desktop"
     if [ ! -d "$UBISOFT_DIR" ]; then
         echo -e "${YELLOW}未检测到育碧平台，无需卸载。${NC}"
         return 0
     fi
 
-    echo -e "${CYAN}正在执行育碧官方卸载程序...${NC}"
-    export STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform"
-    export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
-    ~/.steam/root/steamapps/common/Proton\ -\ Experimental/proton waitforexitandrun \
-        "$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/Uninstall.exe" /S
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ 卸载程序执行成功，正在删除残留目录...${NC}"
-        rm -rf "$UBISOFT_DIR"
-        if [ ! -d "$UBISOFT_DIR" ]; then
-            echo -e "${GREEN}✓ 育碧平台已成功卸载。${NC}"
-        else
-            echo -e "${YELLOW}⚠️ 残留目录删除失败，请手动删除：$UBISOFT_DIR${NC}"
+    echo -e "${CYAN}将删除以下路径：${NC}"
+    local p
+    for p in "$@"; do
+        [ -e "$p" ] || [ -L "$p" ] || continue
+        if [ -L "$p" ]; then
+            echo -e "${RED}  ✗ $p 是符号链接，拒绝删除，请先手动检查。${NC}"
+            return 1
         fi
-    else
-        echo -e "${RED}✗ 卸载程序执行失败，请尝试手动删除目录。${NC}"
+        echo -e "${YELLOW}  · $p${NC}"
+    done
+    echo -e "${RED}警告：以上目录可能含已安装游戏、存档和用户数据，删除后无法恢复！${NC}"
+    echo -e "${YELLOW}建议先确认没有正在运行的该平台/游戏进程。${NC}"
+    if pgrep -f 'third-party-game-platform' >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠ 检测到可能仍在运行的平台/游戏进程，建议先退出再删除。${NC}"
+    fi
+    echo ""
+    if ! confirm_action; then
+        echo -e "${GREEN}已取消，未删除任何文件。${NC}"
+        return 0
     fi
 
-    local DESKTOP_FILE="$HOME/Desktop/Ubisoft Connect.desktop"
-    if [ -f "$DESKTOP_FILE" ]; then
-        rm -f "$DESKTOP_FILE"
-        echo -e "${GREEN}✓ 桌面快捷方式已删除：Ubisoft Connect.desktop${NC}"
+    local uninstaller="$UBISOFT_DIR/Ubisoft Game Launcher/Uninstall.exe"
+    local uninstaller_ok=false
+    if [ -f "$uninstaller" ]; then
+        echo -e "${CYAN}正在执行育碧官方卸载程序...${NC}"
+        export STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform"
+        export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
+        local PROTON_BIN="$HOME/.steam/root/steamapps/common/Proton - Experimental/proton"
+        if [ -x "$PROTON_BIN" ] && "$PROTON_BIN" waitforexitandrun "$uninstaller" /S; then
+            uninstaller_ok=true
+            echo -e "${GREEN}✓ 官方卸载程序执行成功。${NC}"
+        else
+            echo -e "${YELLOW}⚠ 未找到 Proton 或官方卸载程序执行失败，将仅删除目录（不视为完全成功）。${NC}"
+        fi
     else
-        echo -e "${YELLOW}未找到桌面快捷方式，跳过。${NC}"
+        echo -e "${YELLOW}⚠ 未找到官方卸载程序，将仅删除目录。${NC}"
+    fi
+
+    local fail=0
+    if ! rm -rf "$UBISOFT_DIR"; then
+        echo -e "${RED}✗ 删除目录失败：$UBISOFT_DIR${NC}"
+        fail=1
+    elif [ -d "$UBISOFT_DIR" ]; then
+        echo -e "${RED}✗ 目录仍存在，删除未生效：$UBISOFT_DIR${NC}"
+        fail=1
+    else
+        echo -e "${GREEN}✓ 育碧平台目录已删除${NC}"
+    fi
+
+    # 只有卸载器成功且目录删除成功，才清理桌面并报成功
+    if [ "$fail" -eq 0 ] && $uninstaller_ok; then
+        if [ -f "$DESKTOP_FILE" ]; then
+            if rm -f "$DESKTOP_FILE"; then
+                echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+            else
+                echo -e "${RED}✗ 删除桌面快捷方式失败${NC}"
+                fail=1
+            fi
+        fi
+    elif [ "$fail" -eq 0 ]; then
+        echo -e "${RED}✗ 官方卸载程序未成功完成，保留桌面快捷方式，请手动确认后再清理。${NC}"
+        fail=1
     fi
 
     echo ""
     echo -e "${YELLOW}请手动在 Steam 库中删除对应的非 Steam 游戏快捷方式（右键→管理→从您的库中删除非 Steam 游戏）。${NC}"
+    [ "$fail" -eq 0 ] || return 1
+    echo -e "${GREEN}✓ 育碧平台已成功卸载。${NC}"
+    return 0
 }
 
 uninstall_epic() {
+    # FIX-SOFTWARE: 二次确认 + symlink 检查 + rm 失败 return 1。
     local EPIC_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
     local EPIC_DIR_X86="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Epic Games"
+    local DESKTOP_DIR
+    DESKTOP_DIR="$(fs_desktop_dir)"
+    local DESKTOP_FILE="$DESKTOP_DIR/Epic Games Launcher.desktop"
     if [ ! -d "$EPIC_DIR" ] && [ ! -d "$EPIC_DIR_X86" ]; then
         echo -e "${YELLOW}未检测到 Epic 平台，无需卸载。${NC}"
         return 0
     fi
 
-    echo -e "${CYAN}正在删除 Epic 平台目录...${NC}"
-    if [ -d "$EPIC_DIR" ]; then
-        rm -rf "$EPIC_DIR"
-        if [ ! -d "$EPIC_DIR" ]; then
-            echo -e "${GREEN}✓ Epic 平台目录已删除: $EPIC_DIR${NC}"
-        else
-            echo -e "${RED}✗ 删除失败，请手动删除：$EPIC_DIR${NC}"
+    echo -e "${CYAN}将删除以下路径：${NC}"
+    local p
+    for p in "$@"; do
+        [ -e "$p" ] || [ -L "$p" ] || continue
+        if [ -L "$p" ]; then
+            echo -e "${RED}  ✗ $p 是符号链接，拒绝删除，请先手动检查。${NC}"
+            return 1
         fi
+        echo -e "${YELLOW}  · $p${NC}"
+    done
+    echo -e "${RED}警告：以上目录可能含已安装游戏、存档和用户数据，删除后无法恢复！${NC}"
+    echo -e "${YELLOW}建议先确认没有正在运行的该平台/游戏进程。${NC}"
+    if pgrep -f 'third-party-game-platform' >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠ 检测到可能仍在运行的平台/游戏进程，建议先退出再删除。${NC}"
     fi
-
-    if [ -d "$EPIC_DIR_X86" ]; then
-        rm -rf "$EPIC_DIR_X86"
-        if [ ! -d "$EPIC_DIR_X86" ]; then
-            echo -e "${GREEN}✓ Epic 平台目录已删除: $EPIC_DIR_X86${NC}"
-        else
-            echo -e "${RED}✗ 删除失败，请手动删除：$EPIC_DIR_X86${NC}"
-        fi
-    fi
-
-    local DESKTOP_FILE="$HOME/Desktop/Epic Games Launcher.desktop"
-    if [ -f "$DESKTOP_FILE" ]; then
-        rm -f "$DESKTOP_FILE"
-        echo -e "${GREEN}✓ 桌面快捷方式已删除：Epic Games Launcher.desktop${NC}"
-    else
-        echo -e "${YELLOW}未找到桌面快捷方式，跳过。${NC}"
-    fi
-
     echo ""
-    echo -e "${YELLOW}请手动在 Steam 库中删除对应的非 Steam 游戏快捷方式（右键→管理→从您的库中删除非 Steam 游戏）。${NC}"
+    if ! confirm_action; then
+        echo -e "${GREEN}已取消，未删除任何文件。${NC}"
+        return 0
+    fi
+
+    local fail=0 d
+    for d in "$EPIC_DIR" "$EPIC_DIR_X86"; do
+        [ -d "$d" ] || continue
+        if ! rm -rf "$d"; then
+            echo -e "${RED}✗ 删除失败：$d${NC}"
+            fail=1
+        elif [ -d "$d" ]; then
+            echo -e "${RED}✗ 目录仍存在：$d${NC}"
+            fail=1
+        else
+            echo -e "${GREEN}✓ 已删除：$d${NC}"
+        fi
+    done
+    if [ -f "$DESKTOP_FILE" ]; then
+        if rm -f "$DESKTOP_FILE"; then
+            echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+        else
+            echo -e "${RED}✗ 删除桌面快捷方式失败${NC}"
+            fail=1
+        fi
+    fi
+    echo ""
+    echo -e "${YELLOW}请手动在 Steam 库中删除对应的非 Steam 游戏快捷方式。${NC}"
+    [ "$fail" -eq 0 ] || return 1
+    echo -e "${GREEN}✓ Epic 平台已卸载。${NC}"
+    return 0
 }
 
 uninstall_battle_net() {
+    # FIX-SOFTWARE: 二次确认 + symlink 检查 + rm 失败 return 1。
     local BATTLE_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
+    local DESKTOP_DIR
+    DESKTOP_DIR="$(fs_desktop_dir)"
+    local DESKTOP_FILE="$DESKTOP_DIR/Battle.net.desktop"
     if [ ! -d "$BATTLE_DIR" ]; then
         echo -e "${YELLOW}未检测到战网平台，无需卸载。${NC}"
         return 0
     fi
 
-    echo -e "${CYAN}正在删除战网平台目录...${NC}"
-    rm -rf "$BATTLE_DIR"
-    if [ ! -d "$BATTLE_DIR" ]; then
-        echo -e "${GREEN}✓ 战网平台已成功卸载。${NC}"
-    else
-        echo -e "${RED}✗ 删除失败，请手动删除：$BATTLE_DIR${NC}"
+    echo -e "${CYAN}将删除以下路径：${NC}"
+    local p
+    for p in "$@"; do
+        [ -e "$p" ] || [ -L "$p" ] || continue
+        if [ -L "$p" ]; then
+            echo -e "${RED}  ✗ $p 是符号链接，拒绝删除，请先手动检查。${NC}"
+            return 1
+        fi
+        echo -e "${YELLOW}  · $p${NC}"
+    done
+    echo -e "${RED}警告：以上目录可能含已安装游戏、存档和用户数据，删除后无法恢复！${NC}"
+    echo -e "${YELLOW}建议先确认没有正在运行的该平台/游戏进程。${NC}"
+    if pgrep -f 'third-party-game-platform' >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠ 检测到可能仍在运行的平台/游戏进程，建议先退出再删除。${NC}"
     fi
-
-    local DESKTOP_FILE="$HOME/Desktop/Battle.net.desktop"
-    if [ -f "$DESKTOP_FILE" ]; then
-        rm -f "$DESKTOP_FILE"
-        echo -e "${GREEN}✓ 桌面快捷方式已删除：Battle.net.desktop${NC}"
-    else
-        echo -e "${YELLOW}未找到桌面快捷方式，跳过。${NC}"
-    fi
-
     echo ""
-    echo -e "${YELLOW}请手动在 Steam 库中删除对应的非 Steam 游戏快捷方式（右键→管理→从您的库中删除非 Steam 游戏）。${NC}"
+    if ! confirm_action; then
+        echo -e "${GREEN}已取消，未删除任何文件。${NC}"
+        return 0
+    fi
+
+    local fail=0
+    if ! rm -rf "$BATTLE_DIR"; then
+        echo -e "${RED}✗ 删除目录失败：$BATTLE_DIR${NC}"
+        fail=1
+    elif [ -d "$BATTLE_DIR" ]; then
+        echo -e "${RED}✗ 目录仍存在：$BATTLE_DIR${NC}"
+        fail=1
+    else
+        echo -e "${GREEN}✓ 战网平台目录已删除${NC}"
+    fi
+    if [ -f "$DESKTOP_FILE" ]; then
+        if rm -f "$DESKTOP_FILE"; then
+            echo -e "${GREEN}✓ 桌面快捷方式已删除${NC}"
+        else
+            echo -e "${RED}✗ 删除桌面快捷方式失败${NC}"
+            fail=1
+        fi
+    fi
+    echo ""
+    echo -e "${YELLOW}请手动在 Steam 库中删除对应的非 Steam 游戏快捷方式。${NC}"
+    [ "$fail" -eq 0 ] || return 1
+    echo -e "${GREEN}✓ 战网平台已成功卸载。${NC}"
+    return 0
 }
 
 if [ -n "${1:-}" ] && declare -f "$1" > /dev/null; then
@@ -8225,7 +9275,8 @@ fi
 
 BASH_SCRIPT_EN = r'''#!/bin/bash
 set -uo pipefail
-TEMP_DIR="/tmp/steamdeck_toolbox"
+# FIX-SOFTWARE: avoid predictable shared /tmp path (symlink/TOCTOU).
+TEMP_DIR="$(mktemp -d /tmp/steamdeck_toolbox.XXXXXXXX 2>/dev/null || echo /tmp/steamdeck_toolbox)"
 cleanup_temp() { rm -rf "$TEMP_DIR" 2>/dev/null; }
 # SteamOS read-only mode: automatically restore when the script exits (sudo -n non-interactive, to avoid hanging on a password prompt)
 # Key point: only restore when the script itself disabled read-only mode.
@@ -8246,7 +9297,10 @@ restore_readonly() {
     return 0
 }
 trap 'ec=$?; restore_readonly; cleanup_temp; exit $ec' EXIT
-trap 'echo -e "\n${YELLOW}User cancelled the operation, closing window.${NC}"; cleanup_temp; exit 0' INT TERM
+# INT/TERM = user clicked Cancel: use dedicated exit code 75 so TaskWindow can
+# distinguish "cancelled" from "success(0)". EXIT trap keeps the real code via ec=$?.
+CANCEL_EXIT_CODE_EN_OK=75
+trap 'echo -e "\n${YELLOW}User cancelled the operation, closing window.${NC}"; exit 75' INT TERM
 
 PYTHON_CMD="python3"
 command -v python3 &>/dev/null || PYTHON_CMD="python"
@@ -8255,6 +9309,132 @@ CURRENT_USER="${USER:-$(id -un)}"
 CURRENT_GROUP="$(id -gn "$CURRENT_USER" 2>/dev/null || echo "$CURRENT_USER")"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; PURPLE='\033[0;35m'; NC='\033[0m'
+
+# ===== FIX-SOFTWARE: shared safe helpers =====
+# Resolve the real Desktop dir (XDG) and make sure it exists.
+fs_desktop_dir() {
+    local d=""
+    if command -v xdg-user-dir >/dev/null 2>&1; then
+        d="$(xdg-user-dir DESKTOP 2>/dev/null)"
+    fi
+    [ -n "$d" ] && [ "$d" != "$HOME" ] || d="${XDG_DESKTOP_DIR:-$HOME/Desktop}"
+    mkdir -p "$d" 2>/dev/null || d="$HOME/Desktop"
+    printf '%s' "$d"
+}
+# curl with hard fail/timeouts; download to a temp file; verify it is a non-trivial,
+# non-HTML shell text before anything gets executed.
+# usage: fs_fetch_shell URL TMPFILE  -> 0 ok, 1 fail (TMPFILE cleaned on failure)
+fs_fetch_shell() {
+    local url="$1" out="$2" rc=0
+    rm -f "$out"
+    curl -fsSL --connect-timeout 15 --max-time 120 -o "$out" "$url" || rc=$?
+    # FIX-QIYOU: 有些厂商的安装域名只开了 80 端口、没开 443（例如 sd.qiyou.cn）。
+    # HTTPS 连接失败时自动退回 HTTP，并通过下面的内容校验；同时明确告知用户
+    # 正在使用明文连接，让用户自己决定是否继续以 root 执行。
+    if [ "$rc" -ne 0 ] && [ "${url#https://}" != "$url" ]; then
+        local http_url="http://${url#https://}" rc2=0
+        echo -e "${YELLOW}⚠️  HTTPS 连接失败，尝试改用 HTTP 明文连接: $http_url${NC}"
+        echo -e "${YELLOW}   明文连接无法验证对方身份，请确认来源可信后再继续。${NC}"
+        curl -fsSL --connect-timeout 15 --max-time 120 -o "$out" "$http_url" || rc2=$?
+        if [ "$rc2" -eq 0 ]; then rc=0; url="$http_url"; fi
+    fi
+    if [ "$rc" -ne 0 ]; then
+        rm -f "$out"; return 1
+    fi
+    if [ ! -s "$out" ]; then
+        rm -f "$out"; return 1
+    fi
+    # Reject obvious HTML error / login pages (case-insensitive, first 4KB).
+    if head -c 4096 "$out" | grep -qiE '<!doctype[[:space:]]+html|<html([[:space:]>])|<head([[:space:]>])|<title>'; then
+        rm -f "$out"; return 1
+    fi
+    # Must look like a shell script: shebang, or shell keywords / parameter expansion.
+    if ! grep -qE '(^#!.*(/|env )?(ba)?sh|^#!/bin/(ba)?sh|\b(sudo|apt|pacman|systemctl|echo|set|if|then|fi|for|while|curl|wget|mkdir|cp|mv|rm|cat|chmod|chown)\b|\$\(|`|#.*)' "$out"; then
+        rm -f "$out"; return 1
+    fi
+    return 0
+}
+# Compare dotted version strings: returns 0 if $1 > $2, 1 otherwise (equal/less/invalid).
+fs_ver_gt() {
+    local a="$1" b="$2" i av bv
+    [ -n "$a" ] && [ -n "$b" ] || return 1
+    IFS='.' read -ra A <<< "$a"; IFS='.' read -ra B <<< "$b"
+    for i in "${!A[@]}"; do
+        av="${A[$i]}"; bv="${B[$i]:-0}"
+        [[ "$av" =~ ^[0-9]+$ ]] || av=0
+        [[ "$bv" =~ ^[0-9]+$ ]] || bv=0
+        if [ "$((10#$av))" -gt "$((10#$bv))" ]; then return 0; fi
+        if [ "$((10#$av))" -lt "$((10#$bv))" ]; then return 1; fi
+    done
+    return 1
+}
+# FIX-PROGRESS: 把 flatpak/ostree 用 \r 原地刷新的进度条转成干净的逐行文本，
+# 保留「Receiving objects: NN% ... X MB/s」这类含百分比与速度的行。
+# --noninteractive 会关闭进度输出，所以更新命令要去掉它并设 FLATPAK_TTY_PROGRESS=1；
+# 本过滤器负责清除 ANSI 控制符与光标位置应答，避免再次出现乱码。
+fp_progress_filter() {
+    "${PYTHON_CMD:-python3}" -u -c '
+import sys, re
+ansi = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[@-Z\\\\-_]")
+def clean(t):
+    t = ansi.sub("", t)
+    t = re.sub(r"\^\[\[[0-9;]*R", "", t)
+    return t.strip()
+buf = b""
+while True:
+    ch = sys.stdin.buffer.read(1)
+    if not ch:
+        break
+    if ch[0] in (13, 10):
+        c = clean(buf.decode("utf-8", "replace"))
+        if c:
+            print(c, flush=True)
+        buf = b""
+    else:
+        buf += ch
+if buf:
+    c = clean(buf.decode("utf-8", "replace"))
+    if c:
+        print(c, flush=True)
+' 2>/dev/null
+}
+
+# Verify a downloaded Windows installer is not an HTML error page.
+# usage: fs_verify_installer FILE mz|msi
+fs_verify_installer() {
+    local f="$1" kind="$2" sz
+    [ -f "$f" ] || return 1
+    sz=$(stat -c %s "$f" 2>/dev/null || echo 0)
+    [ "$sz" -ge 65536 ] || return 1
+    if head -c 4096 "$f" | grep -qiE '<!doctype[[:space:]]+html|<html([[:space:]>])|<head([[:space:]>])|<title>'; then
+        return 1
+    fi
+    if [ "$kind" = "mz" ]; then
+        [ "$(head -c 2 "$f")" = "MZ" ] || return 1
+        if command -v file >/dev/null 2>&1; then
+            file "$f" | grep -qiE 'PE32|MS-DOS|executable' || return 1
+        fi
+    else
+        # MSI is an OLE2 compound file: D0 CF 11 E0 A1 B1 1A E1
+        [ "$(head -c 8 "$f" | od -An -tx1 | tr -d ' \n')" = "d0cf11e0a1b11ae1" ] || return 1
+    fi
+    return 0
+}
+# Reject tar/zip archives containing path traversal or absolute paths.
+# usage: fs_archive_safe ARCHIVE tar|zip
+fs_archive_safe() {
+    local f="$1" kind="$2" line
+    if [ "$kind" = "tar" ]; then
+        line=$(tar -tf "$f" 2>/dev/null | grep -E '(^/|(^|/)\.\./)' | head -1)
+    else
+        line=$(unzip -Z1 "$f" 2>/dev/null | grep -E '(^/|(^|/)\.\./)' | head -1)
+    fi
+    if [ -n "$line" ]; then
+        return 1
+    fi
+    return 0
+}
+# ===== END FIX-SOFTWARE shared helpers =====
 
 # 全局下载镜像源（GitHub 加速）
 # 2026-10 实测：各跑 5 轮小文件 + 33MB 二进制（sha256 校验）+ 大文件 range，
@@ -8327,7 +9507,10 @@ download_zip_with_mirrors() {
 mk_temp_dir() { mkdir -p "$TEMP_DIR"; }
 
 confirm_action() {
-    read -n1 -p "Press Enter or A to confirm, any other key to cancel: " confirm < /dev/tty
+    # FIX-SOFTWARE: treat /dev/tty EOF as "cancel" so a failed read
+    # cannot reuse a stale value or spin the menu forever.
+    local confirm=""
+    read -r -n1 -p "Press Enter or A to confirm, any other key to cancel: " confirm < /dev/tty || { echo; return 1; }
     echo
     [[ -z "$confirm" || "$confirm" =~ [Aa] ]]
 }
@@ -8442,12 +9625,27 @@ install_chinese_source() {
         "https://dl.flathub.org/repo/"
     )
 
-    # 显示当前源，方便判断要不要改
-    local FP_OLD_URL
-    # 注意：flatpak 没有 remote-get-url 这个子命令，要从 remotes 列表里取
+    # Show the current source: display its name when it matches one of the 5 presets, otherwise the raw URL
+    local FP_OLD_URL FP_CURRENT_LABEL="" FP_NORM_OLD FP_NORM_URL mi
     FP_OLD_URL=$(flatpak remotes --columns=name,url 2>/dev/null | awk '$1 == "flathub" {print $2; exit}')
     if [ -n "$FP_OLD_URL" ]; then
-        echo -e "Current flathub source: ${CYAN}${FP_OLD_URL}${NC}"
+        # Normalise before comparing: strip the trailing slash and lowercase, so a
+        # difference in just the slash or case does not make the match fail.
+        FP_NORM_OLD=$(echo "$FP_OLD_URL" | tr '[:upper:]' '[:lower:]' | sed 's#/*$##')
+        for mi in "${!MIRROR_URLS[@]}"; do
+            FP_NORM_URL=$(echo "${MIRROR_URLS[$mi]}" | tr '[:upper:]' '[:lower:]' | sed 's#/*$##')
+            if [ "$FP_NORM_OLD" = "$FP_NORM_URL" ]; then
+                FP_CURRENT_LABEL="${MIRROR_LABELS[$mi]}"
+                break
+            fi
+        done
+        if [ -n "$FP_CURRENT_LABEL" ]; then
+            echo -e "Current flathub source: ${GREEN}${FP_CURRENT_LABEL}${NC}"
+            echo -e "  URL: ${CYAN}${FP_OLD_URL}${NC}"
+        else
+            echo -e "Current flathub source: ${CYAN}${FP_OLD_URL}${NC}"
+            echo -e "${YELLOW}  (this URL is not one of the 5 preset sources)${NC}"
+        fi
         echo ""
     fi
 
@@ -8635,7 +9833,17 @@ apply_cryo_recommendation() {
     confirm_action || { echo "Operation cancelled."; return; }
     local swap_size_gb=16; local block_count=$((swap_size_gb*1024))
     check_swap_space "$swap_size_gb" || return 1
-    sudo swapoff /home/swapfile 2>/dev/null; sudo swapoff -a 2>/dev/null
+    # FIX-LEAD: cryo swapoff
+    # swapoff 失败时仍删除 /home/swapfile 会让正在使用的 Swap 失去路径且无法恢复，
+    # 低内存时可能触发 OOM。先确认旧 Swap 已全部停用，否则中止并保持原状。
+    if ! sudo swapoff /home/swapfile 2>/dev/null && swapon --show=NAME --noheadings 2>/dev/null | grep -qx '/home/swapfile'; then
+        echo -e "${RED}✗ Failed to deactivate existing /home/swapfile; aborted, original swap untouched.${NC}"
+        return 1
+    fi
+    if ! sudo swapoff -a 2>/dev/null; then
+        echo -e "${RED}✗ Failed to deactivate all swap devices; aborted to avoid deleting an active file.${NC}"
+        return 1
+    fi
     sudo rm -f /home/swapfile
     sudo touch /home/swapfile; sudo chattr +C /home/swapfile 2>/dev/null || true
     if ! sudo dd if=/dev/zero of=/home/swapfile bs=1M count=$block_count conv=fsync status=progress 2>/dev/null; then
@@ -8819,10 +10027,20 @@ cleanup_swap() {
     # Only reset /dev/zram0 when it really exists; when it does not, that means "ZRAM is not enabled", not a failure.
     # The old form `[ -b ... ] && reset || echo failed` wrongly reported "ZRAM reset failed" when the device did not exist.
     if [ -b /dev/zram0 ]; then
-        if sudo zramctl /dev/zram0 --reset 2>/dev/null; then
+        # On some kernels `zramctl --reset` really succeeds but returns non-zero:
+        # right after writing the sysfs reset attribute the device state changes and
+        # the read-back check fails. So judge by the actual post-reset state, not the exit code.
+        sudo zramctl /dev/zram0 --reset 2>/dev/null
+        local _zram_still_on=0 _zram_disk_size=""
+        if swapon --show=NAME --noheadings 2>/dev/null | grep -qx "/dev/zram0"; then
+            _zram_still_on=1
+        fi
+        _zram_disk_size=$(cat /sys/block/zram0/disksize 2>/dev/null || echo "")
+        if [ "$_zram_still_on" -eq 0 ] && { [ ! -e /sys/block/zram0/disksize ] || [ "${_zram_disk_size:-1}" = "0" ]; }; then
             echo -e "${GREEN}✓ ZRAM reset${NC}"
         else
-            echo -e "${YELLOW}⚠️ ZRAM reset failed (the device may still be in use), try again after a reboot.${NC}"
+            echo -e "${YELLOW}⚠️ ZRAM is still in use (device not released); it will return to the default config after a reboot.${NC}"
+            echo "    Active swap devices: $(swapon --show=NAME --noheadings 2>/dev/null | tr '\n' ' ')"
         fi
     else
         echo -e "${CYAN}ℹ No ZRAM device found, skipping the reset.${NC}"
@@ -8876,6 +10094,8 @@ fix_single_ntfs() {
             echo "$_mlog" | grep -iE 'ntfs|volume' | tail -8 | sed 's/^/    /'
         fi
         echo "  If it reports severe corruption, run chkdsk /f in Windows and try again."
+        # FIX-LEAD: fix_single_ntfs EN
+        return 1
     fi
     if [ -n "$mountpoint" ] && [ -d "$mountpoint" ]; then
         echo "  Trying to remount at $mountpoint ..."
@@ -9151,10 +10371,12 @@ fix_disk_write_error() {
         esac
     done
 
+    # FIX-LEAD: ntfs fix count
+    local fix_fail=0
     case $fix_choice in
         1)
             for idx in "${dirty_indices[@]}"; do
-                fix_single_ntfs "${ntfs_devices[$idx]}" "${ntfs_mountpoints[$idx]}"
+                fix_single_ntfs "${ntfs_devices[$idx]}" "${ntfs_mountpoints[$idx]}" || ((fix_fail++))
             done
             ;;
         2)
@@ -9181,8 +10403,9 @@ fix_disk_write_error() {
             for num in "${indices[@]}"; do
                 # Map the "dirty partition list index" back to the real partition index
                 local target_idx="${dirty_indices[$((num-1))]}"
-                fix_single_ntfs "${ntfs_devices[$target_idx]}" "${ntfs_mountpoints[$target_idx]}"
+                fix_single_ntfs "${ntfs_devices[$target_idx]}" "${ntfs_mountpoints[$target_idx]}" || ((fix_fail++))
             done
+            # FIX-LEAD: ntfs selected count EN
             ;;
         3|*)
             echo "Operation cancelled."
@@ -9191,6 +10414,11 @@ fix_disk_write_error() {
 
     _restore_readonly_after_fix
     echo ""
+    # FIX-LEAD: ntfs final EN
+    if [ "${fix_fail:-0}" -gt 0 ]; then
+        echo -e "${YELLOW}⚠️  Repair finished, but ${fix_fail} partition(s) failed; see the errors above.${NC}"
+        return 1
+    fi
     echo -e "${GREEN}✅ Repair process finished.${NC}"
 }
 
@@ -9365,7 +10593,10 @@ if [ -z "$CLOVER_ENTRY" ]; then
     echo "   ESP partition: $ESP_DEV (disk $ESP_DISK, partition number $ESP_PARTN)"
 
     clover_files_ok
-    local files_rc=$?
+    # FIX-LEAD: fix_boot files_rc EN
+    # This runs outside a function in the generated sub-script: `local` fails
+    # and overwrites $?, so a missing Clover file (rc 1) was treated as fine.
+    files_rc=$?
     if [ "$files_rc" -eq 2 ]; then
         echo ""
         echo "⚠️  Cannot read the ESP contents to determine whether the Clover files exist (permission or mount problem)."
@@ -10135,36 +11366,94 @@ fix_shared_disk() {
 }
 
 install_uu_accelerator() {
+    # FIX-SOFTWARE: never pipe network content straight into a root shell.
+    # https + timeouts + temp file + shell-text validation, then run with sudo directly (sudo prompts for the password).
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ Install the UU accelerator plugin ════════════════${NC}"
-    if curl -s uudeck.com | sudo sh; then
-        echo -e "${GREEN}✓ UU accelerator plugin installed.${NC}"
-    else
-        echo -e "${RED}✗ Installation failed (the script returned an error code), please check your network and try again.${NC}"
+    local url="https://uudeck.com"
+    local tmp="$(mktemp "$TEMP_DIR/uudeck.com.XXXXXX.sh" 2>/dev/null)"
+    if [ -z "$tmp" ]; then
+        echo -e "${RED}✗ Cannot create a temp file; aborted.${NC}"
         return 1
     fi
+    echo -e "${CYAN}Downloading and validating the install script (source: $url)...${NC}"
+    if ! fs_fetch_shell "$url" "$tmp"; then
+        echo -e "${RED}✗ Download failed, or the response is not a valid shell script (e.g. an HTML error page); aborted.${NC}"
+        rm -f "$tmp"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Downloaded and validated; running as root now (password prompt follows).${NC}"
+    echo -e "${CYAN}Running the downloaded script with sudo...${NC}"
+    if sudo sh "$tmp"; then
+        echo -e "${GREEN}✓ Install the UU accelerator plugin done.${NC}"
+        rm -f "$tmp"
+        return 0
+    fi
+    echo -e "${RED}✗ The install script returned an error; check output above.${NC}"
+    rm -f "$tmp"
+    return 1
 }
 
 install_xunyou_accelerator() {
+    # FIX-SOFTWARE: never pipe network content straight into a root shell.
+    # https + timeouts + temp file + shell-text validation, then run with sudo directly (sudo prompts for the password).
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ Install the Xunyou accelerator plugin ════════════════${NC}"
-    if curl -s sd.xunyou.com | sudo sh; then
-        echo -e "${GREEN}✓ Xunyou accelerator plugin installed.${NC}"
-    else
-        echo -e "${RED}✗ Installation failed (the script returned an error code), please check your network and try again.${NC}"
+    local url="https://sd.xunyou.com"
+    local tmp="$(mktemp "$TEMP_DIR/sd.xunyou.com.XXXXXX.sh" 2>/dev/null)"
+    if [ -z "$tmp" ]; then
+        echo -e "${RED}✗ Cannot create a temp file; aborted.${NC}"
         return 1
     fi
+    echo -e "${CYAN}Downloading and validating the install script (source: $url)...${NC}"
+    if ! fs_fetch_shell "$url" "$tmp"; then
+        echo -e "${RED}✗ Download failed, or the response is not a valid shell script (e.g. an HTML error page); aborted.${NC}"
+        rm -f "$tmp"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Downloaded and validated; running as root now (password prompt follows).${NC}"
+    echo -e "${CYAN}Running the downloaded script with sudo...${NC}"
+    if sudo sh "$tmp"; then
+        echo -e "${GREEN}✓ Install the Xunyou accelerator plugin done.${NC}"
+        rm -f "$tmp"
+        return 0
+    fi
+    echo -e "${RED}✗ The install script returned an error; check output above.${NC}"
+    rm -f "$tmp"
+    return 1
 }
 
 install_qiyou_accelerator() {
+    # FIX-SOFTWARE: never pipe network content straight into a root shell.
+    # https + timeouts + temp file + shell-text validation, then run with sudo directly (sudo prompts for the password).
     mk_temp_dir; clear
     echo -e "${YELLOW}════════════════ Install the Qiyou accelerator plugin ════════════════${NC}"
-    if curl -s sd.qiyou.cn | sudo sh; then
-        echo -e "${GREEN}✓ Qiyou accelerator plugin installed.${NC}"
-    else
-        echo -e "${RED}✗ Installation failed (the script returned an error code), please check your network and try again.${NC}"
+    # FIX-QIYOU: sd.qiyou.cn only serves HTTP (port 443 is closed), and its
+    # bootstrap script itself fetches the real installer over plaintext http from
+    # static.qiyou.cn. That host supports HTTPS, so fetch the real installer directly:
+    # this avoids the dead 443 port and skips the plaintext bootstrap layer entirely.
+    local url="https://static.qiyou.cn/upgrade/ljb/plugin/qyplug.sh"
+    local tmp="$(mktemp "$TEMP_DIR/qyplug.XXXXXX.sh" 2>/dev/null)"
+    if [ -z "$tmp" ]; then
+        echo -e "${RED}✗ Cannot create a temp file; aborted.${NC}"
         return 1
     fi
+    echo -e "${CYAN}Downloading and validating the install script (source: $url)...${NC}"
+    if ! fs_fetch_shell "$url" "$tmp"; then
+        echo -e "${RED}✗ Download failed, or the response is not a valid shell script (e.g. an HTML error page); aborted.${NC}"
+        rm -f "$tmp"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Downloaded and validated; running as root now (password prompt follows).${NC}"
+    echo -e "${CYAN}Running the downloaded script with sudo...${NC}"
+    if sudo sh "$tmp"; then
+        echo -e "${GREEN}✓ Install the Qiyou accelerator plugin done.${NC}"
+        rm -f "$tmp"
+        return 0
+    fi
+    echo -e "${RED}✗ The install script returned an error; check output above.${NC}"
+    rm -f "$tmp"
+    return 1
 }
 
 install_asklink() {
@@ -10173,24 +11462,52 @@ install_asklink() {
     echo -e "${YELLOW}════════════════ AskLink remote assistance ════════════════${NC}"
 
     if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
+        # FIX-SOFTWARE: confirm + check rc + separately confirm user data removal.
         echo -e "${GREEN}AskLink is installed.${NC}"
-        echo -e "${YELLOW}Press Enter/A to uninstall, press any other key to keep it installed and exit.${NC}"
-        read -p "Please choose: " -n 1 -r < /dev/tty
-        echo ""
-        if [[ $REPLY == "" ]]; then
-            echo -e "${CYAN}Uninstalling AskLink...${NC}"
-            sudo rm -rf /opt/AskLink
-            rm -f "$HOME/Desktop/AskLink.desktop"
-            sudo rm -f /usr/share/applications/AskLink.desktop
-            rm -f "$HOME/.local/share/applications/AskLink.desktop"
-            if [ -d "$HOME/Documents/AskLink" ]; then
-                rm -rf "$HOME/Documents/AskLink"
-                echo -e "${CYAN}Deleted the config directory $HOME/Documents/AskLink${NC}"
-            fi
-            echo -e "${GREEN}✅ AskLink uninstalled.${NC}"
-        else
-            echo -e "${GREEN}Keeping AskLink installed.${NC}"
+        echo -e "${YELLOW}Will delete /opt/AskLink and the desktop/system shortcuts.${NC}"
+        local DESKTOP_DIR
+        DESKTOP_DIR="$(fs_desktop_dir)"
+        echo -e "${RED}Warning: this removes program files; the config dir may contain user data.${NC}"
+        if ! confirm_action; then
+            echo -e "${GREEN}Cancelled; keeping AskLink installed.${NC}"
+            return 0
         fi
+        local fail=0
+        if pgrep -f '/opt/AskLink' >/dev/null 2>&1; then
+            sudo pkill -f '/opt/AskLink' 2>/dev/null || echo -e "${YELLOW}⚠ Could not stop the process; close it manually and retry${NC}"
+        fi
+        if ! sudo rm -rf /opt/AskLink; then
+            echo -e "${RED}✗ Failed to delete /opt/AskLink${NC}"; fail=1
+        fi
+        local f
+        for f in "$DESKTOP_DIR/AskLink.desktop" "$HOME/Desktop/AskLink.desktop"                  "$HOME/.local/share/applications/AskLink.desktop"; do
+            if [ -e "$f" ] && ! rm -f "$f"; then
+                echo -e "${RED}✗ Failed to delete $f${NC}"; fail=1
+            fi
+        done
+        if [ -e /usr/share/applications/AskLink.desktop ] && ! sudo rm -f /usr/share/applications/AskLink.desktop; then
+            echo -e "${RED}✗ Failed to delete the system shortcut${NC}"; fail=1
+        fi
+        if [ -d "$HOME/Documents/AskLink" ]; then
+            echo ""
+            echo -e "${CYAN}Delete the config/user-data directory $HOME/Documents/AskLink?${NC}"
+            echo -e "${YELLOW}It may contain login info / settings; deletion is irreversible.${NC}"
+            if confirm_action; then
+                if ! rm -rf "$HOME/Documents/AskLink"; then
+                    echo -e "${RED}✗ Failed to delete the config dir${NC}"; fail=1
+                else
+                    echo -e "${GREEN}✓ Config directory deleted${NC}"
+                fi
+            else
+                echo -e "${YELLOW}Config directory kept.${NC}"
+            fi
+        fi
+        echo ""
+        if [ "$fail" -ne 0 ]; then
+            echo -e "${RED}✗ Uninstall had failures; see hints above.${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}✅ AskLink uninstalled.${NC}"
         return 0
     fi
 
@@ -10242,24 +11559,36 @@ install_asklink() {
     echo -e "${CYAN}Downloading ${FILENAME} ...${NC}"
 
     cd "$TEMP_DIR" || return
+    # FIX-SOFTWARE: add --fail/timeouts; dpkg errors are no longer sent to /dev/null.
     if command -v wget &>/dev/null; then
-        wget --show-progress "$ASKLINK_URL" -O "$FILENAME"
+        wget --show-progress --connect-timeout=15 --timeout=120 --tries=1 "$ASKLINK_URL" -O "$FILENAME"
     else
-        curl -L --fail --progress-bar "$ASKLINK_URL" -o "$FILENAME"
+        curl -L --fail --connect-timeout 15 --max-time 120 --progress-bar "$ASKLINK_URL" -o "$FILENAME"
     fi
-    if [ $? -ne 0 ] || [ ! -f "$FILENAME" ]; then
-        echo -e "${RED}Download failed.${NC}"
+    if [ $? -ne 0 ] || [ ! -s "$FILENAME" ]; then
+        echo -e "${RED}Download failed or the file is empty.${NC}"
+        rm -f "$FILENAME"
         return 1
     fi
 
-    echo -e "${CYAN}Installing...${NC}"
-    sudo dpkg --force-depends -i "$FILENAME" 2>/dev/null
-
+    echo -e "${CYAN}Installing (dpkg output is no longer suppressed; real errors will show)...${NC}"
+    if ! sudo dpkg --force-depends -i "$FILENAME"; then
+        echo -e "${RED}✗ dpkg failed; see the real error above.${NC}"
+        echo -e "${YELLOW}  Usually a missing dependency; install it (sudo pacman -S ...) and retry.${NC}"
+        rm -f "$FILENAME"
+        return 1
+    fi
     rm -f "$FILENAME"
 
+    if [ ! -x /opt/AskLink/AskLink ] && ! command -v asklink &>/dev/null; then
+        echo -e "${RED}✗ dpkg reported success but no runnable AskLink was found; treating as failed.${NC}"
+        return 1
+    fi
     if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
         echo -e "${GREEN}✅ AskLink installed successfully!${NC}"
-        local DESKTOP_FILE="$HOME/Desktop/AskLink.desktop"
+        local DESKTOP_DIR
+        DESKTOP_DIR="$(fs_desktop_dir)"
+        local DESKTOP_FILE="$DESKTOP_DIR/AskLink.desktop"
         cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Type=Application
@@ -10314,7 +11643,10 @@ watt_toolkit_install() {
     fi
 
     if $has_install; then
-        if [ -n "$installed_version" ] && [ "$installed_version" = "$VERSION" ]; then
+        # FIX-WATT: .version may be "v3.1.0" while the download constant is
+        # "3.1.0"; strip a leading v so the same version is not reported as new.
+        local installed_cmp="${installed_version#v}"
+        if [ -n "$installed_version" ] && [ "$installed_cmp" = "$VERSION" ]; then
             echo -e "${GREEN}✅ Already up to date (${installed_version}); nothing to do.${NC}"
             return 0
         fi
@@ -10332,67 +11664,145 @@ watt_toolkit_install() {
         fi
     fi
 
+    # FIX-SOFTWARE: download into a mktemp dir + curl --fail/timeouts; validate key
+    # files BEFORE touching the old install; abort on mv/mkdir failure; write .version last.
     echo -e "${GREEN}Will install version: ${VERSION}${NC}"
     echo "Downloading ${DOWNLOAD_URL} ..."
 
-    local temp_dir="/tmp/watt_toolkit_install"
-    rm -rf "$temp_dir"
-    mkdir -p "$temp_dir"
-    cd "$temp_dir" || return 1
-
-    local filename="Steam_v${VERSION}_linux_x64.tgz"
-    curl -L --progress-bar -o "$filename" "$DOWNLOAD_URL"
-    if [ $? -ne 0 ] || [ ! -f "$filename" ]; then
+    local temp_dir
+    temp_dir="$(mktemp -d /tmp/watt_toolkit_install.XXXXXXXX 2>/dev/null)" || {
+        echo -e "${RED}✗ Cannot create a temp dir; aborted (old install untouched).${NC}"; return 1; }
+    # FIX-WATT: never cd into the temp dir. It is removed at the end of the
+    # install; if the shell still sits in it, every later sudo prints hundreds of
+    # "job-working-directory: getcwd" errors. Use absolute paths throughout.
+    local filename="$temp_dir/Steam_v${VERSION}_linux_x64.tgz"
+    if ! curl -L --fail --connect-timeout 15 --max-time 300 --progress-bar -o "$filename" "$DOWNLOAD_URL"; then
         echo -e "${RED}Download failed, please check your network and try again.${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+        return 1
+    fi
+    if [ ! -s "$filename" ]; then
+        echo -e "${RED}Downloaded file is empty; aborted.${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
         return 1
     fi
 
     echo -e "${CYAN}Extracting...${NC}"
     local temp_extract="$temp_dir/extracted"
-    mkdir -p "$temp_extract"
+    if ! mkdir -p "$temp_extract"; then
+        echo -e "${RED}✗ Failed to create the extraction dir; aborted.${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+        return 1
+    fi
     if ! tar -xzf "$filename" -C "$temp_extract"; then
         echo -e "${RED}Extraction failed.${NC}"
-        rm -rf "$temp_dir"
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
         return 1
     fi
 
     local content_count=$(ls -1 "$temp_extract" | wc -l)
     local first_item=$(ls -1 "$temp_extract" | head -1)
+    local src_root="$temp_extract"
+    if [ "$content_count" -eq 1 ] && [ -d "$temp_extract/$first_item" ]; then
+        src_root="$temp_extract/$first_item"
+    fi
 
+    # Validate key files in the staging area first (DLL present, dotnet executable).
+    local stage_dotnet="$src_root/dotnet/dotnet"
+    local stage_dll="$src_root/assemblies/Steam++.dll"
+    if [ ! -f "$stage_dll" ] || [ ! -x "$stage_dotnet" ]; then
+        echo -e "${RED}Error: staged contents lack key files or dotnet is not executable; aborted (old install untouched).${NC}"
+        echo "  Expected: $stage_dll present, $stage_dotnet executable (-x)"
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Key files validated (DLL + executable dotnet)${NC}"
+
+    # FIX-WATT: 备份目标必须与安装目录位于同一文件系统（/tmp 与 /home 常是不同设备），
+    # 且压缩包里的 dotnet 带 security.capability xattr —— mv/cp -a 在跨设备或
+    # 不允许设置 capability 时会报 "setting attribute 'security.capability'"。
+    # 因此：备份放到 $HOME 下，用 cp -a 复制而非 mv；新文件先装到同文件系统的
+    # 暂存目录，用 cp -r --no-preserve=xattr 避免把 capability 带过去。
+    local backup_dir="$HOME/.watt_toolkit_backup.$$"
+    local had_backup=0
     if [ -d "$INSTALL_DIR" ]; then
-        echo "Old install directory found; deleting..."
-        rm -rf "$INSTALL_DIR"
+        echo "检测到旧安装目录，先备份再替换..."
+        if ! cp -a "$INSTALL_DIR" "$backup_dir" 2>/dev/null; then
+            echo -e "${RED}✗ 备份旧目录失败，已中止（旧安装未动）。${NC}"
+            rm -rf "$backup_dir" 2>/dev/null
+            cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+            return 1
+        fi
+        had_backup=1
     fi
-    mkdir -p "$INSTALL_DIR"
-
-    if [ $content_count -eq 1 ] && [ -d "$temp_extract/$first_item" ]; then
-        echo -e "${CYAN}Top-level directory detected; moving contents into $INSTALL_DIR ...${NC}"
-        shopt -s dotglob
-        mv "$temp_extract/$first_item"/* "$INSTALL_DIR/"
-        shopt -u dotglob
-        find "$temp_extract/$first_item" -maxdepth 1 -name ".*" ! -name "." ! -name ".." -exec mv {} "$INSTALL_DIR/" \;
-        rm -rf "$temp_extract/$first_item"
+    local stage_install="$HOME/.watt_toolkit_new.$$"
+    rm -rf "$stage_install" 2>/dev/null
+    if ! mkdir -p "$stage_install"; then
+        echo -e "${RED}✗ 创建暂存安装目录失败，已中止（旧安装未动）。${NC}"
+        [ "$had_backup" -eq 1 ] && rm -rf "$backup_dir" 2>/dev/null
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+        return 1
+    fi
+    if cp -r --no-preserve=xattr "$src_root"/. "$stage_install"/ 2>/dev/null || cp -r "$src_root"/. "$stage_install"/; then
+        :
     else
-        echo -e "${CYAN}Moving all contents into $INSTALL_DIR ...${NC}"
-        shopt -s dotglob
-        mv "$temp_extract"/* "$INSTALL_DIR/"
-        shopt -u dotglob
-        find "$temp_extract" -maxdepth 1 -name ".*" ! -name "." ! -name ".." -exec mv {} "$INSTALL_DIR/" \;
+        echo -e "${RED}✗ 复制安装文件失败，已中止（旧安装未动）。${NC}"
+        rm -rf "$stage_install" "$backup_dir" 2>/dev/null
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+        return 1
     fi
-
+    if [ ! -f "$stage_install/assemblies/Steam++.dll" ] || [ ! -x "$stage_install/dotnet/dotnet" ]; then
+        echo -e "${RED}✗ 暂存内容缺少关键文件或 dotnet 不可执行，已中止（旧安装未动）。${NC}"
+        rm -rf "$stage_install" "$backup_dir" 2>/dev/null
+        cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+        return 1
+    fi
+    if [ -d "$INSTALL_DIR" ]; then
+        if ! mv "$INSTALL_DIR" "$INSTALL_DIR.old.$$" 2>/dev/null; then
+            echo -e "${RED}✗ 移走旧安装目录失败，已中止（旧安装未动）。${NC}"
+            rm -rf "$stage_install" "$backup_dir" 2>/dev/null
+            cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+            return 1
+        fi
+        if ! mv "$stage_install" "$INSTALL_DIR" 2>/dev/null; then
+            echo -e "${RED}✗ 移入新版本失败，正在恢复旧版本...${NC}"
+            mv "$INSTALL_DIR.old.$$" "$INSTALL_DIR" 2>/dev/null
+            rm -rf "$stage_install" "$backup_dir" 2>/dev/null
+            cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+            return 1
+        fi
+        rm -rf "$INSTALL_DIR.old.$$" 2>/dev/null
+    else
+        if ! mv "$stage_install" "$INSTALL_DIR" 2>/dev/null; then
+            echo -e "${RED}✗ 移入新版本失败，已中止。${NC}"
+            rm -rf "$stage_install" 2>/dev/null
+            cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
+            return 1
+        fi
+    fi
+    rm -rf "$backup_dir" 2>/dev/null
     rm -rf "$temp_dir"
 
-
-    echo "$VERSION" > "$INSTALL_DIR/.version"
-
+    local DESKTOP_DIR
+    DESKTOP_DIR="$(fs_desktop_dir)"
     local desktop_file="$DESKTOP_DIR/Watt_Toolkit.desktop"
     local dotnet_root="$INSTALL_DIR/dotnet"
     local dll_path="$INSTALL_DIR/assemblies/Steam++.dll"
     local icon_path="$INSTALL_DIR/Icons/Watt-Toolkit.png"
 
-    if [ ! -f "$dll_path" ] || [ ! -f "$dotnet_root/dotnet" ]; then
-        echo -e "${RED}Error: key files missing; install may be incomplete.${NC}"
+    # Re-check: dotnet must be executable (-x), not merely present (-f).
+    if [ ! -f "$dll_path" ] || [ ! -x "$dotnet_root/dotnet" ]; then
+        echo -e "${RED}Error: key files missing or dotnet not executable after install; treating as failed.${NC}"
         echo "Please inspect the contents of $INSTALL_DIR."
+        return 1
+    fi
+    # Launcher compatibility: Steam++.sh or running the DLL via dotnet directly.
+    if [ ! -x "$INSTALL_DIR/Steam++.sh" ] && [ ! -x "$dotnet_root/dotnet" ]; then
+        echo -e "${YELLOW}⚠ No Steam++.sh and dotnet unusable; the desktop shortcut may not launch.${NC}"
+    fi
+    # Write .version only after everything succeeded.
+    if ! echo "$VERSION" > "$INSTALL_DIR/.version"; then
+        echo -e "${RED}✗ Failed to write .version.${NC}"
         return 1
     fi
 
@@ -10441,36 +11851,35 @@ EOF
 }
 
 watt_toolkit_trust_cert() {
-    # 从安装流程调用时传 skip_clear，避免把安装结果摘要清掉
+    # FIX-SOFTWARE: never chmod a+w /etc/hosts (world-writable).
+    # Validate CA:TRUE + fingerprint, store them in a record file for exact removal.
     [ "${1:-}" = "skip_clear" ] || clear
     echo -e "${YELLOW}═══════ Trust Watt Toolkit (Steam++) acceleration certificate ═══════${NC}"
     echo ""
-    echo "Acceleration needs three system-level changes:"
-    echo "  1. Add Watt Toolkit's self-signed root certificate to the system trust store (otherwise HTTPS acceleration fails)"
-    echo "  2. Allow writing /etc/hosts (acceleration redirects domains via hosts)"
-    echo "  3. Allow reading /etc/hosts (Watt Toolkit reads hosts to apply incremental changes)"
+    echo "Acceleration needs two system-level changes:"
+    echo "  1. Add Watt Toolkit's self-signed root CA to the system trust store (otherwise HTTPS acceleration fails)"
+    echo "  2. Allow the current user to write /etc/hosts (via temporary sudo, never a permanent world-writable bit)"
     echo ""
     echo -e "${YELLOW}Security note:${NC}"
-    echo "  This certificate is a root CA generated locally by Watt Toolkit (CN=SteamTools Certificate),"
+    echo "  This certificate is a root CA generated locally by Watt Toolkit (CN=SteamTools Certificate)."
     echo "  Trusting it means a process with the matching private key can decrypt local HTTPS traffic."
-    echo "  When you stop using Watt Toolkit, remove this trust (see uninstall tips)."
+    echo "  When you stop using Watt Toolkit, run the uninstall feature to remove this trust."
     echo ""
 
     local CERT_DIR="$HOME/.local/share/Steam++/Plugins/Accelerator"
     local CERT_FILE="$CERT_DIR/SteamTools.Certificate.cer"
+    local RECORD_FILE="$HOME/.local/share/Steam++/watt_toolkit_trust.record"
     local INSTALL_DIR="$HOME/Watt Toolkit"
-    local launch_now="" retry=""
+    local launch_now="" retry="" confirm=""
+    local CERT_FP=""
 
-    # ---------- 前置检查 ----------
-    if ! command -v trust &>/dev/null; then
+    if ! command -v trust >/dev/null 2>&1; then
         echo -e "${RED}✗ trust command not found (from p11-kit); cannot write to the system trust store.${NC}"
         echo -e "${YELLOW}  Try: sudo pacman -S p11-kit${NC}"
         return 1
     fi
 
-    # ---------- 证书存在性 ----------
-    # 证书不是安装包自带的，而是 Watt Toolkit 首次运行时加速插件生成的，
-    # 所以刚装完通常还没有，需要用户先启动软件并点一次「加速」。
+    # ---------- Certificate presence ----------
     if [ ! -f "$CERT_FILE" ]; then
         echo -e "${YELLOW}Acceleration certificate not found:${NC}"
         echo "  $CERT_FILE"
@@ -10478,21 +11887,28 @@ watt_toolkit_trust_cert() {
         echo "This certificate is generated the first time Watt Toolkit runs; it is not in the package."
         echo "Please start Watt Toolkit, click Accelerate once under Network Acceleration, then the certificate will appear."
         echo ""
-
+        local start_cmd=""
         if [ -x "$INSTALL_DIR/Steam++.sh" ]; then
-            read -n1 -p "Launch Watt Toolkit now? [Enter/A=launch, other=skip] " launch_now < /dev/tty
+            start_cmd="$INSTALL_DIR/Steam++.sh"
+        elif [ -f "$INSTALL_DIR/assemblies/Steam++.dll" ] && [ -x "$INSTALL_DIR/dotnet/dotnet" ]; then
+            start_cmd="$INSTALL_DIR/dotnet/dotnet"
+        fi
+        if [ -n "$start_cmd" ]; then
+            read -r -n1 -p "Launch Watt Toolkit now? [Enter/A=launch, other=skip] " launch_now < /dev/tty || launch_now="q"
             echo
             if [[ -z "$launch_now" || "$launch_now" =~ [Aa] ]]; then
-                nohup "$INSTALL_DIR/Steam++.sh" >/dev/null 2>&1 &
+                if [ "$start_cmd" = "$INSTALL_DIR/dotnet/dotnet" ]; then
+                    (cd "$INSTALL_DIR" && nohup env DOTNET_ROOT="$INSTALL_DIR/dotnet" "$start_cmd" "$INSTALL_DIR/assemblies/Steam++.dll" >/dev/null 2>&1 &)
+                else
+                    nohup "$start_cmd" >/dev/null 2>&1 &
+                fi
                 echo -e "${GREEN}✓ Watt Toolkit launched${NC}"
                 echo ""
             fi
         else
-            echo -e "${YELLOW}$INSTALL_DIR/Steam++.sh not found; please launch from the desktop shortcut.${NC}"
+            echo -e "${YELLOW}No Steam++.sh / dotnet launcher found; please launch from the desktop shortcut.${NC}"
             echo ""
         fi
-
-        # 等用户操作完再检测；Q 可放弃，避免卡死在循环里
         local wait_count=0
         while [ ! -f "$CERT_FILE" ]; do
             wait_count=$((wait_count + 1))
@@ -10500,7 +11916,7 @@ watt_toolkit_trust_cert() {
                 echo -e "${YELLOW}Timed out waiting; exited. Rerun this after the certificate is generated.${NC}"
                 return 0
             fi
-            read -n1 -p "After clicking Accelerate once in Watt Toolkit, press Enter to re-check (Q to abort): " retry < /dev/tty
+            read -r -n1 -p "After clicking Accelerate once in Watt Toolkit, press Enter to re-check (Q to abort): " retry < /dev/tty || { echo; echo -e "${CYAN}Input unavailable; exited.${NC}"; return 0; }
             echo
             if [[ "${retry:-}" =~ [Qq] ]]; then
                 echo -e "${CYAN}Aborted. You can run Trust Certificate again after generating the cert.${NC}"
@@ -10512,30 +11928,42 @@ watt_toolkit_trust_cert() {
 
     echo -e "${GREEN}✓ Certificate found: $CERT_FILE${NC}"
 
-    # ---------- 证书校验 ----------
-    if command -v openssl &>/dev/null; then
-        local cert_subject cert_end
+    # ---------- Validate: must be CA:TRUE, and record the fingerprint ----------
+    if command -v openssl >/dev/null 2>&1; then
+        local cert_subject cert_end bc
         if ! cert_subject=$(openssl x509 -in "$CERT_FILE" -noout -subject 2>/dev/null); then
             echo -e "${RED}✗ Certificate could not be parsed; file may be corrupt.${NC}"
-            echo -e "${YELLOW}  Regenerate the certificate in Watt Toolkit and try again.${NC}"
             return 1
         fi
         echo "  $cert_subject"
+        bc=$(openssl x509 -in "$CERT_FILE" -noout -text 2>/dev/null | grep -A1 "Basic Constraints" | tr '\n' ' ')
+        if ! printf '%s' "$bc" | grep -qi "CA:TRUE"; then
+            echo -e "${RED}✗ Not a CA certificate (Basic Constraints CA:TRUE missing); refusing to trust it.${NC}"
+            echo -e "${YELLOW}  Only Watt Toolkit's own generated root CA should be trusted.${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}  ✓ Basic Constraints: CA:TRUE${NC}"
         cert_end=$(openssl x509 -in "$CERT_FILE" -noout -enddate 2>/dev/null | cut -d= -f2)
         [ -n "$cert_end" ] && echo "  Valid until: $cert_end"
-        if ! openssl x509 -in "$CERT_FILE" -noout -checkend 0 &>/dev/null; then
+        if ! openssl x509 -in "$CERT_FILE" -noout -checkend 0 >/dev/null 2>&1; then
             echo -e "${RED}✗ Certificate expired; regenerate it inside Watt Toolkit first.${NC}"
             return 1
         fi
+        CERT_FP=$(openssl x509 -in "$CERT_FILE" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2 | tr -d ':' | tr 'A-F' 'a-f')
+        if [ -z "$CERT_FP" ]; then
+            echo -e "${RED}✗ Cannot read the certificate fingerprint; aborted.${NC}"
+            return 1
+        fi
+        echo "  SHA256 fingerprint: $CERT_FP"
     else
-        # 没有 openssl 时至少确认是 PEM 证书，避免把垃圾文件写进信任库
         if ! grep -q "BEGIN CERTIFICATE" "$CERT_FILE" 2>/dev/null; then
             echo -e "${RED}✗ File is not a valid PEM certificate; aborted.${NC}"
             return 1
         fi
+        echo -e "${YELLOW}⚠ openssl not available; cannot verify CA:TRUE / fingerprint.${NC}"
+        echo -e "${YELLOW}  Install openssl and retry so uninstall can remove the cert by exact fingerprint.${NC}"
     fi
 
-    # ---------- 已信任检测 ----------
     local already_trusted=false
     if trust list 2>/dev/null | grep -qi "SteamTools Certificate"; then
         already_trusted=true
@@ -10544,165 +11972,298 @@ watt_toolkit_trust_cert() {
     fi
 
     echo ""
-    read -n1 -p "Press Enter or A to write the system trust store and adjust /etc/hosts permissions; any other key cancels: " confirm < /dev/tty
+    read -r -n1 -p "Press Enter or A to write the system trust store; any other key cancels: " confirm < /dev/tty || confirm="q"
     echo
     if [[ -n "$confirm" && ! "$confirm" =~ [Aa] ]]; then
         echo -e "${GREEN}Cancelled; no changes made.${NC}"
         return 0
     fi
 
-    # ---------- 解除只读（写 /etc 需要） ----------
     if ! ensure_writable; then return 1; fi
 
-    # ---------- 写入信任库 ----------
+    # ---------- Save original hosts permissions ----------
+    local HOSTS_PERM=""
+    HOSTS_PERM=$(stat -c %a /etc/hosts 2>/dev/null)
+    [ -z "$HOSTS_PERM" ] && HOSTS_PERM="644"
+    echo -e "${CYAN}Original /etc/hosts mode: $HOSTS_PERM (recorded for restore on uninstall)${NC}"
+
+    # ---------- Write trust store ----------
     echo ""
     echo -e "${CYAN}Writing certificate into the system trust store...${NC}"
-    if sudo trust anchor --store "$CERT_FILE"; then
-        echo -e "${GREEN}✓ Certificate added to the system trust store${NC}"
-    else
-        echo -e "${RED}✗ Failed to write trust store; check output above.${NC}"
+    # FIX-WATT: `sudo trust anchor --store` writes to root's private anchor
+    # location, which the user's `trust list` cannot see, and it does not refresh
+    # the system CA bundle -- so it reports success while HTTPS acceleration still
+    # fails. Write explicitly to the system anchors dir, refresh the bundle, then
+    # verify with openssl that the trust really works.
+    local ANCHOR_DIR="/etc/ca-certificates/trust-source/anchors"
+    local ANCHOR_FILE="$ANCHOR_DIR/SteamTools.Certificate.crt"
+    if [ ! -d "$ANCHOR_DIR" ]; then
+        if ! sudo mkdir -p "$ANCHOR_DIR" 2>/dev/null; then
+            echo -e "${RED}✗ Cannot create the system certificate directory $ANCHOR_DIR.${NC}"
+            return 1
+        fi
+    fi
+    if ! sudo cp "$CERT_FILE" "$ANCHOR_FILE" 2>/dev/null; then
+        echo -e "${RED}✗ Failed to write to the system certificate directory; check the output above.${NC}"
         return 1
     fi
-
-    if trust list 2>/dev/null | grep -qi "SteamTools Certificate"; then
-        echo -e "${GREEN}✓ Certificate confirmed in the trust store${NC}"
+    sudo chmod 644 "$ANCHOR_FILE" 2>/dev/null
+    sudo trust anchor --store "$CERT_FILE" 2>/dev/null || true
+    if command -v update-ca-trust >/dev/null 2>&1; then
+        if ! sudo update-ca-trust 2>/dev/null; then
+            echo -e "${YELLOW}⚠ Failed to refresh the CA bundle; run sudo update-ca-trust later.${NC}"
+        fi
+    fi
+    local TRUST_OK=0
+    if command -v openssl >/dev/null 2>&1 && [ -f /etc/ca-certificates/extracted/tls-ca-bundle.pem ]; then
+        if openssl verify -CAfile /etc/ca-certificates/extracted/tls-ca-bundle.pem "$CERT_FILE" >/dev/null 2>&1; then
+            TRUST_OK=1
+        fi
+    fi
+    if [ "$TRUST_OK" -eq 1 ]; then
+        echo -e "${GREEN}✓ Confirmed the certificate is trusted by the system (openssl verify passed)${NC}"
     else
-        echo -e "${YELLOW}⚠ Could not confirm the certificate from trust list; check manually: trust list | grep -i steam${NC}"
+        echo -e "${YELLOW}⚠ Could not confirm the certificate is trusted; HTTPS acceleration may still report certificate errors.${NC}"
+        echo "    Check manually: openssl verify -CAfile /etc/ca-certificates/extracted/tls-ca-bundle.pem $CERT_FILE"
     fi
 
-    # ---------- /etc/hosts 权限 ----------
-    # 加速靠改 hosts 实现，Watt Toolkit 以普通用户运行，需要读写权限才不用每次提权。
+    # ---------- Record file: hosts mode + cert fingerprint ----------
+    if ! mkdir -p "$(dirname "$RECORD_FILE")" 2>/dev/null; then
+        echo -e "${RED}✗ Cannot create the record directory; aborted (uninstall would be unable to restore).${NC}"
+        return 1
+    fi
+    {
+        echo "HOSTS_PERM=$HOSTS_PERM"
+        echo "CERT_FP=$CERT_FP"
+        echo "CERT_FILE=$CERT_FILE"
+    } > "$RECORD_FILE" || {
+        echo -e "${RED}✗ Cannot write $RECORD_FILE; aborted.${NC}"
+        return 1
+    }
+    chmod 600 "$RECORD_FILE" 2>/dev/null || true
+
+    # ---------- hosts writable: temporary sudo, never permanent a+w ----------
+    # Give only the owner write access and strip group/other write bits.
     echo ""
-    echo -e "${CYAN}Adjusting /etc/hosts permissions...${NC}"
-    if sudo chmod a+w /etc/hosts && sudo chmod a+r /etc/hosts; then
-        echo -e "${GREEN}✓ /etc/hosts permissions adjusted${NC}"
-    else
-        echo -e "${RED}✗ Failed to adjust /etc/hosts permissions${NC}"
-        return 1
+    echo -e "${CYAN}Configuring /etc/hosts write access (owner only, via temporary sudo)...${NC}"
+    local hosts_fail=0
+    if ! sudo chown "$CURRENT_USER":"$CURRENT_GROUP" /etc/hosts 2>/dev/null; then
+        echo -e "${YELLOW}⚠ Could not change /etc/hosts owner; acceleration may need manual authorization.${NC}"
+        hosts_fail=1
+    fi
+    if ! sudo chmod u+w,go-w /etc/hosts 2>/dev/null; then
+        echo -e "${YELLOW}⚠ Could not adjust /etc/hosts permissions; acceleration may need manual authorization.${NC}"
+        hosts_fail=1
+    fi
+    if ! [ -w /etc/hosts ]; then
+        echo -e "${YELLOW}⚠ /etc/hosts is still not writable; acceleration may fail to update hosts.${NC}"
+        hosts_fail=1
     fi
     local hosts_perm
-    hosts_perm=$(stat -c '%A' /etc/hosts 2>/dev/null)
-    [ -n "$hosts_perm" ] && echo "  Current permissions: $hosts_perm"
+    hosts_perm=$(stat -c '%A %U:%G' /etc/hosts 2>/dev/null)
+    [ -n "$hosts_perm" ] && echo "  Current permissions/owner: $hosts_perm"
 
-    # ---------- 结果 ----------
     echo ""
+    if [ "$hosts_fail" -ne 0 ] || [ "$TRUST_OK" -ne 1 ]; then
+        echo -e "${YELLOW}⚠ The certificate trust flow finished, but some items did not take effect; see the hints above.${NC}"
+        return 1
+    fi
     echo -e "${GREEN}✅ Acceleration certificate trusted${NC}"
     echo -e "${YELLOW}Tip:${NC}"
     echo "  · Open browsers must be restarted to reload the system certificate store"
-    echo "  · If Watt Toolkit regenerated the certificate, run this feature again"
+    echo "  · Original hosts mode $HOSTS_PERM and the cert fingerprint were saved to $RECORD_FILE"
+    echo "  · Uninstall restores from that record instead of blindly forcing 644"
     if $already_trusted; then
         echo "  · This was an overwrite update; the old certificate was replaced"
     fi
 }
 
 watt_toolkit_uninstall() {
+    # FIX-SOFTWARE: keep cleaning the root CA / hosts even if the program dir is gone;
+    # restore hosts from the record file, remove the cert by exact fingerprint, report failures.
     mk_temp_dir
     clear
-    echo -e "${YELLOW}══════════════ Uninstall Watt Toolkit ══════════════${NC}"
+    echo -e "${YELLOW}════════════════ Uninstall Watt Toolkit ══════════════${NC}"
     local INSTALL_DIR="$HOME/Watt Toolkit"
-    local DESKTOP_DIR="$HOME/Desktop"
-
-    if [ ! -d "$INSTALL_DIR" ]; then
-        echo -e "${YELLOW}No installed Watt Toolkit detected.${NC}"
-        return 0
-    fi
-
-    echo -e "${CYAN}Uninstalling Watt Toolkit...${NC}"
-    echo "Will delete this directory: ${INSTALL_DIR}"
-    echo "Will delete desktop shortcut: ${DESKTOP_DIR}/Watt_Toolkit.desktop"
-    echo ""
-
-    read -n1 -p "Press Enter or A to confirm uninstall; any other key cancels: " confirm < /dev/tty
-    echo
-    if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
-        echo "Continuing the uninstall..."
-    else
-        echo "Uninstall cancelled."
-        return 0
-    fi
-
-    if rm -rf "$INSTALL_DIR"; then
-        echo -e "${GREEN}✓ Install directory deleted${NC}"
-    else
-        echo -e "${RED}✗ Failed to delete install directory${NC}"
-    fi
-
-    if rm -f "${DESKTOP_DIR}/Watt_Toolkit.desktop"; then
-        echo -e "${GREEN}✓ Desktop shortcut deleted${NC}"
-    else
-        echo -e "${RED}✗ Failed to delete desktop shortcut${NC}"
-    fi
-
-    echo ""
-    # ---------- 清理信任证书与 hosts 权限 ----------
-    # 安装时「信任证书」把自签根证书写进了系统信任库、并放宽了 /etc/hosts 权限，
-    # 卸载后这些都得收回来，否则等于留下一张能解密 https 的根证书和可写的 hosts。
+    local DESKTOP_DIR
+    DESKTOP_DIR="$(fs_desktop_dir)"
+    local RECORD_FILE="$HOME/.local/share/Steam++/watt_toolkit_trust.record"
     local cert_dir="$HOME/.local/share/Steam++/Plugins/Accelerator"
     local cert_file="$cert_dir/SteamTools.Certificate.cer"
-    local trusted=false
-    trust list 2>/dev/null | grep -qi "SteamTools Certificate" && trusted=true
-    # 只有 others 的写权限位真的开着才提示，避免误报（比如用户从没跑过信任证书）
-    # stat -c %A 输出的第 9 个字符即 others 的写位，如 -rw-rw-rw- 的末位是 w
-    local hosts_open=false
-    local hosts_perm_now
-    hosts_perm_now=$(stat -c '%A' /etc/hosts 2>/dev/null)
-    [ "${hosts_perm_now:8:1}" = "w" ] && hosts_open=true
+    local confirm=""
+    local HOSTS_PERM="" CERT_FP="" REC_CERT_FILE=""
 
-    if $trusted || $hosts_open; then
-        echo -e "${YELLOW}Watt Toolkit left some system-level changes:${NC}"
-        $trusted && echo "  • SteamTools root certificate is still in the system trust store (can decrypt local HTTPS)"
-        $hosts_open && echo "  • /etc/hosts was loosened to world-writable (currently $(stat -c '%A' /etc/hosts 2>/dev/null))"
-        echo ""
-        read -n1 -p "Also clear system changes (remove root cert + restore hosts permissions)? [Enter/A=clear, other=keep] " clean_sys < /dev/tty
-        echo
-        if [[ -z "$clean_sys" || "$clean_sys" =~ [Aa] ]]; then
-            if ! ensure_writable; then return 1; fi
+    if [ -f "$RECORD_FILE" ]; then
+        while IFS='=' read -r rk rv; do
+            case "$rk" in
+                HOSTS_PERM) HOSTS_PERM="$rv" ;;
+                CERT_FP) CERT_FP="$rv" ;;
+                CERT_FILE) REC_CERT_FILE="$rv" ;;
+            esac
+        done < "$RECORD_FILE"
+    fi
+    [ -n "$REC_CERT_FILE" ] && cert_file="$REC_CERT_FILE"
 
-            # 移除信任：优先用 trust anchor --remove，失败再从 trust list 里取 pkcs11 id 兜底
-            if $trusted; then
-                echo -e "${CYAN}Removing SteamTools certificate from the system trust store...${NC}"
-                if [ -f "$cert_file" ] && sudo trust anchor --remove "$cert_file" 2>/dev/null; then
-                    echo -e "${GREEN}✓ Certificate removed${NC}"
-                else
-                    # 证书文件已被删掉时，只能从信任库里反查锚点 id
-                    local anchor_id
-                    anchor_id=$(trust list 2>/dev/null | grep -i -B 1 "label: SteamTools Certificate" \
-                                | grep -o 'pkcs11:id=[^;]*;type=cert' | head -1)
-                    if [ -n "$anchor_id" ] && sudo trust anchor --remove "$anchor_id" 2>/dev/null; then
-                        echo -e "${GREEN}✓ Certificate removed${NC}"
-                    else
-                        echo -e "${YELLOW}⚠ Automatic removal failed; run manually:${NC}"
-                        echo "    trust list | grep -i -B1 'SteamTools'   # view anchors"
-                        echo "    sudo trust anchor --remove '<pkcs11:id=... above>'"
-                    fi
-                fi
-            fi
+    local install_exists=false
+    [ -d "$INSTALL_DIR" ] && install_exists=true
+    if ! $install_exists; then
+        echo -e "${YELLOW}Program directory not found, but certificate trust and /etc/hosts permissions will still be cleaned.${NC}"
+    fi
 
-            # 恢复 /etc/hosts 权限为常规的 644（属主可写，其他只读）
-            echo -e "${CYAN}Restoring /etc/hosts permissions...${NC}"
-            if sudo chmod 644 /etc/hosts 2>/dev/null; then
-                echo -e "${GREEN}✓ /etc/hosts restored to 644 (world-writable bit removed)${NC}"
-            else
-                echo -e "${YELLOW}⚠ Restore failed; run manually: sudo chmod 644 /etc/hosts${NC}"
-            fi
-            local hosts_perm
-            hosts_perm=$(stat -c '%A' /etc/hosts 2>/dev/null)
-            [ -n "$hosts_perm" ] && echo "  Current permissions: $hosts_perm"
+    echo -e "${CYAN}The following actions will be performed:${NC}"
+    $install_exists && echo "  · Delete directory: $INSTALL_DIR"
+    echo "  · Delete desktop shortcut: $DESKTOP_DIR/Watt_Toolkit.desktop"
+    echo "  · Remove the SteamTools root CA from the system trust store (matched by SHA256 fingerprint when recorded)"
+    echo "  · Restore /etc/hosts permissions${HOSTS_PERM:+ (original mode $HOSTS_PERM)}"
+    echo ""
+    echo -e "${YELLOW}Warning: the directory may contain user data; system changes need sudo.${NC}"
+    echo ""
+    if ! confirm_action; then
+        echo -e "${GREEN}Cancelled; no changes made.${NC}"
+        return 0
+    fi
 
-            # 信任库变更后刷新系统证书包
-            if command -v update-ca-trust &>/dev/null; then
-                sudo update-ca-trust 2>/dev/null || true
-            fi
+    local fail_count=0
+    # ---------- Delete program dir (never follow a symlink) ----------
+    if $install_exists; then
+        if [ -L "$INSTALL_DIR" ]; then
+            echo -e "${RED}✗ $INSTALL_DIR is a symlink; refusing to delete, check manually.${NC}"
+            fail_count=$((fail_count + 1))
+        elif rm -rf "$INSTALL_DIR"; then
+            echo -e "${GREEN}✓ Install directory deleted${NC}"
         else
-            echo -e "${YELLOW}Kept certificate trust and hosts permissions.${NC}"
-            echo -e "${YELLOW}To clear manually:${NC}"
-            echo "    sudo trust anchor --remove \"$cert_file\""
-            echo "    sudo chmod 644 /etc/hosts"
+            echo -e "${RED}✗ Failed to delete install directory${NC}"
+            fail_count=$((fail_count + 1))
         fi
     fi
 
+    # ---------- Desktop shortcut (XDG + legacy path) ----------
+    local df
+    for df in "$DESKTOP_DIR/Watt_Toolkit.desktop" "$HOME/Desktop/Watt_Toolkit.desktop"; do
+        if [ -e "$df" ] || [ -L "$df" ]; then
+            if rm -f "$df"; then
+                echo -e "${GREEN}✓ Desktop shortcut deleted: $df${NC}"
+            else
+                echo -e "${RED}✗ Failed to delete desktop shortcut: $df${NC}"
+                fail_count=$((fail_count + 1))
+            fi
+        fi
+    done
+
+    # ---------- System-level cleanup (always) ----------
     echo ""
-    echo -e "${GREEN}✅ Watt Toolkit uninstalled.${NC}"
+    echo -e "${CYAN}Cleaning system-level changes...${NC}"
+    if ! ensure_writable; then
+        fail_count=$((fail_count + 1))
+    else
+        # Remove by exact fingerprint, not merely by display name
+        local removed=false fp=""
+        fs_cert_fp() {
+            command -v openssl >/dev/null 2>&1 || return 1
+            openssl x509 -in "$1" -noout -fingerprint -sha256 2>/dev/null \
+                | cut -d= -f2 | tr -d ':' | tr 'A-F' 'a-f'
+        }
+        # FIX-WATT: the trust feature explicitly wrote
+        # /etc/ca-certificates/trust-source/anchors/SteamTools.Certificate.crt;
+        # remove it first or update-ca-trust will keep trusting it after uninstall.
+        if [ -f /etc/ca-certificates/trust-source/anchors/SteamTools.Certificate.crt ]; then
+            if sudo rm -f /etc/ca-certificates/trust-source/anchors/SteamTools.Certificate.crt 2>/dev/null; then
+                echo -e "${GREEN}✓ Removed the system certificate anchor SteamTools.Certificate.crt${NC}"
+                removed=true
+            else
+                echo -e "${YELLOW}⚠ Failed to remove the system certificate anchor${NC}"
+                fail_count=$((fail_count + 1))
+            fi
+        fi
+        local cand anchor_dirs=(
+            /etc/pki/ca-trust/source/anchors
+            /etc/ca-certificates/trust-source/anchors
+            "$HOME/.local/share/p11-kit/anchors"
+        )
+        if [ -n "$CERT_FP" ]; then
+            echo "  Target fingerprint: $CERT_FP"
+            if [ -f "$cert_file" ]; then
+                fp="$(fs_cert_fp "$cert_file")"
+                if [ -n "$fp" ] && [ "$fp" = "$CERT_FP" ]; then
+                    if sudo trust anchor --remove "$cert_file" 2>/dev/null; then
+                        echo -e "${GREEN}✓ Removed cert file by fingerprint: $cert_file${NC}"
+                        removed=true
+                    fi
+                fi
+            fi
+            for ad in "${anchor_dirs[@]}"; do
+                [ -d "$ad" ] || continue
+                for cand in "$ad"/*; do
+                    [ -f "$cand" ] || continue
+                    fp="$(fs_cert_fp "$cand")" || continue
+                    if [ "$fp" = "$CERT_FP" ]; then
+                        if sudo trust anchor --remove "$cand" 2>/dev/null; then
+                            echo -e "${GREEN}✓ Removed anchor by fingerprint: $cand${NC}"
+                            removed=true
+                        else
+                            echo -e "${YELLOW}⚠ Failed to remove anchor: $cand${NC}"
+                            fail_count=$((fail_count + 1))
+                        fi
+                    fi
+                done
+            done
+            if ! $removed; then
+                echo -e "${YELLOW}⚠ No anchor matched that fingerprint (it may have been removed already).${NC}"
+            fi
+        else
+            # Legacy: no fingerprint recorded; fall back to an exact pkcs11 id, not just the label
+            echo -e "${YELLOW}⚠ No fingerprint in the record (old install or openssl missing); using anchor id fallback.${NC}"
+            local anchor_id
+            anchor_id=$(trust list 2>/dev/null | grep -i -B 1 "label: SteamTools Certificate" \
+                        | grep -o 'pkcs11:id=[^;]*;type=cert' | head -1)
+            if [ -n "$anchor_id" ] && sudo trust anchor --remove "$anchor_id" 2>/dev/null; then
+                echo -e "${GREEN}✓ Certificate removed by anchor id${NC}"
+            elif [ -f "$cert_file" ] && sudo trust anchor --remove "$cert_file" 2>/dev/null; then
+                echo -e "${GREEN}✓ Certificate removed by cert file${NC}"
+            else
+                echo -e "${YELLOW}⚠ Automatic removal failed; run manually:${NC}"
+                echo "    trust list | grep -i -B1 'SteamTools'"
+                echo "    sudo trust anchor --remove '<pkcs11:id=...>'"
+                fail_count=$((fail_count + 1))
+            fi
+        fi
+
+        # ---------- Restore original /etc/hosts mode ----------
+        echo -e "${CYAN}Restoring /etc/hosts permissions...${NC}"
+        local target_perm="$HOSTS_PERM"
+        [ -z "$target_perm" ] && target_perm="644"
+        if sudo chmod "$target_perm" /etc/hosts 2>/dev/null; then
+            echo -e "${GREEN}✓ /etc/hosts restored to $target_perm${NC}"
+        else
+            echo -e "${YELLOW}⚠ Restore failed; run manually: sudo chmod $target_perm /etc/hosts${NC}"
+            fail_count=$((fail_count + 1))
+        fi
+        if ! sudo chown root:root /etc/hosts 2>/dev/null; then
+            echo -e "${YELLOW}⚠ Could not restore /etc/hosts owner to root; run: sudo chown root:root /etc/hosts${NC}"
+            fail_count=$((fail_count + 1))
+        fi
+        local hosts_perm
+        hosts_perm=$(stat -c '%A' /etc/hosts 2>/dev/null)
+        [ -n "$hosts_perm" ] && echo "  Current permissions: $hosts_perm"
+
+        if command -v update-ca-trust >/dev/null 2>&1; then
+            if ! sudo update-ca-trust 2>/dev/null; then
+                echo -e "${YELLOW}⚠ Failed to refresh the CA bundle (you can run sudo update-ca-trust later).${NC}"
+            fi
+        fi
+    fi
+
+    if [ -f "$RECORD_FILE" ]; then
+        rm -f "$RECORD_FILE" && echo -e "${GREEN}✓ Record file removed${NC}"
+    fi
+
+    echo ""
+    if [ "$fail_count" -gt 0 ]; then
+        echo -e "${RED}✗ Uninstall finished with $fail_count failure(s); see the hints above.${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✅ Watt Toolkit uninstalled; certificate and hosts permissions restored.${NC}"
+    return 0
 }
 
 install_github_plugin() {
@@ -11391,8 +12952,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=deck
+# FIX-LEAD: decky service
+User=${CURRENT_USER}
 Environment="HOMEBREW_FOLDER=${HOMEBREW_DIR}"
+Environment="UNPRIVILEGED_PATH=${HOMEBREW_DIR}"
+Environment="PRIVILEGED_PATH=${HOMEBREW_DIR}"
+WorkingDirectory=${HOMEBREW_DIR}
 ExecStart=${PLUGIN_LOADER}
 Restart=always
 RestartSec=3
@@ -11432,12 +12997,37 @@ uninstall_plugin_store() {
         return 0
     fi
 
+    # FIX-LEAD: uninstall_plugin_store EN
+    # The old version only removed homebrew and left plugin_loader.service enabled;
+    # systemd would then keep trying to start a binary that no longer exists.
+    local _fail=0
+    if systemctl is-enabled --quiet plugin_loader 2>/dev/null || systemctl is-active --quiet plugin_loader 2>/dev/null; then
+        if ! sudo systemctl disable --now plugin_loader 2>/dev/null; then
+            echo -e "${YELLOW}⚠️  Failed to stop/disable plugin_loader; please check it manually.${NC}"
+            _fail=1
+        fi
+    fi
+    if [ -f /etc/systemd/system/plugin_loader.service ]; then
+        sudo rm -f /etc/systemd/system/plugin_loader.service 2>/dev/null || _fail=1
+    fi
+    if [ -f "$HOME/.config/systemd/user/plugin_loader.service" ]; then
+        rm -f "$HOME/.config/systemd/user/plugin_loader.service" 2>/dev/null || _fail=1
+    fi
+    sudo systemctl daemon-reload 2>/dev/null || _fail=1
+    rm -f "$HOME/.steam/steam/.cef-enable-remote-debugging" \
+          "$HOME/.var/app/com.valvesoftware.Steam/data/Steam/.cef-enable-remote-debugging" 2>/dev/null
+    rm -rf /tmp/plugin_loader 2>/dev/null
+
     echo "Running the uninstall..."
     sudo rm -rf "$HOME/homebrew"
     # Judge by whether the directory really disappeared (rm may also return 0 on partial failure)
     if [ -d "$HOME/homebrew" ]; then
         echo -e "${RED}✗ Failed to uninstall the Plugin Store, the directory still exists: $HOME/homebrew${NC}"
         echo -e "${YELLOW}  Please delete it manually: sudo rm -rf \"$HOME/homebrew\"${NC}"
+        return 1
+    fi
+    if [ "$_fail" -ne 0 ]; then
+        echo -e "${YELLOW}⚠️  The main directory is gone, but some service/marker cleanup failed; check the hints above.${NC}"
         return 1
     fi
     echo -e "${GREEN}✓ Plugin Store uninstalled${NC}"
@@ -11527,7 +13117,12 @@ emergency_steam_reset() {
     fi
 
     if [ -d "$steam_root/config" ]; then
-        cp -a "$steam_root/config" "$bak/config" 2>/dev/null || true
+        # FIX-LEAD: emergency backup EN
+        # Deleting the original after a failed backup loses data irrecoverably.
+        if ! cp -a "$steam_root/config" "$bak/config" 2>/dev/null; then
+            echo -e "${RED}✗ Failed to back up config; aborting before any deletion.${NC}"
+            return 1
+        fi
         rm -rf "$steam_root/config"
         echo -e "${GREEN}✓ Reset config${NC}"
     else
@@ -11549,7 +13144,11 @@ emergency_steam_reset() {
             if [ -e "$bak/$base" ]; then
                 base="${base}_$(echo "$f" | md5sum | awk '{print $1}' | cut -c1-6)"
             fi
-            cp -a "$f" "$bak/$base" 2>/dev/null || true
+            # FIX-LEAD: emergency loop backup
+            if ! cp -a "$f" "$bak/$base" 2>/dev/null; then
+                echo -e "${RED}✗ 备份 $f 失败，已中止删除。${NC}"
+                return 1
+            fi
             rm -rf "$f"
             echo -e "${GREEN}✓ Cleared $f${NC}"
         fi
@@ -11603,7 +13202,11 @@ emergency_gamescope_reset() {
             local dest
             dest="$bak/$(echo "$p" | sed 's#^/##; s#/#_#g')"
             mkdir -p "$(dirname "$dest")"
-            cp -a "$p" "$dest" 2>/dev/null || true
+            # FIX-LEAD: emergency gamescope backup
+            if ! cp -a "$p" "$dest" 2>/dev/null; then
+                echo -e "${RED}✗ 备份 $p 失败，已中止删除。${NC}"
+                return 1
+            fi
             rm -rf "$p"
             echo -e "${GREEN}✓ Cleared $p${NC}"
         fi
@@ -12158,7 +13761,16 @@ EOF
         echo -e "${GREEN}Desktop shortcut \"Boot Configuration\" created.${NC}"
     fi
 
-    cat > ~/1Clover-tools/Clover-Toolbox.sh << 'TOOLBOX_EOF'
+    # FIX-CLOVER-LANG: 英文界面保留 custom/Clover-Toolbox.sh 原版英文，
+    # 不再覆盖成汉化版：原版存在时直接保留；仅当原版缺失时才写入下面的
+    # 汉化版作为兜底，避免英文界面下桌面工具箱完全不可用。
+    if [ -f "$HOME/1Clover-tools/Clover-Toolbox.sh" ]; then
+        chmod +x "$HOME/1Clover-tools/Clover-Toolbox.sh" 2>/dev/null || true
+        echo -e "${GREEN}✓ Kept the original English Clover-Toolbox.sh (English UI).${NC}"
+    else
+        echo -e "${YELLOW}⚠️ Original Clover-Toolbox.sh not found; falling back to the translated copy.${NC}"
+        # 原版缺失时才退回汉化版，避免英文界面下工具箱打不开
+        cat > "$HOME/1Clover-tools/Clover-Toolbox.sh" << 'TOOLBOX_EOF'
 #!/bin/bash
 
 grep -i bazzite /etc/os-release &> /dev/null
@@ -12468,9 +14080,11 @@ then
 fi
 done
 TOOLBOX_EOF
+    fi
 
-    chmod +x ~/1Clover-tools/Clover-Toolbox.sh
-    echo -e "${GREEN}✓ Updated Clover-Toolbox.sh to the translated version.${NC}"
+
+    chmod +x ~/1Clover-tools/Clover-Toolbox.sh 2>/dev/null || true
+    # 提示已在上面的分支里按「原版/回退」分别打印，这里不再重复宣称汉化
 
     echo -e "${YELLOW}It is recommended to reboot the device for the boot changes to take effect.${NC}"
     echo ""
@@ -12485,11 +14099,13 @@ install_anydesk() {
     local ANYDESK_BIN="$ANYDESK_INSTALL_DIR/anydesk"
     local DESKTOP_FILE="$HOME/Desktop/AnyDesk.desktop"
 
+    # FIX-SOFTWARE: add --fail/timeouts; never invent a default version that could downgrade.
     echo "Checking the latest version..."
-    local REMOTE_VERSION=$(curl -s https://anydesk.com.cn/zhs/downloads/linux | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/^v//')
+    local REMOTE_VERSION=$(curl -fsSL --connect-timeout 15 --max-time 60 https://anydesk.com.cn/zhs/downloads/linux 2>/dev/null | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/^v//')
     if [ -z "$REMOTE_VERSION" ]; then
-        echo -e "${YELLOW}Cannot get the version automatically, trying the default version 8.0.4${NC}"
-        REMOTE_VERSION="8.0.4"
+        echo -e "${YELLOW}Could not reliably read the remote version (network or page changed); update cancelled, keeping the current install.${NC}"
+        echo -e "${YELLOW}  No hardcoded fallback version, to avoid accidentally downgrading.${NC}"
+        return 0
     fi
     echo "Latest version: $REMOTE_VERSION"
 
@@ -12507,20 +14123,17 @@ install_anydesk() {
 
     local TARGET_VERSION=""
     if [ -n "$LOCAL_VERSION" ]; then
-        if [ "$LOCAL_VERSION" = "$REMOTE_VERSION" ]; then
-            echo -e "${GREEN}✅ Already the latest version ${LOCAL_VERSION}, no action needed.${NC}"
+        # Only update when the remote version is strictly greater than the local one.
+        if ! fs_ver_gt "$REMOTE_VERSION" "$LOCAL_VERSION"; then
+            echo -e "${GREEN}✅ Local ${LOCAL_VERSION} is not older than remote ${REMOTE_VERSION}; keeping the current install (no downgrade).${NC}"
             return 0
-        else
-            echo -e "${YELLOW}New version ${REMOTE_VERSION} found (current: ${LOCAL_VERSION})${NC}"
-            read -n1 -p "Press Enter or A to update, any other key to cancel: " confirm < /dev/tty
-            echo
-            if [[ -z "$confirm" || "$confirm" =~ [Aa] ]]; then
-                TARGET_VERSION="$REMOTE_VERSION"
-            else
-                echo "Update cancelled."
-                return 0
-            fi
         fi
+        echo -e "${YELLOW}A newer version ${REMOTE_VERSION} was found (current: ${LOCAL_VERSION})${NC}"
+        if ! confirm_action; then
+            echo "Update cancelled."
+            return 0
+        fi
+        TARGET_VERSION="$REMOTE_VERSION"
     else
         TARGET_VERSION="$REMOTE_VERSION"
     fi
@@ -12533,46 +14146,72 @@ install_anydesk() {
     echo "Installing AnyDesk ${TARGET_VERSION}..."
     cd /tmp || return
 
+    # FIX-SOFTWARE: mktemp -d (no shared fixed /tmp name); --fail/timeouts on download.
     local URL="https://download.anydesk.com/linux/anydesk-${TARGET_VERSION}-amd64.tar.gz"
-    local TARBALL="/tmp/anydesk-${TARGET_VERSION}.tar.gz"
-    local EXTRACT_DIR="/tmp/anydesk-extract.$$"
+    local WORK_DIR
+    WORK_DIR="$(mktemp -d /tmp/anydesk-install.XXXXXXXX 2>/dev/null)" || {
+        echo -e "${RED}✗ Cannot create a temp dir; aborted.${NC}"; return 1; }
+    local TARBALL="$WORK_DIR/anydesk-${TARGET_VERSION}.tar.gz"
+    local EXTRACT_DIR="$WORK_DIR/extract"
     echo "Downloading..."
 
-    # Download and extract the package to a temporary directory first, and only replace the old install after everything succeeded.
-    # The old logic did rm -rf on the old directory before downloading, so a network failure left the user without a working AnyDesk.
-    rm -f "$TARBALL"
-    if ! wget -q --show-progress "$URL" -O "$TARBALL"; then
+    if ! wget -q --show-progress --connect-timeout=15 --timeout=180 --tries=1 "$URL" -O "$TARBALL"; then
         echo -e "${RED}Download failed, please check your network and try again.${NC}"
         echo -e "${YELLOW}The existing AnyDesk installation (if any) was kept.${NC}"
-        rm -f "$TARBALL"
+        rm -rf "$WORK_DIR"
         return 1
     fi
-    rm -rf "$EXTRACT_DIR"; mkdir -p "$EXTRACT_DIR"
+    if [ ! -s "$TARBALL" ]; then
+        echo -e "${RED}Downloaded file is empty or not a valid archive; aborted.${NC}"
+        rm -rf "$WORK_DIR"
+        return 1
+    fi
+    mkdir -p "$EXTRACT_DIR" || { rm -rf "$WORK_DIR"; return 1; }
     if ! tar -xzf "$TARBALL" -C "$EXTRACT_DIR" --strip-components=1; then
         echo -e "${RED}✗ Extraction failed, installation aborted.${NC}"
-        rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+        rm -rf "$WORK_DIR"
         echo -e "${YELLOW}The existing AnyDesk installation (if any) was kept.${NC}"
         return 1
     fi
     if [ ! -x "$EXTRACT_DIR/anydesk" ]; then
         echo -e "${RED}✗ The package contents are incomplete (anydesk executable not found), installation aborted.${NC}"
-        rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+        rm -rf "$WORK_DIR"
         echo -e "${YELLOW}The existing AnyDesk installation (if any) was kept.${NC}"
         return 1
     fi
 
-    rm -rf "$ANYDESK_INSTALL_DIR"
-    mkdir -p "$ANYDESK_INSTALL_DIR"
-    if ! cp -a "$EXTRACT_DIR"/. "$ANYDESK_INSTALL_DIR"/; then
+    # Atomic replace: stage new content, then mv into place; never delete the old dir first.
+    local STAGE_DIR="$WORK_DIR/stage"
+    if ! mkdir -p "$STAGE_DIR"; then rm -rf "$WORK_DIR"; return 1; fi
+    if ! cp -a "$EXTRACT_DIR"/. "$STAGE_DIR"/; then
         echo -e "${RED}✗ Failed to copy the installation files.${NC}"
-        rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
+        rm -rf "$WORK_DIR"
         return 1
     fi
-    rm -rf "$EXTRACT_DIR"; rm -f "$TARBALL"
-    chmod +x "$ANYDESK_BIN" 2>/dev/null
+    chmod +x "$STAGE_DIR/anydesk" 2>/dev/null
+    if [ ! -x "$STAGE_DIR/anydesk" ]; then
+        echo -e "${RED}✗ Staged files lack the executable; aborted (old install untouched).${NC}"
+        rm -rf "$WORK_DIR"
+        return 1
+    fi
+    local BACKUP_DIR=""
+    if [ -d "$ANYDESK_INSTALL_DIR" ]; then
+        BACKUP_DIR="$WORK_DIR/backup"
+        if ! mv "$ANYDESK_INSTALL_DIR" "$BACKUP_DIR"; then
+            echo -e "${RED}✗ Failed to back up the old install; aborted (old install untouched).${NC}"
+            rm -rf "$WORK_DIR"
+            return 1
+        fi
+    fi
+    if ! mv "$STAGE_DIR" "$ANYDESK_INSTALL_DIR"; then
+        echo -e "${RED}✗ Failed to install the new version; restoring the old one...${NC}"
+        [ -n "$BACKUP_DIR" ] && mv "$BACKUP_DIR" "$ANYDESK_INSTALL_DIR" 2>/dev/null
+        rm -rf "$WORK_DIR"
+        return 1
+    fi
+    rm -rf "$WORK_DIR"
     if [ ! -x "$ANYDESK_BIN" ]; then
         echo -e "${RED}✗ The installation files are incomplete (executable not found).${NC}"
-        rm -rf "$ANYDESK_INSTALL_DIR"
         return 1
     fi
     mkdir -p "$HOME/.local/bin"
@@ -12625,10 +14264,23 @@ uninstall_anydesk() {
         return 0
     fi
 
+    local fail=0
     if $local_found; then
-        rm -rf "$ANYDESK_INSTALL_DIR" && echo -e "${GREEN}✓ Local installation directory deleted${NC}"
-        rm -f "$DESKTOP_FILE" && echo -e "${GREEN}✓ Local desktop shortcut deleted${NC}"
-        rm -f "$BIN_LINK" && echo -e "${GREEN}✓ Command link deleted${NC}"
+        if rm -rf "$ANYDESK_INSTALL_DIR"; then
+            echo -e "${GREEN}✓ Local installation directory deleted${NC}"
+        else
+            echo -e "${RED}✗ Failed to delete local installation directory${NC}"; fail=1
+        fi
+        if rm -f "$DESKTOP_FILE"; then
+            echo -e "${GREEN}✓ Local desktop shortcut deleted${NC}"
+        else
+            echo -e "${RED}✗ Failed to delete local desktop shortcut${NC}"; fail=1
+        fi
+        if rm -f "$BIN_LINK"; then
+            echo -e "${GREEN}✓ Command link deleted${NC}"
+        else
+            echo -e "${RED}✗ Failed to delete command link${NC}"; fail=1
+        fi
     fi
 
     if $flatpak_found; then
@@ -12664,10 +14316,15 @@ uninstall_anydesk() {
 
         else
             echo -e "${RED}✗ Failed to uninstall the Flatpak version${NC}"
+            fail=1
         fi
     fi
 
     echo ""
+    if [ "$fail" -ne 0 ]; then
+        echo -e "${RED}✗ Uninstall had failures; not reporting full success, see hints above.${NC}"
+        return 1
+    fi
     echo -e "${GREEN}✅ AnyDesk uninstalled.${NC}"
 }
 
@@ -12807,15 +14464,31 @@ install_todesk() {
     fi
     echo -e "${GREEN}✓ Package is intact${NC}"
 
-    # ---------- 清理旧版本 ----------
-    # todesk-bin 声明 conflict=todesk，官方 4.1.0 若还在会挡住安装，先卸掉。
+    # ---------- Remove old versions ----------
+    # FIX-SOFTWARE: record old packages; abort immediately on removal failure (no || true).
+    local OLD_PKGS=""
+    pacman -Q todesk &>/dev/null && OLD_PKGS="$OLD_PKGS todesk"
+    pacman -Q todesk-bin &>/dev/null && OLD_PKGS="$OLD_PKGS todesk-bin"
+    OLD_PKGS="${OLD_PKGS# }"
+    [ -n "$OLD_PKGS" ] && echo -e "${CYAN}Old packages before install:$OLD_PKGS (recorded for recovery)${NC}"
     if pacman -Q todesk &>/dev/null; then
         echo -e "${CYAN}Uninstalling old todesk package...${NC}"
-        sudo pacman -R --noconfirm todesk 2>/dev/null || true
+        if ! sudo pacman -R --noconfirm todesk; then
+            echo -e "${RED}✗ Failed to remove old todesk; aborted to avoid version conflicts.${NC}"
+            echo -e "${YELLOW}  Run manually: sudo pacman -R --noconfirm todesk${NC}"
+            rm -rf "$CLONE_DIR"
+            return 1
+        fi
     fi
     if pacman -Q todesk-bin &>/dev/null; then
         echo -e "${CYAN}Uninstalling existing todesk-bin...${NC}"
-        sudo pacman -R --noconfirm todesk-bin 2>/dev/null || true
+        if ! sudo pacman -R --noconfirm todesk-bin; then
+            echo -e "${RED}✗ Failed to remove existing todesk-bin; aborted.${NC}"
+            echo -e "${YELLOW}  Old packages:${OLD_PKGS:-none}${NC}"
+            echo -e "${YELLOW}  To restore: sudo pacman -U --noconfirm $pkg_path (package kept at $CLONE_DIR)${NC}"
+            rm -rf "$CLONE_DIR"
+            return 1
+        fi
     fi
 
     # ---------- Clean orphaned files (critical) ----------
@@ -12880,19 +14553,38 @@ install_todesk() {
         echo -e "${GREEN}✓ Leftovers cleaned${NC}"
     fi
 
-    # ---------- 安装 ----------
+    # ---------- Install ----------
     echo ""
     echo -e "${CYAN}Installing ToDesk $TODESK_VERSION ...${NC}"
     if ! sudo pacman -U --noconfirm "$pkg_path"; then
         echo -e "${RED}✗ Install failed; check pacman output above.${NC}"
-        rm -rf "$CLONE_DIR"
+        echo -e "${YELLOW}  Old packages:${OLD_PKGS:-none} were removed and are NOT auto-reinstalled.${NC}"
+        echo -e "${YELLOW}  Restore manually: sudo pacman -U --noconfirm $pkg_path${NC}"
+        echo -e "${YELLOW}  (package kept at $CLONE_DIR)${NC}"
         return 1
     fi
 
-    # ---------- 服务与快捷方式 ----------
-    sudo systemctl daemon-reload 2>/dev/null || true
-    sudo systemctl enable todeskd.service 2>/dev/null || true
-    sudo systemctl restart todeskd.service 2>/dev/null || true
+    # ---------- Service & shortcut: check rc + verify with is-active ----------
+    # FIX-SOFTWARE: no more || true swallowing enable/restart failures; no false success.
+    local svc_fail=0
+    if ! sudo systemctl daemon-reload 2>/dev/null; then
+        echo -e "${YELLOW}⚠ systemctl daemon-reload failed${NC}"
+    fi
+    if ! sudo systemctl enable todeskd.service 2>/dev/null; then
+        echo -e "${RED}✗ Failed to enable todeskd.service${NC}"
+        svc_fail=1
+    fi
+    if ! sudo systemctl restart todeskd.service 2>/dev/null; then
+        echo -e "${RED}✗ Failed to restart todeskd.service${NC}"
+        svc_fail=1
+    fi
+    if ! systemctl is-active --quiet todeskd.service 2>/dev/null; then
+        echo -e "${RED}✗ todeskd.service is not active${NC}"
+        echo -e "${YELLOW}  Check manually: systemctl status todeskd.service${NC}"
+        svc_fail=1
+    else
+        echo -e "${GREEN}✓ todeskd.service enabled and active${NC}"
+    fi
 
     if [ -f /usr/share/applications/todesk.desktop ]; then
         mkdir -p "$HOME/Desktop"
@@ -12909,8 +14601,12 @@ install_todesk() {
     sudo rm -rf /tmp/lanbai 2>/dev/null || true
     rm -rf "$CLONE_DIR"
 
-    # ---------- 结果确认 ----------
+    # ---------- Result ----------
     echo ""
+    if [ "$svc_fail" -ne 0 ]; then
+        echo -e "${RED}✗ Package installed but the service did not start; not reporting success.${NC}"
+        return 1
+    fi
     if pacman -Q todesk-bin &>/dev/null || [ -x /opt/todesk/bin/ToDesk ]; then
         echo -e "${GREEN}✅ ToDesk $TODESK_VERSION installed${NC}"
         echo -e "${YELLOW}Tip: ToDesk supports X11 only, not Wayland.${NC}"
@@ -13053,26 +14749,28 @@ update_installed_apps() {
     # 另：flatpak update 默认并不刷新 appstream 元数据，只有显式加 --appstream 才会，
     # 所以这里无需额外跳过，也不会卡在「更新 appstream 数据」。
 
+    # FIX-SOFTWARE: distinguish "no updates / query failed / timeout"; empty output is not "all up to date".
     echo -e "${CYAN}Checking for available updates...${NC}"
-    local updates="" check_rc=0
-    updates=$(timeout 120 flatpak remote-ls --updates 2>/dev/null) || check_rc=$?
+    local updates="" check_rc=0 check_err="" check_tmp
+    check_tmp="$(mktemp "$TEMP_DIR/flatpak_check.XXXXXX" 2>/dev/null)"
+    updates=$(timeout 120 flatpak remote-ls --updates 2>"$check_tmp") || check_rc=$?
+    [ -f "$check_tmp" ] && check_err="$(cat "$check_tmp")"
+    rm -f "$check_tmp"
 
     if [ $check_rc -ne 0 ]; then
-        # 联网检查失败/超时（常见于镜像站抖动），退回本地缓存再判断一次，
-        # 总比直接报错好——至少能把已知的更新列出来
-        echo -e "${YELLOW}Online check timed out/failed; falling back to local cache...${NC}"
-        updates=$(timeout 30 flatpak remote-ls --updates --cached 2>/dev/null)
-        [ -z "$updates" ] && {
-            echo ""
-            echo -e "${RED}✗ Cannot check for updates: network error, and no pending items in the local cache.${NC}"
-            echo -e "${YELLOW}  Check your network and retry, or pick another mirror under Switch Software Source.${NC}"
-            return 1
-        }
+        if [ $check_rc -eq 124 ] || [ $check_rc -eq 137 ]; then
+            echo -e "${RED}✗ Update query timed out or was killed (rc=$check_rc); not treated as 'no updates'.${NC}"
+        else
+            echo -e "${RED}✗ Update query failed (rc=$check_rc).${NC}"
+            [ -n "$check_err" ] && echo -e "${YELLOW}  flatpak stderr: $(echo "$check_err" | head -3 | tr '\n' ' ')${NC}"
+        fi
+        echo -e "${YELLOW}  Check your network and retry, or pick another mirror under Switch Software Source.${NC}"
+        return 1
     fi
 
     if [ -z "$updates" ]; then
         echo ""
-        echo -e "${GREEN}✓ All installed apps are up to date; nothing to update.${NC}"
+        echo -e "${GREEN}✓ Query succeeded with no pending updates: all installed apps are up to date.${NC}"
         return 0
     fi
 
@@ -13081,42 +14779,50 @@ update_installed_apps() {
     printf '%s\n' "$updates" | sed 's/^/  · /'
     echo ""
 
-    # --noninteractive makes flatpak emit plain line-by-line text instead of an ANSI
-    # progress bar that refreshes in place.
-    #
-    # This fixes the earlier stray "^[[20;68R^[[20;68R^[[20;77R" after the progress line:
-    # before drawing its progress bar flatpak sends ESC[6n to ask the terminal for the
-    # cursor position, and VTE answers with ESC[row;colR on the PTY *input* side. The PTY
-    # has ECHO enabled by default, so the kernel echoes that reply back to the screen as
-    # visible text. Without a progress bar the query is never sent, which removes the
-    # garbage at the source without touching terminal ECHO.
-    #
-    # Turning ECHO off would be worse: the reply bytes stay in the input buffer and later
-    # reads pick them up (read -n1 would return ESC instead of the key the user pressed).
-    #
-    # Measured on the same machine and state (nothing to update):
-    #   default           -> 31 escape sequences, ANSI bold and cursor control included
-    #   --noninteractive  -> 0 escape sequences, plain text only
-    # The tradeoff is terser output (upstream: "show minimal output"), so no percentage
-    # progress bar, but each step still prints a line, which is enough for this screen.
+    # FIX-PROGRESS: show percentages and download speed.
+    # --noninteractive disables progress output, so drop it and set
+    # FLATPAK_TTY_PROGRESS=1 so flatpak/ostree emits
+    # "Receiving objects: NN% (...) X MB/s". The output goes through
+    # fp_progress_filter, which turns \r redraws into plain lines and strips ANSI
+    # sequences and cursor-position replies, keeping progress/speed without the
+    # old garbage characters.
     echo -e "${CYAN}Starting update (large packages may be slow; please wait)...${NC}"
+    echo -e "${CYAN}Download percentage and speed are shown live below${NC}"
     echo ""
     local rc=0
-    timeout 1200 flatpak update --noninteractive -y < /dev/null || rc=$?
+    # Save flatpak's real exit code to a file: in a pipeline $? would be the filter's.
+    local _fp_status="${TEMP_DIR}/fp_update_status.$$"
+    ( FLATPAK_TTY_PROGRESS=1 timeout 1200 flatpak update -y < /dev/null 2>&1; echo $? > "$_fp_status" ) \
+        | fp_progress_filter
+    if [ -f "$_fp_status" ]; then
+        rc=$(cat "$_fp_status" 2>/dev/null || echo 1)
+        rm -f "$_fp_status"
+    else
+        rc=1
+    fi
 
     echo ""
-    if [ $rc -eq 124 ]; then
-        echo -e "${RED}✗ Update timed out (20 minutes); aborted.${NC}"
+    # FIX-SOFTWARE: rc=137/124 are timeouts/kills, reported separately from generic failure.
+    if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then
+        echo -e "${RED}✗ Update timed out or was killed (rc=$rc); aborted, not reported as done.${NC}"
         echo -e "${YELLOW}  Partially downloaded data is kept; retry later or switch mirrors first.${NC}"
         return 1
     elif [ $rc -ne 0 ]; then
-        echo -e "${RED}✗ Update failed; check output above.${NC}"
+        echo -e "${RED}✗ Update failed (rc=$rc); check output above.${NC}"
         return 1
     fi
 
-    # 用本地缓存复核：update 已经刷新过 summary，这里不会再有额外的网络等待
-    local left
-    left=$(timeout 30 flatpak remote-ls --updates --cached 2>/dev/null)
+    # Re-check: inspect returncode and stderr; a failed recheck must not report "all done".
+    local left="" left_rc=0 left_err="" left_tmp
+    left_tmp="$(mktemp "$TEMP_DIR/flatpak_recheck.XXXXXX" 2>/dev/null)"
+    left=$(timeout 30 flatpak remote-ls --updates --cached 2>"$left_tmp") || left_rc=$?
+    [ -f "$left_tmp" ] && left_err="$(cat "$left_tmp")"
+    rm -f "$left_tmp"
+    if [ $left_rc -ne 0 ]; then
+        echo -e "${RED}✗ Recheck failed (rc=$left_rc); cannot confirm updates completed.${NC}"
+        [ -n "$left_err" ] && echo -e "${YELLOW}  flatpak stderr: $(echo "$left_err" | head -3 | tr '\n' ' ')${NC}"
+        return 1
+    fi
     if [ -z "$left" ]; then
         echo -e "${GREEN}✓ All apps updated${NC}"
         return 0
@@ -13132,40 +14838,56 @@ install_yellow_duck_software() {
     clear
     echo -e "${YELLOW}════════════════ Install Yellow Duck software ════════════════${NC}"
     echo ""
+    # FIX-SOFTWARE: every failure returns 1 (bare return used to report success to the GUI).
     local LOSS_DIR="$HOME/.local/share/Steam/steamapps/common/Lossless Scaling"
+    local STEAM_COMMON="$HOME/.local/share/Steam/steamapps/common"
     if [[ -d "$LOSS_DIR" ]]; then
         echo -e "${CYAN}Yellow Duck software already installed.${NC}"
         echo "   Install directory: $LOSS_DIR"
-        echo ""
-        read -p "Uninstall installed Yellow Duck software? (y/N): " -n 1 -r < /dev/tty
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo "Starting Yellow Duck uninstall..."
-            if sudo rm -rf "$LOSS_DIR"; then
-                echo -e "${GREEN}✅ Yellow Duck software uninstalled.${NC}"
-                echo "To reinstall, run this feature again."
-            else
-                echo -e "${RED}❌ Uninstall failed; check permissions.${NC}"
-            fi
-            return
-        else
-            echo "Operation cancelled."
-            return
+        echo -e "${RED}Warning: the whole directory will be deleted; it may contain user data (irreversible).${NC}"
+        if ! confirm_action; then
+            echo -e "${GREEN}Cancelled; nothing was deleted.${NC}"
+            return 0
         fi
+        if [ -L "$LOSS_DIR" ]; then
+            echo -e "${RED}✗ Target is a symlink; refusing to delete, check manually.${NC}"
+            return 1
+        fi
+        echo "Starting Yellow Duck uninstall..."
+        if ! sudo rm -rf "$LOSS_DIR"; then
+            echo -e "${RED}❌ Uninstall failed; check permissions.${NC}"
+            return 1
+        fi
+        if [ -d "$LOSS_DIR" ]; then
+            echo -e "${RED}❌ Directory still exists; uninstall did not take effect.${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}✅ Yellow Duck software uninstalled.${NC}"
+        echo "To reinstall, run this feature again."
+        return 0
     fi
 
     echo -e "${CYAN}Yellow Duck software not found; downloading split archives from Gitee...${NC}"
-    local DOWNLOAD_DIR="/tmp/lossless_scaling_download"
-    rm -rf "$DOWNLOAD_DIR"
-    mkdir -p "$DOWNLOAD_DIR"
-    cd "$DOWNLOAD_DIR" || return
+    if [ ! -d "$STEAM_COMMON" ]; then
+        echo -e "${RED}✗ Target directory missing: $STEAM_COMMON; aborted.${NC}"
+        return 1
+    fi
+    local DOWNLOAD_DIR
+    DOWNLOAD_DIR="$(mktemp -d /tmp/lossless_scaling_download.XXXXXXXX 2>/dev/null)" || {
+        echo -e "${RED}✗ Cannot create a temp dir.${NC}"; return 1; }
+    cd "$DOWNLOAD_DIR" || { rm -rf "$DOWNLOAD_DIR"; return 1; }
 
     local BASE_URL="https://gitee.com/Zhucy2100/app-backup/raw/master/Lossless%20Scaling/Lossless%20Scaling.zip"
     local failed=0
     for i in 001 002 003 004 005 006 007; do
         echo "Downloading Lossless Scaling.zip.${i} ..."
-        if ! curl -L --fail -o "Lossless Scaling.zip.${i}" "${BASE_URL}.${i}"; then
+        if ! curl -L --fail --connect-timeout 15 --max-time 180 -o "Lossless Scaling.zip.${i}" "${BASE_URL}.${i}"; then
             echo -e "${RED}Failed to download Lossless Scaling.zip.${i}.${NC}"
+            failed=1
+            break
+        fi
+        if [ ! -s "Lossless Scaling.zip.${i}" ]; then
+            echo -e "${RED}Part Lossless Scaling.zip.${i} is empty (likely an error page).${NC}"
             failed=1
             break
         fi
@@ -13173,22 +14895,40 @@ install_yellow_duck_software() {
 
     if [ $failed -ne 0 ]; then
         echo -e "${RED}Download failed; check your network.${NC}"
-        rm -rf "$DOWNLOAD_DIR"
-        return
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
     fi
 
     echo "Merging split archives and extracting..."
-    cat "Lossless Scaling.zip".* > Lossless-Scaling-Combined.zip
-    unzip -o Lossless-Scaling-Combined.zip -d "$HOME/.local/share/Steam/steamapps/common/"
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}Extraction failed.${NC}"
-        rm -rf "$DOWNLOAD_DIR"
-        return
+    if ! cat "Lossless Scaling.zip".* > Lossless-Scaling-Combined.zip; then
+        echo -e "${RED}✗ Failed to merge split parts.${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
     fi
-
-    sudo chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "$HOME/.local/share/Steam/steamapps/common/Lossless Scaling"
-    rm -rf "$DOWNLOAD_DIR"
+    # Reject ../ or absolute paths before extracting into Steam common.
+    if ! fs_archive_safe Lossless-Scaling-Combined.zip zip; then
+        echo -e "${RED}✗ Archive contains ../ or absolute paths; refusing to extract (path traversal), aborted.${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+    if ! unzip -o Lossless-Scaling-Combined.zip -d "$STEAM_COMMON/"; then
+        echo -e "${RED}Extraction failed.${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+    if [ ! -d "$LOSS_DIR" ]; then
+        echo -e "${RED}✗ Target dir $LOSS_DIR not found after extract; install failed.${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+    if ! sudo chown -R "${CURRENT_USER}:${CURRENT_GROUP}" "$LOSS_DIR"; then
+        echo -e "${RED}✗ chown failed; install not complete.${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+    cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
     echo -e "${GREEN}✅ Yellow Duck software installed!${NC}"
+    return 0
 }
 
 extract_exe_icon() {
@@ -13409,12 +15149,18 @@ install_ubisoft() {
         return 0
     fi
 
+    # FIX-SOFTWARE: --fail/timeouts + PE header check, never hand an HTML page to Proton.
     echo -e "${CYAN}Downloading Ubisoft installer...${NC}"
     cd "$HOME" || return
     rm -f UbisoftConnectInstaller.exe
-    curl -# -L -o UbisoftConnectInstaller.exe "https://ubistatic3-a.akamaihd.net/orbit/launcher_installer/UbisoftConnectInstaller.exe"
-    if [ $? -ne 0 ] || [ ! -f "UbisoftConnectInstaller.exe" ]; then
+    if ! curl -# -L --fail --connect-timeout 15 --max-time 300 -o UbisoftConnectInstaller.exe "https://ubistatic3-a.akamaihd.net/orbit/launcher_installer/UbisoftConnectInstaller.exe"; then
         echo -e "${RED}Download failed; check your network.${NC}"
+        rm -f UbisoftConnectInstaller.exe
+        return 1
+    fi
+    if ! fs_verify_installer UbisoftConnectInstaller.exe mz; then
+        echo -e "${RED}✗ Downloaded file is not a valid PE installer (too small or an HTML error page); aborted.${NC}"
+        rm -f UbisoftConnectInstaller.exe
         return 1
     fi
 
@@ -13430,8 +15176,12 @@ install_ubisoft() {
         echo "   Please install Proton Experimental from Steam Library → Tools, then retry."
         return 1
     fi
-    "$PROTON_BIN" waitforexitandrun \
-        "$HOME/UbisoftConnectInstaller.exe" /S
+    # FIX-SOFTWARE: check Proton's exit code; no more "waiting" after a failed run.
+    if ! "$PROTON_BIN" waitforexitandrun \
+        "$HOME/UbisoftConnectInstaller.exe" /S; then
+        echo -e "${RED}✗ Proton failed to run the installer (non-zero exit); check the Proton environment or logs.${NC}"
+        return 1
+    fi
 
     echo -e "${CYAN}Waiting for install to finish...${NC}"
     local WAIT_TIME=0
@@ -13446,12 +15196,17 @@ install_ubisoft() {
     done
     echo ""
 
-    if [ -d "$UBISOFT_DIR" ]; then
+    local EXE_PATH="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe"
+    # FIX-SOFTWARE: verify the target exe exists, not just the directory.
+    if [ -d "$UBISOFT_DIR" ] && [ -f "$EXE_PATH" ]; then
         echo -e "${GREEN}✓ Ubisoft platform installed successfully!${NC}"
-        local EXE_PATH="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/UbisoftConnect.exe"
 
         echo -e "${CYAN}Adding to Steam library...${NC}"
-        steamos-add-to-steam "$EXE_PATH"
+        # FIX-SOFTWARE: check the tool exists first, so a missing command is not a false "added"
+        if ! command -v steamos-add-to-steam >/dev/null 2>&1; then
+            echo -e "${YELLOW}⚠ steamos-add-to-steam not found; skipping auto-add, please add the exe manually.${NC}"
+        else
+            steamos-add-to-steam "$EXE_PATH"
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ Steam shortcut added.${NC}"
             echo -e "${YELLOW}Please set this shortcut's compatibility tool to Proton Experimental in your Steam library.${NC}"
@@ -13459,6 +15214,7 @@ install_ubisoft() {
         else
             echo -e "${YELLOW}⚠️ Failed to add to Steam automatically; add the exe manually.${NC}"
         fi
+        fi  # FIX-SOFTWARE: add_to_steam guard end
 
         local ICON_PATH=""
         echo -e "${CYAN}Extracting icon from exe...${NC}"
@@ -13470,7 +15226,9 @@ install_ubisoft() {
             echo -e "${YELLOW}⚠️ Icon extraction failed; using the system game icon.${NC}"
         fi
 
-        local DESKTOP_FILE="$HOME/Desktop/Ubisoft Connect.desktop"
+        local DESKTOP_DIR
+        DESKTOP_DIR="$(fs_desktop_dir)"
+        local DESKTOP_FILE="$DESKTOP_DIR/Ubisoft Connect.desktop"
         cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Type=Application
@@ -13498,12 +15256,18 @@ install_epic() {
         return 0
     fi
 
+    # FIX-SOFTWARE: --fail/timeouts + MSI(OLE2) header check, never hand HTML to Proton.
     echo -e "${CYAN}Downloading Epic installer...${NC}"
     cd "$HOME" || return
     rm -f EpicGamesLauncherInstaller.msi
-    wget -O EpicGamesLauncherInstaller.msi "https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/installer/download/EpicGamesLauncherInstaller.msi"
-    if [ $? -ne 0 ] || [ ! -f "EpicGamesLauncherInstaller.msi" ]; then
+    if ! wget --connect-timeout=15 --timeout=300 --tries=1 -O EpicGamesLauncherInstaller.msi "https://launcher-public-service-prod06.ol.epicgames.com/launcher/api/installer/download/EpicGamesLauncherInstaller.msi"; then
         echo -e "${RED}Download failed; check your network.${NC}"
+        rm -f EpicGamesLauncherInstaller.msi
+        return 1
+    fi
+    if ! fs_verify_installer EpicGamesLauncherInstaller.msi msi; then
+        echo -e "${RED}✗ Downloaded file is not a valid MSI installer (too small or an HTML error page); aborted.${NC}"
+        rm -f EpicGamesLauncherInstaller.msi
         return 1
     fi
 
@@ -13522,8 +15286,12 @@ install_epic() {
         echo "   Please install Proton Experimental from Steam Library → Tools, then retry."
         return 1
     fi
-    "$PROTON_BIN" waitforexitandrun \
-        "$HOME/EpicGamesLauncherInstaller.msi" /quiet /log "$MSI_LOG"
+    # FIX-SOFTWARE: run Epic MSI via explicit msiexec /i ... /quiet through Proton, check rc.
+    if ! "$PROTON_BIN" waitforexitandrun \
+        msiexec /i "Z:\\home\\deck\\EpicGamesLauncherInstaller.msi" /quiet /log "$MSI_LOG"; then
+        echo -e "${RED}✗ Proton failed to run msiexec (non-zero exit); check log: ${MSI_LOG}${NC}"
+        return 1
+    fi
 
     echo -e "${CYAN}Waiting for install to finish...${NC}"
     local WAIT_TIME=0
@@ -13538,12 +15306,17 @@ install_epic() {
     done
     echo ""
 
-    if [ -d "$EPIC_DIR" ]; then
+    local EXE_PATH="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
+    # FIX-SOFTWARE: verify the target exe exists, not just the directory.
+    if [ -d "$EPIC_DIR" ] && [ -f "$EXE_PATH" ]; then
         echo -e "${GREEN}✓ Epic platform installed successfully!${NC}"
-        local EXE_PATH="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games/Launcher/Portal/Binaries/Win64/EpicGamesLauncher.exe"
 
         echo -e "${CYAN}Adding to Steam library...${NC}"
-        steamos-add-to-steam "$EXE_PATH"
+        # FIX-SOFTWARE: check the tool exists first, so a missing command is not a false "added"
+        if ! command -v steamos-add-to-steam >/dev/null 2>&1; then
+            echo -e "${YELLOW}⚠ steamos-add-to-steam not found; skipping auto-add, please add the exe manually.${NC}"
+        else
+            steamos-add-to-steam "$EXE_PATH"
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}✓ Steam shortcut added.${NC}"
             echo -e "${YELLOW}Please set this shortcut's compatibility tool to Proton Experimental in your Steam library.${NC}"
@@ -13551,6 +15324,7 @@ install_epic() {
         else
             echo -e "${YELLOW}⚠️ Failed to add to Steam automatically; add the exe manually.${NC}"
         fi
+        fi  # FIX-SOFTWARE: add_to_steam guard end
 
         local ICON_PATH=""
         echo -e "${CYAN}Extracting icon from exe...${NC}"
@@ -13562,7 +15336,9 @@ install_epic() {
             echo -e "${YELLOW}⚠️ Icon extraction failed; using the system game icon.${NC}"
         fi
 
-        local DESKTOP_FILE="$HOME/Desktop/Epic Games Launcher.desktop"
+        local DESKTOP_DIR
+        DESKTOP_DIR="$(fs_desktop_dir)"
+        local DESKTOP_FILE="$DESKTOP_DIR/Epic Games Launcher.desktop"
         cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Type=Application
@@ -13605,7 +15381,8 @@ install_battle_net() {
 
     for part in "${files[@]}"; do
         echo "Downloading Battle.net_backup.part_${part} ..."
-        if ! curl -L --fail --retry 2 \
+        # FIX-SOFTWARE: connect/max-time timeouts on this key download.
+        if ! curl -L --fail --connect-timeout 15 --max-time 180 --retry 2 \
              -H "User-Agent: ${CURL_UA}" \
              -H "Referer: ${CURL_REFERER}" \
              -o "Battle.net_backup.part_${part}" "${BASE_URL}_${part}"; then
@@ -13625,8 +15402,19 @@ install_battle_net() {
     cat Battle.net_backup.part_* > Battle.net_backup.tar.xz
 
     echo -e "${CYAN}Extracting to the target directory...${NC}"
-    mkdir -p "$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)"
-    if ! tar -xJf Battle.net_backup.tar.xz -C "$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/"; then
+    local BN_TARGET="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)"
+    if ! mkdir -p "$BN_TARGET"; then
+        echo -e "${RED}✗ Failed to create the target dir.${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+    # Reject ../ or absolute paths before extracting.
+    if ! fs_archive_safe Battle.net_backup.tar.xz tar; then
+        echo -e "${RED}✗ Archive contains ../ or absolute paths; refusing to extract (path traversal), aborted.${NC}"
+        cd "$HOME" 2>/dev/null; rm -rf "$DOWNLOAD_DIR"
+        return 1
+    fi
+    if ! tar -xJf Battle.net_backup.tar.xz -C "$BN_TARGET/"; then
         echo -e "${RED}Extraction failed.${NC}"
         rm -rf "$DOWNLOAD_DIR"
         return 1
@@ -13640,7 +15428,10 @@ install_battle_net() {
     fi
 
     echo -e "${CYAN}Adding to Steam library...${NC}"
-    steamos-add-to-steam "$EXE_PATH"
+    if ! command -v steamos-add-to-steam >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠ steamos-add-to-steam not found; skipping auto-add, please add the exe manually.${NC}"
+    else
+        steamos-add-to-steam "$EXE_PATH"
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ Steam shortcut added.${NC}"
         echo -e "${YELLOW}Please set this shortcut's compatibility tool to Proton Experimental in your Steam library.${NC}"
@@ -13648,6 +15439,7 @@ install_battle_net() {
     else
         echo -e "${YELLOW}⚠️ Failed to add to Steam automatically; add the exe manually.${NC}"
     fi
+    fi  # FIX-SOFTWARE: bn add_to_steam guard end
 
     local ICON_PATH=""
     echo -e "${CYAN}Extracting icon from exe...${NC}"
@@ -13678,18 +15470,16 @@ EOF
 }
 
 uninstall_third_party_platform() {
+    # FIX-SOFTWARE: add a cancel/back option; /dev/tty EOF no longer loops forever.
     mk_temp_dir
     while true; do
         clear
         echo -e "${YELLOW}═══════════ Uninstall third-party game platforms ═══════════${NC}"
         echo ""
-
         local UBISOFT_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
         local EPIC_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
         local BATTLE_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
-        local ubisoft_installed=false
-        local epic_installed=false
-        local battle_installed=false
+        local ubisoft_installed=false epic_installed=false battle_installed=false
         [ -d "$UBISOFT_DIR" ] && ubisoft_installed=true
         [ -d "$EPIC_DIR" ] && epic_installed=true
         [ -d "$BATTLE_DIR" ] && battle_installed=true
@@ -13705,121 +15495,224 @@ uninstall_third_party_platform() {
         $epic_installed && echo -e "  ${GREEN}✓ Epic platform${NC}"
         $battle_installed && echo -e "  ${GREEN}✓ Battle.net platform${NC}"
         echo ""
-
         echo "Choose platforms to uninstall:"
         echo "  1) Uninstall Ubisoft platform"
         echo "  2) Uninstall Epic platform"
         echo "  3) Uninstall Battle.net platform"
-        read -p "Enter [1-3]: " choice < /dev/tty
-        case $choice in
-            1) uninstall_ubisoft; break ;;
-            2) uninstall_epic; break ;;
-            3) uninstall_battle_net; break ;;
+        echo "  0) Cancel / back (do not uninstall)"
+        local choice=""
+        if ! read -r -p "Enter [0-3] (Enter=cancel): " choice < /dev/tty; then
+            echo -e "${GREEN}Cancelled; no changes made.${NC}"
+            return 0
+        fi
+        case "$choice" in
+            1) uninstall_ubisoft; return $? ;;
+            2) uninstall_epic; return $? ;;
+            3) uninstall_battle_net; return $? ;;
+            ""|0) echo -e "${GREEN}Cancelled; no changes made.${NC}"; return 0 ;;
             *) echo -e "${RED}Invalid option; try again${NC}"; sleep 0.5 ;;
         esac
     done
 }
 
 uninstall_ubisoft() {
+    # FIX-SOFTWARE: list paths + confirm + symlink check + uninstaller failure is not success.
     local UBISOFT_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft"
+    local DESKTOP_DIR
+    DESKTOP_DIR="$(fs_desktop_dir)"
+    local DESKTOP_FILE="$DESKTOP_DIR/Ubisoft Connect.desktop"
     if [ ! -d "$UBISOFT_DIR" ]; then
         echo -e "${YELLOW}Ubisoft platform not detected; nothing to uninstall.${NC}"
         return 0
     fi
 
-    echo -e "${CYAN}Running Ubisoft official uninstaller...${NC}"
-    export STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform"
-    export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
-    ~/.steam/root/steamapps/common/Proton\ -\ Experimental/proton waitforexitandrun \
-        "$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/Uninstall.exe" /S
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ Uninstaller finished; deleting leftover directories...${NC}"
-        rm -rf "$UBISOFT_DIR"
-        if [ ! -d "$UBISOFT_DIR" ]; then
-            echo -e "${GREEN}✓ Ubisoft platform uninstalled.${NC}"
-        else
-            echo -e "${YELLOW}⚠️ Failed to delete leftover directory; remove manually: $UBISOFT_DIR${NC}"
+    echo -e "${CYAN}The following paths will be deleted:${NC}"
+    local p
+    for p in "$@"; do
+        [ -e "$p" ] || [ -L "$p" ] || continue
+        if [ -L "$p" ]; then
+            echo -e "${RED}  ✗ $p is a symlink; refusing to delete, check manually.${NC}"
+            return 1
         fi
-    else
-        echo -e "${RED}✗ Uninstaller failed; try deleting the directory manually.${NC}"
+        echo -e "${YELLOW}  · $p${NC}"
+    done
+    echo -e "${RED}Warning: these directories may contain installed games, saves and user data. This is irreversible!${NC}"
+    echo -e "${YELLOW}Make sure the platform/game processes are not running.${NC}"
+    if pgrep -f 'third-party-game-platform' >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠ A platform/game process may still be running; consider quitting it first.${NC}"
+    fi
+    echo ""
+    if ! confirm_action; then
+        echo -e "${GREEN}Cancelled; nothing was deleted.${NC}"
+        return 0
     fi
 
-    local DESKTOP_FILE="$HOME/Desktop/Ubisoft Connect.desktop"
-    if [ -f "$DESKTOP_FILE" ]; then
-        rm -f "$DESKTOP_FILE"
-        echo -e "${GREEN}✓ Desktop shortcut deleted: Ubisoft Connect.desktop${NC}"
+    local uninstaller="$UBISOFT_DIR/Ubisoft Game Launcher/Uninstall.exe"
+    local uninstaller_ok=false
+    if [ -f "$uninstaller" ]; then
+        echo -e "${CYAN}Running the official Ubisoft uninstaller...${NC}"
+        export STEAM_COMPAT_DATA_PATH="$HOME/Applications/third-party-game-platform"
+        export STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam"
+        local PROTON_BIN="$HOME/.steam/root/steamapps/common/Proton - Experimental/proton"
+        if [ -x "$PROTON_BIN" ] && "$PROTON_BIN" waitforexitandrun "$uninstaller" /S; then
+            uninstaller_ok=true
+            echo -e "${GREEN}✓ Official uninstaller finished.${NC}"
+        else
+            echo -e "${YELLOW}⚠ Proton missing or the official uninstaller failed; only the directory will be removed (not a full success).${NC}"
+        fi
     else
-        echo -e "${YELLOW}Desktop shortcut not found; skipped.${NC}"
+        echo -e "${YELLOW}⚠ Official uninstaller not found; only the directory will be removed.${NC}"
+    fi
+
+    local fail=0
+    if ! rm -rf "$UBISOFT_DIR"; then
+        echo -e "${RED}✗ Failed to delete: $UBISOFT_DIR${NC}"
+        fail=1
+    elif [ -d "$UBISOFT_DIR" ]; then
+        echo -e "${RED}✗ Directory still exists: $UBISOFT_DIR${NC}"
+        fail=1
+    else
+        echo -e "${GREEN}✓ Ubisoft directory deleted${NC}"
+    fi
+
+    # Only clean the shortcut and report success when the uninstaller AND rm both succeeded
+    if [ "$fail" -eq 0 ] && $uninstaller_ok; then
+        if [ -f "$DESKTOP_FILE" ]; then
+            if rm -f "$DESKTOP_FILE"; then
+                echo -e "${GREEN}✓ Desktop shortcut deleted${NC}"
+            else
+                echo -e "${RED}✗ Failed to delete the desktop shortcut${NC}"
+                fail=1
+            fi
+        fi
+    elif [ "$fail" -eq 0 ]; then
+        echo -e "${RED}✗ Official uninstaller did not succeed; desktop shortcut kept, verify manually before removing.${NC}"
+        fail=1
     fi
 
     echo ""
     echo -e "${YELLOW}Please manually remove the corresponding non-Steam shortcut from your Steam library (right-click → Manage → Remove non-Steam game).${NC}"
+    [ "$fail" -eq 0 ] || return 1
+    echo -e "${GREEN}✓ Ubisoft platform uninstalled.${NC}"
+    return 0
 }
 
 uninstall_epic() {
+    # FIX-SOFTWARE: confirm + symlink check + rm failure returns 1.
     local EPIC_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files/Epic Games"
     local EPIC_DIR_X86="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Epic Games"
+    local DESKTOP_DIR
+    DESKTOP_DIR="$(fs_desktop_dir)"
+    local DESKTOP_FILE="$DESKTOP_DIR/Epic Games Launcher.desktop"
     if [ ! -d "$EPIC_DIR" ] && [ ! -d "$EPIC_DIR_X86" ]; then
         echo -e "${YELLOW}Epic platform not detected; nothing to uninstall.${NC}"
         return 0
     fi
 
-    echo -e "${CYAN}Deleting Epic platform directory...${NC}"
-    if [ -d "$EPIC_DIR" ]; then
-        rm -rf "$EPIC_DIR"
-        if [ ! -d "$EPIC_DIR" ]; then
-            echo -e "${GREEN}✓ Epic platform directory deleted: $EPIC_DIR${NC}"
-        else
-            echo -e "${RED}✗ Delete failed; remove manually: $EPIC_DIR${NC}"
+    echo -e "${CYAN}The following paths will be deleted:${NC}"
+    local p
+    for p in "$@"; do
+        [ -e "$p" ] || [ -L "$p" ] || continue
+        if [ -L "$p" ]; then
+            echo -e "${RED}  ✗ $p is a symlink; refusing to delete, check manually.${NC}"
+            return 1
         fi
+        echo -e "${YELLOW}  · $p${NC}"
+    done
+    echo -e "${RED}Warning: these directories may contain installed games, saves and user data. This is irreversible!${NC}"
+    echo -e "${YELLOW}Make sure the platform/game processes are not running.${NC}"
+    if pgrep -f 'third-party-game-platform' >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠ A platform/game process may still be running; consider quitting it first.${NC}"
     fi
-
-    if [ -d "$EPIC_DIR_X86" ]; then
-        rm -rf "$EPIC_DIR_X86"
-        if [ ! -d "$EPIC_DIR_X86" ]; then
-            echo -e "${GREEN}✓ Epic platform directory deleted: $EPIC_DIR_X86${NC}"
-        else
-            echo -e "${RED}✗ Delete failed; remove manually: $EPIC_DIR_X86${NC}"
-        fi
-    fi
-
-    local DESKTOP_FILE="$HOME/Desktop/Epic Games Launcher.desktop"
-    if [ -f "$DESKTOP_FILE" ]; then
-        rm -f "$DESKTOP_FILE"
-        echo -e "${GREEN}✓ Desktop shortcut deleted: Epic Games Launcher.desktop${NC}"
-    else
-        echo -e "${YELLOW}Desktop shortcut not found; skipped.${NC}"
-    fi
-
     echo ""
-    echo -e "${YELLOW}Please manually remove the corresponding non-Steam shortcut from your Steam library (right-click → Manage → Remove non-Steam game).${NC}"
+    if ! confirm_action; then
+        echo -e "${GREEN}Cancelled; nothing was deleted.${NC}"
+        return 0
+    fi
+
+    local fail=0 d
+    for d in "$EPIC_DIR" "$EPIC_DIR_X86"; do
+        [ -d "$d" ] || continue
+        if ! rm -rf "$d"; then
+            echo -e "${RED}✗ Failed to delete: $d${NC}"
+            fail=1
+        elif [ -d "$d" ]; then
+            echo -e "${RED}✗ Directory still exists: $d${NC}"
+            fail=1
+        else
+            echo -e "${GREEN}✓ Deleted: $d${NC}"
+        fi
+    done
+    if [ -f "$DESKTOP_FILE" ]; then
+        if rm -f "$DESKTOP_FILE"; then
+            echo -e "${GREEN}✓ Desktop shortcut deleted${NC}"
+        else
+            echo -e "${RED}✗ Failed to delete the desktop shortcut${NC}"
+            fail=1
+        fi
+    fi
+    echo ""
+    echo -e "${YELLOW}Please manually remove the corresponding non-Steam shortcut from your Steam library.${NC}"
+    [ "$fail" -eq 0 ] || return 1
+    echo -e "${GREEN}✓ Epic platform uninstalled.${NC}"
+    return 0
 }
 
 uninstall_battle_net() {
+    # FIX-SOFTWARE: confirm + symlink check + rm failure returns 1.
     local BATTLE_DIR="$HOME/Applications/third-party-game-platform/pfx/drive_c/Program Files (x86)/Battle.net"
+    local DESKTOP_DIR
+    DESKTOP_DIR="$(fs_desktop_dir)"
+    local DESKTOP_FILE="$DESKTOP_DIR/Battle.net.desktop"
     if [ ! -d "$BATTLE_DIR" ]; then
         echo -e "${YELLOW}Battle.net platform not detected; nothing to uninstall.${NC}"
         return 0
     fi
 
-    echo -e "${CYAN}Deleting Battle.net platform directory...${NC}"
-    rm -rf "$BATTLE_DIR"
-    if [ ! -d "$BATTLE_DIR" ]; then
-        echo -e "${GREEN}✓ Battle.net platform uninstalled.${NC}"
-    else
-        echo -e "${RED}✗ Delete failed; remove manually: $BATTLE_DIR${NC}"
+    echo -e "${CYAN}The following paths will be deleted:${NC}"
+    local p
+    for p in "$@"; do
+        [ -e "$p" ] || [ -L "$p" ] || continue
+        if [ -L "$p" ]; then
+            echo -e "${RED}  ✗ $p is a symlink; refusing to delete, check manually.${NC}"
+            return 1
+        fi
+        echo -e "${YELLOW}  · $p${NC}"
+    done
+    echo -e "${RED}Warning: these directories may contain installed games, saves and user data. This is irreversible!${NC}"
+    echo -e "${YELLOW}Make sure the platform/game processes are not running.${NC}"
+    if pgrep -f 'third-party-game-platform' >/dev/null 2>&1; then
+        echo -e "${YELLOW}⚠ A platform/game process may still be running; consider quitting it first.${NC}"
     fi
-
-    local DESKTOP_FILE="$HOME/Desktop/Battle.net.desktop"
-    if [ -f "$DESKTOP_FILE" ]; then
-        rm -f "$DESKTOP_FILE"
-        echo -e "${GREEN}✓ Desktop shortcut deleted: Battle.net.desktop${NC}"
-    else
-        echo -e "${YELLOW}Desktop shortcut not found; skipped.${NC}"
-    fi
-
     echo ""
-    echo -e "${YELLOW}Please manually remove the corresponding non-Steam shortcut from your Steam library (right-click → Manage → Remove non-Steam game).${NC}"
+    if ! confirm_action; then
+        echo -e "${GREEN}Cancelled; nothing was deleted.${NC}"
+        return 0
+    fi
+
+    local fail=0
+    if ! rm -rf "$BATTLE_DIR"; then
+        echo -e "${RED}✗ Failed to delete: $BATTLE_DIR${NC}"
+        fail=1
+    elif [ -d "$BATTLE_DIR" ]; then
+        echo -e "${RED}✗ Directory still exists: $BATTLE_DIR${NC}"
+        fail=1
+    else
+        echo -e "${GREEN}✓ Battle.net directory deleted${NC}"
+    fi
+    if [ -f "$DESKTOP_FILE" ]; then
+        if rm -f "$DESKTOP_FILE"; then
+            echo -e "${GREEN}✓ Desktop shortcut deleted${NC}"
+        else
+            echo -e "${RED}✗ Failed to delete the desktop shortcut${NC}"
+            fail=1
+        fi
+    fi
+    echo ""
+    echo -e "${YELLOW}Please manually remove the corresponding non-Steam shortcut from your Steam library.${NC}"
+    [ "$fail" -eq 0 ] || return 1
+    echo -e "${GREEN}✓ Battle.net platform uninstalled.${NC}"
+    return 0
 }
 
 if [ -n "${1:-}" ] && declare -f "$1" > /dev/null; then
@@ -13894,6 +15787,7 @@ class TaskWindow(Gtk.Window):
             label.set_margin_top(20)
             label.set_margin_bottom(20)
             vbox.pack_start(label, True, True, 0)
+            self.label = label  # external branch
             self.action_btn = Gtk.Button(label=t("close"))
             self.action_btn.connect("clicked", lambda btn: self.destroy())
             button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -13901,6 +15795,8 @@ class TaskWindow(Gtk.Window):
             button_box.pack_start(Gtk.Label(), True, True, 0)
             button_box.pack_start(self.action_btn, False, False, 0)
             vbox.pack_start(button_box, False, False, 0)
+            # 任务仍在运行时关窗给一次明确提示，不再只显示「运行中」永不更新。
+            self.connect("delete-event", self._on_external_close)
             self.show_all()
             self.run_external(func_key)
         else:
@@ -13957,6 +15853,16 @@ class TaskWindow(Gtk.Window):
     # ------------------------------------------------------------------
     # 复制按钮 / 右键菜单入口
     # ------------------------------------------------------------------
+    def _on_external_close(self, *_a):
+        if not getattr(self, "completed", False):
+            dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
+                                    type=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.NONE,
+                                    text=t("external_running_close"))
+            dlg.add_button(t("ok"), Gtk.ResponseType.OK)
+            fix_dialog_size(dlg)
+            dlg.run(); dlg.destroy()
+        return False  # 继续关窗
+
     def _on_terminal_button_press(self, widget, event):
         # 右键（button 3）弹菜单
         if event.button == 3:
@@ -14137,11 +16043,15 @@ class TaskWindow(Gtk.Window):
                 return False
         return True
 
-    def run_external(self, func_key):
+    def run_external(self, func_key):  # with result feedback
         tmp_path = create_temp_script()
         close_prompt = ("Press Enter to close..." if get_lang() == "en" else "按回车键关闭...")
-        cmd = f"bash {tmp_path} {func_key}; read -p '{close_prompt}' -n1"
-        if not launch_terminal(cmd):
+        # 让 read 在脚本被取消时也能结束：用脚本真实退出码作为提示的一部分。
+        cmd = (f"bash {tmp_path} {func_key}; __rc=$?; "
+               f"echo ''; echo '(exit code: '$__rc')'; "
+               f"read -p '{close_prompt}' -n1; exit $__rc")
+        argv = terminal_command(find_terminal(), cmd) if find_terminal() else None
+        if not argv:
             dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
                                     type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.NONE,
                                     text=t("no_terminal"))
@@ -14149,6 +16059,51 @@ class TaskWindow(Gtk.Window):
             dlg.format_secondary_text(t("no_terminal_hint"))
             fix_dialog_size(dlg)
             dlg.run(); dlg.destroy()
+            self.completed = True
+            self.action_btn.set_sensitive(True)
+            try:
+                self._task_header.props.subtitle = t("task_failed")
+            except Exception:
+                pass
+            return
+        try:
+            self._ext_proc = subprocess.Popen(argv, stdout=subprocess.DEVNULL,
+                                               stderr=subprocess.DEVNULL,
+                                               stdin=subprocess.DEVNULL,
+                                               start_new_session=True)
+        except Exception as e:
+            self.completed = True
+            self.action_btn.set_sensitive(True)
+            try:
+                self._task_header.props.subtitle = t("start_fail")
+            except Exception:
+                pass
+            print(f"启动外部终端失败: {e}")
+            return
+        pid = self._ext_proc.pid
+        self._ext_pid = pid
+        self.label.set_text(t("external_start", pid=pid))
+        # 用后台线程 Popen.wait()：终端关掉后把真实返回码反馈到窗口。
+        def _wait():
+            try:
+                rc = self._ext_proc.wait()
+            except Exception:
+                rc = -1
+            GLib.idle_add(self._on_external_done, rc)
+        threading.Thread(target=_wait, daemon=True).start()
+
+    def _on_external_done(self, rc):
+        self.completed = True
+        self.action_btn.set_sensitive(True)
+        self.action_btn.set_label(t("task_complete_btn"))
+        try:
+            if rc == 0:
+                self._task_header.props.subtitle = t("external_done_ok")
+            else:
+                self._task_header.props.subtitle = t("external_done_fail", rc=rc)
+        except Exception:
+            pass
+        return False
 
     def start_command(self, func_key):
         ok, self.child_pid = self.terminal.spawn_sync(
@@ -14170,23 +16125,35 @@ class TaskWindow(Gtk.Window):
     def on_child_exited(self, terminal, status):
         # VTE 传入 waitpid 风格状态；内嵌脚本 EXIT trap 已保留真实退出码。
         success = False
+        cancelled = False
         try:
             if os.WIFEXITED(status):
-                success = (os.WEXITSTATUS(status) == 0)
+                ec = os.WEXITSTATUS(status)
+                # 内嵌 bash 的 INT/TERM trap 用 75 表示「用户取消」，
+                # 既不是成功(0)也不是普通失败，必须单独区分显示。
+                self._cancel_exit_code = 75
+                cancelled = (ec == self._cancel_exit_code)
+                success = (ec == 0)
             elif hasattr(os, "WIFSIGNALED") and os.WIFSIGNALED(status):
+                cancelled = False
                 success = False
             else:
+                cancelled = (status == 75)
                 success = (status == 0)
         except Exception:
+            cancelled = False
             success = (status == 0)
-        GLib.idle_add(self.set_completed, success)
+        GLib.idle_add(self.set_completed, success, cancelled)
 
-    def set_completed(self, success=True):
+    def set_completed(self, success=True, cancelled=False):
         self.completed = True
         self.action_btn.set_sensitive(True)
         self.action_btn.set_label(t("task_complete_btn"))
         try:
-            self._task_header.props.subtitle = t("task_done") if success else t("task_failed")
+            if cancelled:
+                self._task_header.props.subtitle = t("task_cancelled")
+            else:
+                self._task_header.props.subtitle = t("task_done") if success else t("task_failed")
         except Exception:
             pass
 
@@ -14891,33 +16858,41 @@ class MainWindow(Gtk.Window):
         btn.connect("clicked", lambda *_a, n=name, k=func_key: self.run_function(n, k))
         return btn
 
-    def detect_system_type(self):
+    def detect_system_type(self):  # clover+ntfs aware
         """探测当前是否为「SteamOS + Windows」双系统。
 
-        为什么需要多层判据：
-        1) EFI 启动项里有 Windows —— 最直接，但 Clover 安装时会移除/改名 Windows
-           的 EFI 启动项（改为从 Clover 菜单引导），装了 Clover 的双系统机器上
-           这里往往看不到 Windows 字样，只看这一项会误判成「单系统」。
-        2) 存在 NTFS 分区且标签为 Windows —— 无需 root，稳定可靠。
-        3) NTFS 分区里存在 Windows 目录结构（Windows/Program Files/Users）——
-           即使标签被改也能识别。
-        4) 已挂载的 NTFS 分区里有上述结构同上。
-        注意：不能只凭「Clover 启动项」判断双系统 —— 单系统装了 Clover 也会命中。
-        只要 2/3/4 任一成立即可判定为双系统。
+        判据（任一成立即双系统）：
+        1) EFI 启动项里有 Windows；
+        2) 存在 NTFS 分区且标签为 Windows；
+        3) NTFS 分区里可探测到 Windows 目录结构（Windows/ + Program Files/Users）；
+        4) EFI 启动项含 Clover 且存在任意 NTFS 分区 —— Clover 接管 EFI 后
+           Windows 启动项常被移除/改名，卷也可能没挂载或卷标被改，
+           此时「Clover + 任意 NTFS」足以说明这是双系统机器。
+        无权限读取 EFI / 分区表或探测异常时，宁可返回「双系统」把
+        fix_boot / fix_shared_disk 显示出来，也不误隐藏这两项（fail-open）。
         """
-        # ---- 判据 1：EFI 启动项里有 Windows ----
+        efi_output = None
+        efi_read_ok = False
+        saw_clover = False
         if shutil.which("efibootmgr"):
             for cmd in (["sudo", "-n", "efibootmgr"], ["efibootmgr"]):
                 try:
                     result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
                     if result.returncode == 0:
-                        if re.search(r'(?i)windows', result.stdout):
+                        efi_output = result.stdout or ""
+                        efi_read_ok = True
+                        if re.search(r'(?i)windows', efi_output):
                             return "双系统"
+                        if re.search(r'(?i)clover', efi_output):
+                            saw_clover = True
                         break  # 拿到有效输出即可，不必再试下一种方式
                 except Exception:
                     continue
+        else:
+            # 连 efibootmgr 都没有：视为「无法可靠探测」，别因此隐藏功能。
+            efi_read_ok = False
 
-        # ---- 判据 2/3：扫描 NTFS 分区（lsblk 无需 root）----
+        ntfs_found = False
         try:
             result = subprocess.run(
                 ["lsblk", "-P", "-n", "-o", "NAME,TYPE,FSTYPE,LABEL,MOUNTPOINT"],
@@ -14929,20 +16904,20 @@ class MainWindow(Gtk.Window):
                     fstype = (fields.get("FSTYPE") or "").lower()
                     if fstype not in ("ntfs", "fuseblk", "ntfs3"):
                         continue
+                    ntfs_found = True            # 任意 NTFS 分区都算
                     label = (fields.get("LABEL") or "").strip()
-                    # 判据 2：分区标签直接就是 Windows
                     if label.lower() == "windows":
                         return "双系统"
                     ntfs_entries.append(fields)
 
-                # 判据 3/4：看分区内容里有没有 Windows 目录结构
+                # 判据 3：看分区内容里有没有 Windows 目录结构
+                cannot_read_content = False
                 for fields in ntfs_entries:
                     name = fields.get("NAME") or ""
                     mountpoint = (fields.get("MOUNTPOINT") or "").strip()
                     candidates = []
                     if mountpoint and os.path.isdir(mountpoint):
                         candidates.append(mountpoint)
-                    # 未挂载的尝试常见 udisks 挂载路径
                     if name:
                         for base in ("/run/media", "/media"):
                             try:
@@ -14951,17 +16926,31 @@ class MainWindow(Gtk.Window):
                                     if os.path.isdir(p):
                                         candidates.append(p)
                             except Exception:
-                                pass
+                                cannot_read_content = True
                     for path in candidates:
-                        # Windows 根目录下有 Windows/ 且（Program Files 或 Users）
-                        has_win_dir = os.path.isdir(os.path.join(path, "Windows"))
-                        has_pf = os.path.isdir(os.path.join(path, "Program Files"))
-                        has_users = os.path.isdir(os.path.join(path, "Users"))
-                        if has_win_dir and (has_pf or has_users):
-                            return "双系统"
+                        try:
+                            has_win_dir = os.path.isdir(os.path.join(path, "Windows"))
+                            has_pf = os.path.isdir(os.path.join(path, "Program Files"))
+                            has_users = os.path.isdir(os.path.join(path, "Users"))
+                            if has_win_dir and (has_pf or has_users):
+                                return "双系统"
+                        except Exception:
+                            cannot_read_content = True
+                # Clover 接管 EFI：只要存在任意 NTFS 分区就判双系统。
+                if saw_clover and ntfs_found:
+                    return "双系统"
+                # NTFS 在，但内容读不到（无权限 / 未挂载）：宁可显示两项，别误隐藏。
+                if ntfs_found and cannot_read_content:
+                    return "双系统"
+            else:
+                # lsblk 失败（无权限等）：无法可靠探测，fail-open 显示双系统功能。
+                return "双系统"
         except Exception:
-            pass
+            return "双系统"
 
+        # EFI 读不到（无权限、命令缺失）也无法排除双系统，fail-open。
+        if not efi_read_ok:
+            return "双系统"
         return "单系统"
 
     def on_category_activated(self, treeview, path, column):
@@ -15095,7 +17084,23 @@ class MainWindow(Gtk.Window):
         if func_key == "install_uu_accelerator":
             self.run_external_terminal(func_key); return
 
-        if self.task_window: self.task_window.destroy()
+        # FIX-GUI: confirm before killing running task
+        old = getattr(self, "task_window", None)
+        # 旧任务仍在运行：先弹确认，不再直接 destroy（那会悄悄杀掉正在跑的任务）。
+        if old is not None and not getattr(old, "completed", True):
+            dlg = Gtk.MessageDialog(parent=self, flags=Gtk.DialogFlags.MODAL,
+                                    type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.NONE,
+                                    text=t("task_running_confirm"))
+            dlg.add_button(t("no"), Gtk.ResponseType.NO)
+            dlg.add_button(t("yes"), Gtk.ResponseType.YES)
+            fix_dialog_size(dlg)
+            response = dlg.run()
+            dlg.destroy()
+            if response != Gtk.ResponseType.YES:
+                return
+            old.force_kill()
+        elif old is not None:
+            old.destroy()
         self.task_window = TaskWindow(self, func_key, func_name)
 
     def update_status(self):
@@ -15186,32 +17191,66 @@ class MainWindow(Gtk.Window):
         help_dialog.run(); help_dialog.destroy()
 
 
-def ensure_desktop_shortcut():
-    script_path = os.path.abspath(sys.argv[0])
-    desktop_dir = os.path.expanduser("~/Desktop")
-    # Prefer language-specific name; skip if either legacy/current shortcut exists.
-    names = ("Deck Toolbox.desktop", "Deck工具箱.desktop")
-    for name in names:
-        if os.path.exists(os.path.join(desktop_dir, name)):
-            return
-    desktop_name = "Deck Toolbox.desktop" if get_lang() == "en" else "Deck工具箱.desktop"
-    app_name = "Deck Toolbox" if get_lang() == "en" else "Deck工具箱"
-    desktop_file = os.path.join(desktop_dir, desktop_name)
-    content = f"""[Desktop Entry]
+def _desktop_dir():
+    """按 XDG 规范取桌面目录：xdg-user-dir DESKTOP → ~/.config/user-dirs.dirs → ~/Desktop。"""
+    try:
+        r = subprocess.run(["xdg-user-dir", "DESKTOP"], capture_output=True,
+                           text=True, timeout=3)
+        d = (r.stdout or "").strip()
+        if d and os.path.isabs(d):
+            return d
+    except Exception:
+        pass
+    ud = os.path.join(os.path.expanduser("~"), ".config", "user-dirs.dirs")
+    try:
+        with open(ud, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("XDG_DESKTOP_DIR"):
+                    val = line.split("=", 1)[1].strip().strip('"')
+                    val = val.replace("$HOME", os.path.expanduser("~"))
+                    if os.path.isabs(val):
+                        return val
+    except Exception:
+        pass
+    return os.path.expanduser("~/Desktop")
+
+
+def ensure_desktop_shortcut():  # XDG aware
+    # 整个流程只打印错误、绝不抛异常：快捷方式失败不能阻塞主界面启动。
+    try:
+        script_path = os.path.abspath(sys.argv[0])
+        desktop_dir = _desktop_dir()
+        os.makedirs(desktop_dir, exist_ok=True)
+        desktop_name = "Deck Toolbox.desktop" if get_lang() == "en" else "Deck工具箱.desktop"
+        app_name = "Deck Toolbox" if get_lang() == "en" else "Deck工具箱"
+        desktop_file = os.path.join(desktop_dir, desktop_name)
+        expected_exec = f'Exec={sys.executable} "{script_path}"'
+        # 已有同名快捷方式：校验 Exec 是否指向当前脚本绝对路径，不一致则重写（自愈）。
+        if os.path.isfile(desktop_file):
+            try:
+                with open(desktop_file, "r", encoding="utf-8", errors="replace") as f:
+                    head = f.read(4096)
+                if any(l.strip() == expected_exec for l in head.splitlines()):
+                    return
+            except Exception:
+                pass
+        content = f"""[Desktop Entry]
 Type=Application
 Name={app_name}
-Exec={sys.executable} "{script_path}"
+{expected_exec}
 Icon=input-gamepad-symbolic
 Terminal=false
 StartupNotify=true
 StartupWMClass=Steamdeck-toolbox
 Categories=Utility;
 """
-    try:
-        with open(desktop_file, 'w') as f: f.write(content)
+        with open(desktop_file, 'w', encoding='utf-8') as f:
+            f.write(content)
         os.chmod(desktop_file, 0o755)
     except Exception as e:
-        msg = f"Failed to create desktop shortcut: {e}" if get_lang() == "en" else f"创建桌面快捷方式失败: {e}"
+        msg = (f"Failed to create desktop shortcut: {e}" if get_lang() == "en"
+               else f"创建桌面快捷方式失败: {e}")
         print(msg)
 
 def ensure_vte_installed():
@@ -15221,66 +17260,129 @@ def ensure_vte_installed():
     # 用户看到的是「工具箱窗口在，但点什么都没反应」，正是这个原因。
     # 改成非模态 + 置顶 + present()，即使它被压到后面，主界面也照常可用。
     if VTE_AVAILABLE: return
-    dialog = Gtk.MessageDialog(None, 0, Gtk.MessageType.QUESTION, Gtk.ButtonsType.NONE, t("vte_missing"))
+    # 找主窗口作为 parent：非模态框有明确父窗才不会跑到主界面后面。
+    parent = None
+    try:
+        for w in Gtk.Window.list_toplevels():
+            if isinstance(w, MainWindow):
+                parent = w
+                break
+    except Exception:
+        parent = None
+    dialog = Gtk.MessageDialog(parent, 0, Gtk.MessageType.QUESTION, Gtk.ButtonsType.NONE, t("vte_missing"))
     dialog.format_secondary_text(t("vte_missing_hint"))
     dialog.add_button(t("yes"), Gtk.ResponseType.YES); dialog.add_button(t("no"), Gtk.ResponseType.NO)
     dialog.set_icon_name("input-gamepad-symbolic")
-    dialog.set_position(Gtk.WindowPosition.CENTER)
+    dialog.set_position(Gtk.WindowPosition.CENTER_ON_PARENT if parent else Gtk.WindowPosition.CENTER)
     dialog.set_keep_above(True)
+    if parent:
+        dialog.set_transient_for(parent)
+    dialog.set_modal(False)
     fix_dialog_size(dialog)
+
+    def on_response(dlg, response):
+        # 用 response 回调代替 dialog.run()：run() 会临时启用模态并嵌套主循环，
+        # 与「非模态、主界面不被阻断」的注释不符。
+        try:
+            dlg.destroy()
+        except Exception:
+            pass
+        if response != Gtk.ResponseType.YES:
+            return
+        _do_install_vte(parent)
+
+    dialog.connect("response", on_response)
     dialog.show_all()
     dialog.present()
-    response = dialog.run(); dialog.destroy()
-    if response == Gtk.ResponseType.YES:
-        install_cmd = (
-            "if command -v steamos-readonly >/dev/null 2>&1; then "
-            "sudo steamos-readonly disable || { echo '✗ 禁用只读模式失败，请手动执行: sudo steamos-readonly disable'; read -n1; exit 1; }; "
-            "fi; "
-            "echo '正在初始化 pacman keyring（可能需要一点时间）...'; "
-            "sudo pacman-key --init || { echo '✗ pacman keyring 初始化失败'; read -n1; exit 1; }; "
-            "sudo chown -R root:root /etc/pacman.d/gnupg 2>/dev/null; sudo chmod 700 /etc/pacman.d/gnupg 2>/dev/null; "
-            # 关键：889B5EBD... 属于 holo-keyring，必须同时导入 holo 钥匙环，
-            # 否则该密钥不在本地钥匙环中，--lsign-key 会报“无法在本地签署”。
-            "echo '正在导入 Arch 官方与 SteamOS Holo 密钥...'; "
-            "sudo pacman-key --populate archlinux || { echo '✗ archlinux 钥匙环填充失败'; read -n1; exit 1; }; "
-            "if [ -f /usr/share/pacman/keyrings/holo.gpg ]; then "
-            "sudo pacman-key --populate holo || { echo '✗ holo 钥匙环填充失败'; read -n1; exit 1; }; "
-            "fi; "
-            "echo '正在信任 SteamOS 打包者密钥...'; "
-            "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || { "
-            "echo '⚠ 签名失败，刷新钥匙环后重试...'; "
-            "sudo pacman-key --refresh-keys 2>/dev/null; "
-            "sudo pacman-key --populate archlinux holo 2>/dev/null; "
-            "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || "
-            "{ echo '✗ 密钥签署失败'; read -n1; exit 1; }; }; "
-            "sudo pacman -Sy --noconfirm >/dev/null 2>&1; "
-            "sudo pacman -S --needed --noconfirm vte3 || { echo '✗ vte3 安装失败，请检查网络或软件源'; read -n1; exit 1; }; "
-            "pacman -Q vte3 >/dev/null 2>&1 || { echo '✗ vte3 安装后验证失败，请重启程序后重试'; read -n1; exit 1; }; "
-            "command -v steamos-readonly >/dev/null 2>&1 && sudo steamos-readonly enable 2>/dev/null || true; "
-            "echo '✓ 安装完成，请手动重启本程序。'; read -n1"
-        )
+    return
+
+def _do_install_vte(parent=None):
+    if True:
+        if get_lang() == "en":
+            install_cmd = (
+                "if command -v steamos-readonly >/dev/null 2>&1; then "
+                "sudo steamos-readonly disable || { echo 'x Failed to disable read-only; run: sudo steamos-readonly disable'; read -n1; exit 1; }; "
+                "fi; "
+                "echo 'Initializing pacman keyring (may take a while)...'; "
+                "sudo pacman-key --init || { echo 'x pacman keyring init failed'; read -n1; exit 1; }; "
+                "sudo chown -R root:root /etc/pacman.d/gnupg 2>/dev/null; sudo chmod 700 /etc/pacman.d/gnupg 2>/dev/null; "
+                "echo 'Importing Arch + SteamOS Holo keys...'; "
+                "sudo pacman-key --populate archlinux || { echo 'x archlinux keyring populate failed'; read -n1; exit 1; }; "
+                "if [ -f /usr/share/pacman/keyrings/holo.gpg ]; then "
+                "sudo pacman-key --populate holo || { echo 'x holo keyring populate failed'; read -n1; exit 1; }; "
+                "fi; "
+                "echo 'Trusting SteamOS packager key...'; "
+                "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || { "
+                "echo '! lsign failed, refreshing...'; "
+                "sudo pacman-key --refresh-keys 2>/dev/null; "
+                "sudo pacman-key --populate archlinux holo 2>/dev/null; "
+                "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || "
+                "{ echo 'x key lsign failed'; read -n1; exit 1; }; }; "
+                "sudo pacman -Sy --noconfirm >/dev/null 2>&1; "
+                "sudo pacman -S --needed --noconfirm vte3 || { echo 'x vte3 install failed, check network/repos'; read -n1; exit 1; }; "
+                "pacman -Q vte3 >/dev/null 2>&1 || { echo 'x vte3 verification failed, restart the app and retry'; read -n1; exit 1; }; "
+                "command -v steamos-readonly >/dev/null 2>&1 && sudo steamos-readonly enable 2>/dev/null || true; "
+                "echo 'Done. Please restart this app manually.'; read -n1"
+            )
+        else:
+            install_cmd = (
+                "if command -v steamos-readonly >/dev/null 2>&1; then "
+                "sudo steamos-readonly disable || { echo '✗ 禁用只读模式失败，请手动执行: sudo steamos-readonly disable'; read -n1; exit 1; }; "
+                "fi; "
+                "echo '正在初始化 pacman keyring（可能需要一点时间）...'; "
+                "sudo pacman-key --init || { echo '✗ pacman keyring 初始化失败'; read -n1; exit 1; }; "
+                "sudo chown -R root:root /etc/pacman.d/gnupg 2>/dev/null; sudo chmod 700 /etc/pacman.d/gnupg 2>/dev/null; "
+                # 关键：889B5EBD... 属于 holo-keyring，必须同时导入 holo 钥匙环，
+                # 否则该密钥不在本地钥匙环中，--lsign-key 会报“无法在本地签署”。
+                "echo '正在导入 Arch 官方与 SteamOS Holo 密钥...'; "
+                "sudo pacman-key --populate archlinux || { echo '✗ archlinux 钥匙环填充失败'; read -n1; exit 1; }; "
+                "if [ -f /usr/share/pacman/keyrings/holo.gpg ]; then "
+                "sudo pacman-key --populate holo || { echo '✗ holo 钥匙环填充失败'; read -n1; exit 1; }; "
+                "fi; "
+                "echo '正在信任 SteamOS 打包者密钥...'; "
+                "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || { "
+                "echo '⚠ 签名失败，刷新钥匙环后重试...'; "
+                "sudo pacman-key --refresh-keys 2>/dev/null; "
+                "sudo pacman-key --populate archlinux holo 2>/dev/null; "
+                "sudo pacman-key --lsign-key 889B5EBDDD505A683621900DAF1D2199EF0A3CCF || "
+                "{ echo '✗ 密钥签署失败'; read -n1; exit 1; }; }; "
+                "sudo pacman -Sy --noconfirm >/dev/null 2>&1; "
+                "sudo pacman -S --needed --noconfirm vte3 || { echo '✗ vte3 安装失败，请检查网络或软件源'; read -n1; exit 1; }; "
+                "pacman -Q vte3 >/dev/null 2>&1 || { echo '✗ vte3 安装后验证失败，请重启程序后重试'; read -n1; exit 1; }; "
+                "command -v steamos-readonly >/dev/null 2>&1 && sudo steamos-readonly enable 2>/dev/null || true; "
+                "echo '✓ 安装完成，请手动重启本程序。'; read -n1"
+            )
+        _vte_install_cmd_en = install_cmd
         if not launch_terminal(install_cmd):
-            err = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.ERROR, Gtk.ButtonsType.NONE,
+            err = Gtk.MessageDialog(parent, Gtk.DialogFlags.MODAL, Gtk.MessageType.ERROR, Gtk.ButtonsType.NONE,
                                     t("no_terminal"))
             err.add_button(t("ok"), Gtk.ResponseType.OK)
             err.format_secondary_text(t("vte_manual"))
             fix_dialog_size(err)
             err.run(); err.destroy()
 
-def sync_emoji_icons():
-    """确保脚本目录下存在 emoji_icons 文件夹（从内嵌数据解出，离线可用，便于自定义图标）。"""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    local_icon_dir = os.path.join(script_dir, "emoji_icons")
-    os.makedirs(local_icon_dir, exist_ok=True)
-    for icon_name, data in EMBEDDED_ICONS.items():
-        local_path = os.path.join(local_icon_dir, icon_name)
-        if os.path.isfile(local_path):
-            continue
-        try:
-            with open(local_path, 'wb') as f:
-                f.write(base64.b64decode(data))
-        except Exception as e:
-            print(f"写入图标 {icon_name} 失败: {e}")
+def sync_emoji_icons():  # fully guarded
+    """确保脚本目录下存在 emoji_icons 文件夹（从内嵌数据解出，离线可用，便于自定义图标）。
+
+    整个函数（含 os.makedirs）必须包在 try 里：目录只读时 makedirs 会在线程里
+    抛异常，而更新检查窗口 deletable=False，线程一死就永远进不了主界面。
+    这里任何异常都只打印，绝不外抛。
+    """
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        local_icon_dir = os.path.join(script_dir, "emoji_icons")
+        os.makedirs(local_icon_dir, exist_ok=True)
+        for icon_name, data in EMBEDDED_ICONS.items():
+            local_path = os.path.join(local_icon_dir, icon_name)
+            if os.path.isfile(local_path):
+                continue
+            try:
+                with open(local_path, 'wb') as f:
+                    f.write(base64.b64decode(data))
+            except Exception as e:
+                print(f"写入图标 {icon_name} 失败: {e}")
+    except Exception as e:
+        print(f"同步 emoji_icons 失败（不影响启动）: {e}")
 
 def get_remote_version():
     try:
@@ -15310,10 +17412,34 @@ def _perform_update_in_window(win, remote_version):
                 raise ValueError('下载内容校验失败（不是有效的脚本文件），已中止更新')
             # 再校验一次语法：远程文件若被人改坏，写进去就是个打不开的程序
             compile(new_content, '<remote>', 'exec')
-            current_path = os.path.abspath(sys.argv[0])
+            # 下载后再核对一次 VERSION 与检查结果一致，防止 CDN 缓存 / 中间人
+            # 给了另一个版本却按 remote_version 提示并重启。
+            m = re.search(r'^VERSION\s*=\s*["\']([0-9.]+)["\']', new_content, re.MULTILINE)
+            got_ver = m.group(1) if m else None
+            if got_ver is None or compare_versions(got_ver, remote_version) != 0:
+                raise ValueError(
+                    t("update_ver_mismatch", want=remote_version,
+                      got=(got_ver or "?")))
+            # sys.argv[0] 可能是 sh / 包装脚本 / 相对路径；只替换已知 GUI 文件名
+            # 且是 regular file 的目标，否则绝不覆盖（可能覆盖错误文件）。
+            KNOWN_GUI_BASENAMES = ("steamdeck_gui.py", "steamdeck_toolbox_gui.py",
+                                   "steamdeck-toolbox.py")
+            argv0 = os.path.abspath(sys.argv[0])
+            is_safe = (os.path.basename(argv0) in KNOWN_GUI_BASENAMES
+                       and os.path.isfile(argv0) and not os.path.islink(argv0))
+            if not is_safe:
+                raise ValueError(t("update_target_unsafe", path=argv0, url=REPO_RAW_URL))
+            current_path = argv0
             backup_path = current_path + ".bak"
-            try: shutil.copy2(current_path, backup_path)
-            except: pass
+            try:
+                shutil.copy2(current_path, backup_path)
+            except Exception as be:
+                # 备份失败要提示，不能静默吞掉；更新继续但明确告知无自动回滚。
+                print(t("update_backup_fail", err=be))
+                try:
+                    GLib.idle_add(lambda: win.label.set_text(t("update_backup_fail", err=be)))
+                except Exception:
+                    pass
             # 先写临时文件再原子替换：直接以 'w' 打开自身会先把原文件截断，
             # 一旦写入过程中出错/断电，用户的工具箱就彻底损坏且无法启动。
             tmp_path = current_path + ".new"
@@ -15422,14 +17548,23 @@ FLATPAK_CATALOG = [
 FLATPAK_EXCLUDE = {"org.fcitx.Fcitx5.Addon.ChineseAddons"}
 
 
-def _fp_installed_ids():
-    """返回本机已安装的 flatpak 应用 ID 集合。"""
+def _fp_installed_ids():  # returns (ids, err)
+    """返回 (已安装 ID 集合, 错误字符串)。err 为空串表示查询确实成功。
+
+    旧实现忽略 returncode / FileNotFoundError，一律返回空集：flatpak 没装或
+    命令失败时，卸载页显示「没有可卸载应用」、安装页把已装应用当成未装，
+    属于把「查询失败」谎报成「确实没有」。"""
     try:
         r = subprocess.run(["flatpak", "list", "--app", "--columns=application"],
                            capture_output=True, text=True, timeout=15)
-        return set(x.strip() for x in r.stdout.splitlines() if x.strip())
-    except Exception:
-        return set()
+    except FileNotFoundError:
+        return set(), "flatpak 命令未安装"
+    except Exception as e:
+        return set(), str(e)
+    if r.returncode != 0:
+        err = (r.stderr or "").strip() or ("flatpak list 退出码 %d" % r.returncode)
+        return set(), err
+    return set(x.strip() for x in r.stdout.splitlines() if x.strip()), ""
 
 
 def _fp_pick_id(candidates, installed):
@@ -15440,18 +17575,26 @@ def _fp_pick_id(candidates, installed):
     return candidates[0]
 
 
-def _fp_run_async(argv, on_line, on_done, cwd=None, env=None):
+def _fp_run_async(argv, on_line, on_done, cwd=None, env=None, owner=None):
     """跑一个子进程，按行回调输出，结束后回调退出码。
 
-    关键：这里保留 Popen 句柄，取消时由调用方直接 terminate()/kill()，
-    不依赖任何"窗口是否还活着"的间接判断。
+    Popen 句柄挂在 owner（窗口实例）上，而不是模块级 _fp_run_async.last_proc：
+    那个全局变量被多个窗口共享，多窗并存时会互抢导致取消杀错进程。
+    start_new_session=True 让子进程自成进程组，取消时可 killpg 整组终止。
     """
     def worker():
         proc = None
+        rc = 1
         try:
             proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                    cwd=cwd, env=env, bufsize=1, text=True)
-            _fp_run_async.last_proc = proc
+                                    cwd=cwd, env=env, bufsize=1, text=True,
+                                    start_new_session=True)
+            if owner is not None:
+                owner.proc = proc
+                try:
+                    owner.proc_pgid = os.getpgid(proc.pid)
+                except Exception:
+                    owner.proc_pgid = proc.pid
             for line in iter(proc.stdout.readline, ""):
                 if line:
                     GLib.idle_add(on_line, line)
@@ -17286,9 +19429,11 @@ class FlatpakInstallWindow(Gtk.Window):
         self.set_deletable(True)
 
         self.proc = None          # 当前 flatpak 进程（供取消时 terminate）
+        self.proc_pgid = None     # 进程组 id（start_new_session 后 = pid）
         self.phase = "select"     # select / running / done
         self.cancelled = False
-        self.installed = _fp_installed_ids()
+        self.installed, self._fp_install_err = _fp_installed_ids()
+        self._fp_search_err = ""
         self.queue = []           # 待安装的 (id, desk_name, cat, addon)
         self.queue_total = 0
         self.done_count = 0
@@ -17362,6 +19507,23 @@ class FlatpakInstallWindow(Gtk.Window):
         self.show_all()
         self.present()
         self._sync_buttons()
+        # 关闭窗口（delete-event / destroy）时终止当前 proc，与「取消」按钮一致。
+        self.connect("delete-event", self._on_close_kill)
+        self.connect("destroy", self._on_close_destroy)
+
+    def _on_close_kill(self, *_a):
+        try:
+            self._kill_proc()
+        except Exception:
+            pass
+        return False  # 继续正常关闭
+
+    def _on_close_destroy(self, *_a):
+        try:
+            self._kill_proc()
+        except Exception:
+            pass
+        return False
 
     def _lbl(self, key):
         m = {
@@ -17487,33 +19649,47 @@ class FlatpakInstallWindow(Gtk.Window):
                 out.append(item)
         return out
 
-    def _remote_search(self, q):
-        """本地没有结果时用 flatpak search 查远端，返回 [(id, name)]。"""
+    def _remote_search(self, q):  # returns (rows, err)
+        """本地没有结果时用 flatpak search 查远端，返回 ([(id, name)], err)。"""
         try:
             r = subprocess.run(["flatpak", "search", "--columns=application,name", q],
                                capture_output=True, text=True, timeout=20)
-            rows, seen = [], set()
-            for line in r.stdout.splitlines():
-                parts = line.split("\t")
-                if len(parts) < 2:
-                    continue
-                app_id, name = parts[0].strip(), parts[1].strip()
-                if not app_id or app_id in seen:
-                    continue
-                seen.add(app_id)
-                rows.append((app_id, name))
-                if len(rows) >= 20:
-                    break
-            return rows
-        except Exception:
-            return []
+        except FileNotFoundError:
+            return [], "flatpak 命令未安装"
+        except Exception as e:
+            return [], str(e)
+        if r.returncode != 0:
+            err = (r.stderr or "").strip() or ("flatpak search 退出码 %d" % r.returncode)
+            return [], err
+        rows, seen = [], set()
+        for line in r.stdout.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 2:
+                continue
+            app_id, name = parts[0].strip(), parts[1].strip()
+            if not app_id or app_id in seen:
+                continue
+            seen.add(app_id)
+            rows.append((app_id, name))
+            if len(rows) >= 20:
+                break
+        return rows, ""
 
     def _render_list(self, q=""):
         """按查询词重绘列表；q 为空则显示全部未安装应用。"""
         self._search_gen += 1
         for ch in list(self.list_box.get_children()):
             self.list_box.remove(ch)
-        self.installed = _fp_installed_ids()
+        self.installed, err = _fp_installed_ids()  # render
+        self._fp_install_err = err
+        if err:
+            lbl = Gtk.Label()
+            lbl.set_xalign(0)
+            lbl.set_text(t("fp_query_fail") + (" " + err if err else ""))
+            lbl.get_style_context().add_class("dash-card-desc")
+            self.list_box.pack_start(lbl, False, False, 0)
+            self.list_box.show_all()
+            return
         if not q:
             self._render_catalog_rows(FLATPAK_CATALOG)
             return
@@ -17533,8 +19709,8 @@ class FlatpakInstallWindow(Gtk.Window):
         gen = self._search_gen
 
         def do_remote():
-            rows = self._remote_search(q)
-            GLib.idle_add(self._render_remote_rows, q, rows, gen)
+            rows, err = self._remote_search(q)  # thread
+            GLib.idle_add(self._render_remote_rows, q, rows, err, gen)
             return False
 
         threading.Thread(target=do_remote, daemon=True).start()
@@ -17556,7 +19732,7 @@ class FlatpakInstallWindow(Gtk.Window):
         self._restore_checks()
         self._update_hint()
 
-    def _render_remote_rows(self, q, rows, gen=None):
+    def _render_remote_rows(self, q, rows, err=None, gen=None):
         try:
             if self.search_entry.get_text().strip() != q:
                 return False
@@ -17569,6 +19745,17 @@ class FlatpakInstallWindow(Gtk.Window):
             return False
         for ch in list(self.list_box.get_children()):
             self.list_box.remove(ch)
+        if err:
+            # 查询失败 ≠ 「flathub 也没找到」，必须显示真实错误。
+            lbl = Gtk.Label()
+            lbl.set_xalign(0)
+            lbl.set_line_wrap(True)
+            lbl.set_text(t("fp_search_fail", err=err))
+            lbl.get_style_context().add_class("dash-card-desc")
+            self.list_box.pack_start(lbl, False, False, 0)
+            self.list_box.show_all()
+            self._update_hint()
+            return False
         rows = [(i, n) for i, n in rows if i not in self.installed]
         if not rows:
             lbl = Gtk.Label()
@@ -17664,6 +19851,14 @@ class FlatpakInstallWindow(Gtk.Window):
         p = self.proc
         if not p:
             return
+        # Popen 用了 start_new_session=True，killpg 整组才能连 flatpak 派生的
+        # 子进程一起终止；单 terminate 主进程常留孤儿。
+        pgid = getattr(self, "proc_pgid", None)
+        if pgid:
+            try:
+                os.killpg(pgid, signal.SIGTERM)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
         try:
             p.terminate()
         except Exception:
@@ -17671,6 +19866,12 @@ class FlatpakInstallWindow(Gtk.Window):
         GLib.timeout_add(300, self._force_kill, p)
 
     def _force_kill(self, p):
+        pgid = getattr(self, "proc_pgid", None)
+        if pgid:
+            try:
+                os.killpg(pgid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
         try:
             if p.poll() is None:
                 p.kill()
@@ -17687,7 +19888,11 @@ class FlatpakInstallWindow(Gtk.Window):
         # 得到的是第一个字符（就是结果页那个 "c"），并把 desk/cat 顺序弄反。
         self.queue = []
         for app_id, desk, cat, addon in sel:
-            self.queue.append((app_id, desk, cat, addon))
+            # 主包先入队；附加包（如 Fcitx 5 中文插件）作为独立队列项，
+            # 不再依赖桌面快捷方式写成功才安装，也不再是 fire-and-forget。
+            self.queue.append((app_id, desk, cat, addon, False))
+            if addon:
+                self.queue.append((addon, None, None, None, True))
         self.queue_total = len(self.queue)
         self.done_count = self.fail_count = 0
         self.failed = []
@@ -17708,21 +19913,25 @@ class FlatpakInstallWindow(Gtk.Window):
             self._finish(cancelled=False)
             return
 
-        app_id, desk, cat, addon = self.queue.pop(0)
-        self.cur = (app_id, desk, cat, addon)
+        app_id, desk, cat, addon, is_addon = self.queue.pop(0)
+        self.cur = (app_id, desk, cat, addon, is_addon)
         idx = self.done_count + self.fail_count + 1
-        if get_lang() == "en":
-            self.prog_label.set_text(f"Installing {idx}/{self.queue_total}: {app_id}")
+        if is_addon:
+            label = (f"Installing add-on {idx}/{self.queue_total}: {app_id}"
+                     if get_lang() == "en" else f"正在安装附加包 {idx}/{self.queue_total}：{app_id}")
         else:
-            self.prog_label.set_text(f"正在安装 {idx}/{self.queue_total}：{app_id}")
+            label = (f"Installing {idx}/{self.queue_total}: {app_id}"
+                     if get_lang() == "en" else f"正在安装 {idx}/{self.queue_total}：{app_id}")
+        self.prog_label.set_text(label)
         self.last_inner = 0
         argv = ["flatpak", "install", "-y", "flathub", app_id]
-        _fp_run_async(argv, self._on_line, lambda rc: self._on_app_done(rc))
-        # 拿回 Popen 句柄（worker 线程里设置的）
+        _fp_run_async(argv, self._on_line, lambda rc: self._on_app_done(rc), owner=self)
+        # Popen 已由 worker 挂在 self.proc 上；保留 timeout 兜旧兼容。
         GLib.timeout_add(120, self._grab_proc)
 
     def _grab_proc(self):
-        self.proc = getattr(_fp_run_async, "last_proc", None)
+        # Popen 现在由 worker 直接挂在窗口实例上（owner=self），不再读全局 last_proc。
+        self.proc = getattr(self, "proc", None)  # instance-bound
         return False
 
     def _on_line(self, line):
@@ -17768,16 +19977,20 @@ class FlatpakInstallWindow(Gtk.Window):
             if len(self.error_lines) > 20:
                 self.error_lines = self.error_lines[-20:]
 
-    def _on_app_done(self, rc):
-        app_id, desk, cat, addon = self.cur
+    def _on_app_done(self, rc):  # addon aware
+        app_id, desk, cat, addon, is_addon = self.cur
         if rc == 0:
             self.done_count += 1
-            if _fp_write_shortcut(desk, cat, app_id) and addon:
-                _fp_run_async(["flatpak", "install", "-y", "flathub", addon], lambda l: False,
-                              lambda r: False)
+            # 桌面快捷方式失败不影响安装成功，也不再决定附加包是否安装。
+            if not is_addon and desk:
+                _fp_write_shortcut(desk, cat, app_id)
         else:
             self.fail_count += 1
             self.failed.append(app_id)
+            # 附加包失败也要输出错误（写入 error_lines，结果页能看到原因）。
+            if is_addon:
+                self._note_output(
+                    ("Add-on install failed: " if get_lang() == "en" else "附加包安装失败：") + app_id)
         self._next_app()
         return False
 
@@ -17903,6 +20116,23 @@ class FlatpakUninstallWindow(Gtk.Window):
         self.present()
         self.keep_btn.set_visible(False)
         self._sync_buttons()
+        # 关闭窗口即终止当前 proc，与「取消」按钮一致。
+        self.connect("delete-event", self._on_close_kill)  # uninstall
+        self.connect("destroy", self._on_close_destroy)
+
+    def _on_close_kill(self, *_a):
+        try:
+            self._kill_proc()
+        except Exception:
+            pass
+        return False
+
+    def _on_close_destroy(self, *_a):
+        try:
+            self._kill_proc()
+        except Exception:
+            pass
+        return False
 
     def _lbl(self, key):
         m = {
@@ -17992,15 +20222,32 @@ class FlatpakUninstallWindow(Gtk.Window):
         box.pack_start(self.detail_label, False, False, 0)
         return box
 
-    def _refresh_select_page(self):
+    def _refresh_select_page(self):  # err-aware
         for ch in list(self.list_box.get_children()):
             self.list_box.remove(ch)
+        rows = []
+        query_err = ""
         try:
             r = subprocess.run(["flatpak", "list", "--app", "--columns=application,name"],
                                capture_output=True, text=True, timeout=15)
-            rows = [l.split("\t") for l in r.stdout.splitlines() if l.strip()]
-        except Exception:
-            rows = []
+            if r.returncode != 0:
+                query_err = (r.stderr or "").strip() or ("flatpak list 退出码 %d" % r.returncode)
+            else:
+                rows = [l.split("\t") for l in r.stdout.splitlines() if l.strip()]
+        except FileNotFoundError:
+            query_err = "flatpak 命令未安装"
+        except Exception as e:
+            query_err = str(e)
+        if query_err:
+            lbl = Gtk.Label()
+            lbl.set_xalign(0)
+            lbl.set_line_wrap(True)
+            lbl.set_text(t("fp_query_fail") + " " + query_err)
+            lbl.set_margin_top(20)
+            self.list_box.pack_start(lbl, False, False, 0)
+            self.list_box.show_all()
+            self._update_hint()
+            return
         shown = 0
         for parts in rows:
             app_id = parts[0].strip()
@@ -18064,6 +20311,14 @@ class FlatpakUninstallWindow(Gtk.Window):
         p = self.proc
         if not p:
             return
+        # Popen 用了 start_new_session=True，killpg 整组才能连 flatpak 派生的
+        # 子进程一起终止；单 terminate 主进程常留孤儿。
+        pgid = getattr(self, "proc_pgid", None)
+        if pgid:
+            try:
+                os.killpg(pgid, signal.SIGTERM)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
         try:
             p.terminate()
         except Exception:
@@ -18071,6 +20326,12 @@ class FlatpakUninstallWindow(Gtk.Window):
         GLib.timeout_add(300, self._force_kill, p)
 
     def _force_kill(self, p):
+        pgid = getattr(self, "proc_pgid", None)
+        if pgid:
+            try:
+                os.killpg(pgid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
         try:
             if p.poll() is None:
                 p.kill()
@@ -18106,12 +20367,14 @@ class FlatpakUninstallWindow(Gtk.Window):
                                  if get_lang() == "en" else
                                  f"正在卸载 {idx}/{self.queue_total}：{app_id}")
         self.last_inner = 0
+        # FIX-GUI: uninstall owner=self
         _fp_run_async(["flatpak", "uninstall", "-y", app_id], self._on_line,
-                      lambda rc: self._on_app_done(rc))
+                      lambda rc: self._on_app_done(rc), owner=self)
         GLib.timeout_add(120, self._grab_proc)
 
     def _grab_proc(self):
-        self.proc = getattr(_fp_run_async, "last_proc", None)
+        # Popen 现在由 worker 直接挂在窗口实例上（owner=self），不再读全局 last_proc。
+        self.proc = getattr(self, "proc", None)  # instance-bound
         return False
 
     def _note_output(self, line):
@@ -18279,19 +20542,34 @@ class UpdateCheckWindow(Gtk.Window):
 
     def perform_check(self):
         def check_thread():
-            sync_emoji_icons()
-            remote_version = get_remote_version()
-            GLib.idle_add(self.on_check_done, remote_version)
+            # 任何异常（sync/get_remote_version 内部抛出的、线程调度问题）都必须
+            # 让 on_check_done 被调用；否则非 deletable 的闪屏会永久卡住启动。
+            remote_version = None
+            try:
+                sync_emoji_icons()
+                remote_version = get_remote_version()
+            except Exception as e:
+                print(f"更新检查线程异常: {e}")
+                remote_version = None
+            try:
+                GLib.idle_add(self.on_check_done, remote_version)
+            except Exception as e:
+                print(f"回主线程失败，兜底进入主界面: {e}")
+                GLib.idle_add(self.on_check_done, None)  # always
         threading.Thread(target=check_thread, daemon=True).start()
         return False
 
     def on_check_done(self, remote_version):
         if remote_version is None:
-            self.label.set_text(t("check_update_fail"))
+            # 用带说明的文案，明确告诉用户可以点按钮进入主界面；
+            # 按钮必须 visible + sensitive，否则窗口 deletable=False 会卡死。
+            self.label.set_text(t("check_fail_button"))
             if self.button is None:
                 self.button = Gtk.Button(label=t("enter_main"))
                 self.button.connect("clicked", self.on_button_clicked)
                 self.vbox.pack_start(self.button, False, False, 0)
+            self.button.set_sensitive(True)
+            self.button.set_visible(True)
             self.button.show()
             return
         if compare_versions(remote_version, VERSION) <= 0:

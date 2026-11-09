@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v2.0.4** | Updated: 2026-11-08
+> **Version: v2.1.0** | Updated: 2026-11-09
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -27,6 +27,80 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 
 ## 📝 Changelog
 
+2026-11-09 (v2.1.0)
+[Repo-wide audit and fixes]
+- An agent team reviewed every toolbox feature (system optimization, dual boot, plugins,
+  software installs, network tools, UI and self-update). The confirmed issues below were
+  fixed, and missing cross-device dependencies were checked.
+
+[Security: downloads and root execution]
+- UU / Xunyou / Qiyou accelerators no longer pipe plaintext-HTTP content straight into a
+  root shell: they now use HTTPS, timeouts and HTTP status checks, validate a temporary
+  download as shell text, show its origin, then let sudo prompt for the password directly.
+  The script preview and extra confirmation were removed to restore the "start installing
+  immediately" experience.
+- Qiyou: sd.qiyou.cn only serves HTTP (port 443 closed), so the previous HTTPS-only
+  change broke it. It now fetches the real installer from static.qiyou.cn over HTTPS, and
+  the download helper gained a generic "fall back to HTTP with an explicit warning" path.
+- Watt certificate trust no longer makes /etc/hosts world-writable: original permissions
+  are saved and restored, CA:TRUE and the SHA256 fingerprint are verified, cleanup is
+  fingerprint-based and still runs when the program directory is gone.
+- Epic / Battle.net / Ubisoft uninstalls now list the paths to be removed and ask for
+  confirmation, so games in default folders are not deleted by accident.
+
+[Installer and task window]
+- Installer: temporary file + marker/size/syntax checks before an atomic replace; a
+  failure keeps the old version. Read-only mode is restored only when this script
+  disabled it, never overriding the user's own writable setting.
+- Cancelling a task now shows "Task cancelled" instead of "Task completed"; switching
+  features while a task runs asks for confirmation; closing a Flatpak window really
+  terminates the process, and a failed addon no longer hides behind a successful main app.
+- Added XDG desktop dirs, more terminal emulators, explicit messages when Flatpak is
+  missing or a query fails, and more permissive dual-boot detection so Clover users can
+  still see the boot and shared-disk repairs.
+
+[Boot and system]
+- Fixed the Clover file-check return code being swallowed by `local`, which could
+  register a boot entry for a missing file.
+- Swap operations no longer delete the old swap when deactivation fails; Steam / Gamescope
+  emergency reset aborts immediately if the backup fails, instead of deleting data that
+  cannot be restored.
+- "Clean Virtual Memory Config" now judges by the actual post-reset ZRAM state, fixing
+  the false "ZRAM reset failed" when it had in fact succeeded; NTFS repair failures are
+  now reported honestly.
+- "Switch Flatpak Software Source" shows the matching preset name (e.g. "USTC - China
+  Unicom node") when the current URL matches one of the 5 sources, instead of a raw URL.
+- The boot configuration tool now follows the toolbox language: the Chinese UI keeps
+  the translated script, the English UI keeps the original community English version.
+
+[Watt Toolkit / software installs]
+- Fixed the Watt installer removing its own working directory, which made every later
+  sudo print hundreds of "getcwd: cannot access parent directory" lines. Backups now
+  live on the same filesystem and copies drop security.capability xattrs, fixing
+  "mv: setting attribute ... operation not permitted".
+- Certificate trust now writes explicitly to the system anchors dir, refreshes the CA
+  bundle and verifies with openssl verify that it really took effect (previously it
+  reported success while HTTPS acceleration still failed). hosts and the overall result
+  are judged by actual state, no more false success.
+- The same version is no longer reported as an update (v3.1.0 vs 3.1.0). ToDesk /
+  AnyDesk / Lossless Scaling no longer "remove the old version first" and leave a
+  half-install; download, extraction, service start, uninstall and update failures are
+  reported honestly.
+- "Update All Apps" shows download percentage and speed again: dropped --noninteractive,
+  enabled FLATPAK_TTY_PROGRESS, and added a filter that turns in-place redraws into
+  clean lines without reintroducing the old garbage characters.
+
+[Plugin Store]
+- The Decky service user is no longer hardcoded to deck and the official fields are
+  filled in; uninstall stops, disables and removes the systemd unit and CEF markers;
+  plugin installs validate a temporary directory before replacing, keeping the old
+  plugin on failure.
+
+[Dependencies and compatibility]
+- Added checks and hints for GTK3/VTE3, flatpak, p11-kit, openssl, ntfs-3g/ntfsprogs,
+  efibootmgr, 7z, jupiter-hw-support and others; these are no longer assumed to exist
+  on every distro.
+
 2026-11-08 (v2.0.4)
 [Bug fixes: Fix Shared Disk]
 - No more "false success" on dirty volumes: when a volume carries the NTFS dirty flag, or Windows used Fast Startup / hibernation and never really shut down, the Linux NTFS driver does not fail -- it quietly mounts the partition read-only. The old code only checked the mount command's exit code, so it reported "✓ Mounted successfully" for a volume where not a single file could be written. It now re-reads the real mount options and, when read-only, says so plainly and gives the steps that actually fix it
@@ -40,6 +114,18 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - The flow is now "enter the admin password -> disable SteamOS read-only mode as needed -> install missing tools automatically" instead of immediately telling you that ntfsfix is not installed and leaving the install to you
 - Fixed the wrong package name in the install hint: the old version pointed at ntfs-3g, but on Arch/SteamOS ntfsfix and ntfsinfo belong to ntfsprogs, so following that hint left them still missing. The correct package is now installed automatically, and the package-name difference between the two distro families is handled
 - ntfsfix is now called with -d (clear the dirty flag), so the flag does not survive the repair and make ntfs3 refuse the mount again
+[Repo-wide bug fixes]
+- Security: UU / Xunyou / Qiyou no longer pipe a plaintext-HTTP remote script straight into a root shell; they now use HTTPS, timeouts and HTTP status checks, validate a temporary download, show its origin and ask for confirmation before executing
+- Security: Watt certificate trust no longer makes /etc/hosts world-writable; original permissions are saved and restored, CA constraints and fingerprints are verified, cleanup is fingerprint-based and still runs when the program directory is already gone
+- Security: Epic / Battle.net / Ubisoft uninstalls now list the paths to be removed and ask for confirmation, so games in default folders are not deleted by accident
+- Installer: downloads go to a temporary file and only atomically replace the target after marker / size / syntax checks pass; a failure keeps the old version. Read-only mode is restored only when this script disabled it, never overriding the user's own writable setting
+- Task window: cancelling now shows "Task cancelled" instead of "Task completed"; switching features while a task runs asks for confirmation; closing a Flatpak window really terminates the process, and a failed addon no longer hides behind a successful main package
+- Boot: fixed the Clover file-check return code being swallowed by `local`, which could register a boot entry for a missing file; swap operations no longer delete the old swap when deactivation fails
+- Emergency reset: Steam / Gamescope reset aborts immediately if the backup fails, instead of deleting data that cannot be restored
+- Plugin Store: the service user is no longer hardcoded to deck and the official fields are filled in; uninstall stops, disables and removes the systemd unit; plugin installs validate a temporary directory before replacing, keeping the old plugin on failure
+- Software installs: ToDesk / AnyDesk / Watt / Lossless Scaling no longer "remove the old version first" and leave a half-install; download, extraction, service start, uninstall and update failures are now reported honestly
+- Compatibility: added XDG desktop dirs, more terminal emulators, explicit messages when Flatpak is missing or a query fails, and more permissive dual-boot detection so Clover users can still see the boot and shared-disk repairs
+
 
 2026-11-07 (v2.0.3)
 [Bug fixes]
