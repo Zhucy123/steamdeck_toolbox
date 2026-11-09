@@ -1141,8 +1141,8 @@ def changelog_body_text():
 
 CHANGELOG_BODY_ZH = """2026-11-09（v2.1.0）
 【全功能问题排查与修复】
-- 用智能体团队逐项检查了工具箱全部功能（系统优化、双系统、插件、软件安装、网络工具、
-  界面与自更新），按审查结果修复了下面的确定问题，并补充了跨设备依赖检查
+- 逐项检查了工具箱全部功能（系统优化、双系统、插件、软件安装、网络工具、
+  界面与自更新），修复下面的确定问题，并补充了跨设备依赖检查
 
 【安全：下载与 root 执行】
 - UU / 迅游 / 奇游加速器不再把明文 HTTP 内容直接管道给 root：改为 HTTPS、超时与
@@ -1774,9 +1774,9 @@ CHANGELOG_BODY_ZH = """2026-11-09（v2.1.0）
 
 CHANGELOG_BODY_EN = """2026-11-09 (v2.1.0)
 [Repo-wide audit and fixes]
-- An agent team reviewed every toolbox feature (system optimization, dual boot, plugins,
-  software installs, network tools, UI and self-update). The confirmed issues below were
-  fixed, and missing cross-device dependencies were checked.
+- Reviewed every toolbox feature (system optimization, dual boot, plugins, software
+  installs, network tools, UI and self-update). The confirmed issues below were fixed,
+  and missing cross-device dependencies were checked.
 
 [Security: downloads and root execution]
 - UU / Xunyou / Qiyou accelerators no longer pipe plaintext-HTTP content straight into a

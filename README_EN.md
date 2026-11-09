@@ -29,9 +29,9 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 
 2026-11-09 (v2.1.0)
 [Repo-wide audit and fixes]
-- An agent team reviewed every toolbox feature (system optimization, dual boot, plugins,
-  software installs, network tools, UI and self-update). The confirmed issues below were
-  fixed, and missing cross-device dependencies were checked.
+- Reviewed every toolbox feature (system optimization, dual boot, plugins, software
+  installs, network tools, UI and self-update). The confirmed issues below were fixed,
+  and missing cross-device dependencies were checked.
 
 [Security: downloads and root execution]
 - UU / Xunyou / Qiyou accelerators no longer pipe plaintext-HTTP content straight into a
