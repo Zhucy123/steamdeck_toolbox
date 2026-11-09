@@ -15,10 +15,10 @@ Run this in Konsole:
 curl -L decktools.pages.dev/i | sh
 ```
 
-(If that fails, use the Gitee installer below.)
+(If that fails, use the GitHub installer below.)
 
 ```bash
-curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh | sh
+curl -L https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/master/install_gui.sh | sh
 ```
 
 ## 🔄 Updates

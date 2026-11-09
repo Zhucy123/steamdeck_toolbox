@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TOOLBOX_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
+TOOLBOX_URL="https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/master/steamdeck_gui.py"
 TOOLBOX_NAME="$HOME/steamdeck_gui.py"
 PYTHON_BIN="$(command -v python3 || true)"
 
@@ -158,7 +158,7 @@ else
     fi
 fi
 
-echo "正在从 Gitee 下载 Steam Deck GUI 工具箱..."
+echo "正在从 GitHub 下载 Steam Deck GUI 工具箱..."
 
 # 先下载到目标同目录下的临时文件，完整校验通过后才原子 mv 到目标。
 # 直接 curl -o "$TOOLBOX_NAME" 会在失败 / 拿到错误页时截断或删掉已有安装，
