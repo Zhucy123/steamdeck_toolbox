@@ -27,8 +27,6 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 
 完整更新记录请查看 **[CHANGELOG.md](./CHANGELOG.md)**。
 
-当前版本：**v2.1.2**（2026-11-10）
-
 ## ✨ 特性亮点
 
 - **中英界面**：顶栏一键切换中文 / English，偏好自动保存，重启后保持

@@ -29,8 +29,6 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 
 See **[CHANGELOG_EN.md](./CHANGELOG_EN.md)** for the full release history.
 
-Current version: **v2.1.2** (2026-11-10)
-
 ## ✨ Highlights
 
 - **Chinese / English UI**: switch from the top bar; preference is saved across restarts
