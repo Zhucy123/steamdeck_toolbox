@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v2.1.0** | Updated: 2026-11-09
+> **Version: v2.1.1** | Updated: 2026-11-10
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -26,6 +26,13 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - Open the toolbox; it checks for updates on startup (built-in self-update)
 
 ## 📝 Changelog
+
+2026-11-10 (v2.1.1)
+[Bug fixes]
+- Fixed "Update All Apps" flooding the screen with progress lines: percentage,
+  download speed, the progress bar and "Updating X/Y" transition frames now refresh
+  in place on a single line, while normal log lines and the completion message still
+  get their own lines.
 
 2026-11-09 (v2.1.0)
 [Repo-wide audit and fixes]

@@ -33,7 +33,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "2.1.0"
+VERSION = "2.1.1"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1139,7 +1139,12 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-09（v2.1.0）
+CHANGELOG_BODY_ZH = """2026-11-10（v2.1.1）
+【问题修复】
+- 修复「更新全部应用」的下载进度刷屏：百分比、下载速度、进度条与
+  「正在更新 X/Y」过渡帧现在合并为一行原地刷新，普通日志与完成提示才换行显示
+
+2026-11-09（v2.1.0）
 【全功能问题排查与修复】
 - 逐项检查了工具箱全部功能（系统优化、双系统、插件、软件安装、网络工具、
   界面与自更新），修复下面的确定问题，并补充了跨设备依赖检查
@@ -1772,7 +1777,14 @@ CHANGELOG_BODY_ZH = """2026-11-09（v2.1.0）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-09 (v2.1.0)
+CHANGELOG_BODY_EN = """2026-11-10 (v2.1.1)
+[Bug fixes]
+- Fixed "Update All Apps" flooding the screen with progress lines: percentage,
+  download speed, the progress bar and "Updating X/Y" transition frames now refresh
+  in place on a single line, while normal log lines and the completion message still
+  get their own lines.
+
+2026-11-09 (v2.1.0)
 [Repo-wide audit and fixes]
 - Reviewed every toolbox feature (system optimization, dual boot, plugins, software
   installs, network tools, UI and self-update). The confirmed issues below were fixed,
@@ -2928,26 +2940,45 @@ fp_progress_filter() {
     "${PYTHON_CMD:-python3}" -u -c '
 import sys, re
 ansi = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[@-Z\\\\-_]")
+# 属于「同一条进度行」的帧：X/Y 步骤、百分比、速度、进度条、正在更新/正在安装
+prog = re.compile(r"\d+/\d+|\d+%|\d+\s*(?:字节|bytes|B|kB|MB|GB)/s|[█▍▌▊▏▎▋▐░]|正在更新|正在安装|Receiving objects")
 def clean(t):
     t = ansi.sub("", t)
     t = re.sub(r"\^\[\[[0-9;]*R", "", t)
     return t.strip()
 buf = b""
+active = False
+def emit_progress(t):
+    # 回车 + 清到行尾：始终覆盖同一行，不换行，视觉上只显示一行
+    global active
+    sys.stdout.write("\r\033[K" + t)
+    sys.stdout.flush()
+    active = True
+def emit_log(t):
+    global active
+    if active:
+        sys.stdout.write("\n")
+        active = False
+    print(t, flush=True)
 while True:
     ch = sys.stdin.buffer.read(1)
     if not ch:
         break
     if ch[0] in (13, 10):
-        c = clean(buf.decode("utf-8", "replace"))
-        if c:
-            print(c, flush=True)
+        t = clean(buf.decode("utf-8", "replace"))
         buf = b""
+        if not t:
+            continue
+        (emit_progress if prog.search(t) else emit_log)(t)
     else:
         buf += ch
 if buf:
-    c = clean(buf.decode("utf-8", "replace"))
-    if c:
-        print(c, flush=True)
+    t = clean(buf.decode("utf-8", "replace"))
+    if t:
+        (emit_progress if prog.search(t) else emit_log)(t)
+if active:
+    sys.stdout.write("\n")
+    sys.stdout.flush()
 ' 2>/dev/null
 }
 
@@ -9376,26 +9407,45 @@ fp_progress_filter() {
     "${PYTHON_CMD:-python3}" -u -c '
 import sys, re
 ansi = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[@-Z\\\\-_]")
+# 属于「同一条进度行」的帧：X/Y 步骤、百分比、速度、进度条、正在更新/正在安装
+prog = re.compile(r"\d+/\d+|\d+%|\d+\s*(?:字节|bytes|B|kB|MB|GB)/s|[█▍▌▊▏▎▋▐░]|正在更新|正在安装|Receiving objects")
 def clean(t):
     t = ansi.sub("", t)
     t = re.sub(r"\^\[\[[0-9;]*R", "", t)
     return t.strip()
 buf = b""
+active = False
+def emit_progress(t):
+    # 回车 + 清到行尾：始终覆盖同一行，不换行，视觉上只显示一行
+    global active
+    sys.stdout.write("\r\033[K" + t)
+    sys.stdout.flush()
+    active = True
+def emit_log(t):
+    global active
+    if active:
+        sys.stdout.write("\n")
+        active = False
+    print(t, flush=True)
 while True:
     ch = sys.stdin.buffer.read(1)
     if not ch:
         break
     if ch[0] in (13, 10):
-        c = clean(buf.decode("utf-8", "replace"))
-        if c:
-            print(c, flush=True)
+        t = clean(buf.decode("utf-8", "replace"))
         buf = b""
+        if not t:
+            continue
+        (emit_progress if prog.search(t) else emit_log)(t)
     else:
         buf += ch
 if buf:
-    c = clean(buf.decode("utf-8", "replace"))
-    if c:
-        print(c, flush=True)
+    t = clean(buf.decode("utf-8", "replace"))
+    if t:
+        (emit_progress if prog.search(t) else emit_log)(t)
+if active:
+    sys.stdout.write("\n")
+    sys.stdout.flush()
 ' 2>/dev/null
 }
 
