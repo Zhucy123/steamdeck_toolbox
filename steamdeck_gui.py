@@ -34,8 +34,8 @@ import signal
 # 版本定义
 # ============================================================================
 VERSION = "2.1.1"
-REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
-REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
+REPO_RAW_URL = "https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/master/steamdeck_gui.py"
+REPO_URL = "https://github.com/Zhucy123/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
 
 # ============================================================================

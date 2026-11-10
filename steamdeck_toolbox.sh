@@ -1,7 +1,7 @@
 #!/bin/bash
 VERSION="1.3.9"
 
-TOOLBOX_URL="https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
+TOOLBOX_URL="https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/master/steamdeck_gui.py"
 TOOLBOX_NAME="$HOME/steamdeck_gui.py"
 PYTHON_BIN="$(command -v python3 || true)"
 
@@ -136,7 +136,7 @@ else
     fi
 fi
 
-echo "正在从 Gitee 下载 Steam Deck GUI 工具箱..."
+echo "正在从 GitHub 下载 Steam Deck GUI 工具箱..."
 
 # 与安装器一致：先下载到同目录临时文件，校验通过后才原子 mv，
 # 避免 curl 失败 / 错误页把已有安装截断。
