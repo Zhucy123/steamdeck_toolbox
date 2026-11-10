@@ -33,7 +33,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "2.1.1"
+VERSION = "2.1.2"
 REPO_RAW_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/steamdeck_gui.py"
 REPO_URL = "https://gitee.com/Zhucy2100/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1139,7 +1139,15 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-10（v2.1.1）
+CHANGELOG_BODY_ZH = """2026-11-10（v2.1.2）
+【问题修复：安装器】
+- 修复 `install_gui.sh` 把 `pacman -Sy` 的失败与错误输出一并吞掉，导致装 vte3 时
+  只显示含糊的「无法找到数据库」：现在会保留同步输出、检查返回码，失败时直接给出排查方向
+- 新增废弃仓库检测：如果 `/etc/pacman.conf` 残留 `[community-3.9]`（SteamOS 3.9 已把
+  community 合并进 extra，服务器不再提供 community-3.9.db），提前提示并给出修复命令，
+  避免用户误以为是工具箱或「切换软件源」的问题
+
+2026-11-10（v2.1.1）
 【问题修复】
 - 修复「更新全部应用」的下载进度刷屏：百分比、下载速度、进度条与
   「正在更新 X/Y」过渡帧现在合并为一行原地刷新，普通日志与完成提示才换行显示
@@ -1777,7 +1785,18 @@ CHANGELOG_BODY_ZH = """2026-11-10（v2.1.1）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-10 (v2.1.1)
+CHANGELOG_BODY_EN = """2026-11-10 (v2.1.2)
+[Bug fixes: installer]
+- Fixed `install_gui.sh` swallowing both the failure and the stderr of `pacman -Sy`,
+  which made a failed vte3 install show only a vague "cannot find database" error.
+  Sync output is now shown and the return code is checked; on failure, concrete
+  troubleshooting steps are printed.
+- Added detection for a stale `[community-3.9]` repository in `/etc/pacman.conf`
+  (SteamOS 3.9 merged community into extra, so community-3.9.db no longer exists on the
+  server). It now warns early with the fix commands, so users do not mistake it for a
+  toolbox or "switch software source" problem.
+
+2026-11-10 (v2.1.1)
 [Bug fixes]
 - Fixed "Update All Apps" flooding the screen with progress lines: percentage,
   download speed, the progress bar and "Updating X/Y" transition frames now refresh

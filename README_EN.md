@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v2.1.1** | Updated: 2026-11-10
+> **Version: v2.1.2** | Updated: 2026-11-10
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -26,6 +26,17 @@ curl -L https://gitee.com/Zhucy2100/steamdeck_toolbox/raw/master/install_gui.sh 
 - Open the toolbox; it checks for updates on startup (built-in self-update)
 
 ## 📝 Changelog
+
+2026-11-10 (v2.1.2)
+[Bug fixes: installer]
+- Fixed `install_gui.sh` swallowing both the failure and the stderr of `pacman -Sy`,
+  which made a failed vte3 install show only a vague "cannot find database" error.
+  Sync output is now shown and the return code is checked; on failure, concrete
+  troubleshooting steps are printed.
+- Added detection for a stale `[community-3.9]` repository in `/etc/pacman.conf`
+  (SteamOS 3.9 merged community into extra, so community-3.9.db no longer exists on the
+  server). It now warns early with the fix commands, so users do not mistake it for a
+  toolbox or "switch software source" problem.
 
 2026-11-10 (v2.1.1)
 [Bug fixes]

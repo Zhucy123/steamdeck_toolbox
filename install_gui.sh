@@ -86,7 +86,28 @@ ensure_pacman_keys() {
 install_vte_packages() {
     local force_reinstall="${1:-0}"
     ensure_pacman_keys || return 1
-    sudo pacman -Sy --noconfirm 2>/dev/null || true
+
+    # 同步 pacman 数据库：这一步失败会让后面所有 pacman -S 报「无法找到数据库」。
+    # 原来用 2>/dev/null || true 把错误和返回码都吞了，用户只看到含糊的报错。
+    # 这里改为：先提示废弃的 community 段残留，再保留 stderr、检查返回码。
+    echo "正在同步 pacman 数据库..."
+    if grep -qE '^\[community' /etc/pacman.conf 2>/dev/null; then
+        echo "⚠️ 检测到 /etc/pacman.conf 中残留废弃的 [community] 仓库段。"
+        echo "   SteamOS 3.9 已把 community 合并进 extra，服务器不再提供 community-3.9.db，"
+        echo "   残留会导致同步失败、vte3 安装时报「无法找到数据库」。"
+        echo "   如后续安装失败，请先注释掉该段，例如："
+        echo "     sudo steamos-readonly disable"
+        echo "     sudo sed -i 's/^\[community-3.9\]/#[community-3.9]/' /etc/pacman.conf"
+        echo "     sudo pacman -Sy"
+    fi
+    if ! sudo pacman -Sy --noconfirm; then
+        echo "❌ 同步 pacman 数据库失败，无法继续安装 vte3。"
+        echo "   请检查："
+        echo "     · 网络是否正常、系统 pacman 源是否可用（可先换源）"
+        echo "     · 是否有废弃仓库残留：grep -n community /etc/pacman.conf"
+        echo "   修复后重新运行安装命令即可。"
+        return 1
+    fi
 
     # python-gobject 是 GUI 用 gi 的前提；缺了也会表现为“没有 VTE”
     if ! pacman -Q python-gobject &>/dev/null; then
