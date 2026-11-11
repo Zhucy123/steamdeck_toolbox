@@ -33,7 +33,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "2.1.3"
+VERSION = "2.2.0"
 REPO_RAW_URL = "https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/steamdeck_gui.py"
 REPO_URL = "https://github.com/Zhucy123/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -565,6 +565,23 @@ popover, popover.background {{
     box-shadow: 0 10px 28px {shadow};
 }}
 popover > box, popover.background > box {{ background-color: transparent; }}
+
+/* 深色 / 浅色下的「主题」下拉菜单：系统主题(Breeze 等)会给 popover.background
+   带上带 alpha 的默认背景，看起来发透。这里用更高权重的选择器 + 专属 class
+   强制完全不透明的实色，并把内部容器也填实；只在深浅色基础主题生效，
+   11 套扩展主题用自己的 window.theme-xxx popover 规则，不受影响。 */
+popover.theme-menu-base, popover.theme-menu-base.background,
+window popover.theme-menu-base.background {{
+    background-color: {panel};
+    background-image: none;
+    opacity: 1.0;
+}}
+popover.theme-menu-base > box,
+popover.theme-menu-base.background > box,
+window popover.theme-menu-base.background > box {{
+    background-color: {panel};
+    background-image: none;
+}}
 .theme-row, button.theme-row {{
     background-image: none;
     background-color: transparent;
@@ -679,38 +696,1329 @@ vte-terminal {{
 """
 
 
-def build_css(theme_name):
-    """根据主题名生成对应的 CSS 文本。"""
-    palette = THEME_LIGHT if theme_name == "light" else THEME_DARK
-    return APP_CSS_TEMPLATE.format(**palette)
+# ---------------------------------------------------------------------------
+# 11 套扩展主题的外观覆盖层（按预览稿实现，不只是换几个颜色）。
+#
+# 每套主题都在窗口上挂 theme-<id> 的 style class，这里的选择器全部以
+# window.theme-<id> 开头，因此切换主题时只要去掉旧 class、加上新 class 就会
+# 立刻生效，深色/浅色因为没有 class 而完全不受影响（保持现有配色与布局）。
+#
+# dock / settings / metro / mat / neon 的布局差异由 MainWindow 在重建内容区时
+# 生成对应控件与 style class，下面只负责这些控件的视觉表现。
+#
+# 注意：本文件会自更新覆盖，扩展主题样式必须内联在这里，不能拆成外部文件。
+# ---------------------------------------------------------------------------
 
-def theme_palette(theme_name=None):
-    """返回当前或指定主题的配色字典。"""
-    if theme_name is None:
-        try:
-            theme_name = resolve_theme_mode(load_theme_pref())
-        except Exception:
-            theme_name = "dark"
-    return THEME_LIGHT if theme_name == "light" else THEME_DARK
+# ---------------------------------------------------------------------------
+# 11 套扩展主题的外观覆盖层（按预览稿实现，不只是换几个颜色）。
+#
+# 每套主题都在窗口（或主容器）上挂 theme-<id> 的 style class，这里的选择器
+# 全部以 window.theme-<id> 开头，因此切换主题时只要去掉旧 class、加上新 class
+# 就会立刻生效，深色/浅色因为没有 class 而完全不受影响（保持现有配色与布局）。
+#
+# 布局差异（dock / settings / metro / mat / neon）由 MainWindow 在重建内容区时
+# 生成对应的控件与 style class，下面只负责这些控件的视觉表现。
+# ---------------------------------------------------------------------------
+THEME_CSS_EXTRA = {
 
-def apply_terminal_theme(terminal):
-    """按当前主题设置 VTE 前景/背景与基础调色板。"""
-    if terminal is None:
-        return
-    try:
-        pal = theme_palette()
-        fg = Gdk.RGBA(); fg.parse(pal.get("term_fg", "#e8eefc"))
-        bg = Gdk.RGBA(); bg.parse(pal.get("term_bg", "#0b1018"))
-        if pal is THEME_LIGHT:
-            colors = ("#e8edf5", "#d64555", "#1fa971", "#c48a1a",
+    # 1 新野兽派：黄底、粗黑框、硬阴影、粗黑体，侧栏/功能块像海报切块
+    "bru": r"""
+window.theme-bru, window.theme-bru .background,
+window.theme-bru #content-area, window.theme-bru #detail-panel {
+    background-color: #f4f000; color: #111;
+}
+window.theme-bru headerbar,
+window.theme-bru.csd > headerbar.titlebar {
+    background-color: #111; color: #f4f000;
+    border-bottom: 4px solid #111; min-height: 54px;
+}
+window.theme-bru headerbar .title { color: #f4f000; font-size: 19px; font-weight: 900; }
+window.theme-bru headerbar .subtitle { color: #7dff6a; font-weight: 800; }
+window.theme-bru headerbar button {
+    background-color: #f4f000; color: #111;
+    border: 3px solid #111; border-radius: 0;
+    font-weight: 900; min-height: 34px;
+    box-shadow: 3px 3px 0 #111;
+}
+window.theme-bru headerbar button:hover { background-color: #fff; }
+window.theme-bru headerbar button:active, window.theme-bru headerbar button:checked {
+    background-color: #ff2d55; color: #fff;
+}
+window.theme-bru headerbar button.titlebutton {
+    border-radius: 0; min-width: 26px; min-height: 26px; color: #111;
+}
+/* 右上角最小化/最大化/关闭：黄底上必须用深色图标，
+   否则基础模板给的白图标在 #f4f000 上几乎看不见。 */
+window.theme-bru headerbar button.titlebutton,
+window.theme-bru headerbar button.titlebutton image,
+window.theme-bru headerbar button.titlebutton:hover,
+window.theme-bru headerbar button.titlebutton:hover image {
+    color: #111;
+    -gtk-icon-shadow: none;
+}
+window.theme-bru headerbar button.titlebutton.close:hover { background-color: #ff2d55; color: #fff; }
+window.theme-bru headerbar button.titlebutton.close:hover image { color: #fff; }
+window.theme-bru entry.search, window.theme-bru entry.search-entry {
+    background-color: #fff; color: #111; border: 3px solid #111;
+    border-radius: 0; min-height: 36px; box-shadow: 3px 3px 0 #111;
+}
+window.theme-bru entry.search:focus { border-color: #ff2d55; box-shadow: 3px 3px 0 #ff2d55; }
+window.theme-bru #cat-rail {
+    background-color: #fff; border-right: 4px solid #111; min-width: 232px;
+}
+window.theme-bru #sidebar-header label { color: #111; font-size: 15px; font-weight: 900; }
+window.theme-bru button.nav-item {
+    background-color: #fff; color: #111; border: 0; border-bottom: 4px solid #111;
+    border-radius: 0; min-height: 46px; font-weight: 900; box-shadow: none;
+}
+window.theme-bru button.nav-item:hover { background-color: #f4f000; }
+window.theme-bru button.nav-item.selected {
+    background-color: #111; color: #f4f000; border-color: #111;
+    box-shadow: inset 0 0 0 3px #ff2d55;
+}
+/* 侧栏分类文字：白底上必须用黑字。基础模板 .nav-item-title 给的是浅色
+   （深色主题用），这里用更高权重盖掉，否则未选中项「白底白字」看不见。 */
+window.theme-bru button.nav-item .nav-item-title,
+window.theme-bru button.nav-item:hover .nav-item-title,
+window.theme-bru button.nav-item label { color: #111; font-weight: 900; }
+window.theme-bru button.nav-item.selected .nav-item-title,
+window.theme-bru button.nav-item.selected label { color: #f4f000; }
+window.theme-bru .nav-icon-wrap { background-color: #f4f000; border: 2px solid #111; border-radius: 0; }
+window.theme-bru #page-title, window.theme-bru #about-page-title, window.theme-bru #changelog-page-title {
+    color: #111; font-weight: 900;
+}
+window.theme-bru #page-subtitle { color: #111; font-weight: 800; }
+window.theme-bru button.func-tile, window.theme-bru button.search-tile {
+    background-color: #fff; color: #111; border: 4px solid #111; border-radius: 0;
+    box-shadow: 6px 6px 0 #111; min-height: 52px; font-weight: 900; margin: 0 10px 12px 0;
+}
+window.theme-bru button.func-tile:hover { background-color: #f4f000; }
+window.theme-bru button.func-tile:active { background-color: #7dff6a; box-shadow: 2px 2px 0 #111; }
+window.theme-bru button.func-tile.child-tile { background-color: #fffbe6; border-width: 3px; margin-left: 18px; }
+/* 分组展开后的子功能按钮：.child-tile 的背景规则权重较高，会盖掉上面的
+   :hover，这里用同权重再加 :hover 补回鼠标反馈（黄底 + 硬阴影位移）。 */
+window.theme-bru button.func-tile.child-tile:hover,
+window.theme-bru button.func-tile.child-tile:focus {
+    background-color: #f4f000; color: #111;
+    border-color: #ff2d55;
+    box-shadow: 3px 3px 0 #111;
+}
+window.theme-bru button.func-tile.child-tile:active {
+    background-color: #7dff6a; box-shadow: 1px 1px 0 #111;
+}
+window.theme-bru .func-group-label { color: #111; font-weight: 900; }
+window.theme-bru button.func-group-header {
+    background-color: #ff2d55; color: #fff; border: 4px solid #111; border-radius: 0;
+    box-shadow: 5px 5px 0 #111; font-weight: 900;
+}
+window.theme-bru button.func-group-header:hover { background-color: #7dff6a; color: #111; }
+window.theme-bru button.func-group-header.expanded { background-color: #111; color: #f4f000; }
+window.theme-bru .func-group-header-label { color: inherit; font-weight: 900; }
+window.theme-bru button.func-group-header.expanded .func-group-header-label { color: #f4f000; }
+window.theme-bru button.back-btn {
+    background-color: #7dff6a; color: #111; border: 3px solid #111;
+    border-radius: 0; font-weight: 900; box-shadow: 3px 3px 0 #111;
+}
+window.theme-bru button.back-btn:hover {
+    background-color: #f4f000; color: #111;
+    border-color: #ff2d55; box-shadow: 5px 5px 0 #111;
+}
+window.theme-bru button.back-btn:active {
+    background-color: #7dff6a; box-shadow: 1px 1px 0 #111;
+}
+window.theme-bru .card, window.theme-bru textview, window.theme-bru textview text {
+    background-color: #fff; color: #111; border: 4px solid #111;
+    border-radius: 0; box-shadow: 6px 6px 0 #111;
+}
+window.theme-bru #bottom-bar { background-color: #111; border-top: 4px solid #111; }
+window.theme-bru #status-label { color: #f4f000; font-weight: 800; }
+window.theme-bru button { border-radius: 0; font-weight: 900; }
+window.theme-bru button.destructive-action {
+    background-color: #ff2d55; color: #fff; border: 3px solid #111; border-color: #111;
+}
+window.theme-bru button.destructive-action:hover {
+    background-color: #7dff6a; color: #111; border-color: #111;
+    box-shadow: 5px 5px 0 #111;
+}
+window.theme-bru button.destructive-action:active {
+    background-color: #f4f000; color: #111; box-shadow: 1px 1px 0 #111;
+}
+window.theme-bru popover, window.theme-bru popover.background {
+    background-color: #fff; border: 3px solid #111; border-radius: 0;
+}
+window.theme-bru .theme-row label { color: #111; font-weight: 900; }
+""",
+
+    # 2 赛博朋克：近黑底、品红+青、切角/扫描线感、等宽字体、选中项发光
+    "cyber": r"""
+window.theme-cyber, window.theme-cyber .background,
+window.theme-cyber #content-area, window.theme-cyber #detail-panel {
+    background-color: #050208; color: #67f7ff;
+}
+window.theme-cyber headerbar,
+window.theme-cyber.csd > headerbar.titlebar {
+    background-color: #12010c; border-bottom: 1px solid #ff2bd6;
+    font-family: Monospace; min-height: 52px;
+}
+window.theme-cyber headerbar .title {
+    color: #ff2bd6; font-family: Monospace; font-weight: 800; letter-spacing: 2px;
+    text-shadow: 0 0 8px #ff2bd6;
+}
+window.theme-cyber headerbar .subtitle { color: #67f7ff; font-family: Monospace; }
+window.theme-cyber headerbar button {
+    background-color: transparent; color: #67f7ff;
+    border: 1px solid #67f7ff; border-radius: 0; font-family: Monospace;
+}
+window.theme-cyber headerbar button:hover {
+    background-color: rgba(103,247,255,.12); border-color: #67f7ff;
+    box-shadow: 0 0 10px rgba(103,247,255,.35);
+}
+window.theme-cyber headerbar button:active, window.theme-cyber headerbar button:checked {
+    background-color: rgba(255,43,214,.20); color: #fff;
+}
+window.theme-cyber headerbar button.titlebutton { border-radius: 0; }
+window.theme-cyber headerbar button.titlebutton.close:hover {
+    background-color: rgba(255,43,214,.25); border-color: #ff2bd6; color: #ff2bd6;
+}
+window.theme-cyber entry.search, window.theme-cyber entry.search-entry {
+    background-color: rgba(0,0,0,.45); color: #67f7ff;
+    border: 1px solid #ff2bd6; border-radius: 0; font-family: Monospace;
+}
+window.theme-cyber entry.search:focus { border-color: #67f7ff; box-shadow: 0 0 10px rgba(103,247,255,.45); }
+window.theme-cyber #cat-rail {
+    background-color: #0a040c; border-right: 1px solid rgba(255,43,214,.45);
+}
+window.theme-cyber #sidebar-header label {
+    color: #ff2bd6; font-family: Monospace; font-weight: 800; letter-spacing: 1px;
+}
+window.theme-cyber button.nav-item {
+    background-color: transparent; color: #67f7ff; border: 1px solid transparent;
+    border-radius: 0; font-family: Monospace; font-weight: 700;
+    min-height: 40px; box-shadow: none;
+}
+window.theme-cyber button.nav-item:hover {
+    background-color: rgba(103,247,255,.06); border-color: rgba(103,247,255,.35);
+}
+window.theme-cyber button.nav-item.selected {
+    background-color: rgba(255,43,214,.14); border-color: #ff2bd6; color: #fff;
+    box-shadow: 0 0 12px rgba(255,43,214,.35), inset 3px 0 0 #ff2bd6;
+}
+window.theme-cyber button.nav-item.selected .nav-item-title { color: #fff; }
+window.theme-cyber .nav-icon-wrap {
+    background-color: rgba(103,247,255,.08); border: 1px solid rgba(103,247,255,.35); border-radius: 0;
+}
+window.theme-cyber .nav-item-title { font-family: Monospace; }
+window.theme-cyber #page-title, window.theme-cyber #about-page-title, window.theme-cyber #changelog-page-title {
+    color: #ff2bd6; font-family: Monospace; font-weight: 800; letter-spacing: 1px;
+}
+window.theme-cyber #page-subtitle { color: #67f7ff; font-family: Monospace; }
+window.theme-cyber button.func-tile, window.theme-cyber button.search-tile {
+    background-color: rgba(0,255,255,.04); color: #d7fbff;
+    border: 1px solid rgba(103,247,255,.35); border-radius: 0;
+    box-shadow: none; font-family: Monospace; min-height: 48px;
+    border-left: 3px solid #ff2bd6;
+}
+window.theme-cyber button.func-tile:hover {
+    background-color: rgba(103,247,255,.10); border-color: #67f7ff;
+    box-shadow: 0 0 12px rgba(103,247,255,.28);
+}
+window.theme-cyber button.func-tile:active { background-color: rgba(255,43,214,.20); color: #fff; }
+window.theme-cyber button.func-tile.child-tile { background-color: rgba(255,43,214,.06); }
+window.theme-cyber .func-group-label { color: #ff2bd6; font-family: Monospace; font-weight: 800; }
+window.theme-cyber button.func-group-header {
+    background-color: rgba(255,43,214,.10); color: #ff2bd6;
+    border: 1px solid #ff2bd6; border-radius: 0; border-left: 4px solid #ff2bd6;
+    font-family: Monospace; font-weight: 800;
+}
+window.theme-cyber button.func-group-header:hover { box-shadow: 0 0 14px rgba(255,43,214,.35); }
+window.theme-cyber button.func-group-header.expanded {
+    background-color: rgba(103,247,255,.10); border-color: #67f7ff;
+}
+window.theme-cyber .func-group-header-label, window.theme-cyber button.func-group-header.expanded .func-group-header-label {
+    color: #67f7ff; font-family: Monospace; font-weight: 800;
+}
+window.theme-cyber button.back-btn {
+    background-color: transparent; color: #67f7ff; border: 1px solid #67f7ff;
+    border-radius: 0; font-family: Monospace;
+}
+window.theme-cyber .card, window.theme-cyber textview, window.theme-cyber textview text {
+    background-color: rgba(8,16,24,.85); color: #d7fbff;
+    border: 1px solid rgba(103,247,255,.45); border-radius: 0;
+}
+window.theme-cyber #bottom-bar { background-color: #020104; border-top: 1px solid #ff2bd6; }
+window.theme-cyber #status-label { color: #67f7ff; font-family: Monospace; }
+window.theme-cyber button { border-radius: 0; font-family: Monospace; }
+window.theme-cyber button.destructive-action {
+    background-color: transparent; color: #ff2bd6; border: 1px solid #ff2bd6;
+}
+window.theme-cyber popover, window.theme-cyber popover.background {
+    background-color: #0a0410; border: 1px solid #ff2bd6; border-radius: 0;
+}
+window.theme-cyber .theme-row label { color: #67f7ff; font-family: Monospace; }
+""",
+
+    # 3 Material 柔彩：浅紫底、顶栏 #eaddff、大圆角卡片、紫色强调、顶部胶囊 chips
+    "mat": r"""
+window.theme-mat, window.theme-mat .background,
+window.theme-mat #content-area, window.theme-mat #detail-panel {
+    background-color: #f6edff; color: #1d1b20;
+}
+window.theme-mat headerbar,
+window.theme-mat.csd > headerbar.titlebar {
+    background-color: #eaddff; color: #1d1b20; border-bottom: none; min-height: 56px;
+    box-shadow: none;
+}
+window.theme-mat headerbar .title { color: #1d1b20; font-size: 18px; font-weight: 800; }
+window.theme-mat headerbar .subtitle { color: #6750a4; font-weight: 700; }
+window.theme-mat headerbar button {
+    background-color: #fff; color: #4a4458; border: 1px solid rgba(0,0,0,.12);
+    border-radius: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.08);
+}
+window.theme-mat headerbar button:hover { background-color: #f0e6ff; }
+window.theme-mat headerbar button:active, window.theme-mat headerbar button:checked {
+    background-color: #6750a4; color: #fff;
+}
+window.theme-mat headerbar button.titlebutton { border-radius: 999px; }
+/* 白底窗口按钮必须用深色图标，否则基础模板的浅色图标在白底上看不见 */
+window.theme-mat headerbar button.titlebutton,
+window.theme-mat headerbar button.titlebutton image,
+window.theme-mat headerbar button.titlebutton:hover,
+window.theme-mat headerbar button.titlebutton:hover image {
+    color: #1d1b20; -gtk-icon-shadow: none;
+}
+window.theme-mat headerbar button.titlebutton.close:hover { background-color: #b3261e; color: #fff; }
+window.theme-mat headerbar button.titlebutton.close:hover image { color: #fff; }
+window.theme-mat entry.search, window.theme-mat entry.search-entry {
+    background-color: #fff; color: #1d1b20; border: 1px solid rgba(0,0,0,.18);
+    border-radius: 999px; min-height: 38px;
+}
+window.theme-mat entry.search:focus { border-color: #6750a4; box-shadow: 0 0 0 3px rgba(103,80,164,.20); }
+window.theme-mat #cat-rail { background-color: #eaddff; min-width: 200px; padding: 10px; }
+window.theme-mat #sidebar-header label { color: #6750a4; font-size: 15px; font-weight: 800; }
+window.theme-mat button.nav-item {
+    background-color: transparent; color: #4a4458; border: none; border-radius: 999px;
+    min-height: 40px; box-shadow: none; font-weight: 700;
+}
+window.theme-mat button.nav-item:hover { background-color: rgba(103,80,164,.10); }
+window.theme-mat button.nav-item.selected {
+    background-color: #6750a4; color: #fff; box-shadow: 0 2px 6px rgba(103,80,164,.35);
+}
+window.theme-mat button.nav-item.selected .nav-item-title { color: #fff; }
+window.theme-mat .nav-icon-wrap { background-color: #fff; border: none; border-radius: 999px; }
+window.theme-mat #page-title, window.theme-mat #about-page-title, window.theme-mat #changelog-page-title {
+    color: #1d1b20; font-weight: 800;
+}
+window.theme-mat #page-subtitle { color: #6750a4; }
+window.theme-mat button.func-tile, window.theme-mat button.search-tile {
+    background-color: #fff; color: #1d1b20; border: none; border-radius: 22px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.10); min-height: 64px; padding: 16px 20px;
+    font-weight: 700; font-size: 15px; margin: 0 8px 10px 0;
+}
+window.theme-mat button.func-tile:hover { background-color: #f0e6ff; box-shadow: 0 3px 10px rgba(103,80,164,.18); }
+window.theme-mat button.func-tile:active { background-color: #eaddff; }
+window.theme-mat button.func-tile.child-tile { background-color: #faf5ff; border-radius: 16px; min-height: 52px; }
+window.theme-mat .func-group-label { color: #6750a4; font-weight: 800; }
+window.theme-mat button.func-group-header {
+    background-color: #eaddff; color: #4a4458; border: none; border-radius: 999px;
+    box-shadow: none; font-weight: 800;
+}
+window.theme-mat button.func-group-header:hover { background-color: #d9c6ff; }
+window.theme-mat button.func-group-header.expanded { background-color: #6750a4; color: #fff; }
+window.theme-mat .func-group-header-label, window.theme-mat button.func-group-header.expanded .func-group-header-label {
+    color: inherit; font-weight: 800;
+}
+window.theme-mat .func-group-header-label { color: #4a4458; }
+window.theme-mat button.func-group-header.expanded .func-group-header-label { color: #fff; }
+window.theme-mat button.back-btn {
+    background-color: #fff; color: #4a4458; border: none; border-radius: 999px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08);
+}
+window.theme-mat .card, window.theme-mat textview, window.theme-mat textview text {
+    background-color: #fff; color: #1d1b20; border: none; border-radius: 22px;
+}
+window.theme-mat #bottom-bar { background-color: #e7e0ec; border-top: none; padding: 8px 16px; }
+window.theme-mat #status-label { color: #4a4458; }
+window.theme-mat button { border-radius: 999px; }
+window.theme-mat button.suggested-action { background-color: #6750a4; color: #fff; }
+window.theme-mat button.destructive-action { background-color: #b3261e; color: #fff; border: none; }
+window.theme-mat popover, window.theme-mat popover.background {
+    background-color: #fff; border: none; border-radius: 18px;
+}
+window.theme-mat .theme-row label { color: #1d1b20; }
+window.theme-mat popover button.theme-row:hover { background-color: #eaddff; }
+window.theme-mat #mat-chips { background-color: #eaddff; padding: 6px 16px 10px 16px; }
+window.theme-mat button.mat-chip {
+    background-color: #fff; color: #4a4458; border: none; border-radius: 999px;
+    min-height: 38px; padding: 4px 16px; font-weight: 700; box-shadow: none;
+}
+window.theme-mat button.mat-chip:hover { background-color: #f0e6ff; }
+window.theme-mat button.mat-chip.selected { background-color: #6750a4; color: #fff; }
+""",
+
+    # 4 高对比大字：黑底黄字、超大字号、粗分割线、功能行最小 60px
+    "hc": r"""
+window.theme-hc, window.theme-hc .background,
+window.theme-hc #content-area, window.theme-hc #detail-panel {
+    background-color: #000; color: #ffe500;
+}
+window.theme-hc headerbar,
+window.theme-hc.csd > headerbar.titlebar {
+    background-color: #000; border-bottom: 4px solid #ffe500; min-height: 60px; box-shadow: none;
+}
+window.theme-hc headerbar .title { color: #ffe500; font-size: 22px; font-weight: 900; }
+window.theme-hc headerbar .subtitle { color: #ffe500; font-size: 14px; font-weight: 800; }
+window.theme-hc headerbar button {
+    background-color: #000; color: #ffe500; border: 3px solid #ffe500;
+    border-radius: 0; font-size: 17px; font-weight: 900; min-height: 42px;
+}
+window.theme-hc headerbar button:hover { background-color: #ffe500; color: #000; }
+window.theme-hc headerbar button:active, window.theme-hc headerbar button:checked {
+    background-color: #ffe500; color: #000;
+}
+window.theme-hc headerbar button.titlebutton { border-radius: 0; min-width: 30px; min-height: 30px; }
+window.theme-hc entry.search, window.theme-hc entry.search-entry {
+    background-color: #000; color: #ffe500; border: 3px solid #ffe500;
+    border-radius: 0; font-size: 18px; min-height: 44px;
+}
+window.theme-hc entry.search:focus { border-color: #fff; }
+window.theme-hc #cat-rail { background-color: #000; border-right: 4px solid #ffe500; min-width: 260px; }
+window.theme-hc #sidebar-header label { color: #ffe500; font-size: 19px; font-weight: 900; }
+window.theme-hc button.nav-item {
+    background-color: #000; color: #ffe500; border: none; border-bottom: 3px solid #ffe500;
+    border-radius: 0; min-height: 62px; font-size: 19px; font-weight: 900; box-shadow: none;
+}
+window.theme-hc button.nav-item:hover { background-color: #222; }
+window.theme-hc button.nav-item.selected { background-color: #ffe500; color: #000; }
+window.theme-hc button.nav-item.selected .nav-item-title { color: #000; }
+window.theme-hc .nav-item-title { font-size: 19px; font-weight: 900; }
+window.theme-hc .nav-icon-wrap { background-color: transparent; border: none; }
+window.theme-hc #page-title, window.theme-hc #about-page-title, window.theme-hc #changelog-page-title {
+    color: #ffe500; font-size: 26px; font-weight: 900;
+}
+window.theme-hc #page-subtitle { color: #ffe500; font-size: 17px; font-weight: 800; }
+window.theme-hc button.func-tile, window.theme-hc button.search-tile {
+    background-color: #000; color: #ffe500; border: none; border-bottom: 3px solid #ffe500;
+    border-radius: 0; min-height: 60px; font-size: 20px; font-weight: 900;
+    box-shadow: none; padding: 6px 18px; margin: 0;
+}
+window.theme-hc button.func-tile:hover { background-color: #ffe500; color: #000; }
+window.theme-hc button.func-tile:active { background-color: #fff; color: #000; }
+window.theme-hc button.func-tile.child-tile { background-color: #111; min-height: 60px; padding-left: 34px; }
+/* 分组展开后的子功能按钮：.child-tile 的背景规则权重较高会盖掉上面的
+   :hover，这里补回同权重的悬停/按下反馈——高对比主题用反相（黄底黑字）
+   最醒目，并加粗黄色边框强化「当前指向哪一项」。 */
+window.theme-hc button.func-tile.child-tile:hover,
+window.theme-hc button.func-tile.child-tile:focus {
+    background-color: #ffe500; color: #000;
+    border: 4px solid #ffe500; border-bottom-color: #ffe500;
+    box-shadow: inset 0 0 0 2px #000;
+}
+window.theme-hc button.func-tile.child-tile:active {
+    background-color: #fff; color: #000;
+}
+window.theme-hc .func-group-label { color: #ffe500; font-size: 21px; font-weight: 900; }
+window.theme-hc button.func-group-header {
+    background-color: #000; color: #ffe500; border: 3px solid #ffe500; border-radius: 0;
+    min-height: 60px; font-size: 20px; font-weight: 900; box-shadow: none;
+}
+window.theme-hc button.func-group-header:hover, window.theme-hc button.func-group-header.expanded {
+    background-color: #ffe500; color: #000;
+}
+window.theme-hc .func-group-header-label, window.theme-hc button.func-group-header.expanded .func-group-header-label {
+    color: inherit; font-size: 20px; font-weight: 900;
+}
+window.theme-hc button.back-btn {
+    background-color: #000; color: #ffe500; border: 3px solid #ffe500;
+    border-radius: 0; font-size: 18px; font-weight: 900; min-height: 48px;
+}
+window.theme-hc button.back-btn:hover {
+    background-color: #ffe500; color: #000;
+}
+window.theme-hc button.back-btn:active {
+    background-color: #fff; color: #000;
+}
+window.theme-hc .card, window.theme-hc textview, window.theme-hc textview text {
+    background-color: #000; color: #ffe500; border: 4px solid #ffe500;
+    border-radius: 0; font-size: 19px;
+}
+window.theme-hc #bottom-bar { background-color: #000; border-top: 4px solid #ffe500; }
+window.theme-hc #status-label { color: #ffe500; font-size: 14px; font-weight: 800; }
+window.theme-hc button { border-radius: 0; font-size: 19px; font-weight: 900; min-height: 52px; }
+window.theme-hc button.destructive-action {
+    background-color: #ffe500; color: #000; border: 3px solid #ffe500;
+}
+window.theme-hc button.destructive-action:hover {
+    background-color: #000; color: #ffe500; border-color: #ffe500;
+}
+window.theme-hc button.destructive-action:active {
+    background-color: #fff; color: #000;
+}
+window.theme-hc popover, window.theme-hc popover.background {
+    background-color: #000; border: 4px solid #ffe500; border-radius: 0;
+}
+window.theme-hc .theme-row label { color: #ffe500; font-size: 19px; font-weight: 900; }
+window.theme-hc popover button.theme-row { min-height: 52px; }
+window.theme-hc popover button.theme-row:hover { background-color: #ffe500; }
+window.theme-hc popover button.theme-row:hover label { color: #000; }
+window.theme-hc popover scrollbar slider {
+    background-color: #ffe500; min-width: 10px; border-radius: 0;
+}
+window.theme-hc popover scrollbar slider:hover { background-color: #fff; }
+""",
+
+    # 5 霓虹工具铺：夜店黑底、左侧招牌匾、彩色店招、青色发光菜单
+    "neon": r"""
+/* 底色：近黑 + 顶部一点品红光，避免整窗死黑，也不用复杂径向渐变 */
+window.theme-neon, window.theme-neon .background,
+window.theme-neon #content-area, window.theme-neon #detail-panel {
+    background-color: #09060e; color: #e9ffff;
+    background-image: linear-gradient(180deg, rgba(58,16,48,.40) 0%, rgba(9,6,14,0) 38%);
+}
+window.theme-neon headerbar,
+window.theme-neon.csd > headerbar.titlebar {
+    background-color: #0a0610; color: #ff4fd8;
+    background-image: none;
+    border-bottom: 2px solid #63f6ff; min-height: 48px;
+    box-shadow: 0 0 10px rgba(99,246,255,.40);
+}
+/* 字距收回来，标题才不会在掌机宽度里被挤成「Steam Deck 工具...」 */
+window.theme-neon headerbar .title {
+    color: #ff8ae6; font-weight: 800; letter-spacing: 0.3px;
+    text-shadow: 0 0 8px rgba(255,79,216,.85);
+}
+window.theme-neon headerbar .subtitle {
+    color: #8ff9ff; text-shadow: 0 0 6px rgba(99,246,255,.75);
+}
+window.theme-neon headerbar button {
+    background-color: rgba(99,246,255,.06); color: #8ff9ff;
+    border: 1px solid #63f6ff; border-radius: 4px;
+    padding: 0 8px; min-height: 28px;
+    text-shadow: 0 0 6px rgba(99,246,255,.65);
+    box-shadow: none;
+}
+window.theme-neon headerbar button:hover {
+    background-color: rgba(99,246,255,.16); color: #b3fbff;
+}
+window.theme-neon headerbar button:active, window.theme-neon headerbar button:checked {
+    background-color: rgba(255,79,216,.22); color: #ffb3ec;
+    border-color: #ff4fd8;
+}
+/* 窗口按钮单独收干净，避免套上语言/主题那种大发光框 */
+window.theme-neon headerbar button.titlebutton {
+    background-color: transparent; background-image: none;
+    border: 1px solid #63f6ff; border-radius: 4px;
+    min-width: 26px; min-height: 26px; padding: 0;
+    box-shadow: none; text-shadow: none; color: #8ff9ff;
+}
+window.theme-neon headerbar button.titlebutton image { color: #8ff9ff; }
+window.theme-neon headerbar button.titlebutton:hover {
+    background-color: rgba(99,246,255,.18); border-color: #63f6ff;
+}
+window.theme-neon headerbar button.titlebutton.close:hover {
+    border-color: #ff4fd8; color: #ffb3ec; background-color: rgba(255,79,216,.28);
+}
+window.theme-neon headerbar button.titlebutton.close:hover image { color: #ffb3ec; }
+window.theme-neon entry.search, window.theme-neon entry.search-entry {
+    background-color: rgba(0,0,0,.55); color: #8ff9ff;
+    border: 1px solid #63f6ff; border-radius: 4px;
+    box-shadow: none; text-shadow: none;
+}
+window.theme-neon entry.search:focus {
+    border-color: #63f6ff;
+    box-shadow: 0 0 8px rgba(99,246,255,.55);
+}
+window.theme-neon #cat-rail {
+    background-color: #120814; border-right: 2px solid #ff4fd8; min-width: 110px; padding: 8px 4px;
+}
+window.theme-neon #sidebar-header { }
+window.theme-neon #neon-sidebar {
+    background-color: #120814;
+    min-width: 88px; padding: 16px 10px;
+    box-shadow: inset -2px 0 0 #ff4fd8;
+}
+/* 中间一块招牌匾，不再把整列拉满只剩两个字 */
+window.theme-neon #neon-sign {
+    background-color: rgba(12,6,18,.92);
+    border: 2px solid #ff4fd8; border-radius: 8px;
+    padding: 14px 8px 10px 8px;
+    box-shadow: 0 0 10px rgba(255,79,216,.60), inset 0 0 8px rgba(255,79,216,.16);
+}
+window.theme-neon #neon-sign label {
+    color: #ff8ae6; font-size: 24px; font-weight: 800;
+    text-shadow: 0 0 8px rgba(255,79,216,.9);
+}
+window.theme-neon #neon-sign .neon-open {
+    color: #8ff9ff; font-size: 11px; font-weight: 800; letter-spacing: 2px;
+    text-shadow: 0 0 8px rgba(99,246,255,.9);
+}
+window.theme-neon #neon-shops { background-color: transparent; padding: 8px 12px 6px 10px; }
+/* 店招默认色；各分类的彩色在下面按 id 覆盖 */
+window.theme-neon button.neon-shop {
+    background-color: rgba(0,0,0,.28); color: #ff8ae6;
+    border: 2px solid #ff4fd8; border-radius: 6px;
+    min-height: 38px; font-weight: 800; padding: 3px 10px;
+    text-shadow: 0 0 6px rgba(255,79,216,.65);
+    box-shadow: none;
+}
+window.theme-neon button.neon-shop:hover {
+    background-color: rgba(255,255,255,.10);
+}
+window.theme-neon button.neon-shop.selected {
+    background-color: rgba(255,255,255,.14); border-width: 2px;
+    box-shadow: 0 0 10px rgba(255,255,255,.16);
+}
+window.theme-neon button.neon-shop#neon-shop-support { color: #ff4fd8; border-color: #ff4fd8; text-shadow: 0 0 6px #ff4fd8; }
+window.theme-neon button.neon-shop#neon-shop-changelog { color: #63f6ff; border-color: #63f6ff; text-shadow: 0 0 6px #63f6ff; }
+window.theme-neon button.neon-shop#neon-shop-sysopt { color: #ffe566; border-color: #ffe566; text-shadow: 0 0 6px #ffe566; }
+window.theme-neon button.neon-shop#neon-shop-plugins { color: #7cff6a; border-color: #7cff6a; text-shadow: 0 0 6px #7cff6a; }
+window.theme-neon button.neon-shop#neon-shop-software { color: #ff8a3d; border-color: #ff8a3d; text-shadow: 0 0 6px #ff8a3d; }
+window.theme-neon button.neon-shop#neon-shop-network { color: #c9a0ff; border-color: #c9a0ff; text-shadow: 0 0 6px #c9a0ff; }
+window.theme-neon button.neon-shop#neon-shop-update { color: #ff5b7a; border-color: #ff5b7a; text-shadow: 0 0 6px #ff5b7a; }
+window.theme-neon button.neon-shop#neon-shop-support.selected { background-color: rgba(255,79,216,.22); box-shadow: 0 0 10px rgba(255,79,216,.65); }
+window.theme-neon button.neon-shop#neon-shop-changelog.selected { background-color: rgba(99,246,255,.20); box-shadow: 0 0 10px rgba(99,246,255,.65); }
+window.theme-neon button.neon-shop#neon-shop-sysopt.selected { background-color: rgba(255,229,102,.20); box-shadow: 0 0 10px rgba(255,229,102,.60); }
+window.theme-neon button.neon-shop#neon-shop-plugins.selected { background-color: rgba(124,255,106,.18); box-shadow: 0 0 10px rgba(124,255,106,.60); }
+window.theme-neon button.neon-shop#neon-shop-software.selected { background-color: rgba(255,138,61,.20); box-shadow: 0 0 10px rgba(255,138,61,.60); }
+window.theme-neon button.neon-shop#neon-shop-network.selected { background-color: rgba(201,160,255,.20); box-shadow: 0 0 10px rgba(201,160,255,.60); }
+window.theme-neon button.neon-shop#neon-shop-update.selected { background-color: rgba(255,91,122,.22); box-shadow: 0 0 10px rgba(255,91,122,.65); }
+window.theme-neon button.nav-item { }
+window.theme-neon #page-title, window.theme-neon #about-page-title, window.theme-neon #changelog-page-title {
+    color: #ff8ae6; font-weight: 800;
+    text-shadow: 0 0 8px rgba(255,79,216,.8);
+}
+window.theme-neon #page-subtitle {
+    color: #8ff9ff; text-shadow: 0 0 6px rgba(99,246,255,.7);
+}
+/* 功能页菜单框 + 关于/更新日志框：青色灯管发光框画在容器上 */
+window.theme-neon #neon-menu,
+window.theme-neon .neon-frame {
+    background-color: rgba(0,0,0,.55);
+    border: 2px solid #63f6ff; border-radius: 8px;
+    box-shadow: 0 0 12px rgba(99,246,255,.50), inset 0 0 10px rgba(99,246,255,.10);
+}
+window.theme-neon #neon-menu { padding: 8px 10px; margin: 0 12px 12px 8px; }
+window.theme-neon .neon-frame { margin: 0 4px 8px 0; padding: 8px; }
+/* 正文不再加文字辉光，避免发糊 */
+window.theme-neon .card, window.theme-neon textview, window.theme-neon textview text {
+    background-color: transparent; color: #e9ffff;
+    border: none; border-radius: 0; box-shadow: none;
+    text-shadow: none;
+}
+window.theme-neon button.func-tile, window.theme-neon button.search-tile {
+    background-color: transparent; color: #e9ffff; border: none;
+    border-bottom: 1px dashed rgba(99,246,255,.40); border-radius: 0;
+    box-shadow: none; min-height: 44px; font-size: 16px; font-weight: 700;
+    text-shadow: none;
+}
+window.theme-neon button.func-tile:hover {
+    background-color: rgba(99,246,255,.12); color: #b3fbff;
+    box-shadow: inset 3px 0 0 #63f6ff;
+    text-shadow: 0 0 6px rgba(99,246,255,.7);
+}
+window.theme-neon button.func-tile:active { color: #ff8ae6; text-shadow: 0 0 8px #ff4fd8; }
+window.theme-neon button.func-tile.child-tile { background-color: rgba(99,246,255,.06); }
+window.theme-neon .func-group-label {
+    color: #ff8ae6; font-weight: 800;
+    text-shadow: 0 0 6px rgba(255,79,216,.7);
+}
+window.theme-neon button.func-group-header {
+    background-color: rgba(255,79,216,.08); color: #ff8ae6;
+    border: 1px solid #ff4fd8; border-radius: 4px; font-weight: 800;
+    text-shadow: 0 0 6px rgba(255,79,216,.7);
+    box-shadow: none;
+}
+window.theme-neon button.func-group-header:hover {
+    background-color: rgba(255,79,216,.16);
+}
+window.theme-neon button.func-group-header.expanded {
+    border-color: #63f6ff; color: #b3fbff;
+    text-shadow: 0 0 6px rgba(99,246,255,.75);
+}
+window.theme-neon .func-group-header-label, window.theme-neon button.func-group-header.expanded .func-group-header-label {
+    color: inherit; font-weight: 800;
+}
+window.theme-neon button.back-btn {
+    background-color: transparent; color: #8ff9ff; border: 1px solid #63f6ff; border-radius: 4px;
+    text-shadow: 0 0 6px #63f6ff; box-shadow: none;
+}
+window.theme-neon #bottom-bar {
+    background-color: #09060e; border-top: 2px solid rgba(99,246,255,.55);
+    box-shadow: 0 -3px 12px rgba(99,246,255,.16);
+}
+window.theme-neon #status-label { color: #ff8ae6; text-shadow: 0 0 6px rgba(255,79,216,.65); }
+window.theme-neon button.destructive-action {
+    background-color: transparent; color: #ff8ae6; border: 2px solid #ff4fd8;
+    text-shadow: 0 0 6px #ff4fd8;
+    box-shadow: none;
+}
+window.theme-neon button.destructive-action:hover {
+    background-color: rgba(255,79,216,.18); color: #ffb3ec;
+}
+window.theme-neon popover, window.theme-neon popover.background {
+    background-color: #120814; border: 2px solid #63f6ff; border-radius: 6px;
+    box-shadow: 0 0 10px rgba(99,246,255,.45);
+}
+window.theme-neon .theme-row label { color: #e9ffff; }
+""",
+
+    # 6 皮革旅行箱窗：棕皮、铜扣、米色字/按钮，像打开的旅行箱
+    "lea": r"""
+window.theme-lea, window.theme-lea .background,
+window.theme-lea #content-area, window.theme-lea #detail-panel {
+    background-color: #5b3a28; color: #f3e1c6;
+}
+window.theme-lea headerbar,
+window.theme-lea.csd > headerbar.titlebar {
+    background-color: #3e281c; border-bottom: 3px solid #c9a44c; min-height: 52px;
+    box-shadow: inset 0 -1px 0 #2a1a12;
+}
+window.theme-lea headerbar .title { color: #f3e1c6; font-weight: 800; }
+window.theme-lea headerbar .subtitle { color: #c9a44c; font-weight: 700; }
+window.theme-lea headerbar button {
+    background-color: #c9a44c; color: #2a1a12; border: none; border-radius: 999px;
+    font-weight: 800; box-shadow: inset 0 -2px 0 rgba(0,0,0,.25);
+}
+window.theme-lea headerbar button:hover { background-color: #e0bd68; }
+window.theme-lea headerbar button:active, window.theme-lea headerbar button:checked {
+    background-color: #f3e1c6; color: #2a1a12;
+}
+window.theme-lea headerbar button.titlebutton { border-radius: 999px; }
+window.theme-lea headerbar button.titlebutton.close:hover { background-color: #8b2a1c; color: #fff; }
+window.theme-lea entry.search, window.theme-lea entry.search-entry {
+    background-color: #f3e1c6; color: #2a1a12; border: 2px solid #c9a44c;
+    border-radius: 8px;
+}
+window.theme-lea entry.search:focus { border-color: #f3e1c6; box-shadow: 0 0 0 2px #c9a44c; }
+window.theme-lea #cat-rail { background-color: #3e281c; border-right: 3px solid #c9a44c; }
+window.theme-lea #sidebar-header label { color: #c9a44c; font-weight: 800; }
+window.theme-lea button.nav-item {
+    background-color: #6a4632; color: #f3e1c6; border: 1px dashed #c9a44c;
+    border-radius: 8px; min-height: 44px; box-shadow: none; font-weight: 700;
+}
+window.theme-lea button.nav-item:hover { background-color: #7d563d; }
+window.theme-lea button.nav-item.selected {
+    background-color: #c9a44c; color: #2a1a12; border: 1px solid #f3e1c6; font-weight: 900;
+}
+window.theme-lea button.nav-item.selected .nav-item-title { color: #2a1a12; }
+window.theme-lea .nav-icon-wrap { background-color: rgba(201,164,76,.20); border: none; border-radius: 8px; }
+window.theme-lea #page-title, window.theme-lea #about-page-title, window.theme-lea #changelog-page-title {
+    color: #f3e1c6; font-weight: 800;
+}
+window.theme-lea #page-subtitle { color: #c9a44c; }
+window.theme-lea button.func-tile, window.theme-lea button.search-tile {
+    background-color: #f3e1c6; color: #2a1a12; border: none; border-radius: 8px;
+    box-shadow: 0 3px 0 #2a1a12; font-weight: 800; min-height: 50px;
+}
+/* 悬停：米色功能块翻成铜扣金 + 深棕字，并收拢下方硬阴影（按下感），
+   比原来「米色→更浅米色」明显得多。 */
+window.theme-lea button.func-tile:hover, window.theme-lea button.search-tile:hover {
+    background-color: #c9a44c; color: #2a1a12;
+    box-shadow: 0 1px 0 #2a1a12, inset 0 0 0 2px #f3e1c6;
+}
+window.theme-lea button.func-tile:active, window.theme-lea button.search-tile:active {
+    background-color: #e0bd68; box-shadow: 0 1px 0 #2a1a12;
+}
+window.theme-lea button.func-tile.child-tile { background-color: #e6d0ae; }
+/* 子项 .child-tile 背景权重较高会盖掉上面的 :hover，这里补回同权重反馈 */
+window.theme-lea button.func-tile.child-tile:hover,
+window.theme-lea button.func-tile.child-tile:focus {
+    background-color: #c9a44c; color: #2a1a12;
+    box-shadow: 0 1px 0 #2a1a12, inset 0 0 0 2px #f3e1c6;
+}
+window.theme-lea button.func-tile.child-tile:active { background-color: #e0bd68; }
+window.theme-lea .func-group-label { color: #c9a44c; font-weight: 800; }
+window.theme-lea button.func-group-header {
+    background-color: #6a4632; color: #f3e1c6; border: 2px dashed #c9a44c;
+    border-radius: 8px; box-shadow: 0 3px 0 #2a1a12; font-weight: 800;
+}
+/* 分组头原来完全没有 hover，补上铜扣金反相 */
+window.theme-lea button.func-group-header:hover {
+    background-color: #c9a44c; color: #2a1a12; border-color: #f3e1c6;
+    box-shadow: 0 1px 0 #2a1a12;
+}
+window.theme-lea button.func-group-header:active { background-color: #e0bd68; }
+window.theme-lea button.func-group-header.expanded { background-color: #c9a44c; color: #2a1a12; }
+/* 展开态本身就是金底，hover 要再亮一档才看得出，权重需盖过 .expanded */
+window.theme-lea button.func-group-header.expanded:hover {
+    background-color: #e0bd68; color: #2a1a12; border-color: #f3e1c6;
+    box-shadow: 0 1px 0 #2a1a12;
+}
+window.theme-lea .func-group-header-label, window.theme-lea button.func-group-header.expanded .func-group-header-label {
+    color: inherit; font-weight: 800;
+}
+window.theme-lea button.back-btn {
+    background-color: #c9a44c; color: #2a1a12; border: none; border-radius: 999px; font-weight: 800;
+}
+window.theme-lea button.back-btn:hover {
+    background-color: #e0bd68; color: #2a1a12;
+    box-shadow: inset 0 0 0 2px #f3e1c6;
+}
+window.theme-lea button.back-btn:active { background-color: #f3e1c6; }
+window.theme-lea .card, window.theme-lea textview, window.theme-lea textview text {
+    background-color: #f3e1c6; color: #2a1a12; border: 3px solid #c9a44c; border-radius: 10px;
+}
+window.theme-lea #bottom-bar { background-color: #2a1a12; border-top: 3px solid #c9a44c; }
+window.theme-lea #status-label { color: #f3e1c6; }
+window.theme-lea button { border-radius: 8px; }
+window.theme-lea button.destructive-action { background-color: #8b2a1c; color: #fff; border: none; }
+window.theme-lea button.destructive-action:hover {
+    background-color: #c9a44c; color: #2a1a12;
+    box-shadow: inset 0 0 0 2px #f3e1c6;
+}
+window.theme-lea button.destructive-action:active { background-color: #e0bd68; color: #2a1a12; }
+window.theme-lea popover, window.theme-lea popover.background {
+    background-color: #3e281c; border: 3px solid #c9a44c; border-radius: 10px;
+}
+window.theme-lea .theme-row label { color: #f3e1c6; }
+""",
+
+    # 7 漫画格窗口：粗黑描边、硬阴影、对话框气泡式功能按钮、黄/白纸底
+    "comic": r"""
+window.theme-comic, window.theme-comic .background,
+window.theme-comic #content-area, window.theme-comic #detail-panel {
+    background-color: #fff; color: #111;
+}
+window.theme-comic headerbar,
+window.theme-comic.csd > headerbar.titlebar {
+    background-color: #111; color: #fff; border-bottom: 5px solid #111; min-height: 54px;
+}
+window.theme-comic headerbar .title {
+    color: #fff; font-weight: 900; font-style: italic; letter-spacing: 1px;
+}
+window.theme-comic headerbar .subtitle { color: #f2d023; font-weight: 800; }
+window.theme-comic headerbar button {
+    background-color: #fff; color: #111; border: 3px solid #111; border-radius: 0;
+    font-weight: 900; box-shadow: 2px 2px 0 #111;
+}
+window.theme-comic headerbar button:hover { background-color: #f2d023; }
+window.theme-comic headerbar button:active, window.theme-comic headerbar button:checked {
+    background-color: #111; color: #fff;
+}
+window.theme-comic headerbar button.titlebutton { border-radius: 0; }
+/* 右上角窗口按钮：白底上必须用深色图标，否则基础模板的浅色图标看不见 */
+window.theme-comic headerbar button.titlebutton,
+window.theme-comic headerbar button.titlebutton image,
+window.theme-comic headerbar button.titlebutton:hover,
+window.theme-comic headerbar button.titlebutton:hover image {
+    color: #111; -gtk-icon-shadow: none;
+}
+window.theme-comic headerbar button.titlebutton.close:hover { background-color: #e11d48; color: #fff; }
+window.theme-comic headerbar button.titlebutton.close:hover image { color: #fff; }
+window.theme-comic entry.search, window.theme-comic entry.search-entry {
+    background-color: #fff; color: #111; border: 3px solid #111; border-radius: 0;
+    box-shadow: 2px 2px 0 #111; min-height: 36px;
+}
+window.theme-comic entry.search:focus { border-color: #e11d48; }
+window.theme-comic #cat-rail { background-color: #fffbe6; border-right: 5px solid #111; }
+window.theme-comic #sidebar-header label { color: #111; font-weight: 900; font-size: 15px; }
+window.theme-comic button.nav-item {
+    background-color: #fff; color: #111; border: 3px solid #111; border-radius: 0;
+    box-shadow: 4px 4px 0 #111; min-height: 46px; font-weight: 900; margin: 0 4px 6px 0;
+}
+window.theme-comic button.nav-item:hover { background-color: #f2d023; }
+window.theme-comic button.nav-item.selected {
+    background-color: #111; color: #fff; box-shadow: 2px 2px 0 #e11d48;
+}
+/* 侧栏分类文字：白纸底上必须用黑字。基础模板 .nav-item-title 给的是浅色，
+   这里用更高权重盖掉，否则未选中项「白底白字」看不见。 */
+window.theme-comic button.nav-item .nav-item-title,
+window.theme-comic button.nav-item:hover .nav-item-title,
+window.theme-comic button.nav-item label { color: #111; font-weight: 900; }
+window.theme-comic button.nav-item.selected .nav-item-title,
+window.theme-comic button.nav-item.selected label { color: #fff; }
+window.theme-comic .nav-icon-wrap { background-color: #f2d023; border: 2px solid #111; border-radius: 0; }
+window.theme-comic #page-title, window.theme-comic #about-page-title, window.theme-comic #changelog-page-title {
+    color: #111; font-weight: 900; font-style: italic;
+}
+window.theme-comic #page-subtitle { color: #111; font-weight: 800; }
+window.theme-comic button.func-tile, window.theme-comic button.search-tile {
+    background-color: #fff; color: #111; border: 4px solid #111;
+    border-radius: 40px 40px 40px 0; box-shadow: 5px 5px 0 #111;
+    min-height: 54px; padding: 12px 20px; font-weight: 800; margin: 0 10px 14px 0;
+}
+window.theme-comic button.func-tile:hover, window.theme-comic button.search-tile:hover {
+    background-color: #f2d023; color: #111;
+    box-shadow: 2px 2px 0 #111;
+}
+window.theme-comic button.func-tile:active, window.theme-comic button.search-tile:active {
+    background-color: #e11d48; color: #fff; box-shadow: 1px 1px 0 #111;
+}
+window.theme-comic button.func-tile.child-tile {
+    background-color: #fffbe6; border-width: 3px; border-radius: 20px 20px 20px 0; margin-left: 18px;
+}
+/* 子项 .child-tile 背景权重较高会盖掉 :hover，补回同权重反馈 */
+window.theme-comic button.func-tile.child-tile:hover,
+window.theme-comic button.func-tile.child-tile:focus {
+    background-color: #f2d023; color: #111;
+    box-shadow: 2px 2px 0 #111;
+}
+window.theme-comic button.func-tile.child-tile:active {
+    background-color: #e11d48; color: #fff; box-shadow: 1px 1px 0 #111;
+}
+window.theme-comic .func-group-label { color: #111; font-weight: 900; }
+window.theme-comic button.func-group-header {
+    background-color: #f2d023; color: #111; border: 4px solid #111;
+    border-radius: 40px 40px 40px 0; box-shadow: 5px 5px 0 #111; font-weight: 900;
+}
+window.theme-comic button.func-group-header:hover {
+    background-color: #fff6b0; color: #111; box-shadow: 2px 2px 0 #111;
+}
+window.theme-comic button.func-group-header:active {
+    background-color: #e11d48; color: #fff; box-shadow: 1px 1px 0 #111;
+}
+window.theme-comic button.func-group-header.expanded { background-color: #111; color: #fff; }
+/* 展开态是黑底，hover 用黄底黑字，权重需盖过 .expanded */
+window.theme-comic button.func-group-header.expanded:hover {
+    background-color: #f2d023; color: #111; box-shadow: 2px 2px 0 #111;
+}
+window.theme-comic .func-group-header-label, window.theme-comic button.func-group-header.expanded .func-group-header-label {
+    color: inherit; font-weight: 900;
+}
+window.theme-comic button.back-btn {
+    background-color: #f2d023; color: #111; border: 3px solid #111;
+    border-radius: 999px 999px 999px 0; font-weight: 900; box-shadow: 3px 3px 0 #111;
+}
+window.theme-comic button.back-btn:hover {
+    background-color: #fff6b0; color: #111; box-shadow: 1px 1px 0 #111;
+}
+window.theme-comic button.back-btn:active { background-color: #e11d48; color: #fff; }
+window.theme-comic .card, window.theme-comic textview, window.theme-comic textview text {
+    background-color: #fff; color: #111; border: 5px solid #111;
+    border-radius: 30px 30px 30px 0; box-shadow: 6px 6px 0 #111;
+}
+window.theme-comic #bottom-bar { background-color: #111; border-top: 5px solid #111; }
+window.theme-comic #status-label { color: #fff; font-weight: 800; }
+window.theme-comic button { font-weight: 900; }
+window.theme-comic button.destructive-action {
+    background-color: #e11d48; color: #fff; border: 3px solid #111;
+}
+window.theme-comic button.destructive-action:hover {
+    background-color: #f2d023; color: #111; box-shadow: 5px 5px 0 #111;
+}
+window.theme-comic button.destructive-action:active {
+    background-color: #fff; color: #111; box-shadow: 1px 1px 0 #111;
+}
+window.theme-comic popover, window.theme-comic popover.background {
+    background-color: #fff; border: 4px solid #111; border-radius: 0;
+}
+window.theme-comic .theme-row label { color: #111; font-weight: 900; }
+""",
+
+    # 8 全息边框窗：深蓝黑半透明、青色发光边框、选中青光、关闭/危险项粉
+    "holo": r"""
+window.theme-holo, window.theme-holo .background,
+window.theme-holo #content-area, window.theme-holo #detail-panel {
+    background-color: #081020; color: #d6f3ff;
+}
+window.theme-holo headerbar,
+window.theme-holo.csd > headerbar.titlebar {
+    background-color: #142846; color: #66f0ff; border-bottom: 1px solid #66f0ff;
+    box-shadow: 0 0 14px rgba(102,240,255,.35); min-height: 52px;
+}
+window.theme-holo headerbar .title { color: #66f0ff; font-weight: 800; text-shadow: 0 0 8px #66f0ff; }
+window.theme-holo headerbar .subtitle { color: #d6f3ff; }
+window.theme-holo headerbar button {
+    background-color: transparent; color: #66f0ff; border: 1px solid #66f0ff;
+    border-radius: 2px; box-shadow: 0 0 6px rgba(102,240,255,.25);
+}
+window.theme-holo headerbar button:hover {
+    background-color: rgba(102,240,255,.14); box-shadow: 0 0 12px rgba(102,240,255,.45);
+}
+window.theme-holo headerbar button:active, window.theme-holo headerbar button:checked {
+    background-color: rgba(102,240,255,.22); color: #fff;
+}
+window.theme-holo headerbar button.titlebutton { border-radius: 2px; }
+window.theme-holo headerbar button.titlebutton.close:hover {
+    border-color: #ff6ad5; color: #ff6ad5; box-shadow: 0 0 12px rgba(255,106,213,.5);
+}
+window.theme-holo entry.search, window.theme-holo entry.search-entry {
+    background-color: rgba(8,16,32,.7); color: #d6f3ff; border: 1px solid #66f0ff;
+    border-radius: 2px;
+}
+window.theme-holo entry.search:focus { box-shadow: 0 0 12px rgba(102,240,255,.5); border-color: #66f0ff; }
+window.theme-holo #cat-rail { background-color: rgba(10,24,44,.75); border-right: 1px solid #66f0ff; }
+window.theme-holo #sidebar-header label { color: #66f0ff; font-weight: 800; }
+window.theme-holo button.nav-item {
+    background-color: transparent; color: #d6f3ff; border: 1px solid rgba(102,240,255,.35);
+    border-radius: 2px; min-height: 40px; box-shadow: none; font-weight: 700;
+}
+window.theme-holo button.nav-item:hover { border-color: #66f0ff; background-color: rgba(102,240,255,.08); }
+window.theme-holo button.nav-item.selected {
+    background-color: rgba(102,240,255,.16); border-color: #66f0ff; color: #fff;
+    box-shadow: 0 0 12px rgba(102,240,255,.45), inset 2px 0 0 #66f0ff;
+}
+window.theme-holo button.nav-item.selected .nav-item-title { color: #fff; }
+window.theme-holo .nav-icon-wrap {
+    background-color: rgba(102,240,255,.08); border: 1px solid rgba(102,240,255,.3); border-radius: 2px;
+}
+window.theme-holo #page-title, window.theme-holo #about-page-title, window.theme-holo #changelog-page-title {
+    color: #66f0ff; font-weight: 800; text-shadow: 0 0 8px rgba(102,240,255,.5);
+}
+window.theme-holo #page-subtitle { color: #9fd8e8; }
+window.theme-holo button.func-tile, window.theme-holo button.search-tile {
+    background-color: rgba(102,240,255,.05); color: #d6f3ff;
+    border: 1px solid rgba(102,240,255,.35); border-radius: 2px;
+    box-shadow: none; min-height: 48px;
+}
+window.theme-holo button.func-tile:hover {
+    border-color: #66f0ff; background-color: rgba(102,240,255,.12);
+    box-shadow: 0 0 10px rgba(102,240,255,.35);
+}
+window.theme-holo button.func-tile:active { background-color: rgba(102,240,255,.22); color: #fff; }
+window.theme-holo button.func-tile.child-tile { background-color: rgba(102,240,255,.09); }
+window.theme-holo .func-group-label { color: #66f0ff; font-weight: 800; }
+window.theme-holo button.func-group-header {
+    background-color: rgba(102,240,255,.08); color: #66f0ff;
+    border: 1px solid #66f0ff; border-left: 3px solid #66f0ff; border-radius: 2px;
+    box-shadow: 0 0 8px rgba(102,240,255,.25); font-weight: 800;
+}
+window.theme-holo button.func-group-header.expanded { background-color: rgba(102,240,255,.18); }
+window.theme-holo .func-group-header-label, window.theme-holo button.func-group-header.expanded .func-group-header-label {
+    color: #66f0ff; font-weight: 800;
+}
+window.theme-holo button.back-btn {
+    background-color: transparent; color: #66f0ff; border: 1px solid #66f0ff; border-radius: 2px;
+}
+/* 关于 / 更新日志：青色全息框画在 ScrolledWindow 容器(.neon-frame)上，
+   四边完整、带多层青光；TextView 自身不再画框，避免右边框被裁掉。 */
+window.theme-holo .neon-frame {
+    background-color: rgba(8,16,32,.8);
+    border: 1px solid #66f0ff; border-radius: 2px;
+    box-shadow: 0 0 6px rgba(102,240,255,.55), 0 0 16px rgba(102,240,255,.30),
+                inset 0 0 10px rgba(102,240,255,.12);
+    margin: 0 2px 0 2px;
+}
+window.theme-holo .card, window.theme-holo textview, window.theme-holo textview text {
+    background-color: transparent; color: #d6f3ff;
+    border: none; border-radius: 0; box-shadow: none;
+}
+window.theme-holo #bottom-bar { background-color: #050714; border-top: 1px solid #163040; }
+window.theme-holo #status-label { color: #66f0ff; }
+window.theme-holo button.destructive-action {
+    background-color: transparent; color: #ff6ad5; border: 1px solid #ff6ad5;
+}
+window.theme-holo popover, window.theme-holo popover.background {
+    background-color: #081020; border: 1px solid #66f0ff; border-radius: 2px;
+}
+window.theme-holo .theme-row label { color: #d6f3ff; }
+""",
+
+    # 9 底栏磁贴窗：去掉左侧分类栏，大磁贴网格，底部分类导航，Steam 蓝
+    "dock": r"""
+window.theme-dock, window.theme-dock .background,
+window.theme-dock #content-area, window.theme-dock #detail-panel {
+    background-color: #12161f; color: #e8eef6;
+}
+window.theme-dock headerbar,
+window.theme-dock.csd > headerbar.titlebar {
+    background-color: #0e121a; border-bottom: 1px solid #243044; min-height: 50px;
+}
+window.theme-dock headerbar .title { color: #e8eef6; font-weight: 800; }
+window.theme-dock headerbar .subtitle { color: #1a9fff; }
+window.theme-dock headerbar button {
+    background-color: #1c2433; color: #e8eef6; border: 1px solid #2a3344; border-radius: 10px;
+}
+window.theme-dock headerbar button:hover { background-color: #253044; border-color: #1a9fff; }
+window.theme-dock headerbar button:active, window.theme-dock headerbar button:checked {
+    background-color: #1a9fff; color: #041018;
+}
+window.theme-dock headerbar button.titlebutton.close:hover { background-color: #d23c3c; color: #fff; }
+window.theme-dock entry.search, window.theme-dock entry.search-entry {
+    background-color: #0a0d14; color: #e8eef6; border: 1px solid #2c3a50; border-radius: 10px;
+}
+window.theme-dock entry.search:focus { border-color: #1a9fff; }
+window.theme-dock #cat-rail { }
+window.theme-dock button.nav-item { }
+window.theme-dock #dock-nav {
+    background-color: #0c1018; border-top: 1px solid #243044; padding: 8px;
+}
+window.theme-dock button.dock-cat {
+    background-color: transparent; color: #8b98a8; border: none; border-radius: 12px;
+    min-height: 54px; padding: 6px 4px; font-size: 12px; font-weight: 700; box-shadow: none;
+}
+window.theme-dock button.dock-cat label { font-size: 12px; font-weight: 700; }
+window.theme-dock button.dock-cat:hover { background-color: rgba(26,159,255,.10); color: #cfe6ff; }
+window.theme-dock button.dock-cat.selected { background-color: rgba(26,159,255,.18); color: #7ecbff; }
+window.theme-dock #dock-main {
+    background-color: #12161f; padding: 16px;
+}
+window.theme-dock flowbox, window.theme-dock flowboxchild { background-color: transparent; }
+window.theme-dock button.func-tile, window.theme-dock button.search-tile {
+    background-image: linear-gradient(180deg, #1c2636, #151b26);
+    color: #e8eef6; border: 1px solid #2c3a50; border-radius: 16px;
+    min-height: 96px; min-width: 170px; padding: 14px; font-size: 14px; font-weight: 800;
+    box-shadow: none; margin: 0;
+}
+window.theme-dock button.func-tile:hover { border-color: #1a9fff; background-image: linear-gradient(180deg, #22314a, #182130); }
+window.theme-dock button.func-tile:active { background-color: #1a9fff; color: #041018; }
+window.theme-dock button.func-tile.child-tile {
+    background-image: linear-gradient(180deg, #182130, #141a24); min-height: 82px; margin: 0;
+}
+window.theme-dock .func-group, window.theme-dock button.func-group-header { }
+window.theme-dock .func-group-label { color: #7ecbff; font-weight: 800; }
+window.theme-dock #page-title, window.theme-dock #about-page-title, window.theme-dock #changelog-page-title {
+    color: #e8eef6; font-weight: 800;
+}
+window.theme-dock #page-subtitle { color: #1a9fff; }
+window.theme-dock button.back-btn {
+    background-color: #1c2433; color: #e8eef6; border: 1px solid #2c3a50; border-radius: 10px;
+}
+window.theme-dock .card, window.theme-dock textview, window.theme-dock textview text,
+window.theme-dock .text-tile {
+    background-color: #151b26; color: #e8eef6; border: 1px solid #2c3a50; border-radius: 16px;
+}
+/* 关于/更新日志：整块大面板占满主区宽度（不再被 FlowBox 挤成小格子） */
+window.theme-dock #dock-text {
+    background-color: #12161f; padding: 8px;
+}
+window.theme-dock #dock-text .text-tile {
+    border: 1px solid #2c3a50; border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.25);
+}
+window.theme-dock #dock-text textview,
+window.theme-dock #dock-text textview text {
+    background-color: transparent; border: none; border-radius: 0;
+    font-size: 15px; color: #e8eef6;
+}
+window.theme-dock #bottom-bar { background-color: #0a0d14; border-top: 1px solid #1c2430; }
+window.theme-dock #status-label { color: #8b98a8; }
+window.theme-dock button.destructive-action { background-color: #d23c3c; color: #fff; border: none; }
+window.theme-dock popover, window.theme-dock popover.background {
+    background-color: #151b26; border: 1px solid #2c3a50; border-radius: 14px;
+}
+window.theme-dock .theme-row label { color: #e8eef6; }
+""",
+
+    # 10 设置分栏窗：顶部分类胶囊分段，左侧功能名，右侧说明/详情，浅色系统设置页
+    "settings": r"""
+window.theme-settings, window.theme-settings .background,
+window.theme-settings #content-area, window.theme-settings #detail-panel {
+    background-color: #f3f3f3; color: #1a1a1a;
+}
+window.theme-settings headerbar,
+window.theme-settings.csd > headerbar.titlebar {
+    background-color: #f9f9f9; color: #1a1a1a;
+    border-bottom: 1px solid #e3e3e3; min-height: 50px; box-shadow: none;
+}
+/* 标题/副标题：连失焦(:backdrop)也保持深色，避免 GTK 默认把标题变灰 */
+window.theme-settings headerbar .title,
+window.theme-settings.csd > headerbar.titlebar .title,
+window.theme-settings headerbar:backdrop .title,
+window.theme-settings.csd > headerbar.titlebar:backdrop .title {
+    color: #1a1a1a; font-weight: 800;
+}
+window.theme-settings headerbar .subtitle,
+window.theme-settings.csd > headerbar.titlebar .subtitle,
+window.theme-settings headerbar:backdrop .subtitle,
+window.theme-settings.csd > headerbar.titlebar:backdrop .subtitle { color: #555; }
+window.theme-settings headerbar button {
+    background-color: #fff; color: #1a1a1a; border: 1px solid rgba(0,0,0,.16); border-radius: 8px;
+}
+window.theme-settings headerbar button:hover { background-color: #eaeaea; }
+window.theme-settings headerbar button:active, window.theme-settings headerbar button:checked {
+    background-color: #0067c0; color: #fff;
+}
+/* 右上角窗口按钮：浅灰底 + 深色边框 + 深色图标，白底上才看得见。
+   基础模板给的半透明白圆点在浅色标题栏上几乎隐形。 */
+window.theme-settings headerbar button.titlebutton,
+window.theme-settings headerbar button.titlebutton:hover {
+    background-color: #e6e6e6; color: #1a1a1a;
+    border: 1px solid rgba(0,0,0,.28); border-radius: 6px;
+    -gtk-icon-shadow: none;
+}
+window.theme-settings headerbar button.titlebutton image,
+window.theme-settings headerbar button.titlebutton:hover image {
+    color: #1a1a1a; -gtk-icon-shadow: none;
+}
+window.theme-settings headerbar button.titlebutton.close:hover { background-color: #c42b1c; color: #fff; border-color: #c42b1c; }
+window.theme-settings headerbar button.titlebutton.close:hover image { color: #fff; }
+window.theme-settings entry.search, window.theme-settings entry.search-entry {
+    background-color: #fff; color: #1a1a1a; border: 1px solid rgba(0,0,0,.18); border-radius: 8px;
+}
+window.theme-settings entry.search:focus { border-color: #0067c0; }
+window.theme-settings #cat-rail { }
+window.theme-settings button.nav-item { }
+window.theme-settings #settings-seg { background-color: #f3f3f3; padding: 10px 12px 4px 12px; }
+window.theme-settings button.settings-seg {
+    background-color: #e6e6e6; color: #222; border: none; border-radius: 999px;
+    min-height: 38px; padding: 4px 12px; font-size: 12px; font-weight: 700; box-shadow: none;
+}
+window.theme-settings button.settings-seg:hover { background-color: #d8d8d8; }
+window.theme-settings button.settings-seg.selected { background-color: #0067c0; color: #fff; }
+window.theme-settings #settings-main { background-color: #f3f3f3; }
+window.theme-settings #settings-list { background-color: #f3f3f3; padding: 8px; }
+window.theme-settings button.settings-fn {
+    background-color: #fff; color: #1a1a1a; border: none; border-radius: 8px;
+    min-height: 46px; font-weight: 700; box-shadow: none; margin: 0 0 6px 0;
+}
+window.theme-settings button.settings-fn:hover { background-color: #eef4fb; }
+window.theme-settings button.settings-fn.selected { background-color: #d6e8f8; color: #003a6d; }
+window.theme-settings button.settings-group,
+window.theme-settings button.settings-group:disabled {
+    background-color: transparent; color: #0067c0; border: none; border-radius: 8px;
+    min-height: 40px; font-weight: 800; box-shadow: none; margin: 4px 0 2px 0;
+    opacity: 1.0;
+}
+window.theme-settings button.settings-group:hover { background-color: #e6e6e6; }
+window.theme-settings #settings-detail {
+    background-color: #fff; border-radius: 12px; padding: 20px; margin: 0 12px 12px 0;
+}
+window.theme-settings #settings-detail-title { color: #1a1a1a; font-size: 22px; font-weight: 800; }
+window.theme-settings #settings-detail-body { color: #444; font-size: 14px; }
+window.theme-settings button.func-tile, window.theme-settings button.search-tile {
+    background-color: #fff; color: #1a1a1a; border: none; border-radius: 8px;
+    box-shadow: none; min-height: 46px; font-weight: 700;
+}
+window.theme-settings .func-group-header { }
+window.theme-settings .func-group-label { color: #0067c0; font-weight: 800; }
+window.theme-settings #page-title, window.theme-settings #about-page-title, window.theme-settings #changelog-page-title {
+    color: #1a1a1a; font-weight: 800;
+}
+window.theme-settings #page-subtitle { color: #666; }
+window.theme-settings button.back-btn {
+    background-color: #fff; color: #1a1a1a; border: 1px solid #ddd; border-radius: 8px;
+}
+window.theme-settings .card, window.theme-settings textview, window.theme-settings textview text {
+    background-color: #fff; color: #1a1a1a; border: 1px solid #e3e3e3; border-radius: 12px;
+}
+window.theme-settings #bottom-bar { background-color: #eee; border-top: 1px solid #e3e3e3; }
+window.theme-settings #status-label { color: #333; }
+window.theme-settings button.destructive-action { background-color: #c42b1c; color: #fff; border: none; }
+window.theme-settings popover, window.theme-settings popover.background {
+    background-color: #fff; border: 1px solid #ddd; border-radius: 10px;
+}
+window.theme-settings .theme-row label { color: #1a1a1a; }
+""",
+
+    # 11 线路站点窗：左侧彩色线路分类，右侧沿线站点式功能列表
+    "metro": r"""
+window.theme-metro, window.theme-metro .background,
+window.theme-metro #content-area, window.theme-metro #detail-panel {
+    background-color: #fff; color: #111;
+}
+window.theme-metro headerbar,
+window.theme-metro.csd > headerbar.titlebar {
+    background-color: #111; color: #fff; border-bottom: none; min-height: 50px; box-shadow: none;
+}
+window.theme-metro headerbar .title { color: #fff; font-weight: 800; }
+window.theme-metro headerbar .subtitle { color: #ccc; }
+window.theme-metro headerbar button {
+    background-color: #333; color: #fff; border: none; border-radius: 2px;
+}
+window.theme-metro headerbar button:hover { background-color: #555; }
+window.theme-metro headerbar button:active, window.theme-metro headerbar button:checked {
+    background-color: #fff; color: #111;
+}
+window.theme-metro headerbar button.titlebutton.close:hover { background-color: #ee2e24; color: #fff; }
+window.theme-metro entry.search, window.theme-metro entry.search-entry {
+    background-color: #fff; color: #111; border: 1px solid #c5ccd6; border-radius: 2px;
+}
+window.theme-metro entry.search:focus { border-color: #111; }
+window.theme-metro #cat-rail { }
+window.theme-metro button.nav-item { }
+window.theme-metro #metro-lines {
+    background-color: #f4f6f9; border-right: 1px solid #e0e4ea; padding: 12px;
+}
+window.theme-metro button.metro-line {
+    background-color: transparent; color: #111; border: none; border-radius: 8px;
+    min-height: 46px; font-size: 13px; font-weight: 800;
+    box-shadow: none; padding: 4px 10px 4px 20px; margin: 0 0 6px 0;
+}
+window.theme-metro button.metro-line:hover { background-color: #e8ecf2; }
+window.theme-metro button.metro-line.selected { background-color: #111; color: #fff; }
+window.theme-metro #metro-track { background-color: #fff; padding: 20px 26px; }
+window.theme-metro #metro-rail { background-color: #3dd6c6; min-width: 6px; margin: 0 16px 0 0; }
+window.theme-metro .station-dot {
+    background-color: #fff; border: 4px solid #3dd6c6; border-radius: 999px;
+    min-width: 16px; min-height: 16px; margin: 12px 8px 0 0;
+}
+window.theme-metro button.func-tile, window.theme-metro button.search-tile {
+    background-color: #f4f6f9; color: #111; border: none; border-radius: 10px;
+    box-shadow: none; min-height: 50px; font-weight: 800; margin: 0;
+}
+window.theme-metro button.func-tile:hover { background-color: #e8ecf2; }
+window.theme-metro button.func-tile:active { background-color: #111; color: #fff; }
+window.theme-metro button.func-tile.child-tile { background-color: #eef1f6; min-height: 46px; }
+window.theme-metro .func-group-header { }
+window.theme-metro .func-group-label { color: #111; font-weight: 800; }
+window.theme-metro #page-title, window.theme-metro #about-page-title, window.theme-metro #changelog-page-title {
+    color: #111; font-weight: 800;
+}
+window.theme-metro #page-subtitle { color: #555; }
+window.theme-metro button.back-btn {
+    background-color: #f4f6f9; color: #111; border: 1px solid #d8dde5; border-radius: 10px;
+}
+window.theme-metro .card, window.theme-metro textview, window.theme-metro textview text {
+    background-color: #fff; color: #111; border: 1px solid #c5ccd6; border-radius: 10px;
+}
+window.theme-metro #bottom-bar { background-color: #111; border-top: none; }
+window.theme-metro #status-label { color: #fff; }
+window.theme-metro button.destructive-action { background-color: #ee2e24; color: #fff; border: none; }
+window.theme-metro popover, window.theme-metro popover.background {
+    background-color: #fff; border: 1px solid #c5ccd6; border-radius: 10px;
+}
+window.theme-metro .theme-row label { color: #111; }
+""",
+}
+
+
+# 深色终端（cyber / neon / holo / dock / lea 跟这一套）
+_TERM_DARK_COLORS = ("#1a2336", "#e35d6a", "#3dd68c", "#e0c05c",
+                     "#5b8cff", "#b48cff", "#5cc8d0", "#c7d5e0",
+                     "#3a4a5a", "#ff7a8a", "#6be8a8", "#ffd97a",
+                     "#7aa0ff", "#c9a8ff", "#7fe0e8", "#ffffff")
+# 浅色终端（bru / mat / hc / comic / settings / metro 跟这一套）
+_TERM_LIGHT_COLORS = ("#e8edf5", "#d64555", "#1fa971", "#c48a1a",
                       "#4f6ef7", "#8b5cf6", "#0f9aa8", "#1a2236",
                       "#c5cede", "#e35a68", "#2cc084", "#e0a428",
                       "#6782ff", "#a78bfa", "#22b8c8", "#0f1522")
+# 每个主题对应的终端底色：dark/light 用原来的配色，其余按预览稿分组
+_TERM_LIGHT_THEMES = frozenset(("light", "bru", "mat", "hc", "comic", "settings", "metro"))
+_TERM_DARK_THEMES = frozenset(("dark", "cyber", "neon", "holo", "dock", "lea"))
+
+
+def build_css(theme_name=None):
+    """生成完整 CSS：基础模板 + 全部扩展主题覆盖层。
+
+    扩展主题样式按 window.theme-<id> 选择器隔离，未挂上对应 style class 时
+    完全不生效，因此深色/浅色仍然只看到原来的基础模板。
+    """
+    if theme_name == "light":
+        base = APP_CSS_TEMPLATE.format(**THEME_LIGHT)
+    else:
+        base = APP_CSS_TEMPLATE.format(**THEME_DARK)
+    extra = "\n".join(THEME_CSS_EXTRA.values())
+    return base + "\n/* ===== 扩展主题 ===== */\n" + extra
+
+def theme_palette(theme_name=None):
+    """返回当前或指定主题的配色字典（供 VTE 终端等读取）。"""
+    if theme_name is None:
+        try:
+            theme_name = load_theme_pref()
+        except Exception:
+            theme_name = "dark"
+    if theme_name == "light":
+        return THEME_LIGHT
+    return THEME_DARK
+
+def apply_terminal_theme(terminal):
+    """按当前主题设置 VTE 前景/背景与基础调色板。
+
+    dark/light 沿用原来的两套配色；11 个新主题按预览稿分组：
+      · bru / mat / hc / comic / settings / metro → 浅色终端
+      · cyber / neon / holo / dock / lea        → 深色终端
+    """
+    if terminal is None:
+        return
+    try:
+        mode = load_theme_pref()
+        pal = theme_palette(mode)
+        fg = Gdk.RGBA(); fg.parse(pal.get("term_fg", "#e8eefc"))
+        bg = Gdk.RGBA(); bg.parse(pal.get("term_bg", "#0b1018"))
+        if mode in _TERM_LIGHT_THEMES:
+            colors = _TERM_LIGHT_COLORS
         else:
-            colors = ("#1a2336", "#e35d6a", "#3dd68c", "#e0c05c",
-                      "#5b8cff", "#b48cff", "#5cc8d0", "#c7d5e0",
-                      "#3a4a5a", "#ff7a8a", "#6be8a8", "#ffd97a",
-                      "#7aa0ff", "#c9a8ff", "#7fe0e8", "#ffffff")
+            colors = _TERM_DARK_COLORS
         palette = []
         for hex_color in colors:
             c = Gdk.RGBA(); c.parse(hex_color); palette.append(c)
@@ -723,43 +2031,87 @@ def apply_terminal_theme(terminal):
 APP_CSS = build_css("dark")
 
 # ---------------------------------------------------------------------------
-# 主题配置：深色 / 浅色 / 跟随系统，持久化到 ~/.config/steamdeck_toolbox/config.json
+# 主题配置：深色 / 浅色 + 11 套扩展主题，持久化到
+# ~/.config/steamdeck_toolbox/config.json 的 theme 字段。
+# 默认深色；旧配置里的 system 或任何未知值读取时回退成 dark 并写回。
 # ---------------------------------------------------------------------------
-THEME_MODES = ("dark", "light", "system")
-THEME_LABELS = {"dark": "深色", "light": "浅色", "system": "跟随系统"}
+THEME_MODES = (
+    "dark", "light",
+    "bru", "cyber", "mat", "hc", "neon", "lea",
+    "comic", "holo", "dock", "settings", "metro",
+)
+THEME_LABELS = {
+    "dark": "深色", "light": "浅色",
+    "bru": "新野兽派", "cyber": "赛博朋克", "mat": "Material 柔彩",
+    "hc": "高对比大字", "neon": "霓虹工具铺", "lea": "皮革旅行箱窗",
+    "comic": "漫画格窗口", "holo": "全息边框窗", "dock": "底栏磁贴窗",
+    "settings": "设置分栏窗", "metro": "线路站点窗",
+}
+# 主区容器与默认 func 列表不同的主题（必须重建内容区布局）
+LAYOUT_THEMES = frozenset(("dock", "settings", "metro", "neon"))
+# 把左侧分类栏换成顶部分类胶囊 / 店铺招牌 / 分段条 / 底栏导航的主题
+RAIL_HIDDEN_THEMES = frozenset(("dock", "settings", "metro", "mat", "neon"))
+# 深色终端 / 浅色终端分组见 _TERM_LIGHT_THEMES / _TERM_DARK_THEMES
+# 线路站点窗：每条分类线路一种颜色
+METRO_LINE_COLORS = {
+    "support": "#3dd6c6", "changelog": "#3d5afe", "sysopt": "#f4b942",
+    "plugins": "#c45cff", "software": "#2a9d8f", "network": "#1a9fff",
+    "update": "#ee2e24",
+}
+# 霓虹工具铺：每块店招一种灯色（与预览页一致）
+NEON_SHOP_COLORS = {
+    "support": "#ff4fd8", "changelog": "#63f6ff", "sysopt": "#ffe566",
+    "plugins": "#7cff6a", "software": "#ff8a3d", "network": "#c9a0ff",
+    "update": "#ff5b7a",
+}
 
 _css_provider = None
 
 def _config_path():
     return os.path.join(os.path.expanduser("~"), ".config", "steamdeck_toolbox", "config.json")
 
+def _write_config_data(mutator):
+    """读取 config.json → 应用 mutator(data) → 写回。供主题/语言共用。"""
+    path = _config_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    data = {}
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f) or {}
+        except Exception:
+            data = {}
+    mutator(data)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
 def load_theme_pref():
-    """读取用户偏好，默认跟随系统。"""
+    """读取主题偏好，默认 dark。
+
+    兼容旧配置：theme=system 或未知值（含旧版写下的 system）一律回退成
+    dark 并立即写回，保证界面不会空白、重启后仍是一致的深色。
+    """
     try:
         with open(_config_path(), "r", encoding="utf-8") as f:
             data = json.load(f)
-        mode = data.get("theme", "system")
-        return mode if mode in THEME_MODES else "system"
+        mode = data.get("theme", "dark")
     except Exception:
-        return "system"
+        return "dark"
+    if mode in THEME_MODES:
+        return mode
+    # system / 未知值 → dark，并写回配置
+    try:
+        _write_config_data(lambda d: d.update({"theme": "dark"}))
+    except Exception as e:
+        print(f"回写默认主题失败: {e}")
+    return "dark"
 
 def save_theme_pref(mode):
     """保存主题偏好，失败不影响使用。"""
     if mode not in THEME_MODES:
         return False
     try:
-        path = _config_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        data = {}
-        if os.path.isfile(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f) or {}
-            except Exception:
-                data = {}
-        data["theme"] = mode
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        _write_config_data(lambda d: d.update({"theme": mode}))
         return True
     except Exception as e:
         print(f"保存主题设置失败: {e}")
@@ -860,6 +2212,7 @@ _UI_STRINGS = {
     "app_title": {"zh": "Steam Deck 工具箱", "en": "Steam Deck Toolbox"},
     "search_placeholder": {"zh": "全局搜索功能...", "en": "Search all functions..."},
     "theme_tooltip": {"zh": "切换深色 / 浅色模式", "en": "Switch dark / light mode"},
+    "theme_button": {"zh": "主题", "en": "Theme"},
     "lang_tooltip": {"zh": "切换语言 / Language", "en": "Switch language / 语言"},
     "lang_button": {"zh": "语言", "en": "Language"},
     "lang_zh": {"zh": "中文", "en": "中文"},
@@ -882,6 +2235,17 @@ _UI_STRINGS = {
     "theme_dark": {"zh": "深色", "en": "Dark"},
     "theme_light": {"zh": "浅色", "en": "Light"},
     "theme_system": {"zh": "跟随系统", "en": "Follow System"},
+    "theme_bru": {"zh": "新野兽派", "en": "Neo-Brutalist"},
+    "theme_cyber": {"zh": "赛博朋克", "en": "Cyberpunk"},
+    "theme_mat": {"zh": "Material 柔彩", "en": "Soft Material"},
+    "theme_hc": {"zh": "高对比大字", "en": "High Contrast Large Type"},
+    "theme_neon": {"zh": "霓虹工具铺", "en": "Neon Tool Shop"},
+    "theme_lea": {"zh": "皮革旅行箱窗", "en": "Leather Suitcase"},
+    "theme_comic": {"zh": "漫画格窗口", "en": "Comic Panel"},
+    "theme_holo": {"zh": "全息边框窗", "en": "Holographic Frame"},
+    "theme_dock": {"zh": "底栏磁贴窗", "en": "Bottom Dock Tiles"},
+    "theme_settings": {"zh": "设置分栏窗", "en": "Settings Split View"},
+    "theme_metro": {"zh": "线路站点窗", "en": "Transit Map"},
     "cat_support": {"zh": "支持和维护", "en": "Support & Maintenance"},
     "cat_changelog": {"zh": "更新日志", "en": "Changelog"},
     "cat_sysopt": {"zh": "系统优化", "en": "System Optimization"},
@@ -1055,6 +2419,57 @@ _FUNC_LABELS = {
     "uninstall_third_party_platform": {"zh": "卸载第三方游戏平台", "en": "Uninstall Third-party Game Platform"},
 }
 
+# ---------------------------------------------------------------------------
+# 设置分栏窗：每个功能的一句话简介（中英双语）。
+# key 与 _FUNC_LABELS / category_tree 里的功能 key 一致；
+# 用 func_desc(key) 读取，缺失时回退到通用说明。
+# ---------------------------------------------------------------------------
+_FUNC_DESCS = {
+    "install_chinese_source": {"zh": "在 pacman 国内镜像源与官方源之间切换，解决下载慢或找不到软件包的问题。", "en": "Switch pacman mirrors between China and official sources to fix slow downloads or missing packages."},
+    "adjust_swap": {"zh": "调整虚拟内存（swap / zram）大小与配置，改善内存紧张时的卡顿。", "en": "Adjust swap / zRAM size and settings to reduce stutter when memory is tight."},
+    "fix_disk_write_error": {"zh": "检查并修复 NTFS/磁盘写入错误，处理分区变只读、无法写入等故障。", "en": "Check and fix NTFS / disk write errors, such as a partition turning read-only."},
+    "clear_hosts_cache": {"zh": "清理 hosts 缓存并重置相关网络解析记录（修改前会自动备份）。", "en": "Clear the hosts cache and reset name-resolution records (auto-backup first)."},
+    "calibrate_joystick_stick": {"zh": "校准左右摇杆的中心点与行程，解决漂移、偏移问题。", "en": "Calibrate stick center and range to fix drift or offset."},
+    "calibrate_joystick_trigger": {"zh": "校准扳机键的按下行程与死区，让扳机触发更准确。", "en": "Calibrate trigger travel and dead zones for accurate input."},
+    "steamdeck_cache_manager": {"zh": "扫描并清理 Steam 下载缓存、着色器缓存等，释放磁盘空间。", "en": "Scan and clean Steam download / shader caches to free disk space."},
+    "ge_proton_manager": {"zh": "安装、更新或卸载 GE-Proton / CachyOS 等兼容层，提升游戏兼容性。", "en": "Install, update or remove GE-Proton / CachyOS compatibility layers."},
+    "emergency_steam_reset": {"zh": "备份后重置 Steam 客户端配置与缓存，用于卡启动、配置损坏等急救。", "en": "Back up then reset Steam client config and caches to fix startup hangs."},
+    "emergency_gamescope_reset": {"zh": "备份后清理 Gamescope / 游戏模式本地状态，用于黑屏、进不去游戏模式。", "en": "Back up then clear Gamescope / Game Mode state to fix black screens."},
+    "clover_install_or_reinstall": {"zh": "安装或重装 Clover 引导，用于多系统启动菜单（会写 EFI 分区，属高风险）。", "en": "Install or reinstall the Clover boot manager for multi-boot (writes EFI, high risk)."},
+    "fix_boot": {"zh": "修复 EFI 启动顺序，把 Clover 设为第一启动项，解决进不了引导菜单。", "en": "Fix EFI boot order and set Clover first when the boot menu is missing."},
+    "fix_shared_disk": {"zh": "自动挂载 Windows 的 NTFS 互通盘并写入 fstab，实现两系统共享文件。", "en": "Auto-mount the Windows NTFS shared disk via fstab for cross-OS file access."},
+    "install_anydesk": {"zh": "安装 AnyDesk 远程控制工具，方便从其它设备远程操作 Deck。", "en": "Install AnyDesk for remote control of your Deck from another device."},
+    "install_todesk": {"zh": "安装 ToDesk 远程控制工具，提供另一套远程桌面方案。", "en": "Install ToDesk, an alternative remote-desktop solution."},
+    "install_asklink": {"zh": "安装 AskLink 远程工具，用于远程连接与协助。", "en": "Install AskLink for remote connections and assistance."},
+    "install_flatpak_apps_gui": {"zh": "打开 Flatpak 应用安装窗口，搜索并安装 Flathub 上的应用。", "en": "Open the Flatpak installer to search and install apps from Flathub."},
+    "install_yellow_duck_software": {"zh": "安装小黄鸭（Lossless Scaling 类）补帧工具，提升游戏流畅度。", "en": "Install the Yellow Duck frame-generation tool for smoother gameplay."},
+    "install_third_party_platform": {"zh": "安装 Epic、GOG 等第三方游戏平台客户端。", "en": "Install third-party game clients such as Epic and GOG."},
+    "uninstall_third_party_platform": {"zh": "卸载已安装的第三方游戏平台客户端。", "en": "Uninstall previously installed third-party game clients."},
+    "install_uu_accelerator": {"zh": "安装 UU 加速器插件，改善联机游戏的延迟与丢包。", "en": "Install the UU accelerator plugin to reduce online-game latency."},
+    "install_xunyou_accelerator": {"zh": "安装迅游加速器插件，优化游戏网络连接。", "en": "Install the Xunyou accelerator plugin to optimize game networking."},
+    "install_qiyou_accelerator": {"zh": "安装奇游联机宝加速插件，改善联机体验。", "en": "Install the Qiyou accelerator plugin for a better online experience."},
+    "watt_toolkit_install": {"zh": "安装 Watt Toolkit（Steam++），提供网络加速与本地工具箱功能。", "en": "Install Watt Toolkit (Steam++) for network acceleration and local tools."},
+    "watt_toolkit_trust_cert": {"zh": "信任 Watt Toolkit 的本地证书，让加速功能正常工作。", "en": "Trust the Watt Toolkit local certificate so acceleration works."},
+    "watt_toolkit_uninstall": {"zh": "卸载 Watt Toolkit 并清理相关配置。", "en": "Uninstall Watt Toolkit and clean up its configuration."},
+    "install_plugin_store": {"zh": "安装 Decky 插件商店，之后才能安装各类 Deck 插件。", "en": "Install the Decky plugin store, required for other plugins."},
+    "uninstall_plugin_store": {"zh": "卸载 Decky 插件商店及其插件数据（高风险，会删除插件）。", "en": "Uninstall the Decky plugin store and its data (high risk, removes plugins)."},
+    "install_tomoon_install": {"zh": "安装或更新 ToMoon 插件（网络/工具类）。", "en": "Install or update the ToMoon plugin."},
+    "install_tomoon_uninstall": {"zh": "卸载 ToMoon 插件。", "en": "Uninstall the ToMoon plugin."},
+    "install_freedeck_install": {"zh": "安装或更新 FreeDeck 插件。", "en": "Install or update the FreeDeck plugin."},
+    "install_freedeck_uninstall": {"zh": "卸载 FreeDeck 插件。", "en": "Uninstall the FreeDeck plugin."},
+    "install_decky_lsfg_vk_install": {"zh": "安装或更新 LSFG-VK 补帧插件。", "en": "Install or update the LSFG-VK frame-generation plugin."},
+    "install_decky_lsfg_vk_uninstall": {"zh": "卸载 LSFG-VK 补帧插件。", "en": "Uninstall the LSFG-VK plugin."},
+    "install_decky_framegen_install": {"zh": "安装或更新 Framegen 补帧插件。", "en": "Install or update the Framegen plugin."},
+    "install_decky_framegen_uninstall": {"zh": "卸载 Framegen 补帧插件。", "en": "Uninstall the Framegen plugin."},
+    "install_cheatdeck_install": {"zh": "安装或更新 CheatDeck 插件（游戏修改器）。", "en": "Install or update the CheatDeck plugin (game trainers)."},
+    "install_cheatdeck_uninstall": {"zh": "卸载 CheatDeck 插件。", "en": "Uninstall the CheatDeck plugin."},
+    "update_installed_apps": {"zh": "批量更新已安装的应用（Flatpak / 系统包等）。", "en": "Batch-update installed apps (Flatpak / system packages)."},
+    "uninstall_anydesk": {"zh": "卸载 AnyDesk 远程控制工具。", "en": "Uninstall AnyDesk."},
+    "uninstall_todesk": {"zh": "卸载 ToDesk 远程控制工具。", "en": "Uninstall ToDesk."},
+    "uninstall_other_flatpak_apps": {"zh": "打开卸载窗口，选择并移除已安装的 Flatpak 应用。", "en": "Open the uninstaller to remove installed Flatpak apps."},
+}
+
+
 _DANGER_HINTS_I18N = {
     "clover_install_or_reinstall": {
         "zh": ("该功能会向 EFI 系统分区写入 Clover 引导文件，"
@@ -1118,8 +2533,20 @@ def fl(key):
         return key
     return entry.get(_current_lang) or entry.get("zh") or key
 
+def func_desc(key):
+    """设置分栏窗用：每个功能的一句话简介（中英双语）。"""
+    entry = _FUNC_DESCS.get(key)
+    if not entry:
+        return ""
+    return entry.get(_current_lang) or entry.get("zh") or ""
+
 def theme_label(mode):
-    return t(f"theme_{mode}")
+    """主题菜单显示名：优先 _UI_STRINGS，缺失时回退 THEME_LABELS。"""
+    key = f"theme_{mode}"
+    s = t(key)
+    if s == key:
+        return THEME_LABELS.get(mode, mode)
+    return s
 
 def system_type_display(system_type):
     """system_type 内部仍为「双系统」/「单系统」，仅显示时翻译。"""
@@ -1139,7 +2566,22 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-11（v2.1.3）
+CHANGELOG_BODY_ZH = """2026-11-11（v2.2.0）
+【新增：界面主题】
+- 新增 11 套界面主题：新野兽派、赛博朋克、Material 柔彩、高对比大字、霓虹工具铺、
+  皮革旅行箱窗、漫画格窗口、全息边框窗、底栏磁贴窗、设置分栏窗、线路站点窗，
+  可在标题栏「主题」菜单中切换，选择会自动保存
+- 主题选项保留深色、浅色，去掉「跟随系统」
+- 标题栏主题按钮改为文字「主题」（英文界面显示 Theme），不再使用图标
+
+【问题修复：互通盘】
+- 「修复互通盘」遇到 NTFS 脏标志、休眠/快速启动或未干净卸载时，不再只提示用户
+  按步骤手动处理：会自动用 ntfsfix 清除脏标志并重新挂成读写。预检发现不能读写、
+  挂上后被降级为只读、或挂载失败时都会走这条自动修复；成功后直接提示已挂载。
+  只有自动修复失败时，才给出进 Windows 关快速启动完整关机、或应急只读/强制挂载
+  等后续办法
+
+2026-11-11（v2.1.3）
 【维护：安装与自更新】
 - 本次只改链接，没有功能变化
 - 安装与自更新的 GitHub 地址改为 `main` 分支，不再使用 `master`
@@ -1792,7 +3234,26 @@ CHANGELOG_BODY_ZH = """2026-11-11（v2.1.3）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-11 (v2.1.3)
+CHANGELOG_BODY_EN = """2026-11-11 (v2.2.0)
+[New: UI themes]
+- Added 11 UI themes: Neo-Brutalist, Cyberpunk, Soft Material, High Contrast Large Type,
+  Neon Tool Shop, Leather Suitcase, Comic Panel, Holographic Frame, Bottom Dock Tiles,
+  Settings Split View, and Transit Map. Switch them from the header Theme menu; the
+  choice is saved automatically.
+- The theme menu still includes Dark and Light; "Follow System" has been removed.
+- The header theme control is now a text button labeled "Theme" ("主题" in the Chinese UI),
+  no longer an icon.
+
+[Bug fixes: shared disk]
+- "Fix Shared Disk" no longer only prints manual steps when an NTFS volume has a dirty
+  flag, is hibernated / using Fast Startup, or was not cleanly unmounted: it now runs
+  ntfsfix to clear the dirty flag and remounts the volume read-write automatically.
+  This auto-repair runs on a failed pre-check, when a mount is downgraded to read-only,
+  and when the mount itself fails. On success it reports the disk as mounted; only if
+  auto-repair fails does it still suggest a full Windows shutdown with Fast Startup
+  disabled, or an emergency read-only / forced mount.
+
+2026-11-11 (v2.1.3)
 [Maintenance: install and self-update]
 - Link migration only; no feature changes
 - Install and self-update URLs now use the GitHub `main` branch instead of `master`
@@ -2452,9 +3913,8 @@ def build_category_tree():
 
 
 
-# 系统真实配色方案的快照。
-# 注意：apply_app_css 会去改 GTK 的 prefer-dark 让原生控件跟着变，
-# 如果不先记录系统原始值，选“跟随系统”时读到的就是自己被改写过的值（自我污染）。
+# 旧的「跟随系统」配色探测：现在主题菜单不再提供 system，保留这套代码
+# 仅为向后兼容（旧配置里的 system 由 load_theme_pref 直接回退成 dark）。
 _system_theme = None
 
 def _detect_system_theme():
@@ -2492,13 +3952,20 @@ def reset_system_theme_cache():
     return _system_theme
 
 def resolve_theme_mode(mode):
-    """把 system 解析成实际生效的 dark/light。使用启动时记录的系统快照，避免自我污染。"""
-    if mode in ("dark", "light"):
+    """返回实际生效的样式主题 id。
+
+    dark/light 及 11 套扩展主题一律返回自身（不能再折成 dark/light，否则
+    扩展主题的 class 与样式会丢）；旧的 system 仅作兼容，回退成 dark。
+    """
+    if mode in THEME_MODES:
         return mode
-    global _system_theme
-    if _system_theme is None:
-        reset_system_theme_cache()
-    return _system_theme or "light"
+    if mode == "system":
+        return "dark"
+    return "dark"
+
+# 该主题是否需要深色原生控件（对话框/菜单等）：按终端深浅分组
+def theme_prefer_dark(mode):
+    return resolve_theme_mode(mode) in _TERM_DARK_THEMES
 
 def compute_window_size(fallback_w=1040, fallback_h=680,
                         min_w=900, min_h=580, scale=1.0):
@@ -2715,7 +4182,11 @@ def fix_dialog_size(dlg):
 
 
 def apply_app_css(mode=None):
-    """应用主题样式；mode 为 dark/light/system，None 表示使用已保存的偏好。"""
+    """应用主题样式；mode 为任一 THEME_MODES，None 表示使用已保存的偏好。
+
+    基础 CSS 里包含全部扩展主题的覆盖层，但只有窗口挂上 theme-<id> 的
+    style class 时才会生效；class 由 MainWindow._apply_theme_class 管理。
+    """
     global _css_provider
     try:
         if mode is None:
@@ -2731,7 +4202,8 @@ def apply_app_css(mode=None):
         try:
             settings = Gtk.Settings.get_default()
             if settings is not None:
-                settings.set_property("gtk-application-prefer-dark-theme", resolved == "dark")
+                settings.set_property("gtk-application-prefer-dark-theme",
+                                      theme_prefer_dark(resolved))
                 # 让 GtkDialog 使用 CSD 标题栏。否则 KDE/KWin 会用系统主题绘制对话框
                 # 标题区，浅色系统主题 + 深色应用主题时表现为一条白边，CSS 无法覆盖。
                 try:
@@ -2757,6 +4229,41 @@ def apply_app_css(mode=None):
 
     except Exception as e:
         print(f"应用样式失败: {e}")
+
+
+def current_theme_id():
+    """当前生效的主题 id（dark/light 返回自身，扩展主题返回自身 id）。"""
+    return resolve_theme_mode(load_theme_pref())
+
+
+def apply_theme_to_window(window, mode=None):
+    """给任意窗口挂上当前主题的 style class，让它的 CSS 跟随主题。
+
+    基础 CSS 是全局 provider，扩展主题样式靠 window.theme-<id> 选择器生效，
+    所以只要每个窗口挂上对应 class，任务窗 / 弹窗 / 检查更新窗都会自动
+    使用与主窗口一致的主题。切换主题时会先清掉所有旧的 theme-* class。
+    """
+    if window is None:
+        return
+    try:
+        ctx = window.get_style_context()
+        for rid in THEME_MODES:
+            ctx.remove_class(f"theme-{rid}")
+        rid = resolve_theme_mode(mode) if mode is not None else current_theme_id()
+        if rid not in ("dark", "light") and rid in THEME_CSS_EXTRA:
+            ctx.add_class(f"theme-{rid}")
+    except Exception:
+        pass
+
+
+def refresh_all_window_themes(mode=None):
+    """主题切换后，把所有已打开的顶层窗口的 class 一起刷新。"""
+    try:
+        rid = resolve_theme_mode(mode) if mode is not None else current_theme_id()
+        for win in Gtk.Window.list_toplevels():
+            apply_theme_to_window(win, rid)
+    except Exception:
+        pass
 
 def load_icon_pixbuf(name, size=24):
     """优先加载脚本目录 emoji_icons/ 下的本地图标，其次使用内嵌图标。"""
@@ -4408,39 +5915,75 @@ dmesg_since() {
     sudo dmesg 2>/dev/null | tail -n "+$(( mark + 1 ))"
 }
 
-# 挂载失败时，根据本次新增的内核日志给出可操作的处理步骤
+# 自动清除 NTFS 脏标志并重新挂载（原「方案 B」）。
+# 前置条件：fix_shared_disk 开头已 sudo -v 拿到授权、只读模式已按需关闭、
+#           ntfsprogs(含 ntfsfix) 已在步骤2自动装好。
+# 返回 0 = 已清标志并成功读写挂载；1 = 自动修复失败（调用方再给简短提示）。
+ntfs_auto_clear_dirty() {
+    local dev="$1" mp="$2"
+    echo -e "${CYAN}  → 检测到脏标志，正在自动清除并重试挂载（无需手动操作）...${NC}"
+    # 卷可能已被内核以只读/失败状态占用，先卸载再修
+    sudo umount "$dev" 2>/dev/null || sudo umount -f "$dev" 2>/dev/null
+    if ! command -v ntfsfix &>/dev/null; then
+        # 兜底：步骤2没装上就再装一次（sudo 密码已在开头缓存）
+        if command -v steamos-readonly &>/dev/null; then
+            sudo steamos-readonly disable 2>/dev/null
+        fi
+        if command -v pacman &>/dev/null; then
+            sudo pacman -S --needed --noconfirm ntfsprogs >/dev/null 2>&1
+        elif command -v apt-get &>/dev/null; then
+            sudo apt-get install -y ntfs-3g >/dev/null 2>&1
+        fi
+        hash -r 2>/dev/null || true
+    fi
+    if ! command -v ntfsfix &>/dev/null; then
+        echo -e "${RED}  ✗ 缺少 ntfsfix，无法自动清除脏标志。${NC}"
+        return 1
+    fi
+    # -d/--clear-dirty：清掉卷上的 dirty 标志，否则 ntfs3 仍会拒绝挂载
+    if sudo ntfsfix -d "$dev" 2>/dev/null; then
+        echo -e "${GREEN}  ✓ 已清除脏标志${NC}"
+    else
+        echo -e "${RED}  ✗ ntfsfix 清除脏标志失败。${NC}"
+        echo -e "${YELLOW}    卷可能损坏较严重，请在 Windows 里运行 chkdsk /f 后再试。${NC}"
+        return 1
+    fi
+    # 重新挂载（按 fstab；失败再用 UUID 兜底），并确认真的是读写
+    sudo mount "$mp" 2>/dev/null || sudo mount "$dev" "$mp" 2>/dev/null
+    if ! mountpoint -q "$mp" 2>/dev/null; then
+        echo -e "${RED}  ✗ 清标志后仍无法挂载。${NC}"
+        return 1
+    fi
+    if ntfs_mountpoint_is_ro "$mp"; then
+        echo -e "${RED}  ✗ 清标志后仍被挂载为只读。${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}  ✓ 互通盘已挂载成功（读写）：$mp${NC}"
+    return 0
+}
+
+# 挂载失败时：如果是脏标志/休眠/未干净卸载，直接自动执行方案 B 并重挂；
+# 只有自动修复也失败、或不是这类原因时，才打印简短排查提示。
+# 返回 0 = 已自动修复成功；1 = 仍需人工处理。
 ntfs_explain_failure() {
     local dev="$1" mp="$2" log="$3"
-    local hit=0
-    if echo "$log" | grep -qiE 'volume is dirty|"force" flag is not set'; then
-        hit=1
-        echo -e "${YELLOW}    诊断：卷上带有 NTFS 脏标志(dirty)，内核 ntfs3 驱动据此拒绝挂载。${NC}"
-    elif echo "$log" | grep -qiE 'hibernat'; then
-        hit=1
-        echo -e "${YELLOW}    诊断：Windows 处于休眠/快速启动状态，卷被标记为不可安全写入。${NC}"
-    elif echo "$log" | grep -qiE 'unclean|not clean|chkdsk'; then
-        hit=1
-        echo -e "${YELLOW}    诊断：文件系统处于未干净卸载状态，需要先修复再挂载。${NC}"
-    fi
-    if [ $hit -eq 1 ]; then
-        echo -e "${CYAN}    按顺序尝试：${NC}"
+    if echo "$log" | grep -qiE 'volume is dirty|"force" flag is not set|hibernat|unclean|not clean|chkdsk'; then
+        echo -e "${YELLOW}    诊断：卷上带有 NTFS 脏标志/休眠标记，内核 ntfs3 驱动据此拒绝挂载。${NC}"
+        if ntfs_auto_clear_dirty "$dev" "$mp"; then
+            return 0
+        fi
+        echo -e "${CYAN}    自动修复未成功，可尝试：${NC}"
         echo "      a) 进 Windows 关闭「快速启动」后选择「关机」，再回到 SteamOS 重试（最干净）"
-        echo "      b) 在本机清除标志："
-        echo "           sudo steamos-readonly disable"
-        echo "           sudo pacman -S ntfsprogs"
-        echo "           sudo umount $dev 2>/dev/null; sudo ntfsfix -d $dev"
-        echo "         然后重新运行本功能"
-        echo "      c) 应急只读挂载先取数据：sudo mount -o ro $dev $mp"
-        echo "      d) 应急读写（不清标志，有损坏元数据风险）："
+        echo "      b) 应急只读挂载先取数据：sudo mount -o ro $dev $mp"
+        echo "      c) 应急读写（不清标志，有损坏元数据风险）："
         echo "           sudo mount -t ntfs3 -o force,uid=$(id -u),gid=$(id -g) $dev $mp"
     else
         echo -e "${CYAN}    常见原因：${NC}"
-        echo "      a) 卷有 dirty/休眠标志 → 进 Windows 关闭快速启动并完整关机，"
-        echo "         或安装 ntfsprogs 后用 sudo ntfsfix -d $dev 清理"
-        echo "      b) 该分区是 Windows 恢复分区 → 本功能已自动跳过，不需要挂载"
-        echo "      c) 设备被占用 → 先 sudo umount $dev 再重试"
-        echo "      d) fstab 或挂载点异常 → 检查 /etc/fstab 与 $mp 的属主权限"
+        echo "      a) 该分区是 Windows 恢复分区 → 本功能已自动跳过，不需要挂载"
+        echo "      b) 设备被占用 → 先 sudo umount $dev 再重试"
+        echo "      c) fstab 或挂载点异常 → 检查 /etc/fstab 与 $mp 的属主权限"
     fi
+    return 1
 }
 
 # 挂载前预检：ntfs-3g.probe 随 ntfs-3g 包一起提供，不需要 ntfsprogs。
@@ -4926,9 +6469,14 @@ fix_shared_disk() {
                     fi
                     ((fail_count++))
                 elif ntfs_mountpoint_is_ro "$mount_point"; then
-                    echo -e "${YELLOW}  ✗ 仍为只读挂载，无法写入文件。${NC}"
-                    ntfs_explain_readonly "$device" "$mount_point"
-                    ((fail_count++))
+                    # 重新挂载后仍是只读：多半是脏标志，自动清标志再挂一次
+                    if ntfs_auto_clear_dirty "$device" "$mount_point"; then
+                        :
+                    else
+                        echo -e "${YELLOW}  ✗ 仍为只读挂载，无法写入文件。${NC}"
+                        ntfs_explain_readonly "$device" "$mount_point"
+                        ((fail_count++))
+                    fi
                 else
                     echo -e "${GREEN}  ✓ 已切换为读写挂载：$mount_point${NC}"
                 fi
@@ -4940,30 +6488,44 @@ fix_shared_disk() {
             # 避免把开机以来累积的旧 NTFS 报错当成本次错误。
             local _dmark _mlog
             _dmark="$(dmesg_line_count)"
-            # 挂载前预检：能提前发现「挂上也只会是只读」的情况，先把原因讲清楚
+            # 挂载前预检：脏标志/休眠/未干净卸载会直接导致挂载被拒或被降级为
+            # 只读。这种情况不再提示用户手动处理，直接自动清标志（方案 B）并重挂。
             local _prc=0
             ntfs_probe_writable "$device" || _prc=$?
             if [ "$_prc" -eq 1 ]; then
-                echo -e "${YELLOW}  预检提示：该卷当前不允许读写挂载（脏标志/休眠/未干净卸载）。${NC}"
+                echo -e "${YELLOW}  预检：该卷带有脏标志/休眠标记，不允许读写挂载。${NC}"
+                if ntfs_auto_clear_dirty "$device" "$mount_point"; then
+                    # 已自动修好并挂载成功，跳过下面的常规挂载尝试
+                    continue
+                fi
+                echo -e "${YELLOW}  自动修复未成功，继续尝试常规挂载...${NC}"
             fi
             if sudo systemctl daemon-reload 2>/dev/null; then :; fi
             if sudo mount "$mount_point" 2>/dev/null || sudo mount -U "$uuid" "$mount_point" 2>/dev/null; then
                 if ntfs_mountpoint_is_ro "$mount_point"; then
                     echo -e "${YELLOW}  ⚠️  已挂载到 $mount_point，但被系统降级为「只读」${NC}"
-                    ntfs_explain_readonly "$device" "$mount_point"
-                    ((fail_count++))
+                    # 降级为只读基本都是脏标志，自动清标志后重挂，别让用户手动处理
+                    if ! ntfs_auto_clear_dirty "$device" "$mount_point"; then
+                        ntfs_explain_readonly "$device" "$mount_point"
+                        ((fail_count++))
+                    fi
                 else
                     echo -e "${GREEN}  ✓ 挂载成功到 $mount_point（读写）${NC}"
                 fi
             else
                 _mlog="$(dmesg_since "$_dmark")"
                 echo -e "${RED}  ✗ 挂载失败。${NC}"
-                if [ -n "$_mlog" ]; then
-                    echo "  本次操作期间的 dmesg 输出："
-                    echo "$_mlog" | grep -iE 'ntfs|fuseblk' | tail -8 | sed 's/^/    /'
+                # 脏标志/休眠等可自动修复的情况：直接清标志并重挂，成功就不再算失败、
+                # 也不再打印 A/B/C/D 那串提示，最终把互通盘挂上即可。
+                if ntfs_explain_failure "$device" "$mount_point" "$_mlog"; then
+                    :   # 已自动修复并成功挂载
+                else
+                    if [ -n "$_mlog" ]; then
+                        echo "  本次操作期间的 dmesg 输出："
+                        echo "$_mlog" | grep -iE 'ntfs|fuseblk' | tail -8 | sed 's/^/    /'
+                    fi
+                    ((fail_count++))
                 fi
-                ntfs_explain_failure "$device" "$mount_point" "$_mlog"
-                ((fail_count++))
             fi
         fi
     done
@@ -10879,38 +12441,71 @@ dmesg_since() {
 }
 
 # Turn a failed mount into actionable steps, based on this operation's kernel log
+# Automatically clear the NTFS dirty flag and re-mount (old "option B").
+# Prerequisites: fix_shared_disk already ran sudo -v, disabled read-only mode,
+# and auto-installed ntfsprogs (ntfsfix) in step 2.
+# Returns 0 = flag cleared and mounted read-write; 1 = auto repair failed.
+ntfs_auto_clear_dirty() {
+    local dev="$1" mp="$2"
+    echo -e "${CYAN}  -> Dirty flag detected; clearing it and retrying the mount automatically...${NC}"
+    sudo umount "$dev" 2>/dev/null || sudo umount -f "$dev" 2>/dev/null
+    if ! command -v ntfsfix &>/dev/null; then
+        if command -v steamos-readonly &>/dev/null; then
+            sudo steamos-readonly disable 2>/dev/null
+        fi
+        if command -v pacman &>/dev/null; then
+            sudo pacman -S --needed --noconfirm ntfsprogs >/dev/null 2>&1
+        elif command -v apt-get &>/dev/null; then
+            sudo apt-get install -y ntfs-3g >/dev/null 2>&1
+        fi
+        hash -r 2>/dev/null || true
+    fi
+    if ! command -v ntfsfix &>/dev/null; then
+        echo -e "${RED}  x ntfsfix is missing; cannot clear the dirty flag.${NC}"
+        return 1
+    fi
+    if sudo ntfsfix -d "$dev" 2>/dev/null; then
+        echo -e "${GREEN}  v Dirty flag cleared${NC}"
+    else
+        echo -e "${RED}  x ntfsfix failed to clear the dirty flag.${NC}"
+        echo -e "${YELLOW}    The volume may be badly damaged; run chkdsk /f in Windows and retry.${NC}"
+        return 1
+    fi
+    sudo mount "$mp" 2>/dev/null || sudo mount "$dev" "$mp" 2>/dev/null
+    if ! mountpoint -q "$mp" 2>/dev/null; then
+        echo -e "${RED}  x Still cannot mount after clearing the flag.${NC}"
+        return 1
+    fi
+    if ntfs_mountpoint_is_ro "$mp"; then
+        echo -e "${RED}  x Still mounted read-only after clearing the flag.${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}  v Shared disk mounted successfully (read-write): $mp${NC}"
+    return 0
+}
+
+# On a mount failure caused by a dirty / hibernated / unclean volume, run option B
+# automatically and retry; only show hints when the auto repair also fails.
+# Returns 0 = auto-repaired; 1 = manual action still needed.
 ntfs_explain_failure() {
     local dev="$1" mp="$2" log="$3"
-    local hit=0
-    if echo "$log" | grep -qiE 'volume is dirty|"force" flag is not set'; then
-        hit=1
-        echo -e "${YELLOW}    Diagnosis: the volume carries the NTFS dirty flag, so the in-kernel ntfs3 driver refuses to mount it.${NC}"
-    elif echo "$log" | grep -qiE 'hibernat'; then
-        hit=1
-        echo -e "${YELLOW}    Diagnosis: Windows is hibernated or Fast Startup is on, so the volume is not marked safe to write.${NC}"
-    elif echo "$log" | grep -qiE 'unclean|not clean|chkdsk'; then
-        hit=1
-        echo -e "${YELLOW}    Diagnosis: the filesystem was not cleanly unmounted and must be repaired before mounting.${NC}"
-    fi
-    if [ $hit -eq 1 ]; then
-        echo -e "${CYAN}    Try these in order:${NC}"
-        echo "      a) Boot Windows, turn off Fast Startup, choose Shut down, then come back and retry (cleanest)"
-        echo "      b) Clear the flag on this machine:"
-        echo "           sudo steamos-readonly disable"
-        echo "           sudo pacman -S ntfsprogs"
-        echo "           sudo umount $dev 2>/dev/null; sudo ntfsfix -d $dev"
-        echo "         then run this feature again"
-        echo "      c) Mount read-only for now, just to get at your data: sudo mount -o ro $dev $mp"
-        echo "      d) Emergency read-write (flag not cleared, risks corrupting metadata):"
+    if echo "$log" | grep -qiE 'volume is dirty|"force" flag is not set|hibernat|unclean|not clean|chkdsk'; then
+        echo -e "${YELLOW}    Diagnosis: the volume carries an NTFS dirty / hibernation flag, so the in-kernel ntfs3 driver refuses to mount it.${NC}"
+        if ntfs_auto_clear_dirty "$dev" "$mp"; then
+            return 0
+        fi
+        echo -e "${CYAN}    Auto repair did not succeed. You can try:${NC}"
+        echo "      a) Boot Windows, turn off Fast Startup, choose Shut down, then retry (cleanest)"
+        echo "      b) Mount read-only for now, just to get at your data: sudo mount -o ro $dev $mp"
+        echo "      c) Emergency read-write (flag not cleared, risks corrupting metadata):"
         echo "           sudo mount -t ntfs3 -o force,uid=$(id -u),gid=$(id -g) $dev $mp"
     else
         echo -e "${CYAN}    Common causes:${NC}"
-        echo "      a) dirty/hibernated flag on the volume -> turn off Fast Startup in Windows and shut"
-        echo "         down completely, or install ntfsprogs and run: sudo ntfsfix -d $dev"
-        echo "      b) this is a Windows recovery partition -> this feature already skips those"
-        echo "      c) the device is busy -> run sudo umount $dev first, then retry"
-        echo "      d) bad fstab entry or mountpoint -> check /etc/fstab and the owner of $mp"
+        echo "      a) this is a Windows recovery partition -> this feature already skips those"
+        echo "      b) the device is busy -> run sudo umount $dev first, then retry"
+        echo "      c) bad fstab entry or mountpoint -> check /etc/fstab and the owner of $mp"
     fi
+    return 1
 }
 
 # Pre-mount check: ntfs-3g.probe ships with the ntfs-3g package, so ntfsprogs is not needed.
@@ -11399,9 +12994,14 @@ fix_shared_disk() {
                     fi
                     ((fail_count++))
                 elif ntfs_mountpoint_is_ro "$mount_point"; then
-                    echo -e "${YELLOW}  ✗ Still read-only, files cannot be written.${NC}"
-                    ntfs_explain_readonly "$device" "$mount_point"
-                    ((fail_count++))
+                    # Still read-only after remount: usually a dirty flag, clear it automatically
+                    if ntfs_auto_clear_dirty "$device" "$mount_point"; then
+                        :
+                    else
+                        echo -e "${YELLOW}  ✗ Still read-only, files cannot be written.${NC}"
+                        ntfs_explain_readonly "$device" "$mount_point"
+                        ((fail_count++))
+                    fi
                 else
                     echo -e "${GREEN}  ✓ Remounted read-write: $mount_point${NC}"
                 fi
@@ -11413,30 +13013,44 @@ fix_shared_disk() {
             # instead of surfacing every NTFS error accumulated since boot.
             local _dmark _mlog
             _dmark="$(dmesg_line_count)"
-            # Pre-mount check: catch "it will only mount read-only" before it happens and explain why
+            # Pre-mount check: a dirty flag / hibernation / unclean unmount will make the
+            # mount fail or be downgraded to read-only. Clear the flag automatically
+            # (option B) and remount, instead of handing the user manual steps.
             local _prc=0
             ntfs_probe_writable "$device" || _prc=$?
             if [ "$_prc" -eq 1 ]; then
-                echo -e "${YELLOW}  Pre-check: this volume does not currently allow a read-write mount (dirty flag / hibernated / not cleanly unmounted).${NC}"
+                echo -e "${YELLOW}  Pre-check: this volume carries a dirty / hibernation flag and does not allow a read-write mount.${NC}"
+                if ntfs_auto_clear_dirty "$device" "$mount_point"; then
+                    continue
+                fi
+                echo -e "${YELLOW}  Auto repair did not succeed; continuing with the normal mount attempt...${NC}"
             fi
             if sudo systemctl daemon-reload 2>/dev/null; then :; fi
             if sudo mount "$mount_point" 2>/dev/null || sudo mount -U "$uuid" "$mount_point" 2>/dev/null; then
                 if ntfs_mountpoint_is_ro "$mount_point"; then
                     echo -e "${YELLOW}  ⚠️  Mounted at $mount_point, but the system downgraded it to READ-ONLY${NC}"
-                    ntfs_explain_readonly "$device" "$mount_point"
-                    ((fail_count++))
+                    # A read-only downgrade is almost always a dirty flag; clear it automatically
+                    if ! ntfs_auto_clear_dirty "$device" "$mount_point"; then
+                        ntfs_explain_readonly "$device" "$mount_point"
+                        ((fail_count++))
+                    fi
                 else
                     echo -e "${GREEN}  ✓ Mounted successfully at $mount_point (read-write)${NC}"
                 fi
             else
                 _mlog="$(dmesg_since "$_dmark")"
                 echo -e "${RED}  ✗ Mount failed.${NC}"
-                if [ -n "$_mlog" ]; then
-                    echo "  dmesg output during this operation:"
-                    echo "$_mlog" | grep -iE 'ntfs|fuseblk' | tail -8 | sed 's/^/    /'
+                # Dirty flag / hibernation / unclean unmount: clear the flag and
+                # re-mount automatically instead of printing the A/B/C/D hints.
+                if ntfs_explain_failure "$device" "$mount_point" "$_mlog"; then
+                    :   # auto-repaired and mounted successfully
+                else
+                    if [ -n "$_mlog" ]; then
+                        echo "  dmesg output during this operation:"
+                        echo "$_mlog" | grep -iE 'ntfs|fuseblk' | tail -8 | sed 's/^/    /'
+                    fi
+                    ((fail_count++))
                 fi
-                ntfs_explain_failure "$device" "$mount_point" "$_mlog"
-                ((fail_count++))
             fi
         fi
     done
@@ -15829,6 +17443,7 @@ def create_temp_script(extra_content=''):
 class TaskWindow(Gtk.Window):
     def __init__(self, parent, func_key, display_name):
         super().__init__(title=(f"Running Task: {display_name}" if get_lang() == "en" else f"执行任务: {display_name}"))
+        apply_theme_to_window(self)
         # 任务窗是终端窗口，比主窗口小一号；同样跟随屏幕自适应，
         # 避免大屏上终端太小、小屏上又顶到屏幕边缘。
         _task_w, _task_h = compute_window_size(fallback_w=760, fallback_h=520,
@@ -16301,8 +17916,10 @@ class MainWindow(Gtk.Window):
             pass
         # 按屏幕可用区域自适应窗口尺寸，避免在掌机 1280x800 上底边溢出、
         # 也避免在大屏上窗口过小。详见 compute_window_size()。
-        _win_w, _win_h = compute_window_size()
-        self.set_default_size(_win_w, _win_h)
+        # 记住这个目标尺寸：后续布局重建 / 关于页收紧发光框时，
+        # GTK 可能按内容把窗口吸小，需要再拉回到这个尺寸。
+        self._adaptive_w, self._adaptive_h = compute_window_size()
+        self.set_default_size(self._adaptive_w, self._adaptive_h)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.system_type = self.detect_system_type()
         self.task_window = None
@@ -16310,11 +17927,18 @@ class MainWindow(Gtk.Window):
         self._current_cat_id = None
         self._nav_before_search = "func"
         self._nav_buttons = {}
+        self._active_theme = None          # 当前挂在窗口上的 theme-<id> class
+        self._settings_selected_fn = None  # 设置分栏窗选中的功能名
 
         header = Gtk.HeaderBar()
         header.set_show_close_button(True)
         header.props.title = t("app_title")
         header.props.subtitle = f"v{VERSION}  ·  {system_type_display(self.system_type)}"
+        # 主题按钮改成文字后右侧更挤，允许标题略微偏左，避免被裁成「Steam Deck 工具...」
+        try:
+            header.set_centering_policy(Gtk.CenteringPolicy.LOOSE)
+        except Exception:
+            pass
         self._header = header
         self.set_titlebar(header)
 
@@ -16324,13 +17948,15 @@ class MainWindow(Gtk.Window):
         self.search_entry.connect("search-changed", self.on_search_changed)
         header.pack_end(self.search_entry)
 
+        # 顶栏主题入口和「语言」一样显示文字（中文「主题」/ 英文 Theme），
+        # 不再用太阳/月亮图标。
         self.theme_button = Gtk.MenuButton()
         self.theme_button.set_tooltip_text(t("theme_tooltip"))
         self.theme_button.set_relief(Gtk.ReliefStyle.NONE)
-        self._theme_icon = Gtk.Image.new_from_icon_name("weather-clear-night-symbolic",
-                                                        Gtk.IconSize.BUTTON)
-        self.theme_button.add(self._theme_icon)
+        self._theme_btn_label = Gtk.Label(label=t("theme_button"))
+        self.theme_button.add(self._theme_btn_label)
         header.pack_end(self.theme_button)
+        self._theme_icon = None          # 兼容旧调用：图标已不再使用
         self._build_theme_menu()
 
         self.lang_button = Gtk.MenuButton()
@@ -16353,17 +17979,29 @@ class MainWindow(Gtk.Window):
         main_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(main_vbox)
 
-        body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        body.set_vexpand(True)
-        main_vbox.pack_start(body, True, True, 0)
+        self.body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        self.body.set_vexpand(True)
+        # body 在所有顶部分类条之后才 pack_start，保证视觉顺序正确
+
+        # ---- 顶部分类 chips（Material 柔彩 / 设置分栏窗用） ----
+        self.cat_chips = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.cat_chips.set_name("mat-chips")
+        self.cat_chips.set_hexpand(True)
+        self.cat_chip_buttons = {}
+        for cid, title_key, _desc_key, _icon in category_meta():
+            b = Gtk.Button(label=t(title_key))
+            b.get_style_context().add_class("mat-chip")
+            b.connect("clicked", lambda *_a, c=cid: self.open_category(c))
+            self.cat_chip_buttons[cid] = b
+            self.cat_chips.pack_start(b, False, False, 0)
+        main_vbox.pack_start(self.cat_chips, False, False, 0)
 
         # ---- Left category rail ----
-        rail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        rail.set_name("cat-rail")
-        rail.set_size_request(248, -1)
-        rail.set_hexpand(False)
-        rail.set_vexpand(True)
-
+        self.rail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.rail.set_name("cat-rail")
+        self.rail.set_size_request(248, -1)
+        self.rail.set_hexpand(False)
+        self.rail.set_vexpand(True)
         sidebar_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         sidebar_header.set_name("sidebar-header")
         sidebar_icon = Gtk.Image.new_from_icon_name("input-gamepad-symbolic", Gtk.IconSize.BUTTON)
@@ -16371,16 +18009,112 @@ class MainWindow(Gtk.Window):
         self.sidebar_title.set_halign(Gtk.Align.START)
         sidebar_header.pack_start(sidebar_icon, False, False, 0)
         sidebar_header.pack_start(self.sidebar_title, False, False, 0)
-        rail.pack_start(sidebar_header, False, False, 0)
+        self.rail.pack_start(sidebar_header, False, False, 0)
 
-        nav_scroll = Gtk.ScrolledWindow()
-        nav_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        nav_scroll.set_vexpand(True)
+        self.nav_scroll = Gtk.ScrolledWindow()
+        self.nav_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.nav_scroll.set_vexpand(True)
         self.nav_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.nav_box.set_valign(Gtk.Align.START)
-        nav_scroll.add(self.nav_box)
-        rail.pack_start(nav_scroll, True, True, 0)
-        body.pack_start(rail, False, False, 0)
+        self.nav_scroll.add(self.nav_box)
+        self.rail.pack_start(self.nav_scroll, True, True, 0)
+        self.body.pack_start(self.rail, False, False, 0)
+
+        # 霓虹工具铺：左侧竖排发光招牌（中间一块招牌匾，不拉满整列）
+        self.neon_side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.neon_side.set_name("neon-sidebar")
+        self.neon_side.set_size_request(88, -1)
+        self.neon_side.set_hexpand(False)
+        self.neon_side.set_vexpand(True)
+        neon_sign_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        neon_sign_box.set_name("neon-sign")
+        neon_sign_box.set_valign(Gtk.Align.CENTER)
+        neon_sign_box.set_halign(Gtk.Align.CENTER)
+        neon_sign_box.set_vexpand(False)
+        self.neon_sign = Gtk.Label(label="工具箱")
+        try:
+            # 270°：从上往下读「工具箱」，90° 会变成倒着的「箱具工」
+            self.neon_sign.set_angle(270)
+        except Exception:
+            pass
+        neon_open = Gtk.Label(label="OPEN")
+        neon_open.get_style_context().add_class("neon-open")
+        neon_sign_box.pack_start(self.neon_sign, False, False, 0)
+        neon_sign_box.pack_start(neon_open, False, False, 0)
+        self.neon_side.pack_start(neon_sign_box, True, False, 0)
+        self.body.pack_start(self.neon_side, False, False, 0)
+
+        # 霓虹店招：FlowBox 方便英文分类名换行；其它主题不显示这一条
+        self.top_cat_nav = Gtk.FlowBox()
+        self.top_cat_nav.set_name("neon-shops")
+        self.top_cat_nav.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.top_cat_nav.set_max_children_per_line(7)
+        self.top_cat_nav.set_min_children_per_line(3)
+        self.top_cat_nav.set_column_spacing(8)
+        self.top_cat_nav.set_row_spacing(6)
+        self.top_cat_nav.set_homogeneous(False)
+        self.top_cat_nav.set_hexpand(True)
+        self.top_cat_nav.set_valign(Gtk.Align.START)
+        self.top_cat_buttons = {}
+        for cid, title_key, _desc_key, _icon in category_meta():
+            b = Gtk.Button(label=t(title_key))
+            b.get_style_context().add_class("neon-shop")
+            try:
+                b.set_name("neon-shop-" + cid)
+                color = NEON_SHOP_COLORS.get(cid, "#ff4fd8")
+                prov = Gtk.CssProvider()
+                prov.load_from_data(
+                    ("#neon-shop-%s { color: %s; border-color: %s; }"
+                     % (cid, color, color)).encode("utf-8"))
+                b.get_style_context().add_provider(
+                    prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            except Exception:
+                pass
+            b.connect("clicked", lambda *_a, c=cid: self.open_category(c))
+            self.top_cat_buttons[cid] = b
+            self.top_cat_nav.add(b)
+        main_vbox.pack_start(self.top_cat_nav, False, False, 0)
+
+        # 设置分栏窗：顶部分类胶囊分段
+        self.settings_seg = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.settings_seg.set_name("settings-seg")
+        self.settings_seg.set_hexpand(True)
+        self.settings_seg_buttons = {}
+        for cid, title_key, _desc_key, _icon in category_meta():
+            b = Gtk.Button(label=t(title_key))
+            b.get_style_context().add_class("settings-seg")
+            b.connect("clicked", lambda *_a, c=cid: self.open_category(c))
+            self.settings_seg_buttons[cid] = b
+            self.settings_seg.pack_start(b, True, True, 0)
+        main_vbox.pack_start(self.settings_seg, False, False, 0)
+
+        # 线路站点窗：左侧彩色线路分类
+        self.metro_lines = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.metro_lines.set_name("metro-lines")
+        self.metro_lines.set_size_request(200, -1)
+        self.metro_lines.set_hexpand(False)
+        self.metro_lines.set_vexpand(True)
+        self.metro_line_buttons = {}
+        for cid, title_key, _desc_key, _icon in category_meta():
+            b = Gtk.Button(label=t(title_key))
+            b.get_style_context().add_class("metro-line")
+            # 每条线路一种颜色：用 #<id> 选择器给左边条上色，避免互相覆盖；
+            # 文字颜色仍交给主题 CSS（选中态反白不受影响）。
+            line_color = METRO_LINE_COLORS.get(cid, "#3dd6c6")
+            try:
+                b.set_name("metro-line-" + cid)
+                prov = Gtk.CssProvider()
+                prov.load_from_data(
+                    ("#metro-line-%s { border-left: 4px solid %s; }"
+                     % (cid, line_color)).encode("utf-8"))
+                b.get_style_context().add_provider(
+                    prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            except Exception:
+                pass
+            b.connect("clicked", lambda *_a, c=cid: self.open_category(c))
+            self.metro_line_buttons[cid] = b
+            self.metro_lines.pack_start(b, False, False, 0)
+        self.body.pack_start(self.metro_lines, False, False, 0)
 
         # ---- Right content stack ----
         self.stack = Gtk.Stack()
@@ -16388,8 +18122,37 @@ class MainWindow(Gtk.Window):
         self.stack.set_transition_duration(140)
         self.stack.set_vexpand(True)
         self.stack.set_hexpand(True)
+        # 默认 homogeneous 会按所有页面里最高/最宽的那页来要尺寸，
+        # 更新日志一长就把整窗撑开。各页按自己的可见内容分配即可。
+        try:
+            self.stack.set_hhomogeneous(False)
+            self.stack.set_vhomogeneous(False)
+        except Exception:
+            pass
         self.stack.set_name("content-area")
-        body.pack_start(self.stack, True, True, 0)
+        self.body.pack_start(self.stack, True, True, 0)
+
+        # 顶部分类条建完后再把主区放进 main_vbox（在 bottom-bar 之前）。
+        # 这样 chips / 店招 / 分段条都显示在主区上方，dock 导航在其下方。
+        main_vbox.pack_start(self.body, True, True, 0)
+
+        # 底栏磁贴窗：底部分类导航（放在 stack 与 bottom-bar 之间）
+        self.dock_nav = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.dock_nav.set_name("dock-nav")
+        self.dock_nav.set_hexpand(True)
+        self.dock_nav_buttons = {}
+        for cid, title_key, _desc_key, _icon in category_meta():
+            b = Gtk.Button(label=t(title_key))
+            b.get_style_context().add_class("dock-cat")
+            b.get_child().set_line_wrap(True) if b.get_child() else None
+            try:
+                b.get_child().set_justify(Gtk.Justification.CENTER)
+            except Exception:
+                pass
+            b.connect("clicked", lambda *_a, c=cid: self.open_category(c))
+            self.dock_nav_buttons[cid] = b
+            self.dock_nav.pack_start(b, True, True, 0)
+        main_vbox.pack_start(self.dock_nav, False, False, 0)
 
         # Detail / function page (no back button)
         cat_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -16409,7 +18172,8 @@ class MainWindow(Gtk.Window):
         self.func_list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.func_list_box.set_valign(Gtk.Align.START)
         self.func_list_box.set_margin_end(8)
-        func_scroll = Gtk.ScrolledWindow()
+        self.func_scroll = Gtk.ScrolledWindow()
+        func_scroll = self.func_scroll
         func_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         func_scroll.set_vexpand(True)
         try:
@@ -16439,16 +18203,28 @@ class MainWindow(Gtk.Window):
         about_box.pack_start(self.about_title, False, False, 0)
         self.about_textview = Gtk.TextView()
         self.about_textview.set_editable(False)
-        self.about_textview.set_wrap_mode(Gtk.WrapMode.WORD)
+        self.about_textview.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self.about_textview.set_left_margin(18); self.about_textview.set_right_margin(18)
-        self.about_textview.set_top_margin(16); self.about_textview.set_bottom_margin(16)
+        self.about_textview.set_top_margin(16); self.about_textview.set_bottom_margin(24)
+        self.about_textview.set_size_request(0, -1)
         self.about_textview.get_style_context().add_class("card")
         self.about_textview.get_buffer().set_text(about_body_text())
         scrolled_about = Gtk.ScrolledWindow()
         scrolled_about.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scrolled_about.set_vexpand(True)
+        scrolled_about.set_hexpand(True)
+        try:
+            scrolled_about.set_propagate_natural_width(False)
+            scrolled_about.set_propagate_natural_height(False)
+        except Exception:
+            pass
+        # 霓虹主题：四边完整的发光框画在这个容器上（和 neon-menu 同款），
+        # 其它主题无感。用容器而不是 TextView 画框，右侧边框才不会被裁掉。
+        scrolled_about.get_style_context().add_class("neon-frame")
         scrolled_about.add(self.about_textview)
         about_box.pack_start(scrolled_about, True, True, 0)
+        self.about_scroll = scrolled_about
+        self.about_page_box = about_box
         self.stack.add_named(about_box, "about")
         self.about_back_btn = Gtk.Button(label=t("back_home"))
 
@@ -16464,10 +18240,11 @@ class MainWindow(Gtk.Window):
         changelog_box.pack_start(self.changelog_title, False, False, 0)
         self.changelog_textview = Gtk.TextView()
         self.changelog_textview.set_editable(False)
-        self.changelog_textview.set_wrap_mode(Gtk.WrapMode.WORD)
+        self.changelog_textview.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self.changelog_textview.set_cursor_visible(False)
         self.changelog_textview.set_left_margin(18); self.changelog_textview.set_right_margin(18)
         self.changelog_textview.set_top_margin(16); self.changelog_textview.set_bottom_margin(16)
+        self.changelog_textview.set_size_request(0, -1)
         self.changelog_textview.get_style_context().add_class("card")
         css_provider = Gtk.CssProvider()
         css_provider.load_from_data(b'textview { font: 10pt Monospace; }')
@@ -16476,8 +18253,16 @@ class MainWindow(Gtk.Window):
         scrolled_changelog = Gtk.ScrolledWindow()
         scrolled_changelog.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scrolled_changelog.set_vexpand(True)
+        scrolled_changelog.set_hexpand(True)
+        try:
+            scrolled_changelog.set_propagate_natural_width(False)
+            scrolled_changelog.set_propagate_natural_height(False)
+        except Exception:
+            pass
+        scrolled_changelog.get_style_context().add_class("neon-frame")
         scrolled_changelog.add(self.changelog_textview)
         changelog_box.pack_start(scrolled_changelog, True, True, 0)
+        self.changelog_scroll = scrolled_changelog
         self.changelog_textview.get_buffer().set_text(changelog_body_text())
         self.stack.add_named(changelog_box, "changelog")
         self.changelog_back_btn = Gtk.Button(label=t("back_home"))
@@ -16512,6 +18297,135 @@ class MainWindow(Gtk.Window):
         self.search_store = Gtk.ListStore(str, str, str)
         self.stack.add_named(search_page, "search")
 
+        # ---- 扩展布局所需的容器（用 set_visible 控制显隐） ----
+        # 底栏磁贴窗：大磁贴网格
+        self.dock_tiles = Gtk.FlowBox()
+        self.dock_tiles.set_name("dock-main")
+        self.dock_tiles.set_valign(Gtk.Align.FILL)
+        self.dock_tiles.set_vexpand(True)
+        self.dock_tiles.set_max_children_per_line(8)
+        self.dock_tiles.set_min_children_per_line(2)
+        self.dock_tiles.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.dock_tiles.set_homogeneous(True)
+        self.dock_tiles.set_column_spacing(10)
+        self.dock_tiles.set_row_spacing(10)
+        # 底栏磁贴窗：关于/更新日志用整块大面板（普通 Box，占满主区宽度），
+        # 与磁贴网格互斥显示。放进 FlowBox 会被强制成小格子，正文只有窄窄一条。
+        self.dock_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.dock_text.set_name("dock-text")
+        self.dock_text.set_vexpand(True)
+        self.dock_text.set_hexpand(True)
+        # 设置分栏窗：左侧功能名列表 + 右侧说明/详情（水平分栏）
+        self.settings_split = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        self.settings_split.set_name("settings-main")
+        self.settings_split.set_vexpand(True)
+        self.settings_split.set_hexpand(True)
+        # 左侧功能列表单独放进 ScrolledWindow：只有它上下滚动，
+        # 右侧详情面板保持固定不动（系统设置页的惯用交互）。
+        self.settings_list_scroll = Gtk.ScrolledWindow()
+        self.settings_list_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.settings_list_scroll.set_size_request(300, -1)
+        self.settings_list_scroll.set_vexpand(True)
+        try:
+            self.settings_list_scroll.set_overlay_scrolling(False)
+            self.settings_list_scroll.set_propagate_natural_width(False)
+        except Exception:
+            pass
+        self.settings_list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.settings_list.set_name("settings-list")
+        self.settings_list.set_vexpand(True)
+        self.settings_list_scroll.add(self.settings_list)
+        self.settings_detail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.settings_detail.set_name("settings-detail")
+        self.settings_detail.set_vexpand(True)
+        self.settings_detail.set_hexpand(True)
+        self.settings_detail_title = Gtk.Label()
+        self.settings_detail_title.set_name("settings-detail-title")
+        self.settings_detail_title.set_halign(Gtk.Align.START)
+        self.settings_detail_title.set_xalign(0.0)
+        self.settings_detail_title.set_line_wrap(True)
+        # 更新日志很长：用可折行的 TextView 放进滚动窗口，
+        # 避免 Gtk.Label 按最长行要宽度、把整窗撑横并且右边被裁掉。
+        self.settings_detail_scroll = Gtk.ScrolledWindow()
+        self.settings_detail_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        self.settings_detail_scroll.set_vexpand(True)
+        self.settings_detail_scroll.set_hexpand(True)
+        try:
+            self.settings_detail_scroll.set_overlay_scrolling(False)
+            self.settings_detail_scroll.set_propagate_natural_width(False)
+            self.settings_detail_scroll.set_propagate_natural_height(False)
+        except Exception:
+            pass
+        self.settings_detail_body = Gtk.TextView()
+        self.settings_detail_body.set_name("settings-detail-body")
+        self.settings_detail_body.set_editable(False)
+        self.settings_detail_body.set_cursor_visible(False)
+        self.settings_detail_body.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.settings_detail_body.set_left_margin(4)
+        self.settings_detail_body.set_right_margin(8)
+        self.settings_detail_body.set_top_margin(2)
+        self.settings_detail_body.set_bottom_margin(8)
+        self.settings_detail_body.set_hexpand(True)
+        self.settings_detail_body.set_vexpand(True)
+        self.settings_detail_body.set_size_request(0, -1)
+        self.settings_detail_scroll.add(self.settings_detail_body)
+        self.settings_detail.pack_start(self.settings_detail_title, False, False, 0)
+        self.settings_detail.pack_start(self.settings_detail_scroll, True, True, 0)
+        self.settings_split.pack_start(self.settings_list_scroll, False, False, 0)
+        self.settings_split.pack_start(self.settings_detail, True, True, 0)
+
+        # 线路站点窗：竖线 + 圆点站点
+        self.metro_rail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.metro_rail.set_name("metro-rail")
+        self.metro_stations = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.metro_stations.set_vexpand(True)
+        self.metro_track = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        self.metro_track.set_name("metro-track")
+        self.metro_track.set_hexpand(True)
+        self.metro_track.set_vexpand(True)
+        self.metro_track.pack_start(self.metro_rail, False, False, 0)
+        self.metro_track.pack_start(self.metro_stations, True, True, 0)
+
+        # 霓虹工具铺：青色发光菜单（功能按钮容器）
+        self.neon_menu = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.neon_menu.set_name("neon-menu")
+        self.neon_menu.set_vexpand(True)
+        self.neon_menu.set_hexpand(True)
+        # 扩展容器与标准 func 列表并列挂在 func 页里，由 _apply_theme_layout
+        # 按主题切换显隐；所有功能按钮仍走 run_function，不另写执行逻辑。
+        # 每个容器都放进 ScrolledWindow：内容再长也只滚动，不把窗口撑高
+        # （掌机 1280x800 上尤其重要）。
+        self._func_extra_host = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self._func_extra_host.set_vexpand(True)
+        self._func_extra_host.set_hexpand(True)
+        self._ext_scrolls = {}
+        # dock 的滚动窗口里放两个互斥容器：磁贴网格 / 整块文本面板
+        self.dock_host = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.dock_host.set_vexpand(True)
+        self.dock_host.set_hexpand(True)
+        self.dock_host.pack_start(self.dock_tiles, True, True, 0)
+        self.dock_host.pack_start(self.dock_text, True, True, 0)
+        for key, inner in (("dock", self.dock_host), ("settings", self.settings_split),
+                           ("metro", self.metro_track), ("neon", self.neon_menu)):
+            sw = Gtk.ScrolledWindow()
+            # settings 的左侧列表自己滚动、右侧详情固定，外层不再整体滚动
+            # AUTOMATIC：内容超高/超宽时内部出滚动条，而不是把窗口拉长。
+            # 不要用 NEVER——GTK 会按子控件的自然尺寸要空间，更新日志会把窗撑爆。
+            sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+            sw.set_vexpand(True)
+            sw.set_hexpand(True)
+            try:
+                sw.set_overlay_scrolling(False)
+                # 内容再长也别把窗口撑宽/撑高，只在内部滚动
+                sw.set_propagate_natural_width(False)
+                sw.set_propagate_natural_height(False)
+            except Exception:
+                pass
+            sw.add(inner)
+            self._ext_scrolls[key] = sw
+            self._func_extra_host.pack_start(sw, True, True, 0)
+        cat_page.pack_start(self._func_extra_host, True, True, 0)
+
         # Bottom bar (restrained)
         bottom_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         bottom_bar.set_name("bottom-bar")
@@ -16533,6 +18447,11 @@ class MainWindow(Gtk.Window):
         self.build_func_map()
         self.rebuild_nav_rail()
         self.update_status()
+        # 启动时按已保存主题挂 style class 并配置布局，再打开默认分类。
+        _saved_theme = load_theme_pref()
+        self._apply_theme_class(_saved_theme)
+        self._apply_theme_layout(_saved_theme)
+        self._refresh_cat_nav_labels()
         # Default: 支持和维护 (about/support)
         self.open_category("support")
 
@@ -16540,11 +18459,14 @@ class MainWindow(Gtk.Window):
     # 主题切换
     # ------------------------------------------------------------------
     def _build_theme_menu(self):
-        """构建主题下拉菜单（用 Popover，这样能跟随深色/浅色样式，原生 Gtk.Menu 无法着色）。"""
+        """构建主题下拉菜单（Popover，13 项：深色、浅色 + 11 套扩展主题）。"""
         current = load_theme_pref()
         popover = Gtk.Popover()
         popover.set_relative_to(self.theme_button)
         popover.set_position(Gtk.PositionType.BOTTOM)
+        # 深色 / 浅色下菜单要用实色背景（系统主题默认给 popover 带 alpha），
+        # 11 套扩展主题保持各自样式，不挂这个 class。
+        self._sync_theme_menu_opacity(popover)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         box.set_border_width(6)
@@ -16559,64 +18481,379 @@ class MainWindow(Gtk.Window):
             check.set_opacity(1.0 if mode == current else 0.0)
             hbox.pack_start(check, False, False, 0)
             lbl = Gtk.Label(label=theme_label(mode))
-            hbox.pack_start(lbl, False, False, 0)
+            lbl.set_halign(Gtk.Align.START)
+            hbox.pack_start(lbl, True, True, 0)
             row.add(hbox)
             row.connect("clicked", self.on_theme_row_clicked, mode)
-            self._theme_items[mode] = (row, check)
+            self._theme_items[mode] = (row, check, lbl)
             box.pack_start(row, False, False, 0)
-        popover.add(box)
-        box.show_all()
+        # 高对比大字条目很高，列表会超出窗口；用滚动窗包一层，
+        # 只在该主题下限制高度并允许纵向滑动，其它主题不限高、不出滚动条。
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_propagate_natural_width(True)
+        scrolled.set_propagate_natural_height(True)
+        scrolled.add(box)
+        self._theme_menu_scroll = scrolled
+        self._sync_theme_menu_scroll(scrolled)
+        popover.add(scrolled)
+        scrolled.show_all()
+        try:
+            popover.connect("show", lambda *_: self._sync_theme_menu_scroll())
+        except Exception:
+            pass
         self.theme_button.set_popover(popover)
         self._theme_menu = popover
-        self._refresh_theme_icon(current)
+
+    def _sync_theme_menu_opacity(self, popover=None):
+        """深色 / 浅色：主题下拉菜单用完全不透明的实色背景。
+
+        系统主题（Breeze / Adwaita 等）默认给 popover.background 带 alpha，
+        在深浅色基础主题下菜单会发透。挂上 theme-menu-base class 走高权重
+        实色规则；11 套扩展主题不挂，保持各自原有菜单样式不变。
+        """
+        if popover is None:
+            popover = getattr(self, "_theme_menu", None)
+        if popover is None:
+            return
+        ctx = popover.get_style_context()
+        mode = resolve_theme_mode(load_theme_pref())
+        if mode in ("dark", "light"):
+            ctx.add_class("theme-menu-base")
+            popover.set_opacity(1.0)
+        else:
+            ctx.remove_class("theme-menu-base")
+
+    def _sync_theme_menu_scroll(self, scrolled=None):
+        """仅「高对比大字」让主题列表可下滑；其它主题保持一次性展开。"""
+        if scrolled is None:
+            scrolled = getattr(self, "_theme_menu_scroll", None)
+        if scrolled is None:
+            return
+        mode = resolve_theme_mode(load_theme_pref())
+        if mode == "hc":
+            try:
+                _w, win_h = self.get_size()
+                # 留出标题栏和弹出位置，列表高度不超过窗口内剩余空间
+                max_h = max(280, win_h - 140) if win_h and win_h > 200 else 480
+            except Exception:
+                max_h = 480
+            scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+            try:
+                scrolled.set_max_content_height(int(max_h))
+            except Exception:
+                pass
+            try:
+                scrolled.set_overlay_scrolling(False)
+            except Exception:
+                pass
+        else:
+            scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER)
+            try:
+                scrolled.set_max_content_height(-1)
+            except Exception:
+                pass
 
     def _refresh_theme_icon(self, mode):
-        resolved = resolve_theme_mode(mode)
-        icons = {
-            "dark": "weather-clear-night-symbolic",
-            "light": "weather-clear-symbolic",
-        }
-        name = icons.get(resolved, "weather-clear-night-symbolic")
+        """兼容旧接口：主题按钮已改为文字，这里只刷新按钮文字。"""
         try:
-            if self._theme_icon is not None:
-                self._theme_icon.set_from_icon_name(name, Gtk.IconSize.BUTTON)
+            if getattr(self, "_theme_btn_label", None) is not None:
+                self._theme_btn_label.set_text(t("theme_button"))
         except Exception:
             pass
 
+    def _refresh_theme_menu_labels(self):
+        """语言切换后刷新菜单项文字与按钮文字、勾选状态。"""
+        try:
+            if getattr(self, "_theme_btn_label", None) is not None:
+                self._theme_btn_label.set_text(t("theme_button"))
+            self.theme_button.set_tooltip_text(t("theme_tooltip"))
+            current = load_theme_pref()
+            for m, (_row, chk, lbl) in self._theme_items.items():
+                lbl.set_text(theme_label(m))
+                chk.set_opacity(1.0 if m == current else 0.0)
+        except Exception:
+            pass
+
+    def _apply_theme_class(self, mode):
+        """给窗口挂 theme-<id> style class；切走时去掉旧 class。"""
+        ctx = self.get_style_context()
+        if self._active_theme:
+            ctx.remove_class(f"theme-{self._active_theme}")
+        rid = resolve_theme_mode(mode)
+        # dark / light 不挂 class，保持原来的基础样式
+        if rid not in ("dark", "light") and rid in THEME_CSS_EXTRA:
+            ctx.add_class(f"theme-{rid}")
+            self._active_theme = rid
+        else:
+            self._active_theme = None
+        try:
+            ctx.reset_widgets() if hasattr(ctx, "reset_widgets") else None
+        except Exception:
+            pass
+
+    @staticmethod
+    def _show_container(widget, show):
+        """显示/隐藏一个容器，并显式显示其子控件。
+
+        GTK3 里隐藏后再显形的容器，子控件不一定会随之映射，逐个 show_all
+        更稳妥，避免容器看得见、里面是空的。
+        """
+        try:
+            widget.set_visible(show)
+        except Exception:
+            return
+        if not show:
+            return
+        try:
+            for child in widget.get_children():
+                child.set_visible(True)
+                child.show_all()
+        except Exception:
+            pass
+
+    def _restore_adaptive_size(self, only_if_smaller=True):
+        """把主窗口拉回按屏幕算好的尺寸。
+
+        布局主题切换、关于页发光框按正文收紧、Stack 不再 homogeneous 之后，
+        窗口可能被内容区的自然高度吸小，看起来就不随分辨率自适应了。
+        only_if_smaller=True 时只挡住被吸小，不盖过用户自己放大或最大化。
+        """
+        w = getattr(self, "_adaptive_w", 0)
+        h = getattr(self, "_adaptive_h", 0)
+        if w <= 0 or h <= 0:
+            return
+        try:
+            cw, ch = self.get_size()
+            if only_if_smaller and cw >= w - 8 and ch >= h - 8:
+                return
+            self.resize(w, h)
+        except Exception:
+            pass
+
+    def _apply_neon_about_frame(self, enabled):
+        """霓虹主题下，关于页发光框跟着短正文长高，把每一行（含链接）都露出来。
+
+        更新日志仍然铺满并内部滚动，不在这里处理。
+        """
+        sw = getattr(self, "about_scroll", None)
+        box = getattr(self, "about_page_box", None)
+        tv = getattr(self, "about_textview", None)
+        if sw is None or box is None:
+            return
+        try:
+            if enabled:
+                box.set_child_packing(sw, False, False, 0, Gtk.PackType.START)
+                sw.set_vexpand(False)
+                sw.set_hexpand(True)
+                sw.set_valign(Gtk.Align.START)
+                # 垂直方向按正文自然高度长高，短文本不用滚动；
+                # 宽度不传播，避免长链接把窗口撑横。
+                try:
+                    sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
+                    sw.set_propagate_natural_width(False)
+                    sw.set_propagate_natural_height(True)
+                    sw.set_min_content_height(0)
+                except Exception:
+                    pass
+                if tv is not None:
+                    tv.set_bottom_margin(28)
+            else:
+                box.set_child_packing(sw, True, True, 0, Gtk.PackType.START)
+                sw.set_vexpand(True)
+                sw.set_valign(Gtk.Align.FILL)
+                try:
+                    sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+                    sw.set_propagate_natural_width(False)
+                    sw.set_propagate_natural_height(False)
+                    sw.set_min_content_height(0)
+                except Exception:
+                    pass
+                if tv is not None:
+                    tv.set_bottom_margin(24)
+        except Exception:
+            pass
+
+    def _apply_theme_layout(self, mode):
+        """按主题切换分类导航与主区容器显隐（只切界面，不动功能逻辑）。"""
+        rid = resolve_theme_mode(mode)
+        rail_hidden = rid in RAIL_HIDDEN_THEMES
+        # 默认（dark/light + 8 套换肤主题）：显示左侧分类栏
+        self._show_container(self.rail, not rail_hidden)
+        self._show_container(self.nav_scroll, not rail_hidden)
+        # 顶部分类条
+        for widget in (self.cat_chips, self.top_cat_nav, self.settings_seg):
+            try:
+                widget.set_visible(False)
+            except Exception:
+                pass
+        self._show_container(self.neon_side, rid == "neon")
+        self._show_container(self.metro_lines, rid == "metro")
+        self._show_container(self.dock_nav, rid == "dock")
+        if rid == "mat":
+            self._show_container(self.cat_chips, True)
+        elif rid == "settings":
+            self._show_container(self.settings_seg, True)
+        elif rid == "neon":
+            self._show_container(self.top_cat_nav, True)
+        # 标出当前分类
+        self._refresh_cat_indicators(rid)
+        # 主区：普通 func 列表 vs 扩展布局容器
+        layout = rid in LAYOUT_THEMES
+        try:
+            self.func_scroll.set_visible(not layout)
+            self._func_extra_host.set_visible(layout)
+        except Exception:
+            pass
+        if not layout:
+            # 切回换肤主题时显式把滚动窗口与列表 show_all，
+            # 保证从布局主题切回来后功能列表能正常显示。
+            try:
+                self.func_scroll.show_all()
+                self.func_list_box.show_all()
+            except Exception:
+                pass
+        for key, sw in self._ext_scrolls.items():
+            try:
+                sw.set_visible(False)
+            except Exception:
+                pass
+        for w in (self.dock_tiles, self.settings_split, self.metro_track, self.neon_menu):
+            try:
+                w.set_visible(False)
+            except Exception:
+                pass
+        if rid == "dock":
+            self._ext_scrolls["dock"].set_visible(True)
+            self.dock_host.set_visible(True)
+            # 磁贴网格与整块文本面板互斥，由 open_category / 
+            # _populate_theme_containers 按分类决定谁可见；这里不 show_all()，
+            # 避免把两者一起显形。尺寸协商交给后面统一的 check_resize()。
+        elif rid == "settings":
+            self._ext_scrolls["settings"].set_visible(True)
+            self._ext_scrolls["settings"].show_all()
+            self.settings_split.set_visible(True)
+            self.settings_list.set_visible(True)
+            self.settings_detail.set_visible(True)
+            self.settings_detail_title.set_visible(True)
+            self.settings_detail_body.set_visible(True)
+            self.settings_split.show_all()
+            self.settings_list.show_all()
+            self.settings_detail.show_all()
+        elif rid == "metro":
+            self._ext_scrolls["metro"].set_visible(True)
+            self._ext_scrolls["metro"].show_all()
+            self.metro_track.set_visible(True)
+            self.metro_rail.set_visible(True)
+            self.metro_stations.set_visible(True)
+            self.metro_track.show_all()
+        elif rid == "neon":
+            self._ext_scrolls["neon"].set_visible(True)
+            self._ext_scrolls["neon"].show_all()
+            self._show_container(self.neon_menu, True)
+        # 霓虹竖排招牌文字随语言刷新；英文用短词 TOOLBOX，避免整句竖排撑爆
+        try:
+            self.neon_sign.set_text("TOOLBOX" if get_lang() == "en" else "工具箱")
+        except Exception:
+            pass
+        # 关于页正文很短：霓虹主题让发光框贴着文字，不再拉成一块空黑板
+        self._apply_neon_about_frame(rid == "neon")
+        # 霓虹标题栏更挤，搜索框略收一点；其它主题保持原来的宽度
+        try:
+            self.search_entry.set_width_chars(16 if rid == "neon" else 24)
+        except Exception:
+            pass
+        # 切换显隐后显式触发一次 toplevel 的 check_resize，
+        # 让刚显形的容器重新做尺寸协商（否则可能停在 1x1）。
+        try:
+            self.check_resize()
+        except Exception:
+            pass
+        self._restore_adaptive_size(only_if_smaller=True)
+
+    def _refresh_cat_indicators(self, rid=None):
+        """刷新各主题分类导航的选中态。"""
+        if rid is None:
+            rid = resolve_theme_mode(load_theme_pref())
+        groups = {
+            "mat": self.cat_chip_buttons,
+            "settings": self.settings_seg_buttons,
+            "neon": self.top_cat_buttons,
+            "dock": self.dock_nav_buttons,
+            "metro": self.metro_line_buttons,
+        }
+        for key, btns in groups.items():
+            for cid, b in btns.items():
+                ctx = b.get_style_context()
+                if rid == key and cid == self._current_cat_id:
+                    ctx.add_class("selected")
+                else:
+                    ctx.remove_class("selected")
+
     def on_theme_row_clicked(self, button, mode):
+        # 1) 立即应用 CSS（provider 里含全部扩展主题覆盖层）
         apply_app_css(mode)
+        # 2) 保存偏好，旧值/非法值不会进配置
         save_theme_pref(mode)
-        self._refresh_theme_icon(mode)
+        # 3) 挂 style class：主窗口 + 所有已打开的次级窗口一起刷新
+        self._apply_theme_class(mode)
+        refresh_all_window_themes(mode)
+        # 4) 终端配色跟着变
         try:
             tw = getattr(self, "task_window", None)
             if tw is not None and getattr(tw, "terminal", None) is not None:
                 apply_terminal_theme(tw.terminal)
         except Exception:
             pass
-        for m, (_row, chk) in self._theme_items.items():
+        # 5) 菜单勾选状态
+        for m, (_row, chk, _lbl) in self._theme_items.items():
             try:
                 chk.set_opacity(1.0 if m == mode else 0.0)
             except Exception:
                 pass
+        # 6) 菜单实色 class 跟着主题走（深色/浅色用实色，其它主题保持原样）
+        self._sync_theme_menu_opacity()
+        # 高对比大字才给主题列表加滚动，切走时恢复不限高
+        self._sync_theme_menu_scroll()
+        # 7) 弹出菜单收起
         try:
             popover = self.theme_button.get_popover()
             if popover is not None:
                 popover.popdown()
+        except Exception:
+            pass
+        # 8) 布局重建 + 保留当前分类/搜索状态
+        self._apply_theme_layout(mode)
+        self._refresh_ui_for_theme()
+
+    def _refresh_ui_for_theme(self):
+        """切换主题后重建内容区，保留当前分类与搜索状态。
+
+        继续走现有的 open_category / on_search_changed / run_function，
+        不另写一套执行逻辑。
+        """
+        query = self.search_entry.get_text().strip()
+        try:
+            if query:
+                self.on_search_changed(self.search_entry)
+            elif self._current_cat_id:
+                self.open_category(self._current_cat_id)
+            else:
+                self.open_category("support")
+        except Exception:
+            pass
+        # 不再对整窗 show_all()：那会把按主题隐藏的分类栏/容器重新显形。
+        # 只需再收一遍布局显隐并触发尺寸协商。
+        try:
+            self._apply_theme_layout(load_theme_pref())
+            self.check_resize()
         except Exception:
             pass
 
     def on_theme_selected(self, item, mode):
-        if not item.get_active():
+        """兼容旧 Gtk.RadioMenuItem 接口（当前实现已改用 Popover 按钮）。"""
+        if hasattr(item, "get_active") and not item.get_active():
             return
-        apply_app_css(mode)
-        save_theme_pref(mode)
-        self._refresh_theme_icon(mode)
-        try:
-            popover = self.theme_button.get_popover()
-            if popover is not None:
-                popover.popdown()
-        except Exception:
-            pass
+        self.on_theme_row_clicked(item, mode)
 
     # ------------------------------------------------------------------
     # 语言切换
@@ -16707,6 +18944,7 @@ class MainWindow(Gtk.Window):
         self._build_theme_menu()
         self._build_lang_menu()
         self.rebuild_nav_rail()
+        self._refresh_cat_nav_labels()
         self.update_status()
 
         if search_text.strip():
@@ -16716,6 +18954,34 @@ class MainWindow(Gtk.Window):
             self.open_category(cat_id)
         else:
             self.open_category("support")
+        try:
+            self.check_resize()
+        except Exception:
+            pass
+
+    def _refresh_cat_nav_labels(self):
+        """语言切换后刷新所有扩展布局的分类导航文字与主题按钮文字。"""
+        metas = {m[0]: m for m in category_meta()}
+        try:
+            if getattr(self, "_theme_btn_label", None) is not None:
+                self._theme_btn_label.set_text(t("theme_button"))
+            self.theme_button.set_tooltip_text(t("theme_tooltip"))
+        except Exception:
+            pass
+        for btns in (self.cat_chip_buttons, self.top_cat_buttons,
+                     self.settings_seg_buttons, self.dock_nav_buttons,
+                     self.metro_line_buttons):
+            for cid, b in btns.items():
+                info = metas.get(cid)
+                if info:
+                    try:
+                        b.set_label(t(info[1]))
+                    except Exception:
+                        pass
+        try:
+            self.neon_sign.set_text("TOOLBOX" if get_lang() == "en" else "工具箱")
+        except Exception:
+            pass
 
     def build_func_map(self):
         for items in self.category_tree.values():
@@ -16788,16 +19054,74 @@ class MainWindow(Gtk.Window):
             info = meta.get(cat_id)
             if not info:
                 return
-        _cid, title_key, _desc_key, icon_file = info
+        _cid, title_key, desc_key, icon_file = info
         title = t(title_key)
         self._current_cat_id = cat_id
         self._set_nav_selected(cat_id)
+        self._refresh_cat_indicators()
+
+        rid = resolve_theme_mode(load_theme_pref())
+        about_text = about_body_text()
+        changelog_text = changelog_body_text()
+
+        # 设置分栏窗：关于/更新日志在右侧显示正文（用统一 func 页渲染）
+        if rid == "settings" and cat_id in ("support", "changelog"):
+            self._current_page = "func"
+            self.stack.set_visible_child_name("func")
+            self.title_icon.set_visible(False)
+            doc_title = t("about_title" if cat_id == "support" else "cat_changelog")
+            doc_body = about_text if cat_id == "support" else changelog_text
+            self.category_title.set_markup(f"<span size='large'><b>{doc_title}</b></span>")
+            self._clear_theme_containers()
+            self._clear_box(self.settings_list)
+            gb = Gtk.Button(label=doc_title)
+            gb.set_relief(Gtk.ReliefStyle.NONE)
+            gb.get_style_context().add_class("settings-fn")
+            gb.get_style_context().add_class("selected")
+            gb.connect("clicked", lambda *_a: self._settings_detail_show(doc_title, doc_body))
+            self.settings_list.pack_start(gb, False, False, 0)
+            self._settings_detail_show(doc_title, doc_body)
+            gb.show_all()
+            self.settings_list.set_visible(True)
+            self.settings_detail.set_visible(True)
+            self.settings_split.set_visible(True)
+            self.settings_split.show_all()
+            self._ext_scrolls["settings"].set_visible(True)
+            self._func_extra_host.set_visible(True)
+            self.check_resize()
+            return
+
+        # 底栏磁贴窗：关于/更新日志用占满主区的整块大面板显示
+        if rid == "dock" and cat_id in ("support", "changelog"):
+            self._current_page = "func"
+            self.stack.set_visible_child_name("func")
+            self.title_icon.set_visible(False)
+            self.category_title.set_markup(
+                f"<span size='large'><b>{t('about_title' if cat_id == 'support' else 'cat_changelog')}</b></span>")
+            self._clear_theme_containers(keep="dock")
+            # 清空整块文本面板，再放入一个铺满宽度的文本磁贴
+            for child in list(self.dock_text.get_children()):
+                self.dock_text.remove(child)
+            tile = self._make_text_tile(
+                about_text if cat_id == "support" else changelog_text)
+            self.dock_text.pack_start(tile, True, True, 0)
+            tile.show_all()
+            self.dock_text.show_all()
+            self.dock_tiles.set_visible(False)   # 磁贴网格让位给整块面板
+            self.dock_host.set_visible(True)
+            # 不调 dock_host.show_all()：那会把刚隐藏的 dock_tiles 一起显形
+            self._ext_scrolls["dock"].set_visible(True)
+            self._func_extra_host.set_visible(True)
+            self.check_resize()
+            # check_resize / show_all 之后可能被重新带出来，最后再收一次
+            self.dock_tiles.set_visible(False)
+            return
 
         if cat_id == "support":
             self._current_page = "about"
             try:
                 self.about_title.set_markup(f"<span size='large'><b>{t('about_title')}</b></span>")
-                self.about_textview.get_buffer().set_text(about_body_text())
+                self.about_textview.get_buffer().set_text(about_text)
             except Exception:
                 pass
             self.stack.set_visible_child_name("about")
@@ -16854,6 +19178,244 @@ class MainWindow(Gtk.Window):
             self.func_map[fl("fix_boot")] = "fix_boot"
             self.func_map[fl("fix_shared_disk")] = "fix_shared_disk"
         self._populate_func_tiles(items)
+        # 同步填充扩展布局容器（标准 func 列表始终填充，切主题时不用重算）
+        self._populate_theme_containers(items, desc_key, rid)
+
+    # ------------------------------------------------------------------
+    # 扩展布局容器：全部复用 run_function，不另写执行逻辑
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _iter_leaf_items(items):
+        """把分类树摊平成 (显示名, 功能 key) 列表；分组名作为 section 返回。"""
+        flat = []
+        def walk(seq, group=None):
+            for item in seq:
+                if isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], str):
+                    flat.append((item[0], item[1], group))
+                elif isinstance(item, tuple) and len(item) == 2 and isinstance(item[1], list):
+                    walk(item[1], item[0])
+        walk(items)
+        return flat
+
+    def _clear_theme_containers(self, keep=None):
+        """清空扩展容器；keep 指定保留（只清其它），None 表示全清。"""
+        # 注意：settings_detail 里是常驻的标题/正文 label，只能清 settings_list，
+        # 不能把详情面板的常驻控件一起删掉。
+        targets = {
+            "dock": (self.dock_tiles,),
+            "settings": (self.settings_list,),
+            "metro": (self.metro_rail, self.metro_stations),
+            "neon": (self.neon_menu,),
+        }
+        for key, boxes in targets.items():
+            if keep is not None and key != keep:
+                continue
+            for box in boxes:
+                try:
+                    for child in list(box.get_children()):
+                        box.remove(child)
+                except Exception:
+                    pass
+
+    def _make_tile_button(self, name, func_key, child=False):
+        """扩展布局用的功能按钮：统一 class，点击走 run_function。"""
+        b = Gtk.Button(label=name)
+        b.get_style_context().add_class("func-tile")
+        if child:
+            b.get_style_context().add_class("child-tile")
+        b.set_relief(Gtk.ReliefStyle.NONE)
+        try:
+            lbl = b.get_child()
+            if lbl is not None:
+                lbl.set_line_wrap(True)
+                lbl.set_xalign(0.0)
+        except Exception:
+            pass
+        b.connect("clicked", lambda *_a, n=name, k=func_key: self.run_function(n, k))
+        return b
+
+    def _make_text_tile(self, text):
+        """底栏磁贴窗里显示关于/更新日志正文的整块磁贴（占满宽度）。
+
+        正文放在自己的 ScrolledWindow 里：更新日志很长时只滚动，不会把
+        外层 dock_text 撑到上万像素高、把窗口顶爆。
+        """
+        b = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        b.get_style_context().add_class("text-tile")
+        b.set_hexpand(True)
+        b.set_vexpand(True)
+        sw = Gtk.ScrolledWindow()
+        sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        sw.set_vexpand(True)
+        sw.set_hexpand(True)
+        # 长 changelog 只在内部滚动，绝不把自然宽/高传给窗口
+        try:
+            sw.set_overlay_scrolling(False)
+            sw.set_propagate_natural_width(False)
+            sw.set_propagate_natural_height(False)
+        except Exception:
+            pass
+        tv = Gtk.TextView()
+        tv.set_editable(False)
+        # WORD_CHAR：长 URL / 英文串也强制按字符折行，不请求超宽自然宽度
+        tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        tv.set_cursor_visible(False)
+        tv.set_left_margin(14); tv.set_right_margin(14)
+        tv.set_top_margin(12); tv.set_bottom_margin(12)
+        tv.set_size_request(0, -1)
+        tv.get_buffer().set_text(text)
+        sw.add(tv)
+        b.pack_start(sw, True, True, 0)
+        return b
+
+    def _settings_detail_show(self, title, body):
+        """设置分栏窗右侧详情。"""
+        try:
+            self.settings_detail_title.set_text(title)
+            self.settings_detail_body.get_buffer().set_text(body.strip())
+            self.settings_detail_title.set_visible(True)
+            self.settings_detail_body.set_visible(True)
+            if getattr(self, "settings_detail_scroll", None) is not None:
+                self.settings_detail_scroll.set_visible(True)
+        except Exception:
+            pass
+
+    def _settings_hover_preview(self, name, func_key):
+        """鼠标移入功能项：右侧只预览该功能的简介，不执行、不改变高亮。"""
+        desc = func_desc(func_key) or t("danger_default")
+        # 危险操作在简介后面补一行风险提示
+        if func_key in DANGEROUS_FUNCS:
+            hint = dangerous_hint(func_key)
+            if get_lang() == "en":
+                desc = f"{desc}\n\nNote: {hint}"
+            else:
+                desc = f"{desc}\n\n注意：{hint}"
+        cat_title = ""
+        for cid, title_key, _d, _i in category_meta():
+            if cid == self._current_cat_id:
+                cat_title = t(title_key)
+        if get_lang() == "en":
+            body = f"{desc}\n\nCategory: {cat_title}"
+        else:
+            body = f"{desc}\n\n所属分类：{cat_title}"
+        self._settings_detail_show(name, body)
+        return False
+
+    def _settings_mark_selected(self, name):
+        """点击功能项：高亮当前项（执行由 _make_tile_button 的 run_function 负责）。"""
+        self._settings_selected_fn = name
+        for child in self.settings_list.get_children():
+            ctx = child.get_style_context()
+            if getattr(child, "_sd_fn_name", None) == name:
+                ctx.add_class("selected")
+            else:
+                ctx.remove_class("selected")
+        return False
+
+    def _populate_theme_containers(self, items, desc_key, rid):
+        """按当前主题重建扩展布局容器内容。"""
+        leaves = self._iter_leaf_items(items)
+        self._clear_theme_containers()
+
+        if rid == "dock":
+            # 功能分类页用磁贴网格；关于/更新日志的整块文本面板让位
+            for child in list(self.dock_text.get_children()):
+                self.dock_text.remove(child)
+            self.dock_text.set_visible(False)
+            self.dock_tiles.set_visible(True)
+            # 大磁贴网格：每个磁贴显式显示，避免 FlowBoxChild 停在 1x1
+            for name, key, group in leaves:
+                tile = self._make_tile_button(name, key)
+                self.dock_tiles.insert(tile, -1)
+                tile.show_all()
+            for child in self.dock_tiles.get_children():
+                child.set_visible(True)
+                child.show_all()
+            self.dock_tiles.show_all()
+            self.check_resize()
+            return
+
+        if rid == "settings":
+            # 左侧功能名列表 + 右侧说明；分组用小标题按钮。
+            # 交互：鼠标移入(hover) 只预览该功能的介绍；点击直接执行功能并高亮。
+            last_group = None
+            for name, key, group in leaves:
+                if group and group != last_group:
+                    gb = Gtk.Button(label=group)
+                    gb.set_relief(Gtk.ReliefStyle.NONE)
+                    gb.get_style_context().add_class("settings-group")
+                    gb.set_sensitive(False)
+                    self.settings_list.pack_start(gb, False, False, 0)
+                    last_group = group
+                b = self._make_tile_button(name, key)
+                b.get_style_context().add_class("settings-fn")
+                try:
+                    b._sd_fn_name = name
+                    b._sd_fn_key = key
+                    b.add_events(Gdk.EventMask.ENTER_NOTIFY_MASK)
+                except Exception:
+                    pass
+                # hover：只把右侧详情切换成该功能的简介（不执行、不改高亮）
+                b.connect("enter-notify-event",
+                          lambda *_a, n=name, k=key: self._settings_hover_preview(n, k) or False)
+                # click：run_function 已在 _make_tile_button 里连好（直接执行），
+                # 这里只补一个「高亮当前项」的回调
+                b.connect("clicked", lambda *_a, n=name: self._settings_mark_selected(n))
+                self.settings_list.pack_start(b, False, False, 0)
+                b.show_all()
+            for child in self.settings_list.get_children():
+                child.show_all()
+            if leaves:
+                n0, k0, _g = leaves[0]
+                self._settings_mark_selected(n0)
+                self._settings_hover_preview(n0, k0)
+            self.settings_list_scroll.show_all()
+            self.settings_list.show_all()
+            self.settings_detail.show_all()
+            self.check_resize()
+            return
+
+        if rid == "metro":
+            # 竖线 + 圆点站点：每个功能一个站点
+            line_color = METRO_LINE_COLORS.get(self._current_cat_id, "#3dd6c6")
+            try:
+                c = Gdk.RGBA(); c.parse(line_color)
+                self.metro_rail.override_background_color(Gtk.StateFlags.NORMAL, c)
+            except Exception:
+                pass
+            # 竖线用固定宽度色条，圆点放在每一行
+            for name, key, _group in leaves:
+                station = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+                dot = Gtk.Box()
+                dot.get_style_context().add_class("station-dot")
+                dot.set_size_request(16, 16)
+                dot.set_valign(Gtk.Align.CENTER)
+                dot.set_vexpand(False)
+                dot.set_hexpand(False)
+                try:
+                    dot.override_background_color(Gtk.StateFlags.NORMAL, c)
+                except Exception:
+                    pass
+                b = self._make_tile_button(name, key)
+                b.set_hexpand(True)
+                station.pack_start(dot, False, False, 0)
+                station.pack_start(b, True, True, 0)
+                self.metro_stations.pack_start(station, False, False, 0)
+                station.show_all()
+            self.metro_rail.show_all()
+            self.metro_track.show_all()
+            self.check_resize()
+            return
+
+        if rid == "neon":
+            # 青色发光菜单里的功能按钮
+            for name, key, _group in leaves:
+                b = self._make_tile_button(name, key)
+                self.neon_menu.pack_start(b, False, False, 0)
+                b.show_all()
+            self.neon_menu.show_all()
+            self.check_resize()
+            return
 
     def _clear_box(self, box):
         for child in list(box.get_children()):
@@ -16922,6 +19484,11 @@ class MainWindow(Gtk.Window):
                 self.func_list_box.pack_start(
                     self._make_func_group(title, item[1]), False, False, 0)
         self.func_list_box.show_all()
+        # 重新填充后需要一次尺寸协商
+        try:
+            self.check_resize()
+        except Exception:
+            pass
 
     def _make_func_tile(self, name, func_key, child=False):
         btn = Gtk.Button()
@@ -17097,6 +19664,7 @@ class MainWindow(Gtk.Window):
             self.search_store.append([name, cat, key])
             btn = Gtk.Button()
             btn.get_style_context().add_class("func-tile")
+            btn.get_style_context().add_class("search-tile")
             btn.set_relief(Gtk.ReliefStyle.NONE)
             row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             n = Gtk.Label(label=name); n.set_halign(Gtk.Align.START); n.set_xalign(0.0)
@@ -17886,6 +20454,7 @@ class CacheManagerWindow(Gtk.Window):
 
     def __init__(self, parent=None):
         super().__init__(title=fl("steamdeck_cache_manager"))
+        apply_theme_to_window(self)
         self.set_icon_name("input-gamepad-symbolic")
         self.set_default_size(660, 560)
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT if parent else Gtk.WindowPosition.CENTER)
@@ -18619,6 +21188,7 @@ class CompatManagerWindow(Gtk.Window):
 
     def __init__(self, parent=None):
         super().__init__(title=fl("ge_proton_manager"))
+        apply_theme_to_window(self)
         self.set_icon_name("input-gamepad-symbolic")
         self.set_default_size(660, 560)
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT if parent
@@ -19504,6 +22074,7 @@ class FlatpakInstallWindow(Gtk.Window):
 
     def __init__(self, parent=None):
         super().__init__(title=fl("install_flatpak_apps_gui"))
+        apply_theme_to_window(self)
         self.set_icon_name("input-gamepad-symbolic")
         self.set_default_size(620, 520)
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT if parent else Gtk.WindowPosition.CENTER)
@@ -20134,6 +22705,7 @@ class FlatpakUninstallWindow(Gtk.Window):
 
     def __init__(self, parent=None):
         super().__init__(title=fl("uninstall_other_flatpak_apps"))
+        apply_theme_to_window(self)
         self.set_icon_name("input-gamepad-symbolic")
         self.set_default_size(600, 500)
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT if parent else Gtk.WindowPosition.CENTER)
@@ -20597,6 +23169,7 @@ class FlatpakUninstallWindow(Gtk.Window):
 class UpdateCheckWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title=t("check_update"))
+        apply_theme_to_window(self)
         self.set_icon_name("input-gamepad-symbolic")
         self.set_default_size(*UPDATE_SPLASH_SIZE)
         self.set_size_request(*UPDATE_SPLASH_SIZE)
@@ -20744,6 +23317,14 @@ def show_main_window():
     window = MainWindow()
     window.connect("destroy", Gtk.main_quit)
     window.show_all()
+    # show_all() 会把所有容器都显形；再按已保存主题收一遍，确保只有该主题的
+    # 分类导航/主区容器可见（布局主题不显示左侧栏与标准功能列表）。
+    try:
+        window._apply_theme_layout(load_theme_pref())
+        window.check_resize()
+        window._restore_adaptive_size(only_if_smaller=False)
+    except Exception:
+        pass
     try:
         window.present()
     except Exception:
@@ -20753,6 +23334,10 @@ def show_main_window():
     def _open_default():
         try:
             window.open_category("support")
+        except Exception:
+            pass
+        try:
+            window._restore_adaptive_size(only_if_smaller=False)
         except Exception:
             pass
         return False
@@ -20768,10 +23353,9 @@ def main():
         Gdk.set_program_class("Steamdeck-toolbox")
     except Exception:
         pass
-    # 关键顺序：必须在 apply_app_css 改写 GTK prefer-dark 之前，
-    # 先记录系统真实的配色方案，否则“跟随系统”会读到被自己改过的值。
+    # 旧版「跟随系统」遗留：现在 system 一律回退 dark，这步只为兼容保留。
     reset_system_theme_cache()
-    # 启动时应用用户上次选择的语言与主题
+    # 启动时应用用户上次选择的语言与主题（默认 dark）
     set_lang(load_lang_pref())
     apply_app_css(load_theme_pref())
     # 回调里的异常默认只打到 stderr，从桌面启动时用户完全看不到。

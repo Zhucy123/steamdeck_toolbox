@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v2.1.3** | Updated: 2026-11-11
+> **Version: v2.2.0** | Updated: 2026-11-11
 > Made by: Zhucy
 
 ## 🚀 One-click install
@@ -32,7 +32,7 @@ See **[CHANGELOG_EN.md](./CHANGELOG_EN.md)** for the full release history.
 ## ✨ Highlights
 
 - **Chinese / English UI**: switch from the top bar; preference is saved across restarts
-- **Dark / light theme**: dark, light, or follow system; preference saved
+- **UI themes**: Dark, Light, and 11 extra themes from the header Theme menu; preference saved
 - **Smart dual-boot detection**: single- vs dual-boot aware; Fix Boot / shared disk tools only show for dual-boot users
 - **Graphical boot management**: install/reinstall Clover, plus a boot-config helper (theme, timeout, default OS, …)
 - **Dual-boot helpers**: Clover boot-order repair, Windows–SteamOS shared disk auto-mount
@@ -92,5 +92,5 @@ See **[CHANGELOG_EN.md](./CHANGELOG_EN.md)** for the full release history.
 
 ### Toolbox itself
 - UI language switch (Chinese / English, remembered)
-- Dark / light / follow-system theme (remembered)
+- UI theme switcher (Dark / Light / 11 extra themes, remembered)
 - Auto update check on launch with one-click upgrade

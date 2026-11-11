@@ -2,6 +2,25 @@
 
 > Full release history. The in-app "About / Changelog" page shows the same content.
 
+2026-11-11 (v2.2.0)
+[New: UI themes]
+- Added 11 UI themes: Neo-Brutalist, Cyberpunk, Soft Material, High Contrast Large Type,
+  Neon Tool Shop, Leather Suitcase, Comic Panel, Holographic Frame, Bottom Dock Tiles,
+  Settings Split View, and Transit Map. Switch them from the header Theme menu; the
+  choice is saved automatically.
+- The theme menu still includes Dark and Light; "Follow System" has been removed.
+- The header theme control is now a text button labeled "Theme" ("主题" in the Chinese UI),
+  no longer an icon.
+
+[Bug fixes: shared disk]
+- "Fix Shared Disk" no longer only prints manual steps when an NTFS volume has a dirty
+  flag, is hibernated / using Fast Startup, or was not cleanly unmounted: it now runs
+  ntfsfix to clear the dirty flag and remounts the volume read-write automatically.
+  This auto-repair runs on a failed pre-check, when a mount is downgraded to read-only,
+  and when the mount itself fails. On success it reports the disk as mounted; only if
+  auto-repair fails does it still suggest a full Windows shutdown with Fast Startup
+  disabled, or an emergency read-only / forced mount.
+
 2026-11-11 (v2.1.3)
 [Maintenance: install and self-update]
 - Link migration only; no feature changes
