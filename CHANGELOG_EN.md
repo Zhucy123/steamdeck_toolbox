@@ -2,6 +2,13 @@
 
 > Full release history. The in-app "About / Changelog" page shows the same content.
 
+2026-11-11 (v2.1.3)
+[Maintenance: install and self-update]
+- Link migration only; no feature changes
+- Install and self-update URLs now use the GitHub `main` branch instead of `master`
+- Already-installed v2.1.2 still fetches updates from `master`. Update to this
+  version first so removing `master` later will not break auto-update
+
 2026-11-10 (v2.1.2)
 [Bug fixes: installer]
 - Fixed `install_gui.sh` swallowing both the failure and the stderr of `pacman -Sy`,

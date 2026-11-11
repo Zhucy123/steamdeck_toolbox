@@ -33,7 +33,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "2.1.2"
+VERSION = "2.1.3"
 REPO_RAW_URL = "https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/steamdeck_gui.py"
 REPO_URL = "https://github.com/Zhucy123/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -1139,7 +1139,14 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-10（v2.1.2）
+CHANGELOG_BODY_ZH = """2026-11-11（v2.1.3）
+【维护：安装与自更新】
+- 本次只改链接，没有功能变化
+- 安装与自更新的 GitHub 地址改为 `main` 分支，不再使用 `master`
+- 已安装的 v2.1.2 仍会从 `master` 拉取更新。请先升级到本版本，
+  这样之后删除 `master` 才不会打断自动更新
+
+2026-11-10（v2.1.2）
 【问题修复：安装器】
 - 修复 `install_gui.sh` 把 `pacman -Sy` 的失败与错误输出一并吞掉，导致装 vte3 时
   只显示含糊的「无法找到数据库」：现在会保留同步输出、检查返回码，失败时直接给出排查方向
@@ -1785,7 +1792,14 @@ CHANGELOG_BODY_ZH = """2026-11-10（v2.1.2）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-10 (v2.1.2)
+CHANGELOG_BODY_EN = """2026-11-11 (v2.1.3)
+[Maintenance: install and self-update]
+- Link migration only; no feature changes
+- Install and self-update URLs now use the GitHub `main` branch instead of `master`
+- Already-installed v2.1.2 still fetches updates from `master`. Update to this
+  version first so removing `master` later will not break auto-update
+
+2026-11-10 (v2.1.2)
 [Bug fixes: installer]
 - Fixed `install_gui.sh` swallowing both the failure and the stderr of `pacman -Sy`,
   which made a failed vte3 install show only a vague "cannot find database" error.
