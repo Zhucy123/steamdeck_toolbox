@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TOOLBOX_URL="https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/master/steamdeck_gui.py"
+TOOLBOX_URL="https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/steamdeck_gui.py"
 TOOLBOX_NAME="$HOME/steamdeck_gui.py"
 PYTHON_BIN="$(command -v python3 || true)"
 
