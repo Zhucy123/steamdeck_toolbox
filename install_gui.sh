@@ -7,14 +7,10 @@ PYTHON_BIN="$(command -v python3 || true)"
 # 记录进入时的只读状态：只有脚本自己把只读关掉，退出才恢复。
 # 用户原本就可写（disabled）时绝不擅自 enable 覆盖其设置。
 # 同时统一清理下载临时文件；所有成功 / 失败路径都走这一个 EXIT trap。
+# 注意：不能用 grep -q "enabled" 判断只读，因为 "disabled" 本身也包含 "enabled"。
 RO_ORIGINALLY_ENABLED=0
 RO_DISABLED_BY_US=0
 TMP_TOOLBOX=""
-if command -v steamos-readonly &>/dev/null; then
-    if sudo -n steamos-readonly status 2>/dev/null | grep -q "enabled"; then
-        RO_ORIGINALLY_ENABLED=1
-    fi
-fi
 cleanup() {
     if [ "${RO_DISABLED_BY_US:-0}" -eq 1 ] && [ "${RO_ORIGINALLY_ENABLED:-0}" -eq 1 ]; then
         if command -v steamos-readonly &>/dev/null; then
@@ -31,6 +27,19 @@ cleanup() {
     return 0
 }
 trap cleanup EXIT
+
+# 必须整行匹配：disabled 里包含 enabled 子串，绝不能用 grep "enabled"。
+steamos_ro_status() {
+    local out
+    out="$(sudo steamos-readonly status 2>/dev/null || true)"
+    if echo "$out" | grep -qiE '^[[:space:]]*enabled[[:space:]]*$'; then
+        echo enabled
+    elif echo "$out" | grep -qiE '^[[:space:]]*disabled[[:space:]]*$'; then
+        echo disabled
+    else
+        echo unknown
+    fi
+}
 
 # 与 steamdeck_gui.py 一致：真正能用的是 Python 能否 import Vte，而不只是 pacman -Q
 vte_python_ok() {
@@ -101,12 +110,34 @@ install_vte_packages() {
         echo "     sudo pacman -Sy"
     fi
     if ! sudo pacman -Sy --noconfirm; then
-        echo "❌ 同步 pacman 数据库失败，无法继续安装 vte3。"
-        echo "   请检查："
-        echo "     · 网络是否正常、系统 pacman 源是否可用（可先换源）"
-        echo "     · 是否有废弃仓库残留：grep -n community /etc/pacman.conf"
-        echo "   修复后重新运行安装命令即可。"
-        return 1
+        if [ -e /var/lib/pacman/db.lck ]; then
+            if pgrep -x pacman >/dev/null 2>&1 || pgrep -x packagekitd >/dev/null 2>&1; then
+                echo "❌ 另有软件安装或更新正在进行，pacman 数据库被锁定。"
+                echo "   请等待其结束后重新运行安装命令。"
+                return 1
+            fi
+            echo "⚠️ 发现残留的 pacman 锁文件，且没有正在运行的 pacman，正在清除后重试..."
+            sudo rm -f /var/lib/pacman/db.lck
+        fi
+        if command -v steamos-readonly &>/dev/null && [ "$(steamos_ro_status)" = "enabled" ]; then
+            echo "⚠️ 系统仍处于只读，正在再次解除后重试同步..."
+            if sudo steamos-readonly disable; then
+                RO_ORIGINALLY_ENABLED=1
+                RO_DISABLED_BY_US=1
+            fi
+        fi
+        if sudo pacman -Sy --noconfirm; then
+            echo "✅ 数据库同步已在重试后成功。"
+        else
+            echo "❌ 同步 pacman 数据库失败，无法继续安装 vte3。"
+            echo "   若提示「无法锁定数据库」：请确认已解除只读（sudo steamos-readonly disable），"
+            echo "   并检查是否有其他安装/更新占用，或 /var/lib/pacman 是否可写。"
+            echo "   其他情况请检查："
+            echo "     · 网络是否正常、系统 pacman 源是否可用（可先换源）"
+            echo "     · 是否有废弃仓库残留：grep -n community /etc/pacman.conf"
+            echo "   修复后重新运行安装命令即可。"
+            return 1
+        fi
     fi
 
     # python-gobject 是 GUI 用 gi 的前提；缺了也会表现为“没有 VTE”
@@ -139,17 +170,35 @@ install_vte_packages() {
     return 0
 }
 
-echo "正在检查系统只读状态..."
-if [ "${RO_ORIGINALLY_ENABLED:-0}" -eq 1 ] && command -v steamos-readonly &>/dev/null; then
-    if sudo steamos-readonly disable 2>/dev/null; then
-        RO_DISABLED_BY_US=1
-        echo "✅ 已临时解除只读模式（退出时自动恢复）"
+echo "正在检查系统只读状态（如需密码，只需输入一次）..."
+if ! sudo -v; then
+    echo "❌ 未能获取管理员权限，无法继续安装。"
+    exit 1
+fi
+if command -v steamos-readonly &>/dev/null; then
+    ro_now="$(steamos_ro_status)"
+    if [ "$ro_now" = "enabled" ]; then
+        RO_ORIGINALLY_ENABLED=1
+        if sudo steamos-readonly disable; then
+            RO_DISABLED_BY_US=1
+            echo "✅ 已临时解除只读模式（退出时自动恢复）"
+        else
+            echo "❌ 解除只读模式失败，无法安装系统组件。"
+            exit 1
+        fi
+    elif [ "$ro_now" = "disabled" ]; then
+        echo "系统已处于可写状态，保持不变。"
     else
-        echo "⚠️ 解除只读模式失败（需要 sudo 权限），vte3 安装可能无法写入系统目录。"
-        echo "   可手动执行: sudo steamos-readonly disable 后重试。"
+        echo "⚠️ 无法确认只读状态，尝试解除只读后继续..."
+        if sudo steamos-readonly disable; then
+            echo "✅ 已尝试解除只读模式（因原状态不明确，退出时不会自动恢复）。"
+        else
+            echo "❌ 解除只读模式失败，无法继续安装。"
+            exit 1
+        fi
     fi
 else
-    echo "系统已处于可写状态或无需解除只读，保持不变。"
+    echo "未检测到 steamos-readonly，跳过只读处理。"
 fi
 
 if [ -z "$PYTHON_BIN" ]; then
@@ -254,6 +303,7 @@ EOF
     echo "请单击或双击桌面上的 'Deck工具箱' 图标来启动程序。"
     echo "若仍提示缺少 VTE，请完全退出工具箱后重新打开（VTE 只在启动时检测一次）。"
     echo ""
+    sudo -n -v 2>/dev/null || true
     exit 0
 else
     echo "❌ 下载失败，请检查网络后重试（已保留原有文件）"
