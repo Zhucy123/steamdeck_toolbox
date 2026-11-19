@@ -2,6 +2,24 @@
 
 > Full release history. The in-app "About / Changelog" page shows the same content.
 
+2026-11-19 (v2.2.1)
+[Improvement: Watt Toolkit]
+- "Install/Update Watt Toolkit (Steam++)" now reads the latest version and the Linux x64
+  tarball URL from the official GitHub repository (BeyondDimension/SteamTools) via the API,
+  instead of the hard-coded 3.1.0 / Gitee mirror. New upstream releases can be installed
+  directly (latest at time of writing: 3.2.0).
+- Downloads now use the toolbox-wide GitHub mirror picker: gh-proxy.com / gh.3w.pm /
+  cors.isteed.cc / ghproxy.net / official. An already-current install is still skipped,
+  avoiding redundant downloads.
+
+[Bug fix: clicking any feature fails]
+- Fixed "This action failed and was skipped / TypeError: could not get a reference to type
+  class" on every feature on some systems. Cause: when the VTE typelib and shared library
+  mismatch, creating the embedded terminal raises a GI type error; the old code only checked
+  whether import succeeded and did not catch failures at terminal-instantiation time. The app
+  now probes whether a VTE terminal can actually be created, and automatically falls back to
+  the system's external terminal when it cannot, so every feature keeps working.
+
 2026-11-11 (v2.2.0)
 [New: UI themes]
 - Added 11 UI themes: Neo-Brutalist, Cyberpunk, Soft Material, High Contrast Large Type,

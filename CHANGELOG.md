@@ -2,6 +2,20 @@
 
 > 完整历史更新记录。工具箱「关于 / 更新日志」页面显示的是同一份内容。
 
+2026-11-19（v2.2.1）
+【功能改进：Watt Toolkit】
+- 「安装/更新 Watt Toolkit (Steam++)」改为从 GitHub 官方仓库（BeyondDimension/SteamTools）
+  通过 API 实时获取最新版本号与 Linux x64 安装包地址，不再写死 3.1.0 / Gitee 镜像，
+  官方发新版后即可直接更新（当前最新 3.2.0）
+- 下载接入工具箱统一的 GitHub 镜像源选择：gh-proxy.com / gh.3w.pm / cors.isteed.cc /
+  ghproxy.net / 官方源；已安装且已是最新版仍会跳过，避免重复下载
+
+【问题修复：所有功能点击报错】
+- 修复部分设备上点击任意功能都弹「这个功能执行出错，已跳过 / TypeError: could not get
+  a reference to type class」：根因是 VTE typelib 与共享库不匹配时，创建内嵌终端会抛
+  GI 类型错误，旧代码只判断 import 是否成功、没兜住实例化阶段的异常。现在启动时会
+  实际探测 VTE 能否创建终端，失败即自动改用系统外部终端运行功能，所有功能照常可用
+
 2026-11-11（v2.2.0）
 【新增：界面主题】
 - 新增 11 套界面主题：新野兽派、赛博朋克、Material 柔彩、高对比大字、霓虹工具铺、

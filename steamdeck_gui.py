@@ -7,8 +7,38 @@ try:
     gi.require_version('Vte', '2.91')
     from gi.repository import Vte
     VTE_AVAILABLE = True
-except (ValueError, ImportError):
+except (ValueError, ImportError, TypeError):
+    # TypeError: "could not get a reference to type class" —— 部分系统上 VTE
+    # typelib / 共享库不匹配，import 阶段就会抛这个，旧代码只捕获 ValueError /
+    # ImportError 会漏掉，导致所有功能点击即报错。一并当作「VTE 不可用」。
+    Vte = None
     VTE_AVAILABLE = False
+
+# VTE 可能在 import 时正常、真正实例化终端时才因 GI 类型数据损坏抛
+# TypeError("could not get a reference to type class")。这里做一次运行时探测：
+# 能造出 Vte.Terminal() 才算真的可用，否则降级到外部终端，避免所有功能都弹错。
+_VTE_PROBED = False
+def probe_vte():
+    global VTE_AVAILABLE, _VTE_PROBED
+    if _VTE_PROBED:
+        return VTE_AVAILABLE
+    _VTE_PROBED = True
+    if not VTE_AVAILABLE:
+        return False
+    try:
+        _probe = Vte.Terminal()
+        _probe.destroy()
+        return True
+    except Exception as e:
+        print(f"VTE runtime probe failed, falling back to external terminal: {e}")
+        VTE_AVAILABLE = False
+        return False
+
+def disable_vte():
+    """运行时确认 VTE 坏了：永久禁用，后续功能全部走外部终端，不再反复探测。"""
+    global VTE_AVAILABLE, _VTE_PROBED
+    VTE_AVAILABLE = False
+    _VTE_PROBED = True
 
 from gi.repository import Gtk, GLib, GdkPixbuf, Gdk, Pango
 import subprocess
@@ -33,7 +63,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "2.2.0"
+VERSION = "2.2.1"
 REPO_RAW_URL = "https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/steamdeck_gui.py"
 REPO_URL = "https://github.com/Zhucy123/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -2566,7 +2596,21 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-11（v2.2.0）
+CHANGELOG_BODY_ZH = """2026-11-19（v2.2.1）
+【功能改进：Watt Toolkit】
+- 「安装/更新 Watt Toolkit (Steam++)」改为从 GitHub 官方仓库（BeyondDimension/SteamTools）
+  通过 API 实时获取最新版本号与 Linux x64 安装包地址，不再写死 3.1.0 / Gitee 镜像，
+  官方发新版后即可直接更新（当前最新 3.2.0）
+- 下载接入工具箱统一的 GitHub 镜像源选择：gh-proxy.com / gh.3w.pm / cors.isteed.cc /
+  ghproxy.net / 官方源；已安装且已是最新版仍会跳过，避免重复下载
+
+【问题修复：所有功能点击报错】
+- 修复部分设备上点击任意功能都弹「这个功能执行出错，已跳过 / TypeError: could not get
+  a reference to type class」：根因是 VTE typelib 与共享库不匹配时，创建内嵌终端会抛
+  GI 类型错误，旧代码只判断 import 是否成功、没兜住实例化阶段的异常。现在启动时会
+  实际探测 VTE 能否创建终端，失败即自动改用系统外部终端运行功能，所有功能照常可用
+
+2026-11-11（v2.2.0）
 【新增：界面主题】
 - 新增 11 套界面主题：新野兽派、赛博朋克、Material 柔彩、高对比大字、霓虹工具铺、
   皮革旅行箱窗、漫画格窗口、全息边框窗、底栏磁贴窗、设置分栏窗、线路站点窗，
@@ -3234,7 +3278,25 @@ CHANGELOG_BODY_ZH = """2026-11-11（v2.2.0）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-11 (v2.2.0)
+CHANGELOG_BODY_EN = """2026-11-19 (v2.2.1)
+[Improvement: Watt Toolkit]
+- "Install/Update Watt Toolkit (Steam++)" now reads the latest version and the Linux x64
+  tarball URL from the official GitHub repository (BeyondDimension/SteamTools) via the API,
+  instead of the hard-coded 3.1.0 / Gitee mirror. New upstream releases can be installed
+  directly (latest at time of writing: 3.2.0).
+- Downloads now use the toolbox-wide GitHub mirror picker: gh-proxy.com / gh.3w.pm /
+  cors.isteed.cc / ghproxy.net / official. An already-current install is still skipped,
+  avoiding redundant downloads.
+
+[Bug fix: clicking any feature fails]
+- Fixed "This action failed and was skipped / TypeError: could not get a reference to type
+  class" on every feature on some systems. Cause: when the VTE typelib and shared library
+  mismatch, creating the embedded terminal raises a GI type error; the old code only checked
+  whether import succeeded and did not catch failures at terminal-instantiation time. The app
+  now probes whether a VTE terminal can actually be created, and automatically falls back to
+  the system's external terminal when it cannot, so every feature keeps working.
+
+2026-11-11 (v2.2.0)
 [New: UI themes]
 - Added 11 UI themes: Neo-Brutalist, Cyberpunk, Soft Material, High Contrast Large Type,
   Neon Tool Shop, Leather Suitcase, Comic Panel, Holographic Frame, Bottom Dock Tiles,
@@ -6791,9 +6853,40 @@ watt_toolkit_install() {
 
     local INSTALL_DIR="$HOME/Watt Toolkit"
     local DESKTOP_DIR="$HOME/Desktop"
-    local DOWNLOAD_URL="https://gitee.com/rmbgame/SteamTools/releases/download/3.1.0/Steam%20%20_v3.1.0_linux_x64.tgz"
-    local VERSION="3.1.0"
     local trust_now=""
+
+    # 从 GitHub 官方仓库动态获取最新版本号与 Linux x64 包地址（不再写死 3.1.0 / Gitee 镜像）
+    local WATT_REPO="BeyondDimension/SteamTools"
+    echo -e "${CYAN}正在从 GitHub 获取 Watt Toolkit 最新版本...${NC}"
+    local release_json
+    release_json="$(curl -s --connect-timeout 15 --max-time 30 "https://api.github.com/repos/${WATT_REPO}/releases/latest")"
+    if [ -z "$release_json" ] || ! [[ "$release_json" == \{* ]]; then
+        echo -e "${RED}✗ 无法获取 GitHub 最新版本信息，请检查网络后重试。${NC}"
+        return 1
+    fi
+    local release_info
+    release_info="$(printf '%s' "$release_json" | "$PYTHON_CMD" -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    tag = (d.get("tag_name") or "").lstrip("v")
+    url = ""
+    for a in d.get("assets", []):
+        n = a.get("name", "")
+        if "linux_x64" in n and n.endswith(".tgz"):
+            url = a.get("browser_download_url", "")
+            break
+    print(tag + "|" + url)
+except Exception:
+    print("|")
+')"
+    local VERSION="${release_info%%|*}"
+    local DOWNLOAD_URL="${release_info#*|}"
+    if [ -z "$VERSION" ] || [ -z "$DOWNLOAD_URL" ]; then
+        echo -e "${RED}✗ 无法解析 GitHub 最新版本号或下载链接；请稍后重试。${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}GitHub 最新版本: ${VERSION}${NC}"
 
     for cmd in curl sudo unzip tar; do
         if ! command -v $cmd &> /dev/null; then
@@ -6817,7 +6910,7 @@ watt_toolkit_install() {
     fi
 
     if $has_install; then
-        # FIX-WATT: .version 可能是 "v3.1.0" 而下载常量是 "3.1.0"，
+        # FIX-WATT: 已安装记录可能是 "v3.2.0" 而 GitHub 解析出的是 "3.2.0"，
         # 比较前去掉开头的 v，否则同版本也会误报「检测到新版本」。
         local installed_cmp="${installed_version#v}"
         if [ -n "$installed_version" ] && [ "$installed_cmp" = "$VERSION" ]; then
@@ -6838,10 +6931,10 @@ watt_toolkit_install() {
         fi
     fi
 
-    # FIX-SOFTWARE: 下载到 mktemp 临时目录 + curl --fail/超时；先校验关键文件
+    # FIX-SOFTWARE: 下载到 mktemp 临时目录 + 镜像源选择；先校验关键文件
     # 再替换旧目录；mv/mkdir 失败立即中止；.version 只在全部成功后写。
     echo -e "${GREEN}将安装版本: ${VERSION}${NC}"
-    echo "正在下载 ${DOWNLOAD_URL} ..."
+    echo "下载地址: ${DOWNLOAD_URL}"
 
     local temp_dir
     temp_dir="$(mktemp -d /tmp/watt_toolkit_install.XXXXXXXX 2>/dev/null)" || {
@@ -6850,8 +6943,9 @@ watt_toolkit_install() {
     # 还在里面，后续每条 sudo 都会 getcwd 失败并刷上百行
     # "job-working-directory: getcwd: 无法访问父目录"。全部改用绝对路径。
     local filename="$temp_dir/Steam_v${VERSION}_linux_x64.tgz"
-    if ! curl -L --fail --connect-timeout 15 --max-time 300 --progress-bar -o "$filename" "$DOWNLOAD_URL"; then
-        echo -e "${RED}下载失败，请检查网络后重试。${NC}"
+    # 复用全局 MIRRORS：gh-proxy.com / gh.3w.pm / cors.isteed.cc / ghproxy.net / 官方源
+    if ! download_with_mirrors "$DOWNLOAD_URL" "$filename" "Watt Toolkit ${VERSION}"; then
+        echo -e "${YELLOW}下载已取消。${NC}"
         cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
         return 1
     fi
@@ -13314,9 +13408,41 @@ watt_toolkit_install() {
 
     local INSTALL_DIR="$HOME/Watt Toolkit"
     local DESKTOP_DIR="$HOME/Desktop"
-    local DOWNLOAD_URL="https://gitee.com/rmbgame/SteamTools/releases/download/3.1.0/Steam%20%20_v3.1.0_linux_x64.tgz"
-    local VERSION="3.1.0"
     local trust_now=""
+
+    # Fetch the latest version and the Linux x64 tarball URL from the official
+    # GitHub repo (no more hard-coded 3.1.0 / Gitee mirror).
+    local WATT_REPO="BeyondDimension/SteamTools"
+    echo -e "${CYAN}Fetching the latest Watt Toolkit version from GitHub...${NC}"
+    local release_json
+    release_json="$(curl -s --connect-timeout 15 --max-time 30 "https://api.github.com/repos/${WATT_REPO}/releases/latest")"
+    if [ -z "$release_json" ] || ! [[ "$release_json" == \{* ]]; then
+        echo -e "${RED}✗ Could not fetch the latest version info from GitHub; check your connection and retry.${NC}"
+        return 1
+    fi
+    local release_info
+    release_info="$(printf '%s' "$release_json" | "$PYTHON_CMD" -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    tag = (d.get("tag_name") or "").lstrip("v")
+    url = ""
+    for a in d.get("assets", []):
+        n = a.get("name", "")
+        if "linux_x64" in n and n.endswith(".tgz"):
+            url = a.get("browser_download_url", "")
+            break
+    print(tag + "|" + url)
+except Exception:
+    print("|")
+')"
+    local VERSION="${release_info%%|*}"
+    local DOWNLOAD_URL="${release_info#*|}"
+    if [ -z "$VERSION" ] || [ -z "$DOWNLOAD_URL" ]; then
+        echo -e "${RED}✗ Could not parse the latest version or download URL; please retry later.${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}Latest GitHub version: ${VERSION}${NC}"
 
     for cmd in curl sudo unzip tar; do
         if ! command -v $cmd &> /dev/null; then
@@ -13340,8 +13466,9 @@ watt_toolkit_install() {
     fi
 
     if $has_install; then
-        # FIX-WATT: .version may be "v3.1.0" while the download constant is
-        # "3.1.0"; strip a leading v so the same version is not reported as new.
+        # FIX-WATT: the installed record may be "v3.2.0" while the version parsed
+        # from GitHub is "3.2.0"; strip a leading v so the same version is not
+        # reported as a new release.
         local installed_cmp="${installed_version#v}"
         if [ -n "$installed_version" ] && [ "$installed_cmp" = "$VERSION" ]; then
             echo -e "${GREEN}✅ Already up to date (${installed_version}); nothing to do.${NC}"
@@ -13361,10 +13488,10 @@ watt_toolkit_install() {
         fi
     fi
 
-    # FIX-SOFTWARE: download into a mktemp dir + curl --fail/timeouts; validate key
+    # FIX-SOFTWARE: download into a mktemp dir + mirror selection; validate key
     # files BEFORE touching the old install; abort on mv/mkdir failure; write .version last.
     echo -e "${GREEN}Will install version: ${VERSION}${NC}"
-    echo "Downloading ${DOWNLOAD_URL} ..."
+    echo "Download URL: ${DOWNLOAD_URL}"
 
     local temp_dir
     temp_dir="$(mktemp -d /tmp/watt_toolkit_install.XXXXXXXX 2>/dev/null)" || {
@@ -13373,8 +13500,9 @@ watt_toolkit_install() {
     # install; if the shell still sits in it, every later sudo prints hundreds of
     # "job-working-directory: getcwd" errors. Use absolute paths throughout.
     local filename="$temp_dir/Steam_v${VERSION}_linux_x64.tgz"
-    if ! curl -L --fail --connect-timeout 15 --max-time 300 --progress-bar -o "$filename" "$DOWNLOAD_URL"; then
-        echo -e "${RED}Download failed, please check your network and try again.${NC}"
+    # Reuse the global MIRRORS: gh-proxy.com / gh.3w.pm / cors.isteed.cc / ghproxy.net / official
+    if ! download_with_mirrors "$DOWNLOAD_URL" "$filename" "Watt Toolkit ${VERSION}"; then
+        echo -e "${YELLOW}Download cancelled.${NC}"
         cd "$HOME" 2>/dev/null; rm -rf "$temp_dir"
         return 1
     fi
@@ -17476,77 +17604,99 @@ class TaskWindow(Gtk.Window):
         self.completed = False
         self.temp_script = None
         self._force_closing = False
-        self.use_external_terminal = not VTE_AVAILABLE
+        # 运行时探测：import 成功不代表 Vte.Terminal() 一定能造出来。
+        # 部分系统 typelib/共享库不匹配，实例化时抛 TypeError(could not get a
+        # reference to type class)，Gtk 的 "invalid (unclassed) type" 也属此类。
+        # 一旦探测失败就走外部终端，保证所有功能照常可用而不是点击即报错。
+        self.use_external_terminal = not probe_vte()
         self.child_pid = None
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(vbox)
         if self.use_external_terminal:
-            label = Gtk.Label(label=t("task_external"))
-            label.set_margin_top(20)
-            label.set_margin_bottom(20)
-            vbox.pack_start(label, True, True, 0)
-            self.label = label  # external branch
-            self.action_btn = Gtk.Button(label=t("close"))
-            self.action_btn.connect("clicked", lambda btn: self.destroy())
-            button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-            button_box.set_margin_bottom(5)
-            button_box.pack_start(Gtk.Label(), True, True, 0)
-            button_box.pack_start(self.action_btn, False, False, 0)
-            vbox.pack_start(button_box, False, False, 0)
-            # 任务仍在运行时关窗给一次明确提示，不再只显示「运行中」永不更新。
-            self.connect("delete-event", self._on_external_close)
-            self.show_all()
-            self.run_external(func_key)
+            self._setup_external_terminal(vbox, func_key)
         else:
-            self.terminal = Vte.Terminal()
-            self.terminal.set_vexpand(True)
-            self.terminal.set_hexpand(True)
-            self.terminal.set_scrollback_lines(10000)
+            # 即便 probe 通过，实例化 / spawn 仍可能因 GI 类型数据损坏抛异常。
+            # 这里整段兜住：任何失败都拆掉半成品，改用外部终端重跑，绝不让
+            # 「所有功能点击就弹 TypeError」的情况发生。
             try:
-                self.terminal.set_font(Pango.FontDescription("Monospace 11"))
-            except Exception:
-                pass
-            apply_terminal_theme(self.terminal)
-            term_frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-            term_frame.get_style_context().add_class("card")
-            term_frame.get_style_context().add_class("term-card")
-            term_frame.set_margin_top(12); term_frame.set_margin_bottom(0); term_frame.set_margin_start(12); term_frame.set_margin_end(12)
-            term_frame.pack_start(self.terminal, True, True, 0)
-            vbox.pack_start(term_frame, True, True, 0)
+                self._setup_vte_terminal(vbox, func_key)
+            except Exception as e:
+                print(f"VTE terminal setup failed, falling back to external terminal: {e}")
+                disable_vte()
+                self.use_external_terminal = True
+                self.terminal = None
+                # 清空 vbox 里已加的半成品控件，重建为外部终端界面
+                for child in list(vbox.get_children()):
+                    vbox.remove(child)
+                self._setup_external_terminal(vbox, func_key)
 
-            # 终端右键菜单：复制选中 / 复制全部输出 / 粘贴 / 全选
-            self.terminal.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
-            self.terminal.connect("button-press-event", self._on_terminal_button_press)
-            # 键盘快捷键：Ctrl+Shift+C 复制、Ctrl+Shift+V 粘贴、Ctrl+Shift+A 全选
-            self.terminal.connect("key-press-event", self._on_terminal_key_press)
+    def _setup_external_terminal(self, vbox, func_key):
+        label = Gtk.Label(label=t("task_external"))
+        label.set_margin_top(20)
+        label.set_margin_bottom(20)
+        vbox.pack_start(label, True, True, 0)
+        self.label = label  # external branch
+        self.action_btn = Gtk.Button(label=t("close"))
+        self.action_btn.connect("clicked", lambda btn: self.destroy())
+        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        button_box.set_margin_bottom(5)
+        button_box.pack_start(Gtk.Label(), True, True, 0)
+        button_box.pack_start(self.action_btn, False, False, 0)
+        vbox.pack_start(button_box, False, False, 0)
+        self.connect("delete-event", self._on_external_close)
+        self.show_all()
+        self.run_external(func_key)
 
-            button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-            button_box.set_name("task-toolbar")
-            button_box.set_margin_top(0)
-            button_box.set_margin_bottom(0)
-            button_box.set_margin_start(0)
-            button_box.set_margin_end(0)
-            self.timer_label = Gtk.Label(label=t("elapsed_zero"))
-            self.timer_label.set_name("task-timer")
-            button_box.pack_start(self.timer_label, False, False, 0)
-            button_box.pack_start(Gtk.Label(), True, True, 0)
+    def _setup_vte_terminal(self, vbox, func_key):
+        self.terminal = Vte.Terminal()
+        self.terminal.set_vexpand(True)
+        self.terminal.set_hexpand(True)
+        self.terminal.set_scrollback_lines(10000)
+        try:
+            self.terminal.set_font(Pango.FontDescription("Monospace 11"))
+        except Exception:
+            pass
+        apply_terminal_theme(self.terminal)
+        term_frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        term_frame.get_style_context().add_class("card")
+        term_frame.get_style_context().add_class("term-card")
+        term_frame.set_margin_top(12); term_frame.set_margin_bottom(0); term_frame.set_margin_start(12); term_frame.set_margin_end(12)
+        term_frame.pack_start(self.terminal, True, True, 0)
+        vbox.pack_start(term_frame, True, True, 0)
 
-            # 复制按钮：有选中内容时复制选中，否则复制全部输出
-            self.copy_btn = Gtk.Button(label=t("copy"))
-            self.copy_btn.set_tooltip_text(t("copy_tooltip"))
-            self.copy_btn.connect("clicked", self.on_copy_clicked)
-            button_box.pack_start(self.copy_btn, False, False, 0)
+        # 终端右键菜单：复制选中 / 复制全部输出 / 粘贴 / 全选
+        self.terminal.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+        self.terminal.connect("button-press-event", self._on_terminal_button_press)
+        # 键盘快捷键：Ctrl+Shift+C 复制、Ctrl+Shift+V 粘贴、Ctrl+Shift+A 全选
+        self.terminal.connect("key-press-event", self._on_terminal_key_press)
 
-            self.action_btn = Gtk.Button(label=t("cancel"))
-            self.action_btn.connect("clicked", self.on_action_button_clicked)
-            button_box.pack_start(self.action_btn, False, False, 0)
-            vbox.pack_start(button_box, False, False, 0)
-            self.temp_script = create_temp_script()
-            self.start_time = time.time()
-            self.connect("destroy", self.on_window_destroy)
-            self.start_command(func_key)
-            self.show_all()
-            GLib.timeout_add_seconds(1, self._tick)
+        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        button_box.set_name("task-toolbar")
+        button_box.set_margin_top(0)
+        button_box.set_margin_bottom(0)
+        button_box.set_margin_start(0)
+        button_box.set_margin_end(0)
+        self.timer_label = Gtk.Label(label=t("elapsed_zero"))
+        self.timer_label.set_name("task-timer")
+        button_box.pack_start(self.timer_label, False, False, 0)
+        button_box.pack_start(Gtk.Label(), True, True, 0)
+
+        # 复制按钮：有选中内容时复制选中，否则复制全部输出
+        self.copy_btn = Gtk.Button(label=t("copy"))
+        self.copy_btn.set_tooltip_text(t("copy_tooltip"))
+        self.copy_btn.connect("clicked", self.on_copy_clicked)
+        button_box.pack_start(self.copy_btn, False, False, 0)
+
+        self.action_btn = Gtk.Button(label=t("cancel"))
+        self.action_btn.connect("clicked", self.on_action_button_clicked)
+        button_box.pack_start(self.action_btn, False, False, 0)
+        vbox.pack_start(button_box, False, False, 0)
+        self.temp_script = create_temp_script()
+        self.start_time = time.time()
+        self.connect("destroy", self.on_window_destroy)
+        self.start_command(func_key)
+        self.show_all()
+        GLib.timeout_add_seconds(1, self._tick)
 
     # ------------------------------------------------------------------
     # 复制按钮 / 右键菜单入口
@@ -19910,7 +20060,7 @@ def ensure_vte_installed():
     # 而 parent=None 的框在某些窗口管理器下会跑到主窗口**后面**——
     # 用户看到的是「工具箱窗口在，但点什么都没反应」，正是这个原因。
     # 改成非模态 + 置顶 + present()，即使它被压到后面，主界面也照常可用。
-    if VTE_AVAILABLE: return
+    if probe_vte(): return
     # 找主窗口作为 parent：非模态框有明确父窗才不会跑到主界面后面。
     parent = None
     try:

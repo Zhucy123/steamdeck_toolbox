@@ -4,7 +4,7 @@
 
 An all-in-one system management and enhancement toolkit for Steam Deck. It covers system optimization, boot management, software installs, network acceleration, dual-boot helpers, game enhancements, and 40+ practical tools for daily use and advanced tweaking.
 
-> **Version: v2.2.0** | Updated: 2026-11-11
+> **Version: v2.2.1** | Updated: 2026-11-19
 > Made by: Zhucy
 
 ## 🚀 One-click install
