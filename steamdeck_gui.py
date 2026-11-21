@@ -63,7 +63,7 @@ import signal
 # ============================================================================
 # 版本定义
 # ============================================================================
-VERSION = "2.2.1"
+VERSION = "2.2.2"
 REPO_RAW_URL = "https://raw.githubusercontent.com/Zhucy123/steamdeck_toolbox/main/steamdeck_gui.py"
 REPO_URL = "https://github.com/Zhucy123/steamdeck_toolbox"
 VERSION_CHECK_TIMEOUT = 10
@@ -2596,7 +2596,15 @@ def changelog_body_text():
         return CHANGELOG_BODY_EN
     return CHANGELOG_BODY_ZH
 
-CHANGELOG_BODY_ZH = """2026-11-19（v2.2.1）
+CHANGELOG_BODY_ZH = """2026-11-21（v2.2.2）
+【功能改进：AskLink 远程】
+- 「安装/更新 AskLink」不再写死 4.0.33.0：点击后先从 AskLink 官方接口
+  (www.asklink.com/api/personal-downloads) 读取 Linux 最新版本号，与本机 dpkg 中 asklink 的
+  版本比较，发现新版时提供「更新 / 重装 / 卸载」三选一（已是最新则提供「重装 / 卸载」）。
+- 下载地址同步改为官方现用路径 download/linux/AskLink-<版本>-x86_64.deb，并对旧路径
+  linux/<版本>/ 做兜底；官方接口不可达时使用内置版本号 4.3.9.3，避免装到过期版本。
+
+2026-11-19（v2.2.1）
 【功能改进：Watt Toolkit】
 - 「安装/更新 Watt Toolkit (Steam++)」改为从 GitHub 官方仓库（BeyondDimension/SteamTools）
   通过 API 实时获取最新版本号与 Linux x64 安装包地址，不再写死 3.1.0 / Gitee 镜像，
@@ -3278,7 +3286,17 @@ CHANGELOG_BODY_ZH = """2026-11-19（v2.2.1）
 2026-01-11（v1.0.7） 完善调整虚拟内存大小功能
 最初发布在github，没做详细的统计，发布日期为2026-01-01"""
 
-CHANGELOG_BODY_EN = """2026-11-19 (v2.2.1)
+CHANGELOG_BODY_EN = """2026-11-21 (v2.2.2)
+[Improvement: AskLink remote]
+- "Install/Update AskLink" no longer hard-codes 4.0.33.0. On click it now reads the latest
+  Linux version from AskLink's official API (www.asklink.com/api/personal-downloads) and
+  compares it with the installed dpkg version of asklink. When a newer version exists it
+  offers Update / Reinstall / Uninstall (Reinstall / Uninstall when already current).
+- Download URL switched to the official current path download/linux/AskLink-<ver>-x86_64.deb,
+  with the legacy linux/<ver>/ path as fallback. If the API is unreachable it falls back to
+  the built-in version 4.3.9.3 so an outdated package is not installed.
+
+2026-11-19 (v2.2.1)
 [Improvement: Watt Toolkit]
 - "Install/Update Watt Toolkit (Steam++)" now reads the latest version and the Linux x64
   tarball URL from the official GitHub repository (BeyondDimension/SteamTools) via the API,
@@ -6694,8 +6712,39 @@ install_asklink() {
     clear
     echo -e "${YELLOW}════════════════ AskLink 远程 ════════════════${NC}"
 
-    if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
-        # FIX-SOFTWARE: 二次确认 + 检查返回值 + 用户数据目录单独确认。
+    # 官方版本接口（返回各平台最新版本，含 LINUX）
+    local ASKLINK_API="https://www.asklink.com/api/personal-downloads"
+    # API 不可用时兜底版本
+    local ASKLINK_FALLBACK_VER="4.3.9.3"
+
+    asklink_installed_version() {
+        local v=""
+        if command -v dpkg-query &>/dev/null; then
+            v="$(dpkg-query -W -f='${Version}' asklink 2>/dev/null)"
+        fi
+        if [ -z "$v" ] && [ -f /opt/AskLink/version ]; then
+            v="$(cat /opt/AskLink/version 2>/dev/null)"
+        fi
+        printf '%s' "$v" | tr -d '[:space:]'
+    }
+
+    asklink_latest_version() {
+        local json
+        json="$(curl -s --connect-timeout 10 --max-time 20 "$ASKLINK_API" 2>/dev/null)" || return 1
+        [ -n "$json" ] || return 1
+        printf '%s' "$json" | "$PYTHON_CMD" -c '
+import sys, json
+try:
+    for item in json.load(sys.stdin):
+        if str(item.get("clientType", "")).upper() == "LINUX":
+            print(str(item.get("version", "")).strip())
+            break
+except Exception:
+    pass
+' 2>/dev/null
+    }
+
+    asklink_uninstall() {
         echo -e "${GREEN}AskLink 已安装。${NC}"
         echo -e "${YELLOW}将删除 /opt/AskLink 及桌面/系统快捷方式。${NC}"
         local DESKTOP_DIR
@@ -6706,7 +6755,6 @@ install_asklink() {
             return 0
         fi
         local fail=0
-        # 结束可能占用二进制的进程（检查返回值但不因「没找到进程」而失败）
         if pgrep -f '/opt/AskLink' >/dev/null 2>&1; then
             sudo pkill -f '/opt/AskLink' 2>/dev/null || echo -e "${YELLOW}⚠ 结束进程失败，请手动关闭后重试${NC}"
         fi
@@ -6722,7 +6770,6 @@ install_asklink() {
         if [ -e /usr/share/applications/AskLink.desktop ] && ! sudo rm -f /usr/share/applications/AskLink.desktop; then
             echo -e "${RED}✗ 删除系统快捷方式失败${NC}"; fail=1
         fi
-        # 用户数据目录：单独确认
         if [ -d "$HOME/Documents/AskLink" ]; then
             echo ""
             echo -e "${CYAN}是否删除配置与用户数据目录 $HOME/Documents/AskLink？${NC}"
@@ -6744,6 +6791,69 @@ install_asklink() {
         fi
         echo -e "${GREEN}✅ AskLink 已卸载。${NC}"
         return 0
+    }
+
+    local installed_ver=""
+    installed_ver="$(asklink_installed_version)"
+    [ -n "$installed_ver" ] && echo -e "${CYAN}当前已安装版本: ${installed_ver}${NC}"
+
+    echo -e "${CYAN}正在检查 AskLink 最新版本...${NC}"
+    local latest_ver=""
+    latest_ver="$(asklink_latest_version)"
+    if [ -z "$latest_ver" ]; then
+        echo -e "${YELLOW}⚠ 无法获取官方最新版本，使用内置版本 ${ASKLINK_FALLBACK_VER}。${NC}"
+        latest_ver="$ASKLINK_FALLBACK_VER"
+    else
+        echo -e "${GREEN}官方最新版本: ${latest_ver}${NC}"
+    fi
+
+    local action=""
+    if [ -z "$installed_ver" ]; then
+        echo -e "${CYAN}AskLink 未安装，将安装最新版本 ${latest_ver}。${NC}"
+        action="install"
+    elif fs_ver_gt "$latest_ver" "$installed_ver"; then
+        echo -e "${YELLOW}发现新版本 ${latest_ver}（当前 ${installed_ver}）。${NC}"
+        echo "请选择操作："
+        echo "  1) 更新到 ${latest_ver}"
+        echo "  2) 重新安装当前版本 ${installed_ver}"
+        echo "  3) 卸载 AskLink"
+        echo "  0) 取消"
+        local choice=""
+        read -r -p "请输入编号 [1]: " choice < /dev/tty || choice="1"
+        case "$choice" in
+            1|"") action="update" ;;
+            2) action="reinstall" ;;
+            3) action="uninstall" ;;
+            *) echo -e "${GREEN}已取消。${NC}"; return 0 ;;
+        esac
+    else
+        echo -e "${GREEN}已是最新版本 ${installed_ver}。${NC}"
+        echo "请选择操作："
+        echo "  1) 重新安装 ${installed_ver}"
+        echo "  2) 卸载 AskLink"
+        echo "  0) 取消"
+        local choice=""
+        read -r -p "请输入编号 [1]: " choice < /dev/tty || choice="1"
+        case "$choice" in
+            1|"") action="reinstall" ;;
+            2) action="uninstall" ;;
+            *) echo -e "${GREEN}已取消。${NC}"; return 0 ;;
+        esac
+    fi
+
+    if [ "$action" = "uninstall" ]; then
+        asklink_uninstall
+        return $?
+    fi
+
+    local target_ver="$latest_ver"
+    [ "$action" = "reinstall" ] && target_ver="$installed_ver"
+    if [ -n "$installed_ver" ]; then
+        echo -e "${YELLOW}将安装版本 ${target_ver}（覆盖现有安装）。${NC}"
+        if ! confirm_action; then
+            echo -e "${GREEN}已取消。${NC}"
+            return 0
+        fi
     fi
 
     echo -e "${CYAN}检查 SteamOS 只读状态...${NC}"
@@ -6763,9 +6873,6 @@ install_asklink() {
     if ! command -v dpkg &>/dev/null; then
         echo -e "${CYAN}未检测到 dpkg，正在安装...${NC}"
         if command -v pacman &>/dev/null; then
-            # SteamOS/Holo 上常残留 /var/lib/dpkg/{available,status}
-            #（曾手动 dpkg -i 留下，且不属于任何 pacman 包）。
-            # 直接 pacman -S dpkg 会报「文件系统中已存在」冲突。
             if ! sudo pacman -S --needed --noconfirm dpkg; then
                 echo -e "${YELLOW}常规安装遇到文件冲突，尝试覆盖 /var/lib/dpkg 残留文件...${NC}"
                 if ! sudo pacman -S --needed --noconfirm --overwrite '/var/lib/dpkg/*' dpkg; then
@@ -6787,24 +6894,42 @@ install_asklink() {
         echo -e "${GREEN}dpkg 已存在${NC}"
     fi
 
-    local ASKLINK_URL="https://dl.asklink.com/linux/4.0.33.0/AskLink-4.0.33.0-x86_64.deb"
-    local FILENAME="AskLink-4.0.33.0-x86_64.deb"
-
-    echo -e "${CYAN}下载地址: ${ASKLINK_URL}${NC}"
-    echo -e "${CYAN}正在下载 ${FILENAME} ...${NC}"
-
+    local FILENAME="AskLink-${target_ver}-x86_64.deb"
+    local ASKLINK_URLS=(
+        "https://dl.asklink.com/download/linux/AskLink-${target_ver}-x86_64.deb"
+        "https://dl.asklink.com/linux/${target_ver}/AskLink-${target_ver}-x86_64.deb"
+    )
     cd "$TEMP_DIR" || return
-    # FIX-SOFTWARE: 关键下载加 --fail/超时；dpkg 不再 2>/dev/null 吞错误。
-    if command -v wget &>/dev/null; then
-        wget --show-progress --connect-timeout=15 --timeout=120 --tries=1 "$ASKLINK_URL" -O "$FILENAME"
-    else
-        curl -L --fail --connect-timeout 15 --max-time 120 --progress-bar "$ASKLINK_URL" -o "$FILENAME"
-    fi
-    if [ $? -ne 0 ] || [ ! -s "$FILENAME" ]; then
-        echo -e "${RED}下载失败或文件为空。${NC}"
+    local ASKLINK_URL="" ok=0 url
+    for url in "${ASKLINK_URLS[@]}"; do
+        echo -e "${CYAN}尝试下载地址: ${url}${NC}"
+        # SteamOS 上常见 BusyBox 版 wget，它不支持 --fail；该选项只给 curl 用。
+        # 下载后用 dpkg-deb 校验确为 .deb，避免把 404 错误页当成安装包继续安装。
+        if command -v wget &>/dev/null; then
+            wget --show-progress --connect-timeout=15 --timeout=180 --tries=1 "$url" -O "$FILENAME" && ok=1
+        else
+            curl -L --fail --connect-timeout 15 --max-time 180 -o "$FILENAME" "$url" && ok=1
+        fi
+        local valid=0
+        if [ "$ok" -eq 1 ] && [ -s "$FILENAME" ]; then
+            if command -v dpkg-deb &>/dev/null; then
+                dpkg-deb -I "$FILENAME" >/dev/null 2>&1 && valid=1
+            else
+                valid=1
+            fi
+        fi
+        if [ "$valid" -eq 1 ]; then
+            ASKLINK_URL="$url"
+            break
+        fi
         rm -f "$FILENAME"
+        ok=0
+    done
+    if [ "$ok" -ne 1 ] || [ ! -s "$FILENAME" ]; then
+        echo -e "${RED}下载失败或文件为空（已尝试全部下载地址）。${NC}"
         return 1
     fi
+    echo -e "${CYAN}下载地址: ${ASKLINK_URL}${NC}"
 
     echo -e "${CYAN}正在安装（dpkg 输出不再被抑制，失败将如实显示）...${NC}"
     if ! sudo dpkg --force-depends -i "$FILENAME"; then
@@ -6815,13 +6940,13 @@ install_asklink() {
     fi
     rm -f "$FILENAME"
 
-    # 安装后验证可执行文件/服务，而不是只看目录存在
     if [ ! -x /opt/AskLink/AskLink ] && ! command -v asklink &>/dev/null; then
         echo -e "${RED}✗ dpkg 返回成功但未找到可执行的 AskLink，安装视为失败。${NC}"
         return 1
     fi
     if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
-        echo -e "${GREEN}✅ AskLink 安装成功！${NC}"
+        echo "$target_ver" > /opt/AskLink/version 2>/dev/null || true
+        echo -e "${GREEN}✅ AskLink ${target_ver} 安装/更新成功！${NC}"
         local DESKTOP_DIR
         DESKTOP_DIR="$(fs_desktop_dir)"
         local DESKTOP_FILE="$DESKTOP_DIR/AskLink.desktop"
@@ -13252,8 +13377,39 @@ install_asklink() {
     clear
     echo -e "${YELLOW}════════════════ AskLink remote assistance ════════════════${NC}"
 
-    if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
-        # FIX-SOFTWARE: confirm + check rc + separately confirm user data removal.
+    # Official version API (returns the latest version per platform, including LINUX)
+    local ASKLINK_API="https://www.asklink.com/api/personal-downloads"
+    # Built-in fallback version if the API is unreachable
+    local ASKLINK_FALLBACK_VER="4.3.9.3"
+
+    asklink_installed_version() {
+        local v=""
+        if command -v dpkg-query &>/dev/null; then
+            v="$(dpkg-query -W -f='${Version}' asklink 2>/dev/null)"
+        fi
+        if [ -z "$v" ] && [ -f /opt/AskLink/version ]; then
+            v="$(cat /opt/AskLink/version 2>/dev/null)"
+        fi
+        printf '%s' "$v" | tr -d '[:space:]'
+    }
+
+    asklink_latest_version() {
+        local json
+        json="$(curl -s --connect-timeout 10 --max-time 20 "$ASKLINK_API" 2>/dev/null)" || return 1
+        [ -n "$json" ] || return 1
+        printf '%s' "$json" | "$PYTHON_CMD" -c '
+import sys, json
+try:
+    for item in json.load(sys.stdin):
+        if str(item.get("clientType", "")).upper() == "LINUX":
+            print(str(item.get("version", "")).strip())
+            break
+except Exception:
+    pass
+' 2>/dev/null
+    }
+
+    asklink_uninstall() {
         echo -e "${GREEN}AskLink is installed.${NC}"
         echo -e "${YELLOW}Will delete /opt/AskLink and the desktop/system shortcuts.${NC}"
         local DESKTOP_DIR
@@ -13300,6 +13456,69 @@ install_asklink() {
         fi
         echo -e "${GREEN}✅ AskLink uninstalled.${NC}"
         return 0
+    }
+
+    local installed_ver=""
+    installed_ver="$(asklink_installed_version)"
+    [ -n "$installed_ver" ] && echo -e "${CYAN}Currently installed version: ${installed_ver}${NC}"
+
+    echo -e "${CYAN}Checking the latest AskLink version...${NC}"
+    local latest_ver=""
+    latest_ver="$(asklink_latest_version)"
+    if [ -z "$latest_ver" ]; then
+        echo -e "${YELLOW}⚠ Could not fetch the official version; using built-in ${ASKLINK_FALLBACK_VER}.${NC}"
+        latest_ver="$ASKLINK_FALLBACK_VER"
+    else
+        echo -e "${GREEN}Latest official version: ${latest_ver}${NC}"
+    fi
+
+    local action=""
+    if [ -z "$installed_ver" ]; then
+        echo -e "${CYAN}AskLink is not installed; will install the latest version ${latest_ver}.${NC}"
+        action="install"
+    elif fs_ver_gt "$latest_ver" "$installed_ver"; then
+        echo -e "${YELLOW}New version ${latest_ver} available (current ${installed_ver}).${NC}"
+        echo "Choose an action:"
+        echo "  1) Update to ${latest_ver}"
+        echo "  2) Reinstall current version ${installed_ver}"
+        echo "  3) Uninstall AskLink"
+        echo "  0) Cancel"
+        local choice=""
+        read -r -p "Enter number [1]: " choice < /dev/tty || choice="1"
+        case "$choice" in
+            1|"") action="update" ;;
+            2) action="reinstall" ;;
+            3) action="uninstall" ;;
+            *) echo -e "${GREEN}Cancelled.${NC}"; return 0 ;;
+        esac
+    else
+        echo -e "${GREEN}Already up to date ${installed_ver}.${NC}"
+        echo "Choose an action:"
+        echo "  1) Reinstall ${installed_ver}"
+        echo "  2) Uninstall AskLink"
+        echo "  0) Cancel"
+        local choice=""
+        read -r -p "Enter number [1]: " choice < /dev/tty || choice="1"
+        case "$choice" in
+            1|"") action="reinstall" ;;
+            2) action="uninstall" ;;
+            *) echo -e "${GREEN}Cancelled.${NC}"; return 0 ;;
+        esac
+    fi
+
+    if [ "$action" = "uninstall" ]; then
+        asklink_uninstall
+        return $?
+    fi
+
+    local target_ver="$latest_ver"
+    [ "$action" = "reinstall" ] && target_ver="$installed_ver"
+    if [ -n "$installed_ver" ]; then
+        echo -e "${YELLOW}Will install version ${target_ver} (overwriting the current installation).${NC}"
+        if ! confirm_action; then
+            echo -e "${GREEN}Cancelled.${NC}"
+            return 0
+        fi
     fi
 
     echo -e "${CYAN}Checking the SteamOS read-only state...${NC}"
@@ -13319,9 +13538,6 @@ install_asklink() {
     if ! command -v dpkg &>/dev/null; then
         echo -e "${CYAN}dpkg not detected, installing...${NC}"
         if command -v pacman &>/dev/null; then
-            # SteamOS/Holo often leaves leftover /var/lib/dpkg/{available,status}
-            # from a previous manual dpkg -i; those files are not owned by any
-            # pacman package, so a plain pacman -S dpkg hits "exists in filesystem".
             if ! sudo pacman -S --needed --noconfirm dpkg; then
                 echo -e "${YELLOW}Normal install hit file conflicts; retrying with overwrite of /var/lib/dpkg leftovers...${NC}"
                 if ! sudo pacman -S --needed --noconfirm --overwrite '/var/lib/dpkg/*' dpkg; then
@@ -13343,24 +13559,42 @@ install_asklink() {
         echo -e "${GREEN}dpkg already present${NC}"
     fi
 
-    local ASKLINK_URL="https://dl.asklink.com/linux/4.0.33.0/AskLink-4.0.33.0-x86_64.deb"
-    local FILENAME="AskLink-4.0.33.0-x86_64.deb"
-
-    echo -e "${CYAN}Download address: ${ASKLINK_URL}${NC}"
-    echo -e "${CYAN}Downloading ${FILENAME} ...${NC}"
-
+    local FILENAME="AskLink-${target_ver}-x86_64.deb"
+    local ASKLINK_URLS=(
+        "https://dl.asklink.com/download/linux/AskLink-${target_ver}-x86_64.deb"
+        "https://dl.asklink.com/linux/${target_ver}/AskLink-${target_ver}-x86_64.deb"
+    )
     cd "$TEMP_DIR" || return
-    # FIX-SOFTWARE: add --fail/timeouts; dpkg errors are no longer sent to /dev/null.
-    if command -v wget &>/dev/null; then
-        wget --show-progress --connect-timeout=15 --timeout=120 --tries=1 "$ASKLINK_URL" -O "$FILENAME"
-    else
-        curl -L --fail --connect-timeout 15 --max-time 120 --progress-bar "$ASKLINK_URL" -o "$FILENAME"
-    fi
-    if [ $? -ne 0 ] || [ ! -s "$FILENAME" ]; then
-        echo -e "${RED}Download failed or the file is empty.${NC}"
+    local ASKLINK_URL="" ok=0 url
+    for url in "${ASKLINK_URLS[@]}"; do
+        echo -e "${CYAN}Trying download URL: ${url}${NC}"
+        # SteamOS often ships a BusyBox wget, which has no --fail; keep that flag for curl only.
+        # Verify the result is really a .deb so a 404 error page is never treated as a package.
+        if command -v wget &>/dev/null; then
+            wget --show-progress --connect-timeout=15 --timeout=180 --tries=1 "$url" -O "$FILENAME" && ok=1
+        else
+            curl -L --fail --connect-timeout 15 --max-time 180 -o "$FILENAME" "$url" && ok=1
+        fi
+        local valid=0
+        if [ "$ok" -eq 1 ] && [ -s "$FILENAME" ]; then
+            if command -v dpkg-deb &>/dev/null; then
+                dpkg-deb -I "$FILENAME" >/dev/null 2>&1 && valid=1
+            else
+                valid=1
+            fi
+        fi
+        if [ "$valid" -eq 1 ]; then
+            ASKLINK_URL="$url"
+            break
+        fi
         rm -f "$FILENAME"
+        ok=0
+    done
+    if [ "$ok" -ne 1 ] || [ ! -s "$FILENAME" ]; then
+        echo -e "${RED}Download failed or the file is empty (all URLs tried).${NC}"
         return 1
     fi
+    echo -e "${CYAN}Download address: ${ASKLINK_URL}${NC}"
 
     echo -e "${CYAN}Installing (dpkg output is no longer suppressed; real errors will show)...${NC}"
     if ! sudo dpkg --force-depends -i "$FILENAME"; then
@@ -13376,7 +13610,8 @@ install_asklink() {
         return 1
     fi
     if [ -d "/opt/AskLink" ] || command -v asklink &>/dev/null; then
-        echo -e "${GREEN}✅ AskLink installed successfully!${NC}"
+        echo "$target_ver" > /opt/AskLink/version 2>/dev/null || true
+        echo -e "${GREEN}✅ AskLink ${target_ver} installed/updated successfully!${NC}"
         local DESKTOP_DIR
         DESKTOP_DIR="$(fs_desktop_dir)"
         local DESKTOP_FILE="$DESKTOP_DIR/AskLink.desktop"

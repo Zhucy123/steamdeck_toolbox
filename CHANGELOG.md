@@ -2,6 +2,14 @@
 
 > 完整历史更新记录。工具箱「关于 / 更新日志」页面显示的是同一份内容。
 
+2026-11-21（v2.2.2）
+【功能改进：AskLink 远程】
+- 「安装/更新 AskLink」不再写死 4.0.33.0：点击后先从 AskLink 官方接口
+  (www.asklink.com/api/personal-downloads) 读取 Linux 最新版本号，与本机 dpkg 中 asklink 的
+  版本比较，发现新版时提供「更新 / 重装 / 卸载」三选一（已是最新则提供「重装 / 卸载」）。
+- 下载地址同步改为官方现用路径 download/linux/AskLink-<版本>-x86_64.deb，并对旧路径
+  linux/<版本>/ 做兜底；官方接口不可达时使用内置版本号 4.3.9.3，避免装到过期版本。
+
 2026-11-19（v2.2.1）
 【功能改进：Watt Toolkit】
 - 「安装/更新 Watt Toolkit (Steam++)」改为从 GitHub 官方仓库（BeyondDimension/SteamTools）

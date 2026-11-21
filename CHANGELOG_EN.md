@@ -2,6 +2,16 @@
 
 > Full release history. The in-app "About / Changelog" page shows the same content.
 
+2026-11-21 (v2.2.2)
+[Improvement: AskLink remote]
+- "Install/Update AskLink" no longer hard-codes 4.0.33.0. On click it now reads the latest
+  Linux version from AskLink's official API (www.asklink.com/api/personal-downloads) and
+  compares it with the installed dpkg version of asklink. When a newer version exists it
+  offers Update / Reinstall / Uninstall (Reinstall / Uninstall when already current).
+- Download URL switched to the official current path download/linux/AskLink-<ver>-x86_64.deb,
+  with the legacy linux/<ver>/ path as fallback. If the API is unreachable it falls back to
+  the built-in version 4.3.9.3 so an outdated package is not installed.
+
 2026-11-19 (v2.2.1)
 [Improvement: Watt Toolkit]
 - "Install/Update Watt Toolkit (Steam++)" now reads the latest version and the Linux x64
